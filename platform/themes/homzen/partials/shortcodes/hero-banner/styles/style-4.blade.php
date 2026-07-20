@@ -7402,9 +7402,9 @@ function mapMovedEnoughToRefetch() {
                 ${displayLocation ? `<div class="map-popup-detail-location">${escapeMapHtml(displayLocation)}</div>` : ''}
                 ${displayType ? `<div class="map-popup-detail-type">${escapeMapHtml(displayType)}</div>` : ''}
                 <div class="hs-map-stats-row">
-                    ${beds != null ? `<span class="stat"><strong>${beds}${bedsBelow ? '+' + bedsBelow : ''}</strong> Bedrooms</span>` : ''}
-                    ${baths != null ? `<span class="stat"><strong>${baths}</strong> Bathrooms</span>` : ''}
-                    ${garage != null ? `<span class="stat"><strong>${garage}</strong> Parking</span>` : ''}
+                    ${beds != null ? `<span class="stat"><span aria-hidden="true">🛏</span> <strong>${beds}${bedsBelow ? '+' + bedsBelow : ''}</strong></span>` : ''}
+                    ${baths != null ? `<span class="stat"><span aria-hidden="true">🛁</span> <strong>${baths}</strong></span>` : ''}
+                    ${garage != null ? `<span class="stat"><span aria-hidden="true">🚘</span> <strong>${garage}</strong></span>` : ''}
                     ${areaHtml !== '—' ? `<span class="stat"><strong>${areaHtml}</strong></span>` : ''}
                     ${relativeListedLabel(addedLabel, '') ? `<span class="stat"><strong>Listed</strong> ${escapeMapHtml(relativeListedLabel(addedLabel, ''))}</span>` : ''}
                 </div>

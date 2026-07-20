@@ -266,20 +266,11 @@
 </style>
 
 <div class="hs-detail-section" id="propertyDetailBlocks" @if($listingKey) data-listing-key="{{ $listingKey }}" data-history-auth="{{ $isAuthenticated ? '1' : '0' }}" @endif>
-    <div class="hs-stats-row" id="propertyQuickStats">
-        @if ($bedroomsLabel && $bedroomsLabel !== '-')
-            <span class="stat">
-                <strong>{{ $bedroomsLabel }}</strong>
-                {{ __('Bedrooms') }}
-            </span>
-        @endif
-        @if ($bathrooms)
-            <span class="stat"><strong>{{ number_format((float) $bathrooms) }}</strong> {{ __('Bathrooms') }}</span>
-        @endif
-        @if ($garage)
+    @if ($garage)
+        <div class="hs-stats-row" id="propertyQuickStats">
             <span class="stat"><strong>{{ $garage }}</strong> {{ __('Garage') }}</span>
-        @endif
-    </div>
+        </div>
+    @endif
 
     <div class="section-title">{{ __('Listing History') }}</div>
     <p class="section-subtitle" id="historySubtitle">
