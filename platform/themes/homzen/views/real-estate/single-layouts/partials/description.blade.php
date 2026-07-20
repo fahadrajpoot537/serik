@@ -172,18 +172,19 @@
     $listingKey = $model->external_id ?? '';
     $item = $listingKey ? TrebPropertyHelper::fetchPropertyRecord($listingKey) : null;
 
-    if (! $item && $model) {
-        $item = [
+    if (! is_array($item) || $item === []) {
+        $item = $model ? [
             'UnparsedAddress' => $model->name,
             'PropertySubType' => $model->PropertySubType,
             'ListPrice' => $model->price,
             'LivingAreaRange' => $model->square,
             'ParkingSpaces' => $model->ParkingSpaces,
+            'CoveredSpaces' => $model->CoveredSpaces ?? null,
             'ListOfficeName' => $model->broker,
             'ListingContractDate' => $model->created_at,
             'MlsStatus' => $model->MlsStatus,
             'TransactionType' => $model->TransactionType,
-        ];
+        ] : [];
     }
 @endphp
 
@@ -299,7 +300,7 @@ View::share('cityName', $city);
                     </div>
                     <div class="content">
                         <span class="label">{{ __('Bathrooms:') }}</span>
-                        <span>{{ number_format($model->number_bathroom) }} </span>
+                        <span>{{ number_format((float) $model->number_bathroom) }} </span>
                     </div>
                 </div>
             @endif

@@ -2870,7 +2870,7 @@ class TrebPropertyHelper
                     return $m[0];
                 }
 
-                Log::warning('AMP URL clamped: $expand=Media requires $top<=100', [
+                self::safeLog('warning', 'AMP URL clamped: $expand=Media requires $top<=100', [
                     'from' => $requested,
                     'to' => 100,
                     'url' => substr($url, 0, 300),
@@ -3038,7 +3038,7 @@ class TrebPropertyHelper
      */
     protected static function logAmpRequestFailure(string $context, ?string $listingKey, array $result): void
     {
-        Log::warning('AMP request failed', [
+        self::safeLog('warning', 'AMP request failed', [
             'context' => $context,
             'listing_key' => $listingKey,
             'url' => $result['url'] ?? null,
@@ -3046,6 +3046,24 @@ class TrebPropertyHelper
             'error' => $result['error'] ?? null,
             'body' => $result['body'] ?? null,
         ]);
+    }
+
+    /**
+     * Never let a locked/unwritable laravel.log take down property detail pages.
+     * Live IIS has returned UnexpectedValueException: Permission denied on Log::*.
+     */
+    protected static function safeLog(string $level, string $message, array $context = []): void
+    {
+        try {
+            match ($level) {
+                'info' => Log::info($message, $context),
+                'error' => Log::error($message, $context),
+                'debug' => Log::debug($message, $context),
+                default => Log::warning($message, $context),
+            };
+        } catch (\Throwable) {
+            // ignore — page render must continue
+        }
     }
 
     protected static function isAmpSelectFieldError(array $result): bool
@@ -3219,7 +3237,7 @@ class TrebPropertyHelper
 
             if (! $response['ok']) {
                 if ($mode === 'detail' && self::isAmpSelectFieldError($response)) {
-                    Log::info('AMP resync retrying without $select after field error', [
+                    self::safeLog('info', 'AMP resync retrying without $select after field error', [
                         'listing_key' => $listingKey,
                         'status' => $response['status'],
                         'error' => $response['error'],
@@ -3241,7 +3259,7 @@ class TrebPropertyHelper
             }
         }
 
-        Log::info('AMP listing not found (empty OData value)', [
+        self::safeLog('info', 'AMP listing not found (empty OData value)', [
             'listing_key' => $listingKey,
             'filter' => "ListingKey eq '{$listingKey}'",
         ]);
@@ -3728,7 +3746,7 @@ class TrebPropertyHelper
             try {
                 $result = self::importAmpHistoryListing($item, $dryRun);
             } catch (\Throwable $e) {
-                Log::warning('[syncAddressHistory] sibling import failed', [
+                self::safeLog('warning', '[syncAddressHistory] sibling import failed', [
                     'anchor' => $listingKey,
                     'sibling' => $item['ListingKey'] ?? null,
                     'error' => $e->getMessage(),

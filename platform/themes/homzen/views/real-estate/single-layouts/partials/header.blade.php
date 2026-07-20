@@ -86,7 +86,7 @@
                     @if(!empty($model->ClosePrice))
                         Sold : 
                         <span style="margin-left:8px; color:var(--primary-color, #db1d23);">
-                            ${{ number_format($model->ClosePrice) }}
+                            ${{ number_format((float) $model->ClosePrice) }}
                         </span>
                     @endif
                     <br>
