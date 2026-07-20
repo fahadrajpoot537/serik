@@ -186,9 +186,13 @@ if (isset($_GET['diag_images']) && (string) $_GET['diag_images'] === '1') {
 
         echo "If disk=MISSING_FILE → file not under storage/app/public (re-upload or copy).\n";
         echo "If url has wrong host → fix APP_URL=https://serik.ca and php artisan config:clear.\n";
-        echo "If public/storage is_link=no and is empty dir → run as Admin:\n";
-        echo "  rmdir public\\storage\n";
+        echo "\nIMPORTANT: If public/storage is_link=no BUT files FOUND there, CMS media lives in that folder.\n";
+        echo "Do NOT rmdir public\\storage or you will delete uploads. Optional later migrate:\n";
+        echo "  robocopy public\\storage storage\\app\\public /E\n";
+        echo "  rmdir /S /Q public\\storage\n";
         echo "  mklink /J public\\storage storage\\app\\public\n";
+        echo "MLS listing photos use https://trreb-image.ampre.ca/... (not local storage).\n";
+        echo "If those 404 in browser Network tab, paste the exact failing URL.\n";
     } catch (Throwable $e) {
         echo 'ERROR: ' . $e->getMessage() . "\n";
     }
