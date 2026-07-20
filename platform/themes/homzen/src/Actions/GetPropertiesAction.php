@@ -19,21 +19,23 @@ class GetPropertiesAction
         bool $featured = false,
         array $categoryIds = []
     ): Collection {
+        $limit = max(1, min(48, (int) ($limit ?: 4)));
+
         $model = Property::query()
             ->where(RealEstateHelper::getPropertyDisplayQueryConditions())
             ->when(
                 $featured,
-                fn (Builder $query, string $type) => $query->where('is_featured', $featured) // @phpstan-ignore-line
+                fn (Builder $query) => $query->where('is_featured', true)
             )
             ->when(
                 $type,
-                fn (Builder $query, string $type) => $query->where('type', $type)
+                fn (Builder $query) => $query->where('type', $type)
             )
             ->when(
                 $categoryId,
-                fn (Builder $query, string $categoryId) => $query->whereRelation('categories', 'id', $categoryId)
+                fn (Builder $query) => $query->whereRelation('categories', 'id', $categoryId)
             )
-            ->when($categoryIds, function (Builder $query, array $categoryIds) {
+            ->when($categoryIds, function (Builder $query) use ($categoryIds) {
                 return $query->whereHas('categories', fn (Builder $query) => $query->whereIn('id', $categoryIds));
             })
             ->take($limit);
@@ -44,8 +46,8 @@ class GetPropertiesAction
                 ->orderByRaw('CASE WHEN is_featured = 1 THEN featured_priority ELSE 0 END DESC');
         }
 
+        // Prefer PK order — listing_contract_date DESC is expensive on large tables without covering indexes.
         return $model
-            ->orderByDesc('listing_contract_date')
             ->orderByDesc('id')
             ->notExpired()
             ->with([...RealEstateHelper::getPropertyRelationsQuery(), 'author'])

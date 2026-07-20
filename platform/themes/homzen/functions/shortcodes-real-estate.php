@@ -57,7 +57,11 @@ app()->booted(function (): void {
             if ($shortcode->style == 5) {
                 $limit = (int) $shortcode->limit ?: 8;
                 try {
-                    $result = app(\App\Actions\HomepageFeaturedPropertiesAction::class)->handle($limit);
+                    if (class_exists(\App\Actions\HomepageFeaturedPropertiesAction::class)) {
+                        $result = app(\App\Actions\HomepageFeaturedPropertiesAction::class)->handle($limit);
+                    } else {
+                        $result = app(\Theme\homzen\Actions\GetHomepageFeaturedPropertiesAction::class)->handle($limit);
+                    }
                 } catch (\Throwable $e) {
                     \Illuminate\Support\Facades\Log::error('[shortcode:properties] style=5 uncaught', [
                         'message' => $e->getMessage(),
@@ -72,9 +76,9 @@ app()->booted(function (): void {
                     ];
                 }
 
-                $propertiesForSale = $result['propertiesForSale'];
-                $propertiesSold = $result['propertiesSold'];
-                $visitorCity = $result['visitorCity'];
+                $propertiesForSale = $result['propertiesForSale'] ?? collect();
+                $propertiesSold = $result['propertiesSold'] ?? collect();
+                $visitorCity = $result['visitorCity'] ?? null;
                 $properties = $propertiesForSale;
 
                 $view = 'shortcodes.properties.index';
@@ -86,47 +90,77 @@ app()->booted(function (): void {
                     'sold_count' => is_countable($propertiesSold) ? count($propertiesSold) : 0,
                 ]);
 
-                return Theme::partial($view, compact(
-                    'shortcode',
-                    'properties',
-                    'propertiesForSale',
-                    'propertiesSold',
-                    'tabs',
-                    'categoryIds',
-                    'visitorCity'
-                ));
+                try {
+                    return Theme::partial($view, compact(
+                        'shortcode',
+                        'properties',
+                        'propertiesForSale',
+                        'propertiesSold',
+                        'tabs',
+                        'categoryIds',
+                        'visitorCity'
+                    ));
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::error('[shortcode:properties] style=5 view failed', [
+                        'message' => $e->getMessage(),
+                        'file' => $e->getFile(),
+                        'line' => $e->getLine(),
+                        'class' => $e::class,
+                    ]);
+
+                    // Soft-fail: never blank the homepage section.
+                    return '<section class="flat-section"><div class="container text-center py-4">'
+                        . '<p class="mb-3">Featured properties are temporarily unavailable.</p>'
+                        . '<a class="tf-btn primary size-1" href="' . e(url('/properties')) . '">Browse all properties</a>'
+                        . '</div></section>';
+                }
             }
 
-            if ($shortcode->style == 2 && $categoryIds) {
-                $tabs = Category::query()
-                    ->wherePublished()
-                    ->whereIn('id', $categoryIds)
-                    ->get()
-                    ->mapWithKeys(fn($item) => [$item->id => $item->name]);
+            try {
+                if ($shortcode->style == 2 && $categoryIds) {
+                    $tabs = Category::query()
+                        ->wherePublished()
+                        ->whereIn('id', $categoryIds)
+                        ->get()
+                        ->mapWithKeys(fn($item) => [$item->id => $item->name]);
 
-                $properties = app(GetPropertiesAction::class)
-                    ->handle(
+                    $properties = app(GetPropertiesAction::class)
+                        ->handle(
+                            limit: (int) $shortcode->limit ?: 4,
+                            type: $shortcode->type,
+                            featured: (bool) $shortcode->is_featured,
+                            categoryIds: $categoryIds
+                        );
+                } else {
+                    $properties = app(GetPropertiesAction::class)->handle(
                         limit: (int) $shortcode->limit ?: 4,
-                        type: $shortcode->type,
-                        featured: (bool) $shortcode->is_featured,
+                        type: $shortcode->type ?: null,
+                        featured: in_array((string) $shortcode->is_featured, ['1', 'true', 'yes'], true),
                         categoryIds: $categoryIds
                     );
-            } else {
-                $properties = (new GetPropertiesAction())->handle(
-                    limit: (int) $shortcode->limit ?: 4,
-                    type: $shortcode->type,
-                    featured: (bool) $shortcode->is_featured,
-                    categoryIds: $categoryIds
-                );
+                }
+
+                \Illuminate\Support\Facades\Log::info('[shortcode:properties] rendering view', [
+                    'view' => 'shortcodes.properties.index',
+                    'style' => $shortcode->style,
+                    'property_count' => $properties->count(),
+                ]);
+
+                return Theme::partial('shortcodes.properties.index', compact('shortcode', 'properties', 'tabs', 'categoryIds'));
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error('[shortcode:properties] non-style5 failed', [
+                    'style' => $shortcode->style,
+                    'message' => $e->getMessage(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                    'class' => $e::class,
+                ]);
+
+                return '<section class="flat-section"><div class="container text-center py-4">'
+                    . '<p class="mb-3">Properties are temporarily unavailable.</p>'
+                    . '<a class="tf-btn primary size-1" href="' . e(url('/properties')) . '">Browse all properties</a>'
+                    . '</div></section>';
             }
-
-            \Illuminate\Support\Facades\Log::info('[shortcode:properties] rendering view', [
-                'view' => 'shortcodes.properties.index',
-                'style' => $shortcode->style,
-                'property_count' => $properties->count(),
-            ]);
-
-            return Theme::partial('shortcodes.properties.index', compact('shortcode', 'properties', 'tabs', 'categoryIds'));
         });
 
         Shortcode::setPreviewImage('properties', Theme::asset()->url('images/shortcodes/properties/style-2.png'));

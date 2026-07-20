@@ -1,0 +1,10 @@
+﻿=== style 5 ===
+OK bytes=80
+has temporarily? no
+has prop-box? no
+
+=== style 4 ===
+OK bytes=80
+has temporarily? no
+has prop-box? no
+

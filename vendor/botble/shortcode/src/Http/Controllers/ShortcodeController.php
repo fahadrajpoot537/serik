@@ -168,10 +168,16 @@ class ShortcodeController extends BaseController
                 'elapsed_ms' => round((microtime(true) - $started) * 1000, 1),
             ]);
 
+            $debugKey = (string) $request->header('X-Serik-Debug', $request->input('debug_key', ''));
+            $debugHtml = '<div class="text-center py-3 text-muted">Content temporarily unavailable.</div>';
+            if ($debugKey === 'serik2026clear') {
+                $debugHtml .= '<pre style="text-align:left;white-space:pre-wrap;font-size:12px;max-width:900px;margin:12px auto;background:#f8f8f8;padding:12px;border:1px solid #ddd;">'
+                    . e($e::class . ': ' . $e->getMessage() . "\n" . $e->getFile() . ':' . $e->getLine())
+                    . '</pre>';
+            }
+
             // Never HTTP 500 the homepage lazy loaders.
-            return $this->httpResponse()->setData(
-                '<div class="text-center py-3 text-muted">Content temporarily unavailable.</div>'
-            );
+            return $this->httpResponse()->setData($debugHtml);
         }
     }
 

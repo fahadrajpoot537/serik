@@ -75,13 +75,24 @@
 </style>
 
 @php
-    $visitorCity = $visitorCity ?? \Theme\homzen\Supports\VisitorCityHelper::get();
+    $visitorCity = $visitorCity ?? null;
+    try {
+        if ($visitorCity === null && class_exists(\Theme\homzen\Supports\VisitorCityHelper::class)) {
+            $visitorCity = \Theme\homzen\Supports\VisitorCityHelper::get();
+        }
+    } catch (\Throwable) {
+        $visitorCity = null;
+    }
+
     $saleHeading = $visitorCity
         ? __('Featured Properties in :city', ['city' => $visitorCity])
         : __('Properties for Sale');
     $saleSubheading = $visitorCity
         ? __('Latest listings near you in :city', ['city' => $visitorCity])
         : __('Ontario Residential properties currently available for sale');
+
+    $propertiesForSale = $propertiesForSale ?? collect();
+    $propertiesSold = $propertiesSold ?? collect();
 @endphp
 
 <section class="flat-section-v5 bg-surface flat-recommended flat-recommended-v2 property-top">
