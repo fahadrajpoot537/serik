@@ -115,9 +115,36 @@ class MailConfigServiceProvider extends ServiceProvider
 
                         break;
                     case 'resend':
+                        $resendKey = $setting->get('email_resend_key', $config->get('services.resend.key'));
+                        if (! $resendKey) {
+                            $resendKey = env('RESEND_API_KEY');
+                        }
+
+                        $fromAddress = $setting->get('email_from_address', $config->get('mail.from.address'));
+                        // Resend rejects unverified custom domains — fall back to Resend sandbox sender.
+                        if ($fromAddress && ! str_ends_with(strtolower((string) $fromAddress), '@resend.dev')) {
+                            $verifiedDomains = array_filter(array_map('trim', explode(',', (string) env('RESEND_VERIFIED_DOMAINS', ''))));
+                            $domainOk = false;
+                            foreach ($verifiedDomains as $domain) {
+                                if ($domain !== '' && str_ends_with(strtolower((string) $fromAddress), '@' . strtolower($domain))) {
+                                    $domainOk = true;
+                                    break;
+                                }
+                            }
+                            if (! $domainOk && env('RESEND_FORCE_SANDBOX_FROM', true)) {
+                                $fromAddress = env('RESEND_SANDBOX_FROM', 'onboarding@resend.dev');
+                            }
+                        }
+
                         $config->set([
+                            'mail' => array_merge($config->get('mail'), [
+                                'from' => [
+                                    'address' => $fromAddress,
+                                    'name' => $setting->get('email_from_name', $config->get('mail.from.name')),
+                                ],
+                            ]),
                             'services.resend' => [
-                                'key' => $setting->get('email_resend_key', $config->get('services.resend.key')),
+                                'key' => $resendKey,
                             ],
                         ]);
 

@@ -50,13 +50,27 @@ class ForgotPasswordController extends BaseController
             $account->password = $pin;
             $account->save();
 
-            EmailHandler::setModule(REAL_ESTATE_MODULE_SCREEN_NAME)
-                ->setVariableValues([
-                    'account_name' => $account->name,
-                    'account_email' => $account->email,
-                    'account_password' => $pin,
-                ])
-                ->sendUsingTemplate('account-registered', $account->email);
+            try {
+                $sent = EmailHandler::setModule(REAL_ESTATE_MODULE_SCREEN_NAME)
+                    ->setVariableValues([
+                        'account_name' => $account->name,
+                        'account_email' => $account->email,
+                        'account_password' => $pin,
+                    ])
+                    ->sendUsingTemplate('account-registered', $account->email);
+
+                if (! $sent) {
+                    \Log::warning('[forgot-password] PIN email template disabled or not sent', [
+                        'email' => $account->email,
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                \Log::error('[forgot-password] PIN email failed: ' . $e->getMessage(), [
+                    'email' => $account->email,
+                    'driver' => setting('email_driver'),
+                    'from' => setting('email_from_address'),
+                ]);
+            }
         }
 
         $message = 'If this email is registered, we have sent a new 6-digit PIN. Use it as your password to sign in.';

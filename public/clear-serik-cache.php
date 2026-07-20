@@ -17,6 +17,117 @@ if (($_GET['key'] ?? '') !== $secret) {
 $base = dirname(__DIR__);
 $results = [];
 
+function clearDir(string $dir): int
+{
+    if (! is_dir($dir)) {
+        return 0;
+    }
+
+    $count = 0;
+    $items = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::CHILD_FIRST
+    );
+
+    foreach ($items as $item) {
+        if ($item->isDir()) {
+            @rmdir($item->getPathname());
+        } else {
+            if (@unlink($item->getPathname())) {
+                $count++;
+            }
+        }
+    }
+
+    return $count;
+}
+
+function deleteFile(string $path): bool
+{
+    return is_file($path) && @unlink($path);
+}
+
+function readEnvValue(string $envPath, string $key): ?string
+{
+    if (! is_file($envPath)) {
+        return null;
+    }
+
+    $lines = file($envPath, FILE_IGNORE_NEW_LINES);
+    if ($lines === false) {
+        return null;
+    }
+
+    foreach ($lines as $line) {
+        $trim = trim($line);
+        if ($trim === '' || str_starts_with($trim, '#')) {
+            continue;
+        }
+        if (str_starts_with($trim, $key . '=')) {
+            return substr($trim, strlen($key) + 1);
+        }
+    }
+
+    return null;
+}
+
+function upsertEnvValue(string $envPath, string $key, string $value): bool
+{
+    if (! is_file($envPath) || ! is_writable($envPath)) {
+        return false;
+    }
+
+    $contents = file_get_contents($envPath);
+    if ($contents === false) {
+        return false;
+    }
+
+    $pattern = '/^' . preg_quote($key, '/') . '=.*$/m';
+    if (preg_match($pattern, $contents)) {
+        $contents = preg_replace($pattern, $key . '=' . $value, $contents, 1);
+    } else {
+        $contents = rtrim($contents) . "\n\n" . $key . '=' . $value . "\n";
+    }
+
+    return file_put_contents($envPath, $contents) !== false;
+}
+
+// Fix Resend + send PIN template test (live server helper).
+if (isset($_GET['fix_resend']) && (string) $_GET['fix_resend'] === '1') {
+    header('Content-Type: text/plain; charset=utf-8');
+    echo "=== fix Resend email (DB + test send) ===\n\n";
+
+    $envPath = $base . '/.env';
+    $resendKey = readEnvValue($envPath, 'RESEND_API_KEY');
+    if (! $resendKey) {
+        echo "FAIL: Add RESEND_API_KEY=re_... to {$envPath} first.\n";
+        exit;
+    }
+
+    upsertEnvValue($envPath, 'MAIL_MAILER', 'resend');
+    upsertEnvValue($envPath, 'RESEND_API_KEY', $resendKey);
+    if (! readEnvValue($envPath, 'MAIL_FROM_ADDRESS') || str_contains((string) readEnvValue($envPath, 'MAIL_FROM_ADDRESS'), '@serik.ca')) {
+        upsertEnvValue($envPath, 'MAIL_FROM_ADDRESS', 'onboarding@resend.dev');
+    }
+    upsertEnvValue($envPath, 'MAIL_FROM_NAME', readEnvValue($envPath, 'MAIL_FROM_NAME') ?: 'Serik Realty');
+
+    deleteFile($base . '/bootstrap/cache/config.php');
+
+    $testTo = trim((string) ($_GET['to'] ?? ''));
+    $phpBin = defined('PHP_BINARY') ? PHP_BINARY : 'php';
+    $runner = $base . '/scripts/fix-resend-email.php';
+    $cmd = escapeshellarg($phpBin) . ' ' . escapeshellarg($runner);
+    if ($testTo !== '') {
+        $cmd .= ' ' . escapeshellarg($testTo);
+    }
+    $output = shell_exec($cmd . ' 2>&1');
+    echo ($output ?: "(no output from runner)\n");
+    echo "\nOpen https://resend.com/emails for delivery status.\n";
+    echo "Sandbox onboarding@resend.dev only delivers to your Resend signup email.\n";
+    echo "For real users: verify serik.ca at https://resend.com/domains then set MAIL_FROM_ADDRESS=info@serik.ca\n";
+    exit;
+}
+
 // Fix locked / unwritable Laravel daily logs (IIS Permission denied → homepage properties blank).
 if (isset($_GET['fix_logs']) && (string) $_GET['fix_logs'] === '1') {
     header('Content-Type: text/plain; charset=utf-8');
@@ -125,81 +236,6 @@ if (isset($_GET['test_properties']) && (string) $_GET['test_properties'] === '1'
     }
 
     exit;
-}
-
-function clearDir(string $dir): int
-{
-    if (! is_dir($dir)) {
-        return 0;
-    }
-
-    $count = 0;
-    $items = new RecursiveIteratorIterator(
-        new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS),
-        RecursiveIteratorIterator::CHILD_FIRST
-    );
-
-    foreach ($items as $item) {
-        if ($item->isDir()) {
-            @rmdir($item->getPathname());
-        } else {
-            if (@unlink($item->getPathname())) {
-                $count++;
-            }
-        }
-    }
-
-    return $count;
-}
-
-function deleteFile(string $path): bool
-{
-    return is_file($path) && @unlink($path);
-}
-
-function readEnvValue(string $envPath, string $key): ?string
-{
-    if (! is_file($envPath)) {
-        return null;
-    }
-
-    $lines = file($envPath, FILE_IGNORE_NEW_LINES);
-    if ($lines === false) {
-        return null;
-    }
-
-    foreach ($lines as $line) {
-        $trim = trim($line);
-        if ($trim === '' || str_starts_with($trim, '#')) {
-            continue;
-        }
-        if (str_starts_with($trim, $key . '=')) {
-            return substr($trim, strlen($key) + 1);
-        }
-    }
-
-    return null;
-}
-
-function upsertEnvValue(string $envPath, string $key, string $value): bool
-{
-    if (! is_file($envPath) || ! is_writable($envPath)) {
-        return false;
-    }
-
-    $contents = file_get_contents($envPath);
-    if ($contents === false) {
-        return false;
-    }
-
-    $pattern = '/^' . preg_quote($key, '/') . '=.*$/m';
-    if (preg_match($pattern, $contents)) {
-        $contents = preg_replace($pattern, $key . '=' . $value, $contents, 1);
-    } else {
-        $contents = rtrim($contents) . "\n\n" . $key . '=' . $value . "\n";
-    }
-
-    return file_put_contents($envPath, $contents) !== false;
 }
 
 $viewDir = $base . '/storage/framework/views';
