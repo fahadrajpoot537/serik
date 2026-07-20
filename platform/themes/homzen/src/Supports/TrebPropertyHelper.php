@@ -95,6 +95,10 @@ class TrebPropertyHelper
      */
     public static function canFetchRemoteAmp(): bool
     {
+        if (app()->bound('serik.live_treb_fallback') && app('serik.live_treb_fallback')) {
+            return true;
+        }
+
         return ! self::shouldSkipRemoteAmpFetch() || self::shouldAllowPropertyDetailAmpFetch();
     }
 
@@ -1026,6 +1030,164 @@ class TrebPropertyHelper
         ], true);
     }
 
+    /**
+     * Fast SEO URL for property cards on /properties (no per-card AMP/address parsing).
+     */
+    public static function listingSeoUrl(\Botble\RealEstate\Models\Property $property): string
+    {
+        static $subtypeMap = [
+            'Detached' => 'detached-houses',
+            'Detached Condo' => 'detached-houses',
+            'Semi-Detached' => 'semi-detached-houses',
+            'Link' => 'link-houses',
+            'Att/Row/Townhouse' => 'townhouses',
+            'Condo Townhouse' => 'townhouses',
+            'Condo Apartment' => 'condos',
+            'Co-op Apartment' => 'condos',
+            'Co-Ownership Apartment' => 'condos',
+            'Leasehold Condo' => 'condos',
+            'Common Element Condo' => 'condos',
+            'Duplex' => 'duplex',
+            'Fourplex' => 'fourplex',
+            'Multiplex' => 'multiplex',
+            'Other' => 'houses',
+        ];
+
+        static $citySlugs = [
+            'brampton', 'mississauga', 'vaughan', 'milton', 'oakville', 'niagarafalls', 'toronto',
+            'kitchener', 'waterloo', 'cambridge', 'hamilton', 'ottawa', 'london', 'markham',
+            'windsor', 'richmondhill', 'burlington', 'oshawa', 'barrie', 'guelph', 'kingston',
+            'whitby', 'ajax', 'peterborough', 'sarnia', 'thunderbay', 'sudbury', 'northbay',
+            'orillia', 'brantford', 'stcatharines', 'welland', 'pickering', 'clarington',
+            'newmarket', 'aurora', 'orangeville', 'midland', 'collingwood', 'timmins', 'kenora',
+            'elliotlake', 'brockville', 'cornwall', 'stratford', 'woodstock', 'leamington',
+            'chatham', 'belleville', 'pembroke',
+        ];
+
+        $slug = strtolower((string) ($property->slug ?? ''));
+        $city = 'ontario';
+
+        foreach ($citySlugs as $citySlug) {
+            if (str_contains($slug, '-' . $citySlug . '-')) {
+                $city = $citySlug;
+                break;
+            }
+        }
+
+        $subtype = $subtypeMap[(string) $property->PropertySubType] ?? 'houses';
+
+        return url("on/{$subtype}-for-sale-in-{$city}/map/{$property->slug}");
+    }
+
+    public static function formatListingActiveMonthYear(mixed $value): ?string
+    {
+        if (empty($value)) {
+            return null;
+        }
+
+        try {
+            $date = \Carbon\Carbon::parse($value);
+            $year = (int) $date->format('Y');
+
+            if ($year < 1990 || $year > ((int) date('Y') + 1)) {
+                return null;
+            }
+
+            return $date->format('M Y');
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * @return array{address: string, location: string, listed_ago: string, listed_active: ?string, beds: string, url: string}
+     */
+    public static function listingCardViewModel(\Botble\RealEstate\Models\Property $property): array
+    {
+        $name = (string) $property->name;
+        $parts = array_map('trim', explode(',', $name, 3));
+        $address = $parts[0] ?? $name;
+        $location = '';
+
+        if (isset($parts[1])) {
+            $location = trim(preg_replace('/\s+(ON|Ontario)(\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d)?$/i', '', $parts[1]));
+        }
+
+        if ($location === '' && ! empty($property->short_address)) {
+            $location = (string) $property->short_address;
+        }
+
+        $bedMain = (int) ($property->number_bedroom ?? 0);
+        $bedBelow = (int) ($property->BedroomsBelowGrade ?? 0);
+        $beds = $bedMain > 0 ? $bedMain . ($bedBelow > 0 ? '+' . $bedBelow : '') : '';
+
+        $listedAt = $property->listing_contract_date ?? $property->created_at;
+        $listedActive = self::formatListingActiveMonthYear($listedAt);
+
+        return [
+            'address' => $address,
+            'location' => $location,
+            'listed_ago' => self::formatRelativeTime($listedAt ? (string) $listedAt : null),
+            'listed_active' => $listedActive,
+            'beds' => $beds,
+            'url' => self::listingSeoUrl($property),
+        ];
+    }
+
+    /**
+     * Normalize condo unit tokens for strict history matching (805, #805, Unit 805).
+     */
+    public static function normalizeUnitToken(?string $unit): string
+    {
+        $unit = trim((string) $unit);
+        $unit = ltrim($unit, '#');
+        $unit = preg_replace('/^(unit|suite|apt|#)\s*/i', '', $unit) ?? $unit;
+
+        return trim($unit);
+    }
+
+    /**
+     * First scalar from AMP array / JSON-encoded array fields in detail views.
+     */
+    public static function ampFieldFirst(array $record, string $key): ?string
+    {
+        if (! array_key_exists($key, $record)) {
+            return null;
+        }
+
+        $value = $record[$key];
+
+        if (is_array($value)) {
+            $first = $value[0] ?? null;
+
+            return $first === null || $first === '' ? null : (string) $first;
+        }
+
+        if (is_string($value) && str_starts_with(trim($value), '[')) {
+            $decoded = json_decode($value, true);
+            if (is_array($decoded) && isset($decoded[0]) && $decoded[0] !== '') {
+                return (string) $decoded[0];
+            }
+        }
+
+        $scalar = trim((string) $value);
+
+        return $scalar === '' ? null : $scalar;
+    }
+
+    /**
+     * @param  \Illuminate\Database\Eloquent\Builder|\Botble\RealEstate\QueryBuilders\PropertyBuilder  $query
+     */
+    public static function applyResidentialScope($query)
+    {
+        $excluded = self::excludedCommercialSubTypes();
+
+        return $query->where(function ($q) use ($excluded): void {
+            $q->whereNull('PropertySubType')
+                ->orWhereNotIn('PropertySubType', $excluded);
+        });
+    }
+
     public static function soldStatusLabel(?string $mlsStatus): string
     {
         return match (true) {
@@ -1597,7 +1759,7 @@ class TrebPropertyHelper
 
             $itemUnit = trim((string) ($item['UnitNumber'] ?? ''));
             if ($unitNumber !== '') {
-                return strcasecmp($itemUnit, $unitNumber) === 0;
+                return strcasecmp(self::normalizeUnitToken($itemUnit), self::normalizeUnitToken($unitNumber)) === 0;
             }
 
             // Freehold: only listings without a real unit number
@@ -1659,7 +1821,7 @@ class TrebPropertyHelper
         }
 
         // Brief cache: same address+unit is hit by detail + map popup.
-        $cacheKey = 'serik_addr_hist_v5_' . md5(strtolower($streetNumber . '|' . $streetName . '|' . $unitNumber));
+        $cacheKey = 'serik_addr_hist_v6_' . md5(strtolower($streetNumber . '|' . $streetName . '|' . $unitNumber));
 
         return Cache::remember($cacheKey, 300, function () use ($streetNumber, $streetName, $unitNumber) {
             $filterRows = function ($candidates) use ($streetNumber, $streetName, $unitNumber) {
@@ -1679,7 +1841,7 @@ class TrebPropertyHelper
                     }
 
                     if ($unitNumber !== '') {
-                        if (strcasecmp($itemUnit, $unitNumber) !== 0) {
+                        if (strcasecmp(self::normalizeUnitToken($itemUnit), self::normalizeUnitToken($unitNumber)) !== 0) {
                             continue;
                         }
                     } elseif ($itemUnit !== '' && self::isUnitToken($itemUnit)) {
@@ -1715,12 +1877,8 @@ class TrebPropertyHelper
                 $absorb($search->hydrateIds($meiliIds, $cols));
             }
 
-            if ($unitNumber !== '' && is_array($meiliIds)) {
-                $meiliIds2 = $search->searchStreetCandidateIds($streetNumber, $streetName, 80);
-                if (is_array($meiliIds2) && $meiliIds2 !== []) {
-                    $absorb($search->hydrateIds($meiliIds2, $cols));
-                }
-            }
+            // When a unit is known, never widen to the whole building — that merged
+            // other condos' sold history into the wrong detail page.
 
             // 2) MySQL FULLTEXT — always merge (catches Meili lag + purged AMP siblings
             // that only exist locally after seed/import).
@@ -2137,11 +2295,17 @@ class TrebPropertyHelper
         $local = self::localPropertyArray($listingKey);
 
         $cached = Cache::get($cacheKey);
-        if (is_array($cached) && $cached !== []) {
+        if (is_array($cached)) {
             return $cached;
         }
 
-        $resolve = function () use ($listingKey, $local): array {
+        if (self::shouldSkipRemoteAmpFetch()) {
+            self::schedulePriceChangesWarm($listingKey, $local, $cacheKey);
+
+            return [];
+        }
+
+        return Cache::remember($cacheKey, 1800, function () use ($listingKey, $local): array {
             $record = self::fetchPropertyRecord($listingKey) ?: self::fetchPropertyRecordRaw($listingKey);
 
             if ($record) {
@@ -2161,13 +2325,45 @@ class TrebPropertyHelper
             $history = self::fetchListingHistory($listingKey, $local);
 
             return self::extractPriceChangesFromHistory($history);
-        };
+        });
+    }
 
-        if (! self::canFetchRemoteAmp() || self::isPropertyDetailPageFetch()) {
-            return $resolve();
-        }
+    protected static function schedulePriceChangesWarm(string $listingKey, ?array $local, string $cacheKey): void
+    {
+        app()->terminating(function () use ($listingKey, $local, $cacheKey): void {
+            if (Cache::has($cacheKey)) {
+                return;
+            }
 
-        return Cache::remember($cacheKey, 1800, $resolve);
+            try {
+                Cache::remember($cacheKey, 1800, function () use ($listingKey, $local): array {
+                    $record = self::fetchPropertyRecord($listingKey) ?: self::fetchPropertyRecordRaw($listingKey);
+
+                    if ($record) {
+                        $record = self::enrichRecordAddress($record);
+                        $candidates = self::fetchUnitPropertyRecords($record);
+
+                        if ($candidates === []) {
+                            $candidates = [$record];
+                        }
+
+                        $changes = self::extractPriceChangesFromRecords($candidates);
+                        if ($changes !== []) {
+                            return $changes;
+                        }
+                    }
+
+                    $history = self::fetchListingHistory($listingKey, $local);
+
+                    return self::extractPriceChangesFromHistory($history);
+                });
+            } catch (\Throwable $e) {
+                try {
+                    report($e);
+                } catch (\Throwable) {
+                }
+            }
+        });
     }
 
     /**
@@ -2431,16 +2627,72 @@ class TrebPropertyHelper
         $listingKey = strtoupper(trim($listingKey));
         $authenticated = auth('account')->check() || auth()->check();
         // v8: unit-exact history (no building-wide sibling bleed).
-        $cacheKey = 'treb_listing_history_detail_v8_' . $listingKey . ($authenticated ? '_auth' : '_guest');
+        $cacheKey = 'treb_listing_history_detail_v9_' . $listingKey . ($authenticated ? '_auth' : '_guest');
 
         $cached = Cache::get($cacheKey);
         if (is_array($cached)) {
             return $cached;
         }
 
+        if (self::shouldSkipRemoteAmpFetch()) {
+            $record = $ampRecord ?: self::resolveFactRecordForDetail($listingKey, $local);
+            if ($record === []) {
+                self::scheduleListingHistoryWarm($listingKey, $local, $ampRecord, $cacheKey);
+
+                return [];
+            }
+
+            $stub = self::filterListingHistoryForViewer(
+                [self::propertyToHistoryRow(self::enrichRecordAddress($record))],
+                $authenticated
+            );
+
+            self::scheduleListingHistoryWarm($listingKey, $local, $ampRecord ?: $record, $cacheKey);
+
+            return $stub;
+        }
+
+        return self::computeListingHistoryForDetail($listingKey, $local, $ampRecord, $authenticated, $cacheKey);
+    }
+
+    protected static function scheduleListingHistoryWarm(
+        string $listingKey,
+        ?array $local,
+        ?array $ampRecord,
+        string $cacheKey
+    ): void {
+        app()->terminating(function () use ($listingKey, $local, $ampRecord, $cacheKey): void {
+            if (Cache::has($cacheKey)) {
+                return;
+            }
+
+            try {
+                $authenticated = auth('account')->check() || auth()->check();
+                self::computeListingHistoryForDetail($listingKey, $local, $ampRecord, $authenticated, $cacheKey);
+            } catch (\Throwable $e) {
+                try {
+                    report($e);
+                } catch (\Throwable) {
+                }
+            }
+        });
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $local
+     * @param  array<string, mixed>|null  $ampRecord
+     * @return array<int, array<string, mixed>>
+     */
+    protected static function computeListingHistoryForDetail(
+        string $listingKey,
+        ?array $local,
+        ?array $ampRecord,
+        bool $authenticated,
+        string $cacheKey
+    ): array {
         try {
             $record = $ampRecord
-                ?: self::ensureAmpRecord($listingKey, $local);
+                ?: self::resolveFactRecordForDetail($listingKey, $local);
 
             if (! $record) {
                 return [];
@@ -2449,8 +2701,6 @@ class TrebPropertyHelper
             $record = self::enrichRecordAddress($record);
             $rows = [];
 
-            // Exact unit AMP listings only when AMP is allowed (API/console).
-            // Detail HTML pages use local DB / cache — never block on AMP.
             if (self::canFetchRemoteAmp()) {
                 foreach (self::fetchUnitPropertyRecords($record) as $item) {
                     $rows[] = self::propertyToHistoryRow($item);
@@ -2489,7 +2739,6 @@ class TrebPropertyHelper
             try {
                 report($e);
             } catch (\Throwable) {
-                // ignore locked log files on IIS
             }
 
             return [];
@@ -2507,7 +2756,9 @@ class TrebPropertyHelper
     protected static function filterHistoryRowsToSameUnit(array $rows, array $record): array
     {
         $record = self::enrichRecordAddress($record);
-        $unitNumber = self::isUnitToken($record['UnitNumber'] ?? null) ? trim((string) $record['UnitNumber']) : '';
+        $unitNumber = self::isUnitToken($record['UnitNumber'] ?? null)
+            ? self::normalizeUnitToken((string) $record['UnitNumber'])
+            : '';
         $streetNumber = trim((string) ($record['StreetNumber'] ?? ''));
         $streetName = strtolower(trim((string) ($record['StreetName'] ?? '')));
 
@@ -2521,7 +2772,9 @@ class TrebPropertyHelper
                 $parsed = self::enrichRecordAddress([
                     'UnparsedAddress' => (string) $row['address'],
                 ]);
-                $itemUnit = self::isUnitToken($parsed['UnitNumber'] ?? null) ? trim((string) $parsed['UnitNumber']) : '';
+                $itemUnit = self::isUnitToken($parsed['UnitNumber'] ?? null)
+                    ? self::normalizeUnitToken((string) $parsed['UnitNumber'])
+                    : '';
                 $itemNumber = trim((string) ($parsed['StreetNumber'] ?? ''));
                 $itemName = strtolower(trim((string) ($parsed['StreetName'] ?? '')));
             } elseif ($itemUnit !== '' && ! self::isUnitToken($itemUnit)) {
@@ -2537,7 +2790,7 @@ class TrebPropertyHelper
             }
 
             if ($unitNumber !== '') {
-                return strcasecmp($itemUnit, $unitNumber) === 0;
+                return strcasecmp(self::normalizeUnitToken($itemUnit), $unitNumber) === 0;
             }
 
             // Detached / freehold: exclude condo/apartment unit rows.
@@ -2561,6 +2814,10 @@ class TrebPropertyHelper
         $cached = Cache::get($cacheKey);
         if (is_array($cached) && $cached !== []) {
             return $cached;
+        }
+
+        if (self::shouldSkipRemoteAmpFetch()) {
+            return [];
         }
 
         $urls = [
@@ -3566,7 +3823,7 @@ class TrebPropertyHelper
                         continue;
                     }
                     if ($unitNumber !== '') {
-                        if (strcasecmp($itemUnit, $unitNumber) !== 0) {
+                        if (strcasecmp(self::normalizeUnitToken($itemUnit), self::normalizeUnitToken($unitNumber)) !== 0) {
                             continue;
                         }
                     } elseif ($itemUnit !== '' && self::isUnitToken($itemUnit)) {

@@ -1,10 +1,13 @@
+@php
+    $canViewSold = ! $property->isSoldHistory() || auth('account')->check() || auth()->check();
+@endphp
 <div class="property-item homeya-box list-style-1 position-relative" @if ($property->latitude && $property->longitude) data-lat="{{ $property->latitude }}" data-lng="{{ $property->longitude }}" @endif>
-@if ($property->isSoldHistory() && !auth('account')->check())
+@if ($property->isSoldHistory() && ! $canViewSold)
     {!! Theme::partial('sold-property-login-gate') !!}
 @endif
-<div class="@if($property->isSoldHistory() && !auth('account')->check()) blurred-content @endif">
-    <a href="{{ (!$property->isSoldHistory() || auth('account')->check()) ? $property->url : '#modalRegister' }}" 
-       @if($property->isSoldHistory() && !auth('account')->check()) data-bs-toggle="modal" @endif
+<div class="@if($property->isSoldHistory() && ! $canViewSold) blurred-content @endif">
+    <a href="{{ $canViewSold ? $property->url : '#modalRegister' }}" 
+       @if(! $canViewSold) data-bs-toggle="modal" @endif
        class="images-group">
         <div class="images-style">
             @include(Theme::getThemeNamespace('views.real-estate.partials.property-image'), [
@@ -42,8 +45,8 @@
     <div class="content">
         <div class="archive-top">
             <div class="h7 text-capitalize fw-7">
-                <a href="{{ (!$property->isSoldHistory() || auth('account')->check()) ? $property->url : '#modalRegister' }}" 
-                   @if($property->isSoldHistory() && !auth('account')->check()) data-bs-toggle="modal" @endif
+                <a href="{{ $canViewSold ? $property->url : '#modalRegister' }}" 
+                   @if(! $canViewSold) data-bs-toggle="modal" @endif
                    class="link line-clamp-1" title="{{ $property->display_name }}">{!! BaseHelper::clean($property->display_name) !!}</a>
             </div>
             @if($property->short_address)
@@ -84,7 +87,7 @@
             @endif
             @if (!setting('real_estate_hide_price', false))
                 <div class="d-flex align-items-center">
-                    @if(!$property->isSoldHistory() || auth('account')->check())
+                    @if($canViewSold)
                         <div class="h7 fw-7">{{ $property->price_format }}</div>
                     @else
                         <div class="h7 fw-7 blur-text">******</div>

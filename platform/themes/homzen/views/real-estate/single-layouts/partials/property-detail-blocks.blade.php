@@ -495,11 +495,39 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    // Logged-in: refresh history via API (AMP unit sync) — HTML pages cannot call AMP directly.
+    // Lazy-load listing history after first paint (never block SSR on Meili/FULLTEXT).
     const blocks = document.getElementById('propertyDetailBlocks');
     const listingKey = blocks?.dataset?.listingKey;
-    const canRefreshHistory = blocks?.dataset?.historyAuth === '1';
-    if (listingKey && canRefreshHistory) {
+    const renderHistoryRows = (rows) => {
+        const tbody = document.querySelector('#hs-history tbody');
+        const tabLabel = document.querySelector('[data-tab="hs-history"] .hs-tab-text');
+        if (!tbody || !Array.isArray(rows) || rows.length === 0) {
+            return;
+        }
+
+        tbody.innerHTML = rows.map((row) => {
+            const locked = !!row.locked;
+            const price = (!locked && row.price != null) ? ('$' + Number(row.price).toLocaleString()) : '-';
+            const eventLabel = locked
+                ? ('<span class="hs-sign-in-link">(Sign in required)</span> ' + String(row.event || '').replace(/^\(Sign in required\)\s*/, ''))
+                : (row.event || '-');
+            const listingId = locked ? '*********' : (row.listing_id || '-');
+            const trClass = locked ? ' class="text-muted hs-history-locked-row"' : '';
+            return '<tr' + trClass + '>'
+                + '<td>' + (row.date_start || '-') + '</td>'
+                + '<td>' + (row.date_end || '-') + '</td>'
+                + '<td>' + price + '</td>'
+                + '<td>' + eventLabel + '</td>'
+                + '<td>' + listingId + '</td>'
+                + '</tr>';
+        }).join('');
+
+        if (tabLabel) {
+            tabLabel.textContent = 'Listing History (' + rows.length + ')';
+        }
+    };
+
+    if (listingKey) {
         fetch('/api/v1/listing-history/' + encodeURIComponent(listingKey), {
             credentials: 'same-origin',
             headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
@@ -507,38 +535,56 @@ document.addEventListener('DOMContentLoaded', function () {
         .then((res) => res.ok ? res.json() : null)
         .then((payload) => {
             const rows = Array.isArray(payload?.data) ? payload.data : [];
-            if (rows.length === 0) {
-                return;
-            }
-
-            const tbody = document.querySelector('#hs-history tbody');
-            const tabLabel = document.querySelector('[data-tab="hs-history"] .hs-tab-text');
-            if (!tbody) {
-                return;
-            }
-
-            tbody.innerHTML = rows.map((row) => {
-                const locked = !!row.locked;
-                const price = (!locked && row.price != null) ? ('$' + Number(row.price).toLocaleString()) : '-';
-                const eventLabel = locked
-                    ? ('<span class="hs-sign-in-link">(Sign in required)</span> ' + String(row.event || '').replace(/^\(Sign in required\)\s*/, ''))
-                    : (row.event || '-');
-                const listingId = locked ? '*********' : (row.listing_id || '-');
-                const trClass = locked ? ' class="text-muted hs-history-locked-row"' : '';
-                return '<tr' + trClass + '>'
-                    + '<td>' + (row.date_start || '-') + '</td>'
-                    + '<td>' + (row.date_end || '-') + '</td>'
-                    + '<td>' + price + '</td>'
-                    + '<td>' + eventLabel + '</td>'
-                    + '<td>' + listingId + '</td>'
-                    + '</tr>';
-            }).join('');
-
-            if (tabLabel) {
-                tabLabel.textContent = 'Listing History (' + rows.length + ')';
-            }
+            renderHistoryRows(rows);
         })
         .catch(() => {});
+    }
+
+    let roomsLoaded = {{ count($rooms) > 0 ? 'true' : 'false' }};
+    const roomsTabBtn = document.querySelector('[data-tab="hs-rooms"]');
+    const loadRooms = () => {
+        if (!listingKey || roomsLoaded) {
+            return;
+        }
+        roomsLoaded = true;
+        const panel = document.getElementById('hs-rooms');
+        if (panel) {
+            panel.innerHTML = '<p class="text-muted">{{ __('Loading room details…') }}</p>';
+        }
+        fetch('/api/v1/property-rooms/' + encodeURIComponent(listingKey), {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then((res) => res.ok ? res.json() : null)
+        .then((payload) => {
+            const rooms = Array.isArray(payload?.data) ? payload.data : [];
+            const tabLabel = document.querySelector('[data-tab="hs-rooms"] .hs-tab-text');
+            if (tabLabel) {
+                tabLabel.textContent = 'Rooms (' + rooms.length + ')';
+            }
+            if (!panel) {
+                return;
+            }
+            if (rooms.length === 0) {
+                panel.innerHTML = '<p class="text-muted">{{ __('Room details are not available for this listing.') }}</p>';
+                return;
+            }
+            panel.innerHTML = '<div class="hs-room-list">' + rooms.map((room) => {
+                const level = room.level && room.level !== '-' ? '<div style="font-size:14px;color:#64748b;">{{ __('Level') }}: ' + room.level + '</div>' : '';
+                const features = room.features && room.features !== '-' ? '<div style="font-size:14px;color:#334155;">' + room.features + '</div>' : '';
+                return '<div class="hs-room-item" style="margin-bottom:16px;">'
+                    + '<div style="font-weight:700;color:#1e293b;">' + (room.name || 'Room') + '</div>'
+                    + level + features
+                    + '</div>';
+            }).join('') + '</div>';
+        })
+        .catch(() => {
+            roomsLoaded = false;
+        });
+    };
+
+    if (roomsTabBtn) {
+        roomsTabBtn.addEventListener('click', loadRooms, { once: false });
     }
 });
 </script>

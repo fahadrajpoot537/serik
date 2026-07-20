@@ -521,8 +521,15 @@ class Property extends BaseModel
 
     public function isSoldHistory(): bool
     {
-        return in_array($this->MlsStatus, ['Sold', 'Leased', 'Sold Conditional', 'Sold Conditional Escape'])
-            || ($this->ClosePrice && (float) $this->ClosePrice > 0);
+        // Match map/API sold detection — ClosePrice alone must not lock active For Sale
+        // listings when AMP leaves stale close data (e.g. C13586122).
+        return in_array((string) $this->MlsStatus, [
+            'Sold',
+            'Sold Conditional',
+            'Sold Conditional Escape',
+            'Leased',
+            'Leased Conditional',
+        ], true);
     }
 
     /*
@@ -555,9 +562,16 @@ class Property extends BaseModel
             ? $moderation->getValue()
             : (string) $moderation;
 
-        // Only publicly visible TREB listings belong in the search index.
-        return $moderationValue === ModerationStatusEnum::APPROVED
-            && ! empty($this->external_id);
+        // Only publicly visible residential TREB listings belong in the search index.
+        if ($moderationValue !== ModerationStatusEnum::APPROVED || empty($this->external_id)) {
+            return false;
+        }
+
+        if (class_exists(\Theme\homzen\Supports\TrebPropertyHelper::class)) {
+            return ! \Theme\homzen\Supports\TrebPropertyHelper::isCommercialSubType($this->PropertySubType);
+        }
+
+        return true;
     }
 
     public function toSearchableArray(): array

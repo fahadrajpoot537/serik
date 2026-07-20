@@ -1,5 +1,7 @@
 @php
-    Theme::set('breadcrumbEnabled', 'yes');
+    $isSerikToolbar = str_contains($filterViewPath ?? '', 'properties-toolbar');
+
+    Theme::set('breadcrumbEnabled', $isSerikToolbar ? 'no' : 'yes');
 
     Theme::addBodyAttributes(['class' => Theme::getBodyAttribute('class') . ' listing-no-map']);
 
@@ -19,7 +21,10 @@
     <input type="hidden" name="page" value="{{ BaseHelper::stringify(request()->integer('page')) }}" />
     <input type="hidden" name="layout" value="{{ BaseHelper::stringify(request()->input('layout')) }}" />
 
-    <section class="flat-map">
+    <section @class(['serik-properties-filters-section' => $isSerikToolbar])>
+        @if ($isSerikToolbar)
+            @include($filterViewPath, ['style' => 2, 'actionUrl' => $actionUrl, 'propertyCount' => $propertyCount ?? null])
+        @else
         <div class="container">
             <div class="search-box-offcanvas container">
                 <div class="search-box-offcanvas-backdrop"></div>
@@ -36,11 +41,14 @@
                 </div>
             </div>
         </div>
+        @endif
     </section>
 
     <section class="flat-section-v5 flat-recommended flat-recommended-v2">
         <div class="container">
-            @include(Theme::getThemeNamespace('views.real-estate.partials.listing-top'))
+            @if (! str_contains($filterViewPath ?? '', 'properties-toolbar'))
+                @include(Theme::getThemeNamespace('views.real-estate.partials.listing-top'))
+            @endif
 
             {!! apply_filters('ads_render', null, 'listing_page_before') !!}
 

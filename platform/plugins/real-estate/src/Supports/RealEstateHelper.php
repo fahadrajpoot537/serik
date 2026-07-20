@@ -17,6 +17,7 @@ use Botble\RealEstate\Repositories\Interfaces\ProjectInterface;
 use Botble\RealEstate\Repositories\Interfaces\PropertyInterface;
 use Botble\Slug\Facades\SlugHelper;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Pagination\Paginator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Collection;
@@ -220,7 +221,7 @@ class RealEstateHelper
         return $this->projectsListingPageUrl;
     }
 
-    public function getPropertiesFilter(?int $perPage = 12, array $extra = []): LengthAwarePaginator|Collection
+    public function getPropertiesFilter(?int $perPage = 12, array $extra = []): LengthAwarePaginator|Paginator|Collection
     {
         $request = request();
 
@@ -249,6 +250,8 @@ class RealEstateHelper
                 'locations' => 'nullable|array',
                 'category_ids' => 'nullable|array',
                 'features' => 'nullable|array',
+                'home_types' => 'nullable|array',
+                'home_types.*' => 'nullable|string|in:house,condo,townhouse',
             ]));
         } catch (Throwable) {
             $filters = [];
@@ -256,14 +259,27 @@ class RealEstateHelper
 
         $filters['keyword'] = $request->input('k');
 
+        $isBrowseListing = $request->routeIs('public.properties', 'public.ajax.properties')
+            || $request->is('properties', 'properties/*');
+
         $params = array_merge([
             'paginate' => [
                 'per_page' => $perPage,
                 'current_paged' => $request->integer('page', 1),
             ],
-            'order_by' => ['re_properties.created_at' => 'DESC'],
-            'with' => RealEstateHelper::getPropertyRelationsQuery(),
+            'order_by' => $isBrowseListing ? [] : ['re_properties.created_at' => 'DESC'],
+            'with' => $isBrowseListing
+                ? [
+                    'slugable:id,key,prefix,reference_id',
+                    'currency:id,is_default,exchange_rate,symbol,title,is_prefix_symbol,decimals',
+                ]
+                : RealEstateHelper::getPropertyRelationsQuery(),
         ], $extra);
+
+        if ($isBrowseListing) {
+            // Avoid COUNT(*) on 90k+ rows — simplePaginate is much faster.
+            $params['paginate']['type'] = 'simplePaginate';
+        }
 
         return app(PropertyInterface::class)->getProperties($filters, $params);
     }

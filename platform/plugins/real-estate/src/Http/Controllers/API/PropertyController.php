@@ -1532,171 +1532,31 @@ class PropertyController extends BaseController
     {
         if (empty($listingKey)) {
             return response()->json([
-                'error' => 'ListingKey is required'
+                'error' => 'ListingKey is required',
             ], 400);
         }
 
-        $normalizedKey = strtoupper($listingKey);
+        $normalizedKey = strtoupper(trim((string) $listingKey));
+        $service = app(\Botble\RealEstate\Services\LiveTrebPropertyFallbackService::class);
 
         if (Property::query()->where('external_id', $normalizedKey)->exists()) {
             return response()->json(['status' => 'exists', 'skipped' => true]);
         }
 
-        $ampCacheKey = 'treb_add_single_v1_' . $normalizedKey;
-        $payload = Cache::get($ampCacheKey);
+        $property = $service->ingestByListingKey($normalizedKey, true, false);
 
-        if (! is_array($payload) || empty($payload['value'][0])) {
-            $url = "https://query.ampre.ca/odata/Property?"
-                . "\$filter=ListingKey%20eq%20%27{$listingKey}%27"
-                . "&\$select=ListingKey,UnparsedAddress,PropertySubType,PublicRemarks,PrivateRemarks,BedroomsTotal,BathroomsTotalInteger,KitchensTotal,LivingAreaRange,ListPrice,PostalCode,OriginalEntryTimestamp,ModificationTimestamp,TransactionType,MlsStatus,BedroomsBelowGrade,ListingContractDate"
-                . "&\$top=1";
-
-            $tokens = TrebPropertyHelper::ampTokens();
-
-            $payload = null;
-
-            foreach ($tokens as $token) {
-                $ch = curl_init($url);
-                curl_setopt_array($ch, [
-                    CURLOPT_RETURNTRANSFER => true,
-                    CURLOPT_TIMEOUT => 6,
-                    CURLOPT_CONNECTTIMEOUT => 3,
-                    CURLOPT_HTTPHEADER => [
-                        "Authorization: Bearer {$token}",
-                        'Accept: application/json',
-                        'OData-Version: 4.0',
-                        'OData-MaxVersion: 4.0',
-                    ],
-                ]);
-
-                $response = curl_exec($ch);
-                curl_close($ch);
-
-                if ($response === false) {
-                    continue;
-                }
-
-                $payload = json_decode($response, true);
-
-                if (! empty($payload['value'][0])) {
-                    Cache::put($ampCacheKey, $payload, 3600);
-                    break;
-                }
-
-                $payload = null;
-            }
-        }
-        //dd($payload);
-        if (empty($payload) || empty($payload['value'][0])) {
+        if ($property === null) {
             return response()->json([
-                'error' => 'Property not found or API returned empty response'
+                'error' => 'Property not found or API returned empty response',
             ], 404);
         }
 
-        $item = $payload['value'][0];
-
-        if (empty($item['ListingKey'])) {
-            return response()->json([
-                'error' => 'Invalid ListingKey'
-            ], 400);
-        }
-        $address = $item['UnparsedAddress'];
-
-        $latitude = null;
-        $longitude = null;
-        if ($address) {
-            foreach ($this->buildGeocodeCandidates($address, (string) ($item['PostalCode'] ?? '')) as $candidate) {
-                $coords = $this->nominatimGeocode($candidate);
-
-                if ($coords !== null) {
-                    $latitude = $coords['lat'];
-                    $longitude = $coords['lng'];
-                    break;
-                }
-
-                usleep(max(0, (int) config('services.nominatim.rate_limit_ms', 1100)) * 1000);
-            }
-        }
-
-        // dd($lat);   
-
-        // Create or Update Property
-        $property = Property::updateOrCreate(
-            ['external_id' => $item['ListingKey']],
-            [
-                'unique_id' => $this->generateUniqueId(),
-
-                'author_id' => 1,
-                'author_type' => 'Botble\ACL\Models\User',
-
-                'name' => TrebPropertyHelper::formatDisplayAddress($item),
-                'PropertySubType' => $item['PropertySubType'] ?? 'sell',
-                'description' => $item['PublicRemarks'],
-                'content' => ($item['PublicRemarks'] ?? '') . "<br>" . ($item['PrivateRemarks'] ?? ''),
-                'location' => TrebPropertyHelper::formatLocationLine($item) ?: $item['UnparsedAddress'],
-
-                'number_bedroom' => $this->extractMainBedrooms($item),
-                'number_bathroom' => (int) ($item['BathroomsTotalInteger'] ?? 0),
-                'number_floor' => $this->extractNumberFloor($item),
-
-                'square' => $item['LivingAreaRange'] ?? null,
-                'price' => (float) ($item['ListPrice'] ?? 0),
-                'currency_id' => 1,
-
-                'is_featured' => 0,
-                'featured_priority' => 0,
-
-                'status' => 'selling',
-                'moderation_status' => 'approved',
-
-                'expire_date' => '2027-04-06',
-                'auto_renew' => 1,
-                'never_expired' => 1,
-
-                'TransactionType' => $item['TransactionType'] ?? null,
-                'MlsStatus' => $item['MlsStatus'] ?? null,
-                'BedroomsBelowGrade' => $this->extractBelowGradeBedrooms($item),
-
-
-
-                'latitude' => $latitude ? (float) $latitude : 0,
-                'longitude' => $longitude ? (float) $longitude : 0,
-
-                'zip_code' => $item['PostalCode'] ?? null,
-                'views' => 0,
-
-                'created_at' => $item['ListingContractDate'] ?? now(),
-                'updated_at' => $item['ModificationTimestamp'] ?? now(),
-
-                'private_notes' => $item['PrivateRemarks'] ?? null,
-            ]
-        );
-
-        // ✅ Create Slug only when new
-        $baseSlug = Str::slug($item['UnparsedAddress'] ?? 'property');
-        $slug = $baseSlug . '-' . strtolower($item['ListingKey']);
-
-        // Check if slug already exists
-        $existing = SlugHelper::getSlug($slug, SlugHelper::getPrefix(\Botble\RealEstate\Models\Property::class));
-
-        if ($property->wasRecentlyCreated && !$existing) {
-            // Only create if it doesn't exist
-            SlugHelper::createSlug($property, $slug);
-        }
-
-        // OPTIONAL IMAGE IMPORT
-        // $this->importPropertyImages($item['ListingKey']);
-
         return response()->json([
-            'status' => 'success',
-            'listingKey' => $listingKey,
-            'property_id' => $property->id
+            'status' => 'imported',
+            'property_id' => $property->id,
+            'listing_key' => $normalizedKey,
         ]);
     }
-
-
-
-
 
     public function syncPropertiesOneByOne()
     {
@@ -3369,8 +3229,9 @@ class PropertyController extends BaseController
         // Address miss in local/Meili — pull exact street from AMP (AUTH/AUTH1),
         // ingest, then return. Fixes "390 Bank St Ottawa" when only Cherry "390"s
         // were indexed locally.
-        if ($parsed && $mappedLocal === [] && TrebPropertyHelper::canFetchRemoteAmp()) {
-            $ingestedIds = $this->ingestAmpAddressSearchHits($parsed, $top);
+        if ($parsed && $mappedLocal === []) {
+            $ingestedIds = app(\Botble\RealEstate\Services\LiveTrebPropertyFallbackService::class)
+                ->ingestAddressSearchHits($parsed, $top);
             if ($ingestedIds !== []) {
                 $ordered = $this->hydrateSmartSearchRows($ingestedIds, $top, true);
 
@@ -3383,11 +3244,24 @@ class PropertyController extends BaseController
         // indexed, then returned as a normal local row. The map can immediately
         // center / drop a marker on it and every future request is served
         // entirely from local storage.
-        if ($isListingKey && $mappedLocal === [] && TrebPropertyHelper::canFetchRemoteAmp()) {
-            $ingested = $this->ingestListingFromAmp($keyword);
+        if ($isListingKey && $mappedLocal === []) {
+            $ingested = app(\Botble\RealEstate\Services\LiveTrebPropertyFallbackService::class)
+                ->ingestByListingKey($keyword, true, false);
 
             if ($ingested !== null) {
                 // Allow commercial on exact MLS hit — subtype filter must not hide it.
+                $ordered = $this->hydrateSmartSearchRows([(int) $ingested->id], $top, true);
+                if ($ordered !== []) {
+                    return response()->json(TrebPropertyHelper::groupListingsByBuilding($ordered));
+                }
+            }
+        }
+
+        $postal = app(\Botble\RealEstate\Services\LiveTrebPropertyFallbackService::class)->parsePostalCode($keyword);
+        if ($postal !== null && $mappedLocal === []) {
+            $ingested = app(\Botble\RealEstate\Services\LiveTrebPropertyFallbackService::class)
+                ->searchAndIngestByKeyword($keyword);
+            if ($ingested !== null) {
                 $ordered = $this->hydrateSmartSearchRows([(int) $ingested->id], $top, true);
                 if ($ordered !== []) {
                     return response()->json(TrebPropertyHelper::groupListingsByBuilding($ordered));
@@ -6010,7 +5884,8 @@ class PropertyController extends BaseController
         // indexed on this first request, then served locally on every request
         // afterward. Browsing existing local listings never triggers this.
         if ($property === null) {
-            $property = $this->ingestListingFromAmp((string) $listingKey);
+            $property = app(\Botble\RealEstate\Services\LiveTrebPropertyFallbackService::class)
+                ->ingestByListingKey((string) $listingKey, true, false);
             if ($property !== null) {
                 $property->refresh();
             }
@@ -6073,10 +5948,8 @@ class PropertyController extends BaseController
         // payload above is never blocked. Idempotent + checkpoint-guarded, so a
         // fully-hydrated listing does zero remote work.
         if ($property && $this->listingNeedsHydration($property)) {
-            $hydrateKey = $upperKey;
-            dispatch(function () use ($hydrateKey) {
-                app(self::class)->ensureListingHydrated($hydrateKey);
-            })->afterResponse();
+            app(\Botble\RealEstate\Services\LiveTrebPropertyFallbackService::class)
+                ->scheduleBackgroundImport($upperKey);
         }
 
         return response()->json([

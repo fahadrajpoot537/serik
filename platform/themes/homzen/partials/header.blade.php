@@ -702,7 +702,7 @@
                                
                             
                          
-                            <a href="https://serik.ca/evaluation" class="main-city"> Free Home Evaluation</a>
+                            <a href="{{ url('/free-home-evaluation') }}" class="main-city"> Free Home Evaluation</a>
                                 <a href="https://serik.ca/tips-for-home-selling" class="main-city"> Tips For Home Selling</a>
                                 <a href="https://serik.ca/about-us#testimonials" class="main-city"> Customers' testimonials</a>
                             </div>

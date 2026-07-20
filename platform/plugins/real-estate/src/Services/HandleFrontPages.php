@@ -36,8 +36,7 @@ class HandleFrontPages
         switch ($slug->reference_type) {
             case Property::class:
 
-                $reviewData = RealEstateHelper::getReviewExtraData();
-
+                // Reviews load via AJAX — skip withCount/withAvg on the initial query.
                 // MLS sold/terminated rows are stored as status=draft (hidden from
                 // list indexes). Detail pages must still open them — otherwise
                 // abort(404) + redirect_404_to_homepage sends users back home.
@@ -64,11 +63,6 @@ class HandleFrontPages
                             });
                     })
                     ->with(RealEstateHelper::getPropertyRelationsQuery())
-                    ->when($reviewData, function (PropertyBuilder $query) use ($reviewData) {
-                        return $query
-                            ->withCount($reviewData['withCount'])
-                            ->withAvg($reviewData['withAvg'][0], $reviewData['withAvg'][1]);
-                    })
                     ->first();
 
                 if (! $property) {

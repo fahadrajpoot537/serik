@@ -4,10 +4,32 @@
     .breadcrumb-wrap, .flat-breadcrumb {
         display: none !important;
     }
+    html {
+        height: 100%;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
+    }
     body {
         margin: 0 !important;
         padding: 0 !important;
         background: #fff;
+        min-height: 100%;
+        height: auto !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
+    }
+    #wrapper {
+        overflow: visible !important;
+        min-height: 100%;
+    }
+
+    @media (max-width: 991px) {
+        .flat-property-detail .row > .col-lg-4 {
+            position: static !important;
+            top: auto !important;
+        }
     }
 
     /* Keep the action bar (wishlist / share / fullscreen) visible & pinned in popup */

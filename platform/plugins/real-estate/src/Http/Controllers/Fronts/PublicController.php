@@ -10,6 +10,7 @@ use Botble\Location\Models\City;
 use Botble\Location\Models\State;
 use Botble\RealEstate\Enums\ConsultCustomFieldTypeEnum;
 use Botble\RealEstate\Facades\RealEstateHelper;
+use Botble\RealEstate\Services\LiveTrebPropertyFallbackService;
 use Botble\RealEstate\Forms\Fronts\ConsultForm;
 use Botble\RealEstate\Http\Requests\SendConsultRequest;
 use Botble\RealEstate\Models\Account;
@@ -170,7 +171,33 @@ class PublicController extends BaseController
 
         Theme::addBodyAttributes(['id' => 'page-properties']);
 
-        $properties = RealEstateHelper::getPropertiesFilter((int) theme_option('number_of_properties_per_page') ?: 12, RealEstateHelper::getReviewExtraData());
+        $keyword = trim((string) $request->input('k'));
+
+        if ($keyword !== '' && ! $request->ajax()) {
+            $fallback = app(LiveTrebPropertyFallbackService::class)->searchAndIngestByKeyword($keyword);
+
+            if ($fallback) {
+                $service = app(LiveTrebPropertyFallbackService::class);
+
+                if ($service->isListingKey($keyword) || $service->parsePostalCode($keyword) || $service->parseAddressSearchKeyword($keyword)) {
+                    return redirect()->to($fallback->url);
+                }
+            }
+        }
+
+        $properties = RealEstateHelper::getPropertiesFilter((int) theme_option('number_of_properties_per_page') ?: 12);
+
+        if (! \Illuminate\Support\Facades\Cache::has('serik_active_listing_count_v1')) {
+            app()->terminating(function (): void {
+                \Illuminate\Support\Facades\Cache::remember('serik_active_listing_count_v1', 600, function () {
+                    return \Botble\RealEstate\Models\Property::query()
+                        ->active()
+                        ->residential()
+                        ->mlsActive()
+                        ->count();
+                });
+            });
+        }
 
         if ($request->ajax()) {
             if ($request->query('minimal')) {
@@ -185,9 +212,19 @@ class PublicController extends BaseController
                 $view = Theme::getThemeNamespace('views.real-estate.properties.index');
             }
 
-            return $this
+            $response = $this
                 ->httpResponse()
                 ->setData(view($view, compact('properties'))->render());
+
+            if ($properties instanceof \Illuminate\Contracts\Pagination\LengthAwarePaginator) {
+                $response->setAdditional([
+                    'total' => $properties->total(),
+                    'current_page' => $properties->currentPage(),
+                    'last_page' => $properties->lastPage(),
+                ]);
+            }
+
+            return $response;
         }
 
         return Theme::scope('real-estate.properties', compact('properties'), 'plugins/real-estate::themes.properties')->render();

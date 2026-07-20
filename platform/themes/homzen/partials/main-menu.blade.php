@@ -480,7 +480,7 @@
                         <div class="mega-right">
                             <h4>Features</h4>
 
-                                <a href="https://serik.ca/evaluation">&gt; Free Home Evaluation</a>
+                                <a href="{{ url('/free-home-evaluation') }}">&gt; Free Home Evaluation</a>
                                 <a href="https://serik.ca/tips-for-home-selling">&gt; Tips For Home Selling</a>
                                 <a href="https://www.google.com/search?sca_esv=5007095e94022ac2&biw=1536&bih=738&sxsrf=ANbL-n6A5KhK6IOO-0FVdTuAlRbAQEQ3MA:1776271594886&si=AL3DRZEsmMGCryMMFSHJ3StBhOdZ2-6yYkXd_doETEE1OR-qOfvoulo1K3CdIC5M45JUCC4r873m2qwN7EicjGCMgYWtNzBTKNl8PkUaJZYYaU6q_EC5LNKLYfGq1WitFm3vQOmt5TFOzgO3dLn3bfm3a6YNV2Pe8g%3D%3D&q=Serik+Realty+Inc.+Reviews&sa=X&ved=2ahUKEwjz-7-rp_CTAxVmVqQEHbnzCsUQ0bkNegQIJRAH" target="_blank">&gt; Customers' testimonials</a>
                         </div>

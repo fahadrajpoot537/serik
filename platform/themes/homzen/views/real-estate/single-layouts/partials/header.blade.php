@@ -3,22 +3,16 @@
 
     $model = $model ?? $property ?? null;
     $listingKey = $model->external_id ?? '';
-    $ampRecord = $listingKey ? TrebPropertyHelper::ensureAmpRecord($listingKey, [
-            'name' => $model->name,
-            'price' => $model->price,
-            'MlsStatus' => $model->MlsStatus,
-            'TransactionType' => $model->TransactionType,
-            'PropertySubType' => $model->PropertySubType,
-        ]) : null;
-
-    $factRecord = $ampRecord
-        ?: TrebPropertyHelper::enrichRecordAddress(TrebPropertyHelper::recordFromLocal([
-            'name' => $model->name,
-            'price' => $model->price,
-            'MlsStatus' => $model->MlsStatus,
-            'TransactionType' => $model->TransactionType,
-            'PropertySubType' => $model->PropertySubType,
-        ], $listingKey));
+    $localHeader = [
+        'name' => $model->name,
+        'price' => $model->price,
+        'MlsStatus' => $model->MlsStatus,
+        'TransactionType' => $model->TransactionType,
+        'PropertySubType' => $model->PropertySubType,
+    ];
+    $factRecord = $listingKey
+        ? TrebPropertyHelper::resolveFactRecordForDetail($listingKey, $localHeader)
+        : TrebPropertyHelper::enrichRecordAddress(TrebPropertyHelper::recordFromLocal($localHeader, $listingKey));
 
     $displayName = TrebPropertyHelper::formatDisplayAddress($factRecord);
     $displayLocation = TrebPropertyHelper::formatLocationLine($factRecord);
@@ -101,7 +95,9 @@
 
                 @else
                     @php
-                        $cash_back = ($model->price/100)*1.5;
+                        $cash_back = is_numeric($model->price) && (float) $model->price > 0
+                            ? ((float) $model->price / 100) * 1.5
+                            : 0;
                     @endphp
 
                     Listed For :

@@ -202,7 +202,7 @@
 <script>
 function isAboutUsPage() {
     return window.location.pathname === '/about-us' 
-        || window.location.pathname === '/evaluation' || window.location.pathname === '/appointment-scheduler';
+        || window.location.pathname === '/free-home-evaluation' || window.location.pathname === '/evaluation' || window.location.pathname === '/appointment-scheduler';
 }
 
 

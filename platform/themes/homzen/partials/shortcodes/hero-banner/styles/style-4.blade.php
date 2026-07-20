@@ -7,10 +7,32 @@
 <style>
 .map-housesigma{
     position:relative;
+    display:flex;
+    flex-direction:column;
+    min-height:0;
 }
 
 .map-housesigma #map {
     background: #f4f2ef;
+}
+
+@media (min-width: 992px) {
+    .map-housesigma {
+        /* Fill viewport below site header + map filter bars */
+        min-height: calc(100dvh - 132px);
+    }
+
+    .map-housesigma .map-search-wrapper {
+        flex: 1 1 auto;
+        min-height: 480px;
+        height: calc(100dvh - 168px) !important;
+        max-height: none;
+    }
+
+    .map-housesigma .map-search-wrapper #map {
+        height: 100% !important;
+        min-height: 0 !important;
+    }
 }
 
 /* ===== TOP BAR ===== */
@@ -1589,6 +1611,24 @@ button {
         overflow-y: auto !important;
         max-height: 88vh !important;
         -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        touch-action: pan-y;
+    }
+
+    .map-housesigma .hs-map-cluster-mobile-popup .clusterpopup {
+        max-height: none !important;
+        height: 100%;
+        min-height: 0;
+    }
+
+    .map-housesigma .hs-map-cluster-mobile-popup .hs-cluster-popup-list {
+        flex: 1 1 auto;
+        min-height: 0;
+        max-height: none !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        touch-action: pan-y;
     }
 
     @media (max-width: 768px) {
@@ -1596,15 +1636,15 @@ button {
         .maplibregl-popup.hs-map-mobile-popup,
         .maplibregl-popup.hs-map-cluster-mobile-popup,
         .map-housesigma .maplibregl-popup {
-            bottom: 70px !important;
-            max-height: calc(100dvh - 60px - 70px) !important;
+            bottom: calc(52px + env(safe-area-inset-bottom, 0px)) !important;
+            max-height: calc(100dvh - 60px - 52px - env(safe-area-inset-bottom, 0px)) !important;
         }
 
         .maplibregl-popup.hs-map-mobile-sheet .maplibregl-popup-content,
         .maplibregl-popup.hs-map-mobile-popup .maplibregl-popup-content,
         .maplibregl-popup.hs-map-cluster-mobile-popup .maplibregl-popup-content,
         .map-housesigma .maplibregl-popup-content {
-            max-height: calc(100dvh - 60px - 70px) !important;
+            max-height: calc(100dvh - 60px - 52px - env(safe-area-inset-bottom, 0px)) !important;
         }
     }
 
@@ -2202,8 +2242,7 @@ position: absolute;
 
     #propertyModal {
         position: fixed;
-        top: 0;
-        left: 0;
+        inset: 0;
         width: 100%;
         height: 100%;
         z-index: 99999;
@@ -2211,23 +2250,30 @@ position: absolute;
     }
 
     #propertyModal .modal-content {
+        display: flex;
+        flex-direction: column;
+        position: relative;
         top: 0;
         left: 0;
         transform: none;
         width: 100%;
-        height: 100%;
+        height: 100dvh;
+        max-height: 100dvh;
         border-radius: 0;
+        overflow: hidden;
     }
 
     #propertyFrame {
+        flex: 1 1 auto;
+        min-height: 0;
         width: 100%;
-        height: 100%;
+        height: 100% !important;
         border: none;
-        overflow: auto;
-        -webkit-overflow-scrolling: touch;
+        display: block;
     }
 
     #propertyModal .close-modal {
+        position: fixed;
         right: 10px;
         top: calc(env(safe-area-inset-top, 0px) + 8px);
         width: 34px;
@@ -2240,13 +2286,13 @@ position: absolute;
         color: #0f172a;
         font-size: 24px;
         line-height: 1;
+        z-index: 100000;
     }
 
     #iframeLoader {
         position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
+        inset: 0;
+        z-index: 2;
     }
 }
 
@@ -2735,7 +2781,7 @@ position: absolute;
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 1001;
+    z-index: 10050;
     display: flex;
     background: #fff;
     border-top: 1px solid #e5e7eb;
@@ -2793,7 +2839,8 @@ position: absolute;
         flex-direction: row;
         align-items: stretch;
         overflow: hidden;
-        height: 80vh;
+        height: calc(100dvh - 168px);
+        min-height: 480px;
         position: relative;
     }
 
@@ -2845,9 +2892,21 @@ position: absolute;
         z-index: 1000;
     }
 
+    body:has(.map-housesigma) .mobile-bottom-nav {
+        display: none !important;
+    }
+
+    body:has(.map-housesigma) {
+        padding-bottom: calc(52px + env(safe-area-inset-bottom, 0px)) !important;
+    }
+
+    .map-housesigma {
+        min-height: calc(100dvh - 60px);
+    }
+
     .map-housesigma .map-mobile-view {
-        height: calc(100dvh - 118px - 52px);
-        min-height: 320px;
+        height: calc(100dvh - 60px - 52px - env(safe-area-inset-bottom, 0px));
+        min-height: 300px;
         flex-direction: column !important;
         overflow: hidden;
     }
@@ -2920,6 +2979,16 @@ position: absolute;
     }
 
     .map-housesigma .hs-cluster-popup-list {
+        max-height: min(52vh, 420px);
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        touch-action: pan-y;
+    }
+
+    .map-housesigma .hs-map-cluster-mobile-popup .maplibregl-popup-content,
+    .map-housesigma .hs-map-cluster-mobile-popup {
         padding: 12px 14px calc(32px + env(safe-area-inset-bottom, 0px));
         max-height: none;
         flex: 1 1 auto;
@@ -3501,7 +3570,7 @@ position: absolute;
                    
                 </a>
                 <!--a>Market Trends</a-->
-                <a href="{{ url('evaluation') }}">Home Evaluation</a>
+                <a href="{{ url('/free-home-evaluation') }}">Home Evaluation</a>
                 <a href="{{ url('agents') }}">Agents</a>
                 <!--a>Tools</a-->
             </div>
@@ -3589,18 +3658,6 @@ position: absolute;
                                 <input type="checkbox" value="Duplex">
                                 <span class="custom-checkbox"></span>
                                 Duplex
-                            </label>
-                            
-                            <label class="checkbox-item">
-                                <input type="checkbox" value="Farm">
-                                <span class="custom-checkbox"></span>
-                                Farm
-                            </label>
-                            
-                            <label class="checkbox-item">
-                                <input type="checkbox" value="Land">
-                                <span class="custom-checkbox"></span>
-                                Land
                             </label>
                             
                             <label class="checkbox-item">
@@ -4147,10 +4204,6 @@ position: absolute;
                     </div>
                 </div>
                 <div class="hs-m-filter-section">
-                    <p class="header">Description Contains Keywords</p>
-                    <input type="text" id="hsMKeywords" placeholder="Waterfront, Pool, Fireplace..." style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;">
-                </div>
-                <div class="hs-m-filter-section">
                     <p class="header">Bedrooms</p>
                     <ul class="hs-m-chips" data-mfilter="bedroom">
                         <li class="selected">All</li><li>0</li><li>1+</li><li>2+</li><li>3+</li><li>4+</li><li>5+</li>
@@ -4169,9 +4222,9 @@ position: absolute;
                     </ul>
                 </div>
                 <div class="hs-m-filter-section">
-                    <p class="header">Open House</p>
-                    <ul class="hs-m-chips" data-mfilter="openhouse">
-                        <li class="selected">Unspecified</li><li>Today</li><li>Tomorrow</li><li>7 days</li><li>All Open Houses</li>
+                    <p class="header">Basement</p>
+                    <ul class="hs-m-chips" data-mfilter="basement1">
+                        <li class="selected">All</li><li>Finished</li><li>Separate Entrance</li><li>Walk-out</li>
                     </ul>
                 </div>
                 <div class="hs-m-filter-section">
@@ -4181,10 +4234,14 @@ position: absolute;
                     </ul>
                 </div>
                 <div class="hs-m-filter-section">
-                    <p class="header">Basement</p>
-                    <ul class="hs-m-chips" data-mfilter="basement1">
-                        <li class="selected">All</li><li>Finished</li><li>Separate Entrance</li><li>Walk-out</li>
+                    <p class="header">Open House</p>
+                    <ul class="hs-m-chips" data-mfilter="openhouse">
+                        <li class="selected">Unspecified</li><li>Today</li><li>Tomorrow</li><li>7 days</li><li>All Open Houses</li>
                     </ul>
+                </div>
+                <div class="hs-m-filter-section">
+                    <p class="header">Description Contains Keywords</p>
+                    <input type="text" id="hsMKeywords" placeholder="Waterfront, Pool, Fireplace..." style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;">
                 </div>
                 <div class="hs-m-filter-section">
                     <p class="header">Max Maintenance Fee</p>
@@ -4204,7 +4261,7 @@ position: absolute;
                 <div id="iframeLoader" class="iframe-loader">
                     <div class="spinner"></div>
                 </div>
-            <iframe id="propertyFrame" src="" frameborder="0" allowfullscreen allow="fullscreen; clipboard-write"></iframe>
+            <iframe id="propertyFrame" src="" frameborder="0" allowfullscreen allow="fullscreen; clipboard-write" scrolling="yes"></iframe>
         </div>
     </div>
         
@@ -4784,6 +4841,20 @@ async function showCityBoundary(cityName) {
   
     map.addControl(new maplibregl.NavigationControl(), window.innerWidth <= 991 ? 'bottom-right' : 'top-right');
     window.hsMap = map;
+
+    const resizeHsMap = () => {
+        if (map && typeof map.resize === 'function') {
+            map.resize();
+        }
+    };
+
+    map.once('load', resizeHsMap);
+    window.addEventListener('resize', resizeHsMap);
+    window.addEventListener('orientationchange', () => setTimeout(resizeHsMap, 250));
+    if (window.innerWidth < 992) {
+        setTimeout(resizeHsMap, 150);
+        setTimeout(resizeHsMap, 600);
+    }
 
     // ==============================
     // LOAD SOURCE + LAYERS
@@ -7563,6 +7634,29 @@ function mapMovedEnoughToRefetch() {
 
     window.hsMergeMapBundle = hsMergeMapBundle;
 
+    function lockBodyForPropertyModal() {
+        document.documentElement.classList.add('hs-property-modal-open');
+        document.body.dataset.hsModalScrollY = String(window.scrollY || 0);
+        document.body.style.position = 'fixed';
+        document.body.style.top = `-${document.body.dataset.hsModalScrollY}px`;
+        document.body.style.left = '0';
+        document.body.style.right = '0';
+        document.body.style.width = '100%';
+    }
+
+    function unlockBodyForPropertyModal() {
+        document.documentElement.classList.remove('hs-property-modal-open');
+        const scrollY = parseInt(document.body.dataset.hsModalScrollY || '0', 10);
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.left = '';
+        document.body.style.right = '';
+        document.body.style.width = '';
+        document.body.style.overflow = '';
+        delete document.body.dataset.hsModalScrollY;
+        window.scrollTo(0, scrollY);
+    }
+
     function pinMobileMapPopup(popup) {
         if (window.innerWidth > 991 || !popup?._container) return;
 
@@ -7570,7 +7664,7 @@ function mapMovedEnoughToRefetch() {
         document.body.appendChild(container);
         container.classList.add('hs-map-mobile-sheet');
 
-        const bottomOffset = window.innerWidth <= 768 ? 70 : 0;
+        const bottomOffset = 52 + (parseInt(getComputedStyle(document.documentElement).getPropertyValue('env(safe-area-inset-bottom)')) || 0);
         container.style.cssText = [
             'position:fixed',
             'left:0',
@@ -7583,14 +7677,31 @@ function mapMovedEnoughToRefetch() {
             'z-index:10050',
             'margin:0',
             'padding:0',
+            'touch-action:pan-y',
         ].join(';');
 
         const content = container.querySelector('.maplibregl-popup-content');
         if (content) {
-            const maxH = window.innerWidth <= 768
-                ? 'calc(100dvh - 60px - 70px)'
-                : '88vh';
+            const maxH = 'calc(100dvh - 60px - 52px - env(safe-area-inset-bottom, 0px))';
             content.style.maxHeight = maxH;
+            content.style.overflowY = 'auto';
+            content.style.overflowX = 'hidden';
+            content.style.webkitOverflowScrolling = 'touch';
+            content.style.overscrollBehavior = 'contain';
+            content.style.touchAction = 'pan-y';
+        }
+
+        const list = container.querySelector('.hs-cluster-popup-list');
+        if (list) {
+            list.style.maxHeight = 'none';
+            list.style.overflowY = 'auto';
+            list.style.webkitOverflowScrolling = 'touch';
+            list.style.touchAction = 'pan-y';
+        }
+
+        if (window.hsMap?.dragPan?.disable) {
+            window.hsMap.dragPan.disable();
+            popup.once('close', () => window.hsMap?.dragPan?.enable?.());
         }
 
         popup._update = function () {};
@@ -7730,7 +7841,7 @@ function mapMovedEnoughToRefetch() {
 
         modal.style.display = 'block';
         if (loader1) loader1.style.display = 'flex';
-        document.body.style.overflow = 'hidden';
+        lockBodyForPropertyModal();
         iframe.onload = function () {
             if (loader1) loader1.style.display = 'none';
         };
@@ -7841,6 +7952,50 @@ function mapMovedEnoughToRefetch() {
         `;
     }
 
+    function ensureMapPopupFullyVisible(popup, coordinates) {
+        if (!popup || !map || window.innerWidth <= 991) {
+            return;
+        }
+
+        const adjust = () => {
+            const el = popup.getElement();
+            const mapEl = map.getContainer();
+            if (!el || !mapEl) {
+                return;
+            }
+
+            const padding = 20;
+            const mapRect = mapEl.getBoundingClientRect();
+            const popupRect = el.getBoundingClientRect();
+            let panY = 0;
+            let panX = 0;
+
+            if (popupRect.bottom > mapRect.bottom - padding) {
+                panY = popupRect.bottom - (mapRect.bottom - padding);
+            }
+            if (popupRect.top < mapRect.top + padding) {
+                panY = popupRect.top - (mapRect.top + padding);
+            }
+            if (popupRect.right > mapRect.right - padding) {
+                panX = popupRect.right - (mapRect.right - padding);
+            }
+            if (popupRect.left < mapRect.left + padding) {
+                panX = popupRect.left - (mapRect.left + padding);
+            }
+
+            if (panX !== 0 || panY !== 0) {
+                map.easeTo({
+                    center: coordinates,
+                    offset: [panX * 0.5, panY],
+                    duration: 420,
+                    essential: true,
+                });
+            }
+        };
+
+        requestAnimationFrame(() => requestAnimationFrame(adjust));
+    }
+
     function showClusterPopup(leaves, coordinates) {
         window._hsLastClusterLeaves = leaves || [];
 
@@ -7879,6 +8034,8 @@ function mapMovedEnoughToRefetch() {
 
         if (isMobile) {
             pinMobileMapPopup(clusterPopup);
+        } else {
+            ensureMapPopupFullyVisible(clusterPopup, coordinates);
         }
 
         hydrateMapThumbnailsForFeatures(leaves, '.hs-cluster-list-item');
@@ -8203,6 +8360,10 @@ function setHsViewMode(mode) {
     if (isList && window.innerWidth < 992 && lastMapFeatures.length) {
         renderMapListCards(lastMapFeatures);
     }
+
+    if (!isList && window.innerWidth < 992) {
+        setTimeout(() => window.hsMap?.resize?.(), 320);
+    }
 }
 
 function onHsListCardClick(e) {
@@ -8267,7 +8428,10 @@ function initHsViewMode() {
     });
 
     document.querySelectorAll('.hs-view-bar-btn').forEach((btn) => {
-        btn.addEventListener('click', () => setHsViewMode(btn.dataset.hsView || 'map'));
+        btn.addEventListener('click', () => {
+            setHsViewMode(btn.dataset.hsView || 'map');
+            setTimeout(() => window.hsMap?.resize?.(), 320);
+        });
     });
 
     document.getElementById('hsListSidebarBody')?.addEventListener('click', onHsListCardClick);
@@ -8686,9 +8850,7 @@ document.addEventListener('click', function (e) {
                 url += (url.includes('?') ? '&' : '?') + 'iframe=1&t=' + Date.now();
                 modal.style.display = 'block';
                 if (loader1) loader1.style.display = 'flex';
-                if (window.innerWidth <= 991) {
-                    document.body.style.overflow = 'hidden';
-                }
+                lockBodyForPropertyModal();
                 iframe.onload = function () { if (loader1) loader1.style.display = 'none'; };
                 iframe.src = url;
             }
@@ -8751,7 +8913,7 @@ document.addEventListener('click', function (e) {
         modal.style.display = 'block';
         iframe.src = url;
 
-        document.body.style.overflow = "hidden";
+        lockBodyForPropertyModal();
 
         return; // stop here for mobile
     }
@@ -8762,6 +8924,7 @@ document.addEventListener('click', function (e) {
     modal.style.display = 'block';
 
     loader1.style.display = 'flex';
+    lockBodyForPropertyModal();
 
     iframe.onload = null;
 
@@ -8792,7 +8955,7 @@ const iframe = document.getElementById('propertyFrame');
     //Clear iframe
     iframe.src = '';
     loader1.style.display = 'flex';
-    document.body.style.overflow = "";
+    unlockBodyForPropertyModal();
 
 });
 
@@ -9290,21 +9453,6 @@ document.querySelector('.apply-all')?.addEventListener('click', function(){
         bootstrap.Collapse.getOrCreateInstance(collapse).hide();
     }
 });
-
-
-document.addEventListener('click', function (e) {
-    const property = e.target.closest('.open-property');
-    if (!property) return;
-
-    if (window.innerWidth <= 768) {
-        document.body.style.overflow = "hidden";
-    }
-});
-
-document.getElementById("clearBtn_popup").addEventListener("click", function(){
-    document.body.style.overflow = "auto";
-});
-
 
 
 function closeMobileSheetsGlobal() {

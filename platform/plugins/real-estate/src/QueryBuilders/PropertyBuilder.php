@@ -54,4 +54,44 @@ class PropertyBuilder extends BaseQueryBuilder
 
         return $this;
     }
+
+    /**
+     * Ontario residential inventory only (excludes commercial / land / farm / etc.).
+     */
+    public function residential(): static
+    {
+        if (! class_exists(\Theme\homzen\Supports\TrebPropertyHelper::class)) {
+            return $this;
+        }
+
+        $excluded = \Theme\homzen\Supports\TrebPropertyHelper::excludedCommercialSubTypes();
+
+        $this->where(function (Builder $query) use ($excluded): void {
+            $query->whereNull('PropertySubType')
+                ->orWhereNotIn('PropertySubType', $excluded);
+        });
+
+        return $this;
+    }
+
+    /**
+     * MLS-active listings (For Sale / For Lease on market).
+     *
+     * @param  array<int, string>|null  $statuses
+     */
+    public function mlsActive(?array $statuses = null): static
+    {
+        $statuses ??= [
+            'New',
+            'Active',
+            'Ext',
+            'Extension',
+            'Price Change',
+            'Active Under Contract',
+        ];
+
+        $this->whereIn('MlsStatus', $statuses);
+
+        return $this;
+    }
 }

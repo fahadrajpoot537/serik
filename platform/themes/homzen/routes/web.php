@@ -29,6 +29,8 @@ Route::middleware(['web', 'core'])
     
     
 Route::middleware(['web', 'core'])->group(function (): void {
+    Route::redirect('/evaluation', '/free-home-evaluation', 301);
+
     Route::get(
         '/on/{filters}/map/{slug}',
         function (PublicController $controller, string $filters, string $slug) {

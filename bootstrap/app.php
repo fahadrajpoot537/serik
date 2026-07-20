@@ -73,6 +73,16 @@ $app = Application::configure(basePath: dirname(__DIR__))
             ->withoutOverlapping(10)
             ->appendOutputTo(storage_path('logs/treb-search-index.log'));
 
+        // Historical TREB import (TRREB_AUTH1 archive) — resumable slices.
+        $schedule->call($safe('serik:import-historical', [
+            '--resume' => true,
+            '--max-runtime' => 240,
+        ]))
+            ->name('serik-import-historical')
+            ->hourly()
+            ->withoutOverlapping(15)
+            ->appendOutputTo(storage_path('logs/treb-historical.log'));
+
         // E) Heavy maintenance → LOW queue (scheduler only dispatches)
         $schedule->call(function () {
             try {

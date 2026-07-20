@@ -12,9 +12,11 @@ use Botble\RealEstate\Models\Property;
 use Botble\RealEstate\Repositories\Interfaces\PropertyInterface;
 use Botble\Support\Repositories\Eloquent\RepositoriesAbstract;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Pagination\Paginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 
 class PropertyRepository extends RepositoriesAbstract implements PropertyInterface
 {
@@ -52,7 +54,7 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
         return $this->advancedGet($params);
     }
 
-    public function getProperties(array $filters = [], array $params = []): Collection|LengthAwarePaginator
+    public function getProperties(array $filters = [], array $params = []): Collection|LengthAwarePaginator|Paginator
     {
         $filters = array_merge([
             'keyword' => null,
@@ -76,12 +78,19 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
             'zip_code' => null,
             'sort_by' => null,
             'features' => null,
+            'home_types' => null,
         ], $filters);
 
+        $isBrowseListing = request()->routeIs('public.properties', 'public.ajax.properties', 'public.ajax.properties.map')
+            || request()->is('properties', 'properties/*');
+
         $orderBy = match ($filters['sort_by']) {
-            'date_asc' => [
-                'created_at' => 'ASC',
-            ],
+            'date_asc' => $isBrowseListing
+                ? ['re_properties.id' => 'ASC']
+                : [
+                    'listing_modified_at' => 'ASC',
+                    'created_at' => 'ASC',
+                ],
             'price_asc' => [
                 'price' => 'ASC',
             ],
@@ -95,7 +104,7 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
                 'name' => 'DESC',
             ],
             default => [
-                'created_at' => 'DESC',
+                're_properties.id' => 'DESC',
             ],
         };
 
@@ -115,11 +124,18 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
             'with' => [],
         ], $params);
 
-        // Initialize the model with active properties
-        $this->model = $this->originalModel->active();
+        // Initialize the model with active residential properties
+        $this->model = $this->originalModel->active()->residential();
 
-        // Sort by featured properties if the setting is enabled
-        if (RealEstateHelper::isEnabledKeepFeaturedPropertiesOnTop()) {
+        if (
+            request()->routeIs('public.properties', 'public.ajax.properties', 'public.ajax.properties.map')
+            || request()->is('properties', 'properties/*')
+        ) {
+            $this->model = $this->model->mlsActive();
+        }
+
+        // Featured ordering forces a full-table filesort on 90k+ MLS rows — skip on browse listing.
+        if (RealEstateHelper::isEnabledKeepFeaturedPropertiesOnTop() && ! $isBrowseListing) {
             // First sort by featured status (featured properties first)
             $this->model = $this->model->orderByDesc('is_featured');
 
@@ -139,11 +155,18 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
             if ($keyword !== '' && $search->constrainQueryToKeyword($this->model, $keyword, 500)) {
                 // Meili IDs applied via whereIn / empty-result guard.
             } elseif ($keyword !== '' && preg_match('/^[a-z]\d+$/i', $keyword)) {
-                // Meili down: sargable MLS key only — never LOWER LIKE on name/location.
-                $this->model = $this->model->where(function ($q) use ($keyword) {
-                    $q->where('external_id', strtoupper($keyword))
-                        ->orWhere('unique_id', strtoupper($keyword));
-                });
+                $ingested = app(\Botble\RealEstate\Services\LiveTrebPropertyFallbackService::class)
+                    ->ingestByListingKey($keyword, true, false);
+
+                if ($ingested) {
+                    $this->model = $this->model->where('id', $ingested->id);
+                } else {
+                    // Meili down: sargable MLS key only — never LOWER LIKE on name/location.
+                    $this->model = $this->model->where(function ($q) use ($keyword) {
+                        $q->where('external_id', strtoupper($keyword))
+                            ->orWhere('unique_id', strtoupper($keyword));
+                    });
+                }
             } elseif ($keyword !== '') {
                 $this->model = $this->model->whereRaw('0 = 1');
             }
@@ -151,26 +174,39 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
 
         if ($filters['type'] !== null) {
             if ($filters['type'] == PropertyTypeEnum::SALE) {
-                $this->model = $this->model->where('type', $filters['type']);
+                // MLS ingest often leaves type NULL; treat those as for-sale listings.
+                $this->model = $this->model->where(function (Builder $query) {
+                    $query->where('type', PropertyTypeEnum::SALE)->orWhereNull('type');
+                });
             } else {
                 $this->model = $this->model->where('type', $filters['type']);
+            }
+        }
+
+        if (! empty($filters['home_types'])) {
+            $subtypeMap = [
+                'house' => ['Detached', 'Semi-Detached', 'Link', 'Rural Residential', 'Farm'],
+                'condo' => ['Condo Apartment', 'Condo Townhouse', 'Detached Condo', 'Leasehold Condo', 'Common Element Condo', 'Co-Ownership Apartment'],
+                'townhouse' => ['Att/Row/Townhouse', 'Condo Townhouse'],
+            ];
+            $subtypes = [];
+            foreach ((array) $filters['home_types'] as $homeType) {
+                if (isset($subtypeMap[$homeType])) {
+                    $subtypes = array_merge($subtypes, $subtypeMap[$homeType]);
+                }
+            }
+            $subtypes = array_values(array_unique($subtypes));
+            if ($subtypes !== []) {
+                $this->model = $this->model->whereIn('PropertySubType', $subtypes);
             }
         }
 
         if ($filters['bedroom']) {
-            if ($filters['bedroom'] < 5) {
-                $this->model = $this->model->where('number_bedroom', $filters['bedroom']);
-            } else {
-                $this->model = $this->model->where('number_bedroom', '>=', $filters['bedroom']);
-            }
+            $this->model = $this->model->where('number_bedroom', '>=', $filters['bedroom']);
         }
 
         if ($filters['bathroom']) {
-            if ($filters['bathroom'] < 5) {
-                $this->model = $this->model->where('number_bathroom', $filters['bathroom']);
-            } else {
-                $this->model = $this->model->where('number_bathroom', '>=', $filters['bathroom']);
-            }
+            $this->model = $this->model->where('number_bathroom', '>=', $filters['bathroom']);
         }
 
         if ($filters['floor']) {
@@ -342,7 +378,138 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
 
         $this->model = apply_filters('properties_filter_query', $this->model, $filters, $params);
 
+        if ($isBrowseListing && Arr::get($params, 'paginate.type') === 'simplePaginate') {
+            return $this->browseListingPaginate($params, $filters);
+        }
+
         return $this->advancedGet($params);
+    }
+
+    protected function browseListingPaginate(array $params, array $filters): LengthAwarePaginator
+    {
+        $paginate = $params['paginate'] ?? [];
+        $perPage = max(1, (int) ($paginate['per_page'] ?? 12));
+        $page = max(1, (int) ($paginate['current_paged'] ?? 1));
+        $pageName = $paginate['page_name'] ?? 'page';
+
+        $query = $this->model;
+
+        if (! empty($params['select'])) {
+            $query = $query->select($params['select']);
+        }
+
+        if (! empty($params['with'])) {
+            $query = $query->with($params['with']);
+        }
+
+        $query = $this->applyBeforeExecuteQuery($query);
+        $total = $this->resolveBrowseListingTotal($query, $filters);
+
+        $items = (clone $query)->forPage($page, $perPage)->get();
+
+        return new \Illuminate\Pagination\LengthAwarePaginator(
+            $items,
+            $total,
+            $perPage,
+            $page,
+            [
+                'path' => Paginator::resolveCurrentPath(),
+                'pageName' => $pageName,
+                'query' => request()->query(),
+            ]
+        );
+    }
+
+    protected function resolveBrowseListingTotal(Builder $query, array $filters): int
+    {
+        if (! $this->browseListingHasFilters($filters)) {
+            $cached = Cache::get('serik_active_listing_count_v1');
+
+            if ($cached !== null) {
+                return (int) $cached;
+            }
+        }
+
+        $cacheKey = 'serik_browse_count:' . md5(json_encode($this->browseListingCountSignature($filters)));
+
+        return (int) Cache::remember($cacheKey, 300, function () use ($query) {
+            return (clone $query)->toBase()->count('re_properties.id');
+        });
+    }
+
+    protected function browseListingHasFilters(array $filters): bool
+    {
+        foreach ([
+            'keyword',
+            'bedroom',
+            'bathroom',
+            'floor',
+            'min_price',
+            'max_price',
+            'min_square',
+            'max_square',
+            'project',
+            'project_id',
+            'category_id',
+            'author_id',
+            'city_id',
+            'city',
+            'state',
+            'state_id',
+            'location',
+            'zip_code',
+            'home_types',
+            'features',
+            'category_ids',
+            'locations',
+        ] as $key) {
+            $value = $filters[$key] ?? null;
+
+            if ($value === null || $value === '' || $value === []) {
+                continue;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function browseListingCountSignature(array $filters): array
+    {
+        $signature = Arr::only($filters, [
+            'keyword',
+            'type',
+            'bedroom',
+            'bathroom',
+            'floor',
+            'min_price',
+            'max_price',
+            'min_square',
+            'max_square',
+            'project',
+            'project_id',
+            'category_id',
+            'author_id',
+            'city_id',
+            'city',
+            'state',
+            'state_id',
+            'location',
+            'zip_code',
+            'sort_by',
+            'home_types',
+            'features',
+            'category_ids',
+            'locations',
+        ]);
+
+        ksort($signature);
+
+        return $signature;
     }
 
     public function getProperty(int $propertyId, array $with = [], array $extra = []): ?Property

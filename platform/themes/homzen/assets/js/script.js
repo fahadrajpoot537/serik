@@ -1913,17 +1913,27 @@ $(() => {
             const $dataListing = $('[data-bb-toggle="data-listing"]')
             const $form = $(e.currentTarget)
             const cleanedFormData = cleanFormData($form.serializeArray())
+            const isSerikProperties = $('body').hasClass('serik-properties-page')
 
             const nextHref = $form.prop('action') + cleanedFormData.queryString
 
-            $.ajax({
+            if (isSerikProperties && window.serikPropertiesFilter) {
+                window.serikPropertiesFilter.abortPending()
+                window.serikPropertiesFilter.setLoading(true)
+            }
+
+            const xhr = $.ajax({
                 url: $form.data('url') || $form.prop('action'),
                 type: 'POST',
                 data: cleanedFormData.formData,
                 beforeSend: () => {
+                    $dataListing.addClass('is-loading')
+                    $dataListing.find('.loading-spinner').remove()
                     $dataListing.append('<div class="loading-spinner"></div>')
                 },
-                success: function ({error, data, message}) {
+                success: function (response) {
+                    const {error, data, message, additional} = response
+
                     if (error) {
                         Theme.showError(message)
 
@@ -1936,7 +1946,11 @@ $(() => {
                         Theme.lazyLoadInstance.update()
                     }
 
-                    initMap(cleanedFormData.formData)
+                    if (!isSerikProperties) {
+                        initMap(cleanedFormData.formData)
+                    } else if (window.serikPropertiesFilter && additional?.total != null) {
+                        window.serikPropertiesFilter.setTotal(additional.total)
+                    }
 
                     if (nextHref !== window.location.href) {
                         window.history.pushState(cleanedFormData.formData, message, nextHref)
@@ -1945,13 +1959,24 @@ $(() => {
                     }
                 },
                 complete: () => {
+                    $dataListing.removeClass('is-loading')
                     $dataListing.find('.loading-spinner').remove()
 
-                    $('html, body').animate({
-                        scrollTop: $dataListing.offset().top - 100,
-                    })
+                    if (isSerikProperties && window.serikPropertiesFilter) {
+                        window.serikPropertiesFilter.setLoading(false)
+                    }
+
+                    if (!isSerikProperties) {
+                        $('html, body').animate({
+                            scrollTop: $dataListing.offset().top - 100,
+                        })
+                    }
                 },
             })
+
+            if (isSerikProperties && window.serikPropertiesFilter) {
+                window.serikPropertiesFilter.setXhr(xhr)
+            }
         })
         .on('submit', '#hero-search-form', function (e) {
             e.preventDefault()

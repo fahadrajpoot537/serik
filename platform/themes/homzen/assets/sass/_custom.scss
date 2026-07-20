@@ -1465,9 +1465,15 @@ body[dir="rtl"] {
     }
 }
 
-.listing-no-map {
+.listing-no-map:not(.serik-properties-page) {
     .flat-title-page {
         padding: 50px 0 100px;
+    }
+}
+
+.serik-properties-page.listing-no-map {
+    .flat-title-page {
+        padding: 0;
     }
 }
 

@@ -22,6 +22,7 @@ use Botble\Location\Models\State;
 use Botble\RealEstate\Commands\PurgeExpiredAccountsCommand;
 use Botble\RealEstate\Commands\RenewPropertiesCommand;
 use Botble\RealEstate\Facades\RealEstateHelper;
+use Botble\RealEstate\Services\LiveTrebPropertyFallbackService;
 use Botble\RealEstate\Forms\Fronts\Auth\ForgotPasswordForm;
 use Botble\RealEstate\Forms\Fronts\Auth\LoginForm;
 use Botble\RealEstate\Forms\Fronts\Auth\RegisterForm;
@@ -107,6 +108,8 @@ class RealEstateServiceProvider extends ServiceProvider
 
     public function register(): void
     {
+        $this->app->singleton(LiveTrebPropertyFallbackService::class);
+
         $this->app->singleton(PropertyInterface::class, function () {
             return new PropertyRepository(new Property());
         });

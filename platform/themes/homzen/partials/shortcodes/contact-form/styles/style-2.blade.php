@@ -794,7 +794,7 @@ function isAboutUsPage() {
 }
 
 function isEstimatePage() {
-    return window.location.pathname === '/evaluation';
+    return window.location.pathname === '/free-home-evaluation' || window.location.pathname === '/evaluation';
 }
 
 function isFeedbackePage() {

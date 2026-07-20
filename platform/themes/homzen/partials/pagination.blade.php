@@ -8,21 +8,24 @@
             </li>
         @endif
 
-        @foreach ($elements as $element)
-            @if (is_string($element))
-                <li>
-                    <span class="page-numbers current">{{ $element }}</span>
-                </li>
-            @endif
-
-            @if (is_array($element))
-                @foreach ($element as $page => $url)
+        @if (! empty($elements))
+            @foreach ($elements as $element)
+                @if (is_string($element))
                     <li>
-                        <a href="{{ $url }}" @class(['page-numbers', 'current' => $page == $paginator->currentPage()])>{{ $page }}</a>
+                        <span class="page-numbers current">{{ $element }}</span>
                     </li>
-                @endforeach
-            @endif
-        @endforeach
+                @endif
+
+                @if (is_array($element))
+                    @foreach ($element as $page => $url)
+                        <li>
+                            <a href="{{ $url }}" @class(['page-numbers', 'current' => $page == $paginator->currentPage()])>{{ $page }}</a>
+                        </li>
+                    @endforeach
+                @endif
+            @endforeach
+        @endif
+
         @if ($paginator->hasMorePages())
             <li>
                 <a href="{{ $paginator->nextPageUrl() }}" class="page-numbers" aria-label="{{ trans('pagination.next') }}">

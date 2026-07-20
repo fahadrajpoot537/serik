@@ -170,9 +170,23 @@
 
     $model = $model ?? $property ?? null;
     $listingKey = $model->external_id ?? '';
-    $item = $listingKey ? TrebPropertyHelper::fetchPropertyRecord($listingKey) : null;
+    $localDesc = [
+        'name' => $model->name,
+        'price' => $model->price,
+        'square' => $model->square,
+        'MlsStatus' => $model->MlsStatus,
+        'TransactionType' => $model->TransactionType,
+        'PropertySubType' => $model->PropertySubType,
+        'broker' => $model->broker,
+        'ParkingSpaces' => $model->ParkingSpaces,
+        'CoveredSpaces' => $model->CoveredSpaces,
+        'created_at' => $model->created_at,
+    ];
+    $item = $listingKey
+        ? TrebPropertyHelper::resolveFactRecordForDetail($listingKey, $localDesc)
+        : [];
 
-    if (! is_array($item) || $item === []) {
+    if ($item === []) {
         $item = $model ? [
             'UnparsedAddress' => $model->name,
             'PropertySubType' => $model->PropertySubType,
@@ -552,14 +566,14 @@ View::share('cityName', $city);
             
             
             {{-- Style --}}
-            @if(!empty($item['ArchitecturalStyle'][0]))
+            @if(TrebPropertyHelper::ampFieldFirst($item, 'ArchitecturalStyle'))
             <div class="col item">
                 <div class="box-icon w-52">
                     <x-core::icon name="ti ti-building" />
                 </div>
                 <div class="content">
                     <span class="label">{{ __('Style:') }}</span>
-                    <span>{{ $item['ArchitecturalStyle'][0] }}</span>
+                    <span>{{ TrebPropertyHelper::ampFieldFirst($item, 'ArchitecturalStyle') }}</span>
                 </div>
             </div>
             @endif
@@ -638,14 +652,14 @@ View::share('cityName', $city);
             
             
             {{-- Construction --}}
-            @if(!empty($item['ConstructionMaterials'][0]))
+            @if(TrebPropertyHelper::ampFieldFirst($item, 'ConstructionMaterials'))
             <div class="col item">
                 <div class="box-icon w-52">
                     <x-core::icon name="ti ti-building" />
                 </div>
                 <div class="content">
                     <span class="label">{{ __('Construction:') }}</span>
-                    <span>{{ $item['ConstructionMaterials'][0] }}</span>
+                    <span>{{ TrebPropertyHelper::ampFieldFirst($item, 'ConstructionMaterials') }}</span>
                 </div>
             </div>
             @endif
@@ -669,14 +683,14 @@ View::share('cityName', $city);
             
             
             {{-- Cooling --}}
-            @if(!empty($item['Cooling'][0]))
+            @if(TrebPropertyHelper::ampFieldFirst($item, 'Cooling'))
             <div class="col item">
                 <div class="box-icon w-52">
                     <x-core::icon name="ti ti-snowflake" />
                 </div>
                 <div class="content">
                     <span class="label">{{ __('Cooling:') }}</span>
-                    <span>{{ $item['Cooling'][0] }}</span>
+                    <span>{{ TrebPropertyHelper::ampFieldFirst($item, 'Cooling') }}</span>
                 </div>
             </div>
             @endif
@@ -711,14 +725,14 @@ View::share('cityName', $city);
             
             
             {{-- Pets Allowed --}}
-            @if(!empty($item['PetsAllowed'][0]))
+            @if(TrebPropertyHelper::ampFieldFirst($item, 'PetsAllowed'))
             <div class="col item">
                 <div class="box-icon w-52">
                     <x-core::icon name="ti ti-paw" />
                 </div>
                 <div class="content">
                     <span class="label">{{ __('Pets Allowed:') }}</span>
-                    <span>{{ $item['PetsAllowed'][0] }}</span>
+                    <span>{{ TrebPropertyHelper::ampFieldFirst($item, 'PetsAllowed') }}</span>
                 </div>
             </div>
             @endif
