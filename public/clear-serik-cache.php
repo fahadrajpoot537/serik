@@ -128,6 +128,108 @@ if (isset($_GET['fix_resend']) && (string) $_GET['fix_resend'] === '1') {
     exit;
 }
 
+// Diagnose IIS storage link + sample image_val paths (404 helper).
+if (isset($_GET['diag_images']) && (string) $_GET['diag_images'] === '1') {
+    header('Content-Type: text/plain; charset=utf-8');
+    echo "=== storage / images diagnostic ===\n\n";
+
+    $publicStorage = $base . '/public/storage';
+    $appPublic = $base . '/storage/app/public';
+
+    echo 'APP_URL(.env)=' . (readEnvValue($base . '/.env', 'APP_URL') ?: '(missing)') . "\n";
+    echo 'public/storage exists=' . (file_exists($publicStorage) ? 'yes' : 'NO') . "\n";
+    echo 'public/storage is_link=' . (is_link($publicStorage) ? 'yes' : 'no') . "\n";
+    echo 'public/storage is_dir=' . (is_dir($publicStorage) ? 'yes' : 'no') . "\n";
+    echo 'storage/app/public exists=' . (is_dir($appPublic) ? 'yes' : 'NO') . "\n";
+
+    if (is_dir($publicStorage)) {
+        $probe = $publicStorage . '/avatars/1.jpg';
+        echo 'probe file public/storage/avatars/1.jpg=' . (is_file($probe) ? 'FOUND' : 'missing') . "\n";
+    }
+    if (is_dir($appPublic)) {
+        $probe2 = $appPublic . '/avatars/1.jpg';
+        echo 'probe file storage/app/public/avatars/1.jpg=' . (is_file($probe2) ? 'FOUND' : 'missing') . "\n";
+    }
+
+    echo "\n--- sample image_val from DB ---\n";
+    try {
+        require $base . '/vendor/autoload.php';
+        $app = require $base . '/bootstrap/app.php';
+        $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+
+        echo 'config app.url=' . config('app.url') . "\n";
+        echo 'filesystems.public.url=' . config('filesystems.disks.public.url') . "\n\n";
+
+        $rows = Illuminate\Support\Facades\DB::table('re_properties')
+            ->select(['id', 'external_id', 'image_val'])
+            ->whereNotNull('image_val')
+            ->where('image_val', '!=', '')
+            ->orderByDesc('updated_at')
+            ->limit(12)
+            ->get();
+
+        foreach ($rows as $row) {
+            $raw = (string) $row->image_val;
+            $url = \App\Support\SerikMediaUrl::toPublic($raw);
+            $diskRel = ltrim(str_replace('\\', '/', $raw), '/');
+            if (str_starts_with($diskRel, 'storage/')) {
+                $diskRel = substr($diskRel, strlen('storage/'));
+            }
+            $onDisk = (! str_starts_with($raw, 'http') && $diskRel !== '')
+                ? (is_file($appPublic . '/' . $diskRel) ? 'ON_DISK' : 'MISSING_FILE')
+                : 'remote_or_empty';
+            echo "id={$row->id} key={$row->external_id}\n";
+            echo "  raw={$raw}\n";
+            echo "  url={$url}\n";
+            echo "  disk={$onDisk}\n\n";
+        }
+
+        echo "If disk=MISSING_FILE → file not under storage/app/public (re-upload or copy).\n";
+        echo "If url has wrong host → fix APP_URL=https://serik.ca and php artisan config:clear.\n";
+        echo "If public/storage is_link=no and is empty dir → run as Admin:\n";
+        echo "  rmdir public\\storage\n";
+        echo "  mklink /J public\\storage storage\\app\\public\n";
+    } catch (Throwable $e) {
+        echo 'ERROR: ' . $e->getMessage() . "\n";
+    }
+    exit;
+}
+
+// Cron / queue health snapshot (writes same idea as serik-live-health.bat).
+if (isset($_GET['diag_cron']) && (string) $_GET['diag_cron'] === '1') {
+    header('Content-Type: text/plain; charset=utf-8');
+    echo "=== cron / queue diagnostic ===\n\n";
+    try {
+        require $base . '/vendor/autoload.php';
+        $app = require $base . '/bootstrap/app.php';
+        $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+
+        echo 'now=' . now() . ' tz=' . config('app.timezone') . "\n";
+        echo 'high=' . Illuminate\Support\Facades\DB::table('jobs')->where('queue', 'high')->count() . "\n";
+        echo 'low=' . Illuminate\Support\Facades\DB::table('jobs')->where('queue', 'low')->count() . "\n";
+        echo 'failed=' . Illuminate\Support\Facades\DB::table('failed_jobs')->count() . "\n";
+        echo 'updated_3h=' . \Botble\RealEstate\Models\Property::where('updated_at', '>=', now()->subHours(3))->count() . "\n";
+        echo 'created_3h=' . \Botble\RealEstate\Models\Property::where('created_at', '>=', now()->subHours(3))->where('created_at', '<', '2100-01-01')->count() . "\n";
+
+        foreach (['treb-sync-live.log', 'queue-high.log', 'queue-low.log'] as $log) {
+            $p = $base . '/storage/logs/' . $log;
+            if (is_file($p)) {
+                echo $log . ' mtime=' . date('Y-m-d H:i:s', filemtime($p)) . ' size=' . filesize($p) . "\n";
+            } else {
+                echo $log . " MISSING\n";
+            }
+        }
+
+        echo "\nNeeded on Windows:\n";
+        echo "1) Task Scheduler every 1 min: php artisan schedule:run\n";
+        echo "2) NSSM SerikQueueHigh + SerikQueueLow RUNNING\n";
+        echo "3) Force: php artisan serik:sync-live --force --days=1 --pages=6 --max-new=100\n";
+    } catch (Throwable $e) {
+        echo 'ERROR: ' . $e->getMessage() . "\n";
+    }
+    exit;
+}
+
 // Fix locked / unwritable Laravel daily logs (IIS Permission denied → homepage properties blank).
 if (isset($_GET['fix_logs']) && (string) $_GET['fix_logs'] === '1') {
     header('Content-Type: text/plain; charset=utf-8');

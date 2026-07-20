@@ -3537,11 +3537,7 @@ class PropertyController extends BaseController
             'lat' => $item->latitude ?? null,
             'lng' => $item->longitude ?? null,
             'URL' => $slug,
-            'MediaURL' => ! empty($item->image_val) && str_starts_with($item->image_val, 'http')
-                ? $item->image_val
-                : (! empty($item->image_val)
-                    ? asset($item->image_val)
-                    : asset('storage/general/placeholder.png')),
+            'MediaURL' => \App\Support\SerikMediaUrl::toPublic($item->image_val ?? null),
             'source' => 'local',
         ];
     }
@@ -6167,12 +6163,9 @@ class PropertyController extends BaseController
 
         $data = [];
         foreach ($query->get() as $row) {
-            $img = (string) $row->image_val;
+            $img = \App\Support\SerikMediaUrl::toPublic((string) $row->image_val);
             if ($img === '') {
                 continue;
-            }
-            if (! str_starts_with($img, 'http')) {
-                $img = asset($img);
             }
             $data[(string) $row->id] = $img;
             $data[strtoupper((string) $row->external_id)] = $img;
