@@ -54,8 +54,9 @@ return [
 
         'stack' => [
             'driver' => 'stack',
+            // IIS often locks storage/logs; never let a Log:: write become HTTP 500.
             'channels' => explode(',', (string) env('LOG_STACK', 'single')),
-            'ignore_exceptions' => false,
+            'ignore_exceptions' => true,
         ],
 
         'single' => [
