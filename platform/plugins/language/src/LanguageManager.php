@@ -75,7 +75,11 @@ class LanguageManager
     {
         $this->app = app();
 
-        $this->translator = $this->app['translator'];
+        if (class_exists(\App\Support\EnsuresTranslator::class)) {
+            \App\Support\EnsuresTranslator::ensure();
+        }
+
+        $this->translator = $this->app->make('translator');
         $this->router = $this->app['router'];
         $this->request = $this->app['request'];
         $this->url = $this->app['url'];

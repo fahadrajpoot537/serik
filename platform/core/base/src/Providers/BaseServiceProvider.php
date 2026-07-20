@@ -318,7 +318,11 @@ class BaseServiceProvider extends ServiceProvider
         $timezone = $bootSettings['timezone'];
         $locale = $bootSettings['locale'];
 
-        $this->app->setLocale($locale);
+        if (class_exists(\App\Support\EnsuresTranslator::class)) {
+            \App\Support\EnsuresTranslator::setLocaleSafe($locale);
+        } else {
+            $this->app->setLocale($locale);
+        }
 
         if (in_array($timezone, DateTimeZone::listIdentifiers())) {
             date_default_timezone_set($timezone);

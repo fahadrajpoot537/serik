@@ -23,7 +23,11 @@ class LocaleMiddleware
             return $next($request);
         }
 
-        $this->app->setLocale(config('app.locale'));
+        if (class_exists(\App\Support\EnsuresTranslator::class)) {
+            \App\Support\EnsuresTranslator::setLocaleSafe((string) config('app.locale'));
+        } else {
+            $this->app->setLocale(config('app.locale'));
+        }
 
         if (! $request->session()->has('site-locale')) {
             return $next($request);
@@ -32,7 +36,11 @@ class LocaleMiddleware
         $sessionLocale = $request->session()->get('site-locale');
 
         if (array_key_exists($sessionLocale, Language::getAvailableLocales())) {
-            $this->app->setLocale($sessionLocale);
+            if (class_exists(\App\Support\EnsuresTranslator::class)) {
+                \App\Support\EnsuresTranslator::setLocaleSafe($sessionLocale);
+            } else {
+                $this->app->setLocale($sessionLocale);
+            }
             $request->setLocale($sessionLocale);
         }
 

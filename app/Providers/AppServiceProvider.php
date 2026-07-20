@@ -16,6 +16,12 @@ class AppServiceProvider extends ServiceProvider
             \App\Contracts\GeocodingProviderInterface::class,
             fn ($app) => $app->make(\App\Services\Geocoding\GeocodingManager::class)->driver()
         );
+
+        // Eagerly resolve translator after providers are registered so deferred
+        // binding cannot race during AJAX shortcode / Blade rendering on IIS.
+        $this->app->booting(function (): void {
+            \App\Support\EnsuresTranslator::ensure();
+        });
     }
 
     /**
@@ -23,6 +29,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        \App\Support\EnsuresTranslator::ensure();
     }
 }
