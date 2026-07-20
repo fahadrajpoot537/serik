@@ -17,6 +17,42 @@ if (($_GET['key'] ?? '') !== $secret) {
 $base = dirname(__DIR__);
 $results = [];
 
+// Fix locked / unwritable Laravel daily logs (IIS Permission denied → homepage properties blank).
+if (isset($_GET['fix_logs']) && (string) $_GET['fix_logs'] === '1') {
+    header('Content-Type: text/plain; charset=utf-8');
+    $logDir = $base . '/storage/logs';
+    echo "=== fix storage/logs ===\n\n";
+    echo 'log dir: ' . $logDir . "\n";
+    echo 'exists: ' . (is_dir($logDir) ? 'yes' : 'no') . "\n";
+    echo 'writable: ' . (is_writable($logDir) ? 'yes' : 'no') . "\n\n";
+
+    if (! is_dir($logDir)) {
+        @mkdir($logDir, 0775, true);
+    }
+
+    $deleted = 0;
+    $kept = 0;
+    foreach (glob($logDir . '/laravel*.log') ?: [] as $file) {
+        $name = basename($file);
+        if (@unlink($file)) {
+            echo "deleted: {$name}\n";
+            $deleted++;
+        } else {
+            echo "COULD NOT DELETE (still locked?): {$name}\n";
+            $kept++;
+        }
+    }
+
+    // Touch a fresh writable log so Monolog can append.
+    $today = $logDir . '/laravel-' . date('Y-m-d') . '.log';
+    $ok = @file_put_contents($today, '[' . date('Y-m-d H:i:s') . '] local.INFO: log permissions probe' . PHP_EOL, FILE_APPEND);
+    echo "\nprobe write " . basename($today) . ': ' . ($ok !== false ? 'OK' : 'FAILED') . "\n";
+    echo "deleted={$deleted} kept={$kept}\n\n";
+    echo "Next: hard refresh https://serik.ca/\n";
+    echo "Also deploy the code fix that stops Log::info from crashing the properties shortcode.\n";
+    exit;
+}
+
 // Boot Laravel over HTTP and print the real properties-shortcode exception.
 if (isset($_GET['test_properties']) && (string) $_GET['test_properties'] === '1') {
     header('Content-Type: text/plain; charset=utf-8');

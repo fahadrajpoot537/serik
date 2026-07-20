@@ -38,21 +38,8 @@ app()->booted(function (): void {
 
             $categoryIds = Shortcode::fields()->getIds('category_ids', $shortcode) ?: [];
 
-            \Illuminate\Support\Facades\Log::info('[shortcode:properties] render start', [
-                'shortcode' => 'properties',
-                'style' => $shortcode->style,
-                'attributes' => [
-                    'style' => $shortcode->style,
-                    'title' => $shortcode->title,
-                    'limit' => $shortcode->limit,
-                    'type' => $shortcode->type,
-                    'is_featured' => $shortcode->is_featured,
-                    'category_ids' => $categoryIds,
-                ],
-                'renderer' => $shortcode->style == 5
-                    ? \App\Actions\HomepageFeaturedPropertiesAction::class
-                    : \Theme\homzen\Actions\GetPropertiesAction::class,
-            ]);
+            // Never Log::info on this hot path — a locked storage/logs file on IIS
+            // (Permission denied) would otherwise blank the entire homepage properties block.
 
             if ($shortcode->style == 5) {
                 $limit = (int) $shortcode->limit ?: 8;
@@ -63,12 +50,15 @@ app()->booted(function (): void {
                         $result = app(\Theme\homzen\Actions\GetHomepageFeaturedPropertiesAction::class)->handle($limit);
                     }
                 } catch (\Throwable $e) {
-                    \Illuminate\Support\Facades\Log::error('[shortcode:properties] style=5 uncaught', [
-                        'message' => $e->getMessage(),
-                        'file' => $e->getFile(),
-                        'line' => $e->getLine(),
-                        'trace' => $e->getTraceAsString(),
-                    ]);
+                    try {
+                        \Illuminate\Support\Facades\Log::error('[shortcode:properties] style=5 uncaught', [
+                            'message' => $e->getMessage(),
+                            'file' => $e->getFile(),
+                            'line' => $e->getLine(),
+                        ]);
+                    } catch (\Throwable) {
+                        // ignore log failures
+                    }
                     $result = [
                         'propertiesForSale' => collect(),
                         'propertiesSold' => collect(),
@@ -81,17 +71,8 @@ app()->booted(function (): void {
                 $visitorCity = $result['visitorCity'] ?? null;
                 $properties = $propertiesForSale;
 
-                $view = 'shortcodes.properties.index';
-
-                \Illuminate\Support\Facades\Log::info('[shortcode:properties] rendering view', [
-                    'view' => $view,
-                    'style' => 5,
-                    'for_sale_count' => is_countable($propertiesForSale) ? count($propertiesForSale) : 0,
-                    'sold_count' => is_countable($propertiesSold) ? count($propertiesSold) : 0,
-                ]);
-
                 try {
-                    return Theme::partial($view, compact(
+                    return Theme::partial('shortcodes.properties.index', compact(
                         'shortcode',
                         'properties',
                         'propertiesForSale',
@@ -101,14 +82,17 @@ app()->booted(function (): void {
                         'visitorCity'
                     ));
                 } catch (\Throwable $e) {
-                    \Illuminate\Support\Facades\Log::error('[shortcode:properties] style=5 view failed', [
-                        'message' => $e->getMessage(),
-                        'file' => $e->getFile(),
-                        'line' => $e->getLine(),
-                        'class' => $e::class,
-                    ]);
+                    try {
+                        \Illuminate\Support\Facades\Log::error('[shortcode:properties] style=5 view failed', [
+                            'message' => $e->getMessage(),
+                            'file' => $e->getFile(),
+                            'line' => $e->getLine(),
+                            'class' => $e::class,
+                        ]);
+                    } catch (\Throwable) {
+                        // ignore
+                    }
 
-                    // Soft-fail: never blank the homepage section.
                     return '<section class="flat-section"><div class="container text-center py-4">'
                         . '<p class="mb-3">Featured properties are temporarily unavailable.</p>'
                         . '<a class="tf-btn primary size-1" href="' . e(url('/properties')) . '">Browse all properties</a>'
@@ -140,21 +124,19 @@ app()->booted(function (): void {
                     );
                 }
 
-                \Illuminate\Support\Facades\Log::info('[shortcode:properties] rendering view', [
-                    'view' => 'shortcodes.properties.index',
-                    'style' => $shortcode->style,
-                    'property_count' => $properties->count(),
-                ]);
-
                 return Theme::partial('shortcodes.properties.index', compact('shortcode', 'properties', 'tabs', 'categoryIds'));
             } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::error('[shortcode:properties] non-style5 failed', [
-                    'style' => $shortcode->style,
-                    'message' => $e->getMessage(),
-                    'file' => $e->getFile(),
-                    'line' => $e->getLine(),
-                    'class' => $e::class,
-                ]);
+                try {
+                    \Illuminate\Support\Facades\Log::error('[shortcode:properties] non-style5 failed', [
+                        'style' => $shortcode->style,
+                        'message' => $e->getMessage(),
+                        'file' => $e->getFile(),
+                        'line' => $e->getLine(),
+                        'class' => $e::class,
+                    ]);
+                } catch (\Throwable) {
+                    // ignore
+                }
 
                 return '<section class="flat-section"><div class="container text-center py-4">'
                     . '<p class="mb-3">Properties are temporarily unavailable.</p>'

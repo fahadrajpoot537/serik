@@ -39,7 +39,6 @@ class HomepageFeaturedPropertiesAction
     public function handle(int $limit = 8): array
     {
         $limit = max(8, min(24, $limit));
-        $started = microtime(true);
         $visitorCity = null;
 
         try {
@@ -54,37 +53,17 @@ class HomepageFeaturedPropertiesAction
         $cacheKey = "homepage_featured_props_v3:{$cityKey}:{$limit}";
 
         try {
-            Log::info('[homepage-featured] start', [
-                'limit' => $limit,
-                'visitor_city' => $visitorCity,
-            ]);
-
             $idPayload = Cache::remember($cacheKey, self::CACHE_SECONDS, function () use ($limit, $visitorCity) {
                 return $this->resolveIds($limit, $visitorCity);
             });
 
-            $propertiesForSale = $this->hydrate($idPayload['sale'] ?? [], $limit);
-            $propertiesSold = $this->hydrate($idPayload['sold'] ?? [], $limit);
-
-            Log::info('[homepage-featured] done', [
-                'source' => $idPayload['source'] ?? 'unknown',
-                'for_sale' => $propertiesForSale->count(),
-                'sold' => $propertiesSold->count(),
-                'ms' => round((microtime(true) - $started) * 1000, 1),
-            ]);
-
             return [
-                'propertiesForSale' => $propertiesForSale,
-                'propertiesSold' => $propertiesSold,
+                'propertiesForSale' => $this->hydrate($idPayload['sale'] ?? [], $limit),
+                'propertiesSold' => $this->hydrate($idPayload['sold'] ?? [], $limit),
                 'visitorCity' => $visitorCity,
             ];
         } catch (Throwable $e) {
-            Log::error('[homepage-featured] FAILED', [
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString(),
-            ]);
+            $this->safeLog('error', '[homepage-featured] FAILED: ' . $e->getMessage());
 
             return [
                 'propertiesForSale' => new Collection(),
@@ -141,7 +120,7 @@ class HomepageFeaturedPropertiesAction
                 }
             }
         } catch (Throwable $e) {
-            Log::warning('[homepage-featured] Meili resolve failed: ' . $e->getMessage());
+            $this->safeLog('warning', '[homepage-featured] Meili resolve failed: ' . $e->getMessage());
         }
 
         return [
@@ -217,5 +196,14 @@ class HomepageFeaturedPropertiesAction
             ->get()
             ->sortBy(static fn (Property $p) => $order[$p->id] ?? 9999)
             ->values();
+    }
+
+    private function safeLog(string $level, string $message): void
+    {
+        try {
+            Log::{$level}($message);
+        } catch (Throwable) {
+            // IIS often locks daily log files — never break the homepage for that.
+        }
     }
 }
