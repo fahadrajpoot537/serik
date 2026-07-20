@@ -131,7 +131,9 @@ class MailConfigServiceProvider extends ServiceProvider
                                     break;
                                 }
                             }
-                            if (! $domainOk && env('RESEND_FORCE_SANDBOX_FROM', true)) {
+                            // Default false once you have a verified domain — sandbox cannot email Gmail users.
+                            $forceSandbox = filter_var(env('RESEND_FORCE_SANDBOX_FROM', false), FILTER_VALIDATE_BOOL);
+                            if (! $domainOk && $forceSandbox) {
                                 $fromAddress = env('RESEND_SANDBOX_FROM', 'onboarding@resend.dev');
                             }
                         }

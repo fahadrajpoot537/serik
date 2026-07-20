@@ -30,9 +30,11 @@ if ($verified !== [] && ! str_ends_with(strtolower($from), '@resend.dev')) {
         $from = 'onboarding@resend.dev';
         echo "WARN: From reset to onboarding@resend.dev (domain not in RESEND_VERIFIED_DOMAINS)\n";
     }
-} elseif (! str_ends_with(strtolower($from), '@resend.dev') && $verified === [] && filter_var(env('RESEND_FORCE_SANDBOX_FROM', true), FILTER_VALIDATE_BOOL)) {
-    $from = 'onboarding@resend.dev';
-    echo "WARN: From reset to onboarding@resend.dev until serik.ca is verified in Resend.\n";
+}
+
+if (str_ends_with(strtolower($from), '@resend.dev')) {
+    $from = 'info@serik.ca';
+    echo "WARN: Replaced @resend.dev From with info@serik.ca (required for Gmail recipients).\n";
 }
 
 setting()->set([

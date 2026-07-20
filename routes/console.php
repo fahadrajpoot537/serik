@@ -454,37 +454,69 @@ Artisan::command('serik:geocode-all
 | serik:test-mail — diagnose why registration PIN emails are not arriving
 |--------------------------------------------------------------------------
 */
-Artisan::command('serik:test-mail {email? : Destination address} {--resend : Force Resend API driver}', function () {
+Artisan::command('serik:test-mail {email? : Destination address} {--resend : Force Resend API driver} {--from= : Override From address (must be on verified domain)}', function () {
     $to = trim((string) ($this->argument('email') ?: setting('email_from_address') ?: 'info@serik.ca'));
+    $fromOverride = trim((string) $this->option('from'));
 
     if ((bool) $this->option('resend')) {
-        $key = setting('email_resend_key');
+        $key = setting('email_resend_key') ?: env('RESEND_API_KEY');
         if (! $key) {
-            $this->error('email_resend_key is empty in Admin → Settings → Email.');
+            $this->error('No Resend key. Set Admin → Settings → Email → Resend API Key, or RESEND_API_KEY in .env');
 
             return 1;
         }
-        setting()->set('email_driver', 'resend')->save();
-        $this->warn('Switched email_driver to resend.');
+
+        // Prefer verified-domain From — sandbox cannot deliver to arbitrary Gmail.
+        $from = $fromOverride
+            ?: (string) env('MAIL_FROM_ADDRESS', '')
+            ?: (string) setting('email_from_address', 'info@serik.ca');
+
+        if (str_ends_with(strtolower($from), '@resend.dev')) {
+            $from = 'info@serik.ca';
+            $this->warn('Refusing onboarding@resend.dev for Gmail recipients — using info@serik.ca');
+        }
+
+        setting()->set([
+            'email_driver' => 'resend',
+            'email_resend_key' => $key,
+            'email_from_address' => $from,
+            'email_from_name' => setting('email_from_name') ?: env('MAIL_FROM_NAME', 'Serik Realty'),
+            'plugins_real-estate_account-registered_status' => '1',
+        ])->save();
+
+        $this->warn("Switched email_driver=resend, from={$from}");
     }
 
     // Refresh mail config from settings (same path as HTTP boot).
+    app()->forgetInstance(\Illuminate\Mail\MailManager::class);
     app()->forgetInstance('mail.manager');
     config(['mail.default' => setting('email_driver', config('mail.default'))]);
     config(['mail.from.address' => setting('email_from_address', config('mail.from.address'))]);
     config(['mail.from.name' => setting('email_from_name', config('mail.from.name'))]);
 
     $driver = setting('email_driver', config('mail.default'));
+    $fromNow = (string) setting('email_from_address');
+
     $this->table(['Key', 'Value'], [
         ['driver', $driver],
-        ['host', setting('email_host')],
-        ['port', setting('email_port')],
-        ['encryption', setting('email_encryption') ?: '(none)'],
-        ['username', setting('email_username')],
-        ['from', setting('email_from_address')],
+        ['from', $fromNow],
         ['to', $to],
+        ['resend_key', substr((string) setting('email_resend_key'), 0, 10) . '…'],
         ['config mail.default', config('mail.default')],
+        ['config mail.from', config('mail.from.address')],
     ]);
+
+    if ($driver === 'resend' && str_ends_with(strtolower($fromNow), '@resend.dev')) {
+        $this->error('BLOCKED: from is still @resend.dev');
+        $this->line('Resend sandbox only delivers to YOUR Resend signup email — not fahadrajpoot537@gmail.com.');
+        $this->line('Fix:');
+        $this->line('  1) https://resend.com/domains → serik.ca must be Verified');
+        $this->line('  2) Admin → Email → From = info@serik.ca');
+        $this->line('  3) .env: MAIL_FROM_ADDRESS=info@serik.ca  RESEND_FORCE_SANDBOX_FROM=false');
+        $this->line('  4) php artisan serik:test-mail ' . $to . ' --resend --from=info@serik.ca');
+
+        return 1;
+    }
 
     if ($driver === 'log') {
         $this->error('email_driver is still "log" — emails only write to laravel.log. Set SMTP or Resend.');
@@ -492,31 +524,16 @@ Artisan::command('serik:test-mail {email? : Destination address} {--resend : For
         return 1;
     }
 
-    if ($driver === 'smtp') {
-        $host = (string) setting('email_host');
-        $port = (int) setting('email_port', 25);
-        $errno = 0;
-        $err = '';
-        $fp = @fsockopen($host, $port, $errno, $err, 8);
-        if (! $fp) {
-            $this->error("TCP connect to {$host}:{$port} FAILED ({$errno} {$err}).");
-            $this->warn('On AWS/EC2 outbound port 25 is often blocked. Use --resend or SMTP port 587/465.');
-
-            return 1;
-        }
-        fclose($fp);
-        $this->info("TCP {$host}:{$port} OK");
-    }
-
     try {
-        // Force Mail manager to rebuild with current settings (resend/smtp).
         app()->forgetInstance(\Illuminate\Mail\MailManager::class);
         app()->forgetInstance('mail.manager');
 
         if ($driver === 'resend') {
             config([
                 'mail.default' => 'resend',
-                'services.resend.key' => setting('email_resend_key'),
+                'mail.from.address' => $fromNow,
+                'mail.from.name' => setting('email_from_name', 'Serik Realty'),
+                'services.resend.key' => setting('email_resend_key') ?: env('RESEND_API_KEY'),
             ]);
         } elseif ($driver === 'smtp') {
             config([
@@ -538,13 +555,8 @@ Artisan::command('serik:test-mail {email? : Destination address} {--resend : For
             ->sendUsingTemplate('account-registered', $to, [], true);
 
         if ($ok) {
-            $this->info("API accepted send for {$to}.");
-            if ($driver === 'resend') {
-                $this->newLine();
-                $this->warn('If inbox is empty, open https://resend.com/emails and check delivery status.');
-                $this->warn('Resend only delivers from verified domains. info@serik.ca needs serik.ca verified in Resend (SPF/DKIM DNS).');
-                $this->line('Until then, testing may only work to the Resend account owner email, or from onboarding@resend.dev.');
-            }
+            $this->info("Send accepted for {$to} from {$fromNow}.");
+            $this->warn('Open https://resend.com/emails — if status is Failed/403, domain is not verified or From domain mismatch.');
 
             return 0;
         }
@@ -556,14 +568,12 @@ Artisan::command('serik:test-mail {email? : Destination address} {--resend : For
         $this->error('SEND FAILED: ' . $e->getMessage());
         $this->line($e->getFile() . ':' . $e->getLine());
 
-        if ($driver === 'smtp') {
+        $msg = strtolower($e->getMessage());
+        if (str_contains($msg, 'resend.dev') || str_contains($msg, 'only send testing') || str_contains($msg, 'verify a domain')) {
             $this->newLine();
-            $this->warn('Try Resend instead (API, no SMTP port needed):');
-            $this->line('  php artisan serik:test-mail ' . $to . ' --resend');
-        }
-
-        if ($driver === 'resend' && str_contains(strtolower($e->getMessage()), 'domain')) {
-            $this->warn('Verify serik.ca in Resend dashboard → Domains → add DNS records, then set From to info@serik.ca.');
+            $this->error('Resend rejected: sandbox From cannot send to this Gmail.');
+            $this->line('Verify serik.ca at https://resend.com/domains then:');
+            $this->line('  php artisan serik:test-mail ' . $to . ' --resend --from=info@serik.ca');
         }
 
         return 1;
