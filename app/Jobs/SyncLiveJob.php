@@ -63,6 +63,19 @@ class SyncLiveJob implements ShouldQueue, ShouldBeUnique
             return;
         }
 
+        if ($this->force) {
+            Cache::forget('amp_recent_lock');
+            try {
+                Cache::lock('serik_sync_live_lock')->forceRelease();
+            } catch (Throwable) {
+                //
+            }
+            // Re-acquire after force-release so finally can release cleanly.
+            if (! $lock->get()) {
+                $lock = null;
+            }
+        }
+
         $started = microtime(true);
         $geocoded = 0;
         $historyQueued = 0;
@@ -85,11 +98,28 @@ class SyncLiveJob implements ShouldQueue, ShouldBeUnique
             ))));
 
             Log::info('[SyncLiveJob] import', [
+                'status' => $payload['status'] ?? null,
+                'pages' => $payload['pages'] ?? 0,
                 'created' => $payload['created'] ?? 0,
                 'updated' => $payload['updated'] ?? 0,
+                'unchanged' => $payload['unchanged'] ?? 0,
                 'new_ids' => count($newIds),
                 'stopped_early' => $payload['stopped_early'] ?? false,
+                'error' => $payload['error'] ?? null,
             ]);
+
+            // Expose last import stats for artisan inline runs.
+            Cache::put('serik_sync_live_last_result', [
+                'status' => $payload['status'] ?? null,
+                'pages' => $payload['pages'] ?? 0,
+                'created' => $payload['created'] ?? 0,
+                'updated' => $payload['updated'] ?? 0,
+                'unchanged' => $payload['unchanged'] ?? 0,
+                'new_ids' => count($newIds),
+                'stopped_early' => $payload['stopped_early'] ?? false,
+                'error' => $payload['error'] ?? null,
+                'at' => now()->toDateTimeString(),
+            ], 600);
 
             if ($newIds === []) {
                 return;

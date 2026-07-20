@@ -2342,8 +2342,20 @@ Artisan::command('serik:sync-live
     @set_time_limit(0);
     @ini_set('max_execution_time', '0');
     $this->info('Running SyncLiveJob inline (manual)…');
+    Cache::forget('serik_sync_live_last_result');
     $job = new \App\Jobs\SyncLiveJob($force, $days, $pages, $maxSeconds, $maxNew, $pageSize);
     $job->handle(app(PropertyController::class));
+
+    $stats = Cache::get('serik_sync_live_last_result');
+    if (is_array($stats)) {
+        $this->table(['Key', 'Value'], collect($stats)->map(fn ($v, $k) => [$k, is_bool($v) ? ($v ? 'true' : 'false') : (string) $v])->values()->all());
+        if (($stats['pages'] ?? 0) === 0 && ($stats['created'] ?? 0) === 0) {
+            $this->warn('0 AMP pages imported. Check laravel.log for AMP API errors / empty token / lock.');
+        }
+    } else {
+        $this->warn('No import stats cached — check storage/logs for [SyncLiveJob] import');
+    }
+
     $this->info('serik:sync-live inline complete.');
 
     return 0;

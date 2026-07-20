@@ -223,31 +223,31 @@ class PropertyController extends BaseController
                     'author_id' => 1,
                     'author_type' => 'Botble\ACL\Models\User',
 
-                    'name' => $item['UnparsedAddress'],
+                    'name' => $item['UnparsedAddress'] ?? '',
                     'PropertySubType' => $item['PropertySubType'] ?? 'sell',
-                    'description' => $item['PublicRemarks'],
-                    'content' => $item['PublicRemarks'] . "<br>" . $item['PrivateRemarks'],
-                    'location' => $item['UnparsedAddress'],
+                    'description' => $item['PublicRemarks'] ?? '',
+                    'content' => ($item['PublicRemarks'] ?? '') . '<br>' . ($item['PrivateRemarks'] ?? ''),
+                    'location' => $item['UnparsedAddress'] ?? '',
 
                     'number_bedroom' => $this->extractMainBedrooms($item),
-                    'number_bathroom' => (int) $item['BathroomsTotalInteger'],
+                    'number_bathroom' => (int) ($item['BathroomsTotalInteger'] ?? 0),
                     'number_floor' => $this->extractNumberFloor($item),
                     'BedroomsBelowGrade' => $this->extractBelowGradeBedrooms($item),
                     'broker' => $item['ListOfficeName'] ?? null,
 
                     'square' => is_array($item['LivingAreaRange'] ?? null)
                         ? null
-                        : $this->normalizeSquare($item['LivingAreaRange']),
-                    'price' => (float) $item['ListPrice'],
+                        : $this->normalizeSquare($item['LivingAreaRange'] ?? null),
+                    'price' => (float) ($item['ListPrice'] ?? 0),
                     'currency_id' => 1,
 
                     'is_featured' => 0,
                     'featured_priority' => 0,
 
-                    'status' => $item['StandardStatus'] === 'Active' ? 'selling' : 'draft',
+                    'status' => ($item['StandardStatus'] ?? '') === 'Active' ? 'selling' : 'draft',
                     'moderation_status' => 'approved',
 
-                    'expire_date' => $item['ExpirationDate'],
+                    'expire_date' => $item['ExpirationDate'] ?? now()->addYear()->toDateTimeString(),
                     'auto_renew' => 1,
                     'never_expired' => 1,
 
@@ -258,7 +258,7 @@ class PropertyController extends BaseController
                     'image_val' => $mediaUrl ?? null,
 
 
-                    'zip_code' => $item['PostalCode'],
+                    'zip_code' => $item['PostalCode'] ?? null,
                     'views' => 0,
                     'ParkingSpaces' => $item['ParkingSpaces'] ?? '0',
                     'Basement' => isset($item['Basement'])
@@ -271,7 +271,7 @@ class PropertyController extends BaseController
                     'created_at' => Carbon::parse($item['ListingContractDate'] ?? now()),
                     'updated_at' => Carbon::parse($item['ModificationTimestamp'] ?? now()),
 
-                    'private_notes' => $item['PrivateRemarks'],
+                    'private_notes' => $item['PrivateRemarks'] ?? '',
                 ]
             );
 
@@ -376,31 +376,31 @@ class PropertyController extends BaseController
                         'author_id' => 1,
                         'author_type' => 'Botble\ACL\Models\User',
 
-                        'name' => $item['UnparsedAddress'],
+                        'name' => $item['UnparsedAddress'] ?? '',
                         'PropertySubType' => $item['PropertySubType'] ?? 'sell',
-                        'description' => $item['PublicRemarks'],
-                        'content' => $item['PublicRemarks'] . "<br>" . $item['PrivateRemarks'],
-                        'location' => $item['UnparsedAddress'],
+                        'description' => $item['PublicRemarks'] ?? '',
+                        'content' => ($item['PublicRemarks'] ?? '') . '<br>' . ($item['PrivateRemarks'] ?? ''),
+                        'location' => $item['UnparsedAddress'] ?? '',
 
                         'number_bedroom' => $this->extractMainBedrooms($item),
-                        'number_bathroom' => (int) $item['BathroomsTotalInteger'],
+                        'number_bathroom' => (int) ($item['BathroomsTotalInteger'] ?? 0),
                         'number_floor' => $this->extractNumberFloor($item),
                         'BedroomsBelowGrade' => $this->extractBelowGradeBedrooms($item),
                         'broker' => $item['ListOfficeName'] ?? null,
 
                         'square' => is_array($item['LivingAreaRange'] ?? null)
                             ? null
-                            : $this->normalizeSquare($item['LivingAreaRange']),
-                        'price' => (float) $item['ListPrice'],
+                            : $this->normalizeSquare($item['LivingAreaRange'] ?? null),
+                        'price' => (float) ($item['ListPrice'] ?? 0),
                         'currency_id' => 1,
 
                         'is_featured' => 0,
                         'featured_priority' => 0,
 
-                        'status' => $item['StandardStatus'] === 'Active' ? 'selling' : 'draft',
+                        'status' => ($item['StandardStatus'] ?? '') === 'Active' ? 'selling' : 'draft',
                         'moderation_status' => 'approved',
 
-                        'expire_date' => $item['ExpirationDate'],
+                        'expire_date' => $item['ExpirationDate'] ?? now()->addYear()->toDateTimeString(),
                         'auto_renew' => 1,
                         'never_expired' => 1,
 
@@ -411,7 +411,7 @@ class PropertyController extends BaseController
                         'image_val' => $mediaUrl ?? null,
 
 
-                        'zip_code' => $item['PostalCode'],
+                        'zip_code' => $item['PostalCode'] ?? null,
                         'views' => 0,
                         'ParkingSpaces' => $item['ParkingSpaces'] ?? '0',
                         'Basement' => isset($item['Basement'])
@@ -424,7 +424,7 @@ class PropertyController extends BaseController
                         'created_at' => Carbon::parse($item['ListingContractDate'] ?? now()),
                         'updated_at' => Carbon::parse($item['ModificationTimestamp'] ?? now()),
 
-                        'private_notes' => $item['PrivateRemarks'],
+                        'private_notes' => $item['PrivateRemarks'] ?? '',
                     ]
                 );
 
