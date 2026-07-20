@@ -128,6 +128,63 @@ if (isset($_GET['fix_resend']) && (string) $_GET['fix_resend'] === '1') {
     exit;
 }
 
+// Fix missing site logo (.webp 404 → working .jpeg that exists on disk).
+if (isset($_GET['fix_logo']) && (string) $_GET['fix_logo'] === '1') {
+    header('Content-Type: text/plain; charset=utf-8');
+    echo "=== fix missing logo (webp → jpeg) ===\n\n";
+
+    $publicStorage = $base . '/public/storage';
+    $broken = 'whatsapp-image-2025-12-09-at-12.webp';
+    $candidates = [
+        'whatsapp-image-2025-12-09-at-120824-am.jpeg',
+        'whatsapp-image-2025-1.png',
+    ];
+
+    $chosen = null;
+    foreach ($candidates as $candidate) {
+        if (is_file($publicStorage . '/' . $candidate)) {
+            $chosen = $candidate;
+            break;
+        }
+    }
+
+    if (! $chosen) {
+        echo "FAIL: No replacement logo found under public/storage.\n";
+        exit;
+    }
+
+    echo 'broken webp on disk: ' . (is_file($publicStorage . '/' . $broken) ? 'yes' : 'NO ← this causes 404') . "\n";
+    echo "replacement: {$chosen}\n\n";
+
+    try {
+        require $base . '/vendor/autoload.php';
+        $app = require $base . '/bootstrap/app.php';
+        $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+
+        echo 'before logo=' . theme_option('logo') . "\n";
+        echo 'before logo_light=' . theme_option('logo_light') . "\n";
+
+        \Botble\Theme\Facades\ThemeOption::setOption('logo', $chosen);
+        \Botble\Theme\Facades\ThemeOption::setOption('logo_light', $chosen);
+        \Botble\Theme\Facades\ThemeOption::saveOptions();
+
+        echo 'after logo=' . theme_option('logo') . "\n";
+        echo 'after logo_light=' . theme_option('logo_light') . "\n";
+        echo "\nOK → https://serik.ca/storage/{$chosen}\n";
+
+        try {
+            Illuminate\Support\Facades\Artisan::call('cache:clear');
+            Illuminate\Support\Facades\Artisan::call('view:clear');
+            echo "cache+view cleared\n";
+        } catch (Throwable $e) {
+            echo 'cache clear skipped: ' . $e->getMessage() . "\n";
+        }
+    } catch (Throwable $e) {
+        echo 'ERROR: ' . $e->getMessage() . "\n";
+    }
+    exit;
+}
+
 // Diagnose IIS storage link + sample image_val paths (404 helper).
 if (isset($_GET['diag_images']) && (string) $_GET['diag_images'] === '1') {
     header('Content-Type: text/plain; charset=utf-8');

@@ -169,8 +169,8 @@
 
         <!-- ✅ Tabler Flag Icon -->
         <div class="nz_thankyou_icon_921">
-           <a href="https://serik.ca">
-                                <img src="https://serik.ca/storage/whatsapp-image-2025-12-09-at-12.webp" data-bb-lazy="false" style="max-height: 44px !important" alt="Serik Realty">
+           <a href="{{ BaseHelper::getHomepageUrl() }}">
+                                {!! Theme::getLogoImage(['data-bb-lazy' => 'false'], maxHeight: 44) !!}
                             </a>
         </div>
 
@@ -238,8 +238,8 @@
 
         <!-- ✅ Tabler Flag Icon -->
         <div class="nz_thankyou_icon_921">
-           <a href="https://serik.ca">
-                                <img src="https://serik.ca/storage/whatsapp-image-2025-12-09-at-12.webp" data-bb-lazy="false" style="max-height: 44px !important" alt="Serik Realty">
+           <a href="{{ BaseHelper::getHomepageUrl() }}">
+                                {!! Theme::getLogoImage(['data-bb-lazy' => 'false'], maxHeight: 44) !!}
                             </a>
         </div>
 
