@@ -266,12 +266,6 @@
 </style>
 
 <div class="hs-detail-section" id="propertyDetailBlocks" @if($listingKey) data-listing-key="{{ $listingKey }}" data-history-auth="{{ $isAuthenticated ? '1' : '0' }}" @endif>
-    @if ($garage)
-        <div class="hs-stats-row" id="propertyQuickStats">
-            <span class="stat"><strong>{{ $garage }}</strong> {{ __('Garage') }}</span>
-        </div>
-    @endif
-
     <div class="section-title">{{ __('Listing History') }}</div>
     <p class="section-subtitle" id="historySubtitle">
         {{ __('Buy/sell history for') }} {{ $displayName }}

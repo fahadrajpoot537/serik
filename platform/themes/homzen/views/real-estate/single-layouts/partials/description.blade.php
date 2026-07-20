@@ -303,17 +303,22 @@ View::share('cityName', $city);
                     </div>
                 </div>
             @endif
-              {{-- Garage Type --}}
-            @if(!empty($item['GarageType']))
-            <div class="col item">
-                <div class="box-icon w-52">
-                   <x-core::icon name="ti ti-car" />
+            @php
+                $garageSpaces = (int) ($item['ParkingSpaces'] ?? $model->ParkingSpaces ?? $model->garage ?? 0);
+                if ($garageSpaces <= 0 && ! empty($item['CoveredSpaces'])) {
+                    $garageSpaces = (int) $item['CoveredSpaces'];
+                }
+            @endphp
+            @if ($garageSpaces > 0 || ! empty($item['GarageType']))
+                <div class="col item">
+                    <div class="box-icon w-52">
+                        <x-core::icon name="ti ti-car" />
+                    </div>
+                    <div class="content">
+                        <span class="label">{{ __('Garage:') }}</span>
+                        <span>{{ $garageSpaces > 0 ? $garageSpaces : ($item['GarageType'] ?? '—') }}</span>
+                    </div>
                 </div>
-                <div class="content">
-                    <span class="label">{{ __('Garage / Parking Places:') }}</span>
-                    <span>{{ $item['ParkingSpaces'] }}</span>
-                </div>
-            </div>
             @endif
         </div>
   
