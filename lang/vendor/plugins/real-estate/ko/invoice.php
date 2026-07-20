@@ -1,0 +1,40 @@
+<?php
+
+return [
+    'name' => 'Invoices',
+    'amount' => 'Amount',
+    'code' => 'Code',
+    'show' => '송장 :code',
+    'print' => '송장 인쇄',
+    'download' => '송장 다운로드',
+    'heading' => 'Invoice',
+    'purchase_at' => '구매처:',
+    'sub_total' => '소계',
+    'tax_amount' => '세액',
+    'discount_amount' => '할인금액',
+    'total_amount' => '총액',
+    'status' => 'Status',
+    'account' => 'Account',
+    'payment_info' => '결제정보',
+    'payment_method' => '결제수단',
+    'payment_status' => '결제 상태',
+    'item' => [
+        'name' => 'Name',
+        'qty' => 'Quantity',
+        'description' => 'Description',
+    ],
+    'statuses' => [
+        'pending' => 'Pending',
+        'processing' => 'Processing',
+        'completed' => 'Completed',
+        'canceled' => 'Canceled',
+    ],
+    'template' => [
+        'name' => '송장 템플릿',
+        'setting' => '송장 설정',
+        'setting_description' => '송장 템플릿 설정',
+        'setting_content' => 'Content',
+        'preview' => 'Preview',
+        'preview_heading' => '송장 템플릿 미리보기',
+    ],
+];

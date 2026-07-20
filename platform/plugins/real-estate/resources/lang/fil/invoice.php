@@ -1,0 +1,40 @@
+<?php
+
+return [
+    'name' => 'Mga Invoice',
+    'amount' => 'Halaga',
+    'code' => 'Code',
+    'show' => 'Invoice :code',
+    'print' => 'I-print ang Invoice',
+    'download' => 'I-download ang Invoice',
+    'heading' => 'Invoice',
+    'purchase_at' => 'Binili noong',
+    'sub_total' => 'Subtotal',
+    'tax_amount' => 'Halaga ng buwis',
+    'discount_amount' => 'Halaga ng diskwento',
+    'total_amount' => 'Kabuuang halaga',
+    'status' => 'Katayuan',
+    'account' => 'Account',
+    'payment_info' => 'Impormasyon ng Bayad',
+    'payment_method' => 'Paraan ng pagbabayad',
+    'payment_status' => 'Katayuan ng pagbabayad',
+    'item' => [
+        'name' => 'Pangalan',
+        'qty' => 'Dami',
+        'description' => 'Paglalarawan',
+    ],
+    'statuses' => [
+        'pending' => 'Nakabinbin',
+        'processing' => 'Pinoproseso',
+        'completed' => 'Nakumpleto',
+        'canceled' => 'Kinansela',
+    ],
+    'template' => [
+        'name' => 'Invoice Template',
+        'setting' => 'Mga Setting ng Invoice',
+        'setting_description' => 'Mga setting para sa Invoice template',
+        'setting_content' => 'Nilalaman',
+        'preview' => 'Preview',
+        'preview_heading' => 'I-preview ang Invoice template',
+    ],
+];

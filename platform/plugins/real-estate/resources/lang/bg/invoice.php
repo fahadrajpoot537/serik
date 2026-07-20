@@ -1,0 +1,40 @@
+<?php
+
+return [
+    'name' => 'Фактури',
+    'amount' => 'Сума',
+    'code' => 'Код',
+    'show' => 'Фактура :code',
+    'print' => 'Печат на фактура',
+    'download' => 'Изтегляне на фактура',
+    'heading' => 'Фактура',
+    'purchase_at' => 'Покупка на',
+    'sub_total' => 'Междинна сума',
+    'tax_amount' => 'Сума на данъка',
+    'discount_amount' => 'Размер на отстъпката',
+    'total_amount' => 'Обща сума',
+    'status' => 'Статус',
+    'account' => 'Акаунт',
+    'payment_info' => 'Информация за плащане',
+    'payment_method' => 'Метод на плащане',
+    'payment_status' => 'Статус на плащането',
+    'item' => [
+        'name' => 'Име',
+        'qty' => 'Количество',
+        'description' => 'Описание',
+    ],
+    'statuses' => [
+        'pending' => 'В очакване',
+        'processing' => 'Обработва се',
+        'completed' => 'Завършена',
+        'canceled' => 'Отменена',
+    ],
+    'template' => [
+        'name' => 'Шаблон за фактура',
+        'setting' => 'Настройки за фактури',
+        'setting_description' => 'Настройки за шаблон на фактура',
+        'setting_content' => 'Съдържание',
+        'preview' => 'Преглед',
+        'preview_heading' => 'Преглед на шаблон за фактура',
+    ],
+];

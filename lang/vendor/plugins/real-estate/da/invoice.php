@@ -1,0 +1,40 @@
+<?php
+
+return [
+    'name' => 'Fakturaer',
+    'amount' => 'Beløb',
+    'code' => 'Kode',
+    'show' => 'Faktura :code',
+    'print' => 'Udskriv faktura',
+    'download' => 'Download faktura',
+    'heading' => 'Faktura',
+    'purchase_at' => 'Købt den',
+    'sub_total' => 'Subtotal',
+    'tax_amount' => 'Momsbeløb',
+    'discount_amount' => 'Rabatbeløb',
+    'total_amount' => 'Totalbeløb',
+    'status' => 'Status',
+    'account' => 'Konto',
+    'payment_info' => 'Betalingsinformation',
+    'payment_method' => 'Betalingsmetode',
+    'payment_status' => 'Betalingsstatus',
+    'item' => [
+        'name' => 'Navn',
+        'qty' => 'Antal',
+        'description' => 'Beskrivelse',
+    ],
+    'statuses' => [
+        'pending' => 'Afventer',
+        'processing' => 'Behandler',
+        'completed' => 'Fuldført',
+        'canceled' => 'Annulleret',
+    ],
+    'template' => [
+        'name' => 'Fakturaskabelon',
+        'setting' => 'Fakturaindstillinger',
+        'setting_description' => 'Indstillinger for fakturaskabelon',
+        'setting_content' => 'Indhold',
+        'preview' => 'Forhåndsvisning',
+        'preview_heading' => 'Forhåndsvis fakturaskabelon',
+    ],
+];

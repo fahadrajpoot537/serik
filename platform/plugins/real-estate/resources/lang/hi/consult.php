@@ -1,0 +1,78 @@
+<?php
+
+return [
+    'name' => 'परामर्श',
+    'edit' => 'परामर्श देखें',
+    'statuses' => [
+        'read' => 'पढ़ा गया',
+        'unread' => 'नहीं पढ़ा गया',
+    ],
+    'phone' => 'फोन',
+    'ip_address' => 'IP पता',
+    'content' => 'विवरण',
+    'consult_information' => 'परामर्श की जानकारी',
+    'email' => [
+        'header' => 'ईमेल',
+        'title' => 'आपकी साइट से नया परामर्श',
+        'success' => 'परामर्श सफलतापूर्वक भेजा गया!',
+        'failed' => 'इस समय अनुरोध नहीं भेजा जा सकता, कृपया बाद में पुनः प्रयास करें!',
+    ],
+    'form' => [
+        'name' => [
+            'required' => 'नाम आवश्यक है',
+        ],
+        'email' => [
+            'required' => 'ईमेल आवश्यक है',
+            'email' => 'ईमेल पता मान्य नहीं है',
+        ],
+        'content' => [
+            'required' => 'संदेश आवश्यक है',
+        ],
+    ],
+    'consult_sent_from' => 'यह परामर्श जानकारी भेजी गई है',
+    'time' => 'समय',
+    'consult_id' => 'परामर्श आईडी',
+    'form_name' => 'नाम',
+    'form_email' => 'ईमेल',
+    'form_phone' => 'फोन',
+    'form_content' => 'सामग्री',
+    'form_message' => 'संदेश',
+    'name_placeholder' => 'राजेश कुमार',
+    'phone_placeholder' => 'उदा 0123456789',
+    'email_placeholder' => 'email@example.com',
+    'message_placeholder' => 'अपना संदेश दर्ज करें...',
+    'send_consult' => 'संदेश भेजें',
+    'mark_as_read' => 'पढ़ा गया के रूप में चिह्नित करें',
+    'mark_as_unread' => 'नहीं पढ़ा गया के रूप में चिह्नित करें',
+    'new_consult_notice' => 'आपके पास <span class="bold">:count</span> नए परामर्श हैं',
+    'view_all' => 'सभी देखें',
+    'project' => 'परियोजना',
+    'property' => 'संपत्ति',
+    'custom_field' => [
+        'name' => 'कस्टम फील्ड',
+        'create' => 'कस्टम फील्ड बनाएं',
+        'type' => 'प्रकार',
+        'required' => 'आवश्यक',
+        'placeholder' => 'प्लेसहोल्डर',
+        'order' => 'क्रम',
+        'options' => 'विकल्प',
+        'option' => [
+            'label' => 'लेबल',
+            'value' => 'मान',
+            'add' => 'नया विकल्प जोड़ें',
+        ],
+        'enums' => [
+            'types' => [
+                'text' => 'टेक्स्ट',
+                'number' => 'संख्या',
+                'dropdown' => 'ड्रॉपडाउन',
+                'checkbox' => 'चेकबॉक्स',
+                'radio' => 'रेडियो',
+                'textarea' => 'टेक्स्टएरिया',
+                'date' => 'दिनांक',
+                'datetime' => 'दिनांक समय',
+                'time' => 'समय',
+            ],
+        ],
+    ],
+];

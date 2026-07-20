@@ -1,0 +1,78 @@
+<?php
+
+return [
+    'name' => 'Consulten',
+    'edit' => 'Consult bekijken',
+    'statuses' => [
+        'read' => 'Gelezen',
+        'unread' => 'Ongelezen',
+    ],
+    'phone' => 'Telefoon',
+    'ip_address' => 'IP-adres',
+    'content' => 'Details',
+    'consult_information' => 'Consultinformatie',
+    'email' => [
+        'header' => 'Email',
+        'title' => 'Nieuw consult van uw website',
+        'success' => 'Consult succesvol verzonden!',
+        'failed' => 'Kan op dit moment geen verzoek verzenden, probeer het later opnieuw!',
+    ],
+    'form' => [
+        'name' => [
+            'required' => 'Naam is verplicht',
+        ],
+        'email' => [
+            'required' => 'Email is verplicht',
+            'email' => 'Het emailadres is niet geldig',
+        ],
+        'content' => [
+            'required' => 'Bericht is verplicht',
+        ],
+    ],
+    'consult_sent_from' => 'Deze consultinformatie is verzonden vanaf',
+    'time' => 'Tijd',
+    'consult_id' => 'Consult ID',
+    'form_name' => 'Naam',
+    'form_email' => 'Email',
+    'form_phone' => 'Telefoon',
+    'form_content' => 'Inhoud',
+    'form_message' => 'Bericht',
+    'name_placeholder' => 'Jan de Vries',
+    'phone_placeholder' => 'Bijv 0123456789',
+    'email_placeholder' => 'email@example.com',
+    'message_placeholder' => 'Voer uw bericht in...',
+    'send_consult' => 'Bericht verzenden',
+    'mark_as_read' => 'Markeer als gelezen',
+    'mark_as_unread' => 'Markeer als ongelezen',
+    'new_consult_notice' => 'U heeft <span class="bold">:count</span> nieuwe consulten',
+    'view_all' => 'Bekijk alles',
+    'project' => 'Project',
+    'property' => 'Woonobject',
+    'custom_field' => [
+        'name' => 'Aangepaste velden',
+        'create' => 'Aangepast veld aanmaken',
+        'type' => 'Type',
+        'required' => 'Verplicht',
+        'placeholder' => 'Plaatshouder',
+        'order' => 'Volgorde',
+        'options' => 'Opties',
+        'option' => [
+            'label' => 'Label',
+            'value' => 'Waarde',
+            'add' => 'Nieuwe optie toevoegen',
+        ],
+        'enums' => [
+            'types' => [
+                'text' => 'Tekst',
+                'number' => 'Nummer',
+                'dropdown' => 'Dropdown',
+                'checkbox' => 'Selectievakje',
+                'radio' => 'Keuzerondje',
+                'textarea' => 'Tekstgebied',
+                'date' => 'Datum',
+                'datetime' => 'Datum tijd',
+                'time' => 'Tijd',
+            ],
+        ],
+    ],
+];

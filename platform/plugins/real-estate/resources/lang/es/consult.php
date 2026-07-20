@@ -1,0 +1,78 @@
+<?php
+
+return [
+    'name' => 'Consultas',
+    'edit' => 'Ver consulta',
+    'statuses' => [
+        'read' => 'Leída',
+        'unread' => 'No leída',
+    ],
+    'phone' => 'Teléfono',
+    'ip_address' => 'Dirección IP',
+    'content' => 'Detalles',
+    'consult_information' => 'Información de consulta',
+    'email' => [
+        'header' => 'Email',
+        'title' => 'Nueva consulta desde tu sitio',
+        'success' => '¡Consulta enviada exitosamente!',
+        'failed' => '¡No se puede enviar la solicitud en este momento, por favor intenta más tarde!',
+    ],
+    'form' => [
+        'name' => [
+            'required' => 'El nombre es requerido',
+        ],
+        'email' => [
+            'required' => 'El email es requerido',
+            'email' => 'La dirección de email no es válida',
+        ],
+        'content' => [
+            'required' => 'El mensaje es requerido',
+        ],
+    ],
+    'consult_sent_from' => 'Esta información de consulta fue enviada desde',
+    'time' => 'Hora',
+    'consult_id' => 'ID de Consulta',
+    'form_name' => 'Nombre',
+    'form_email' => 'Email',
+    'form_phone' => 'Teléfono',
+    'form_content' => 'Contenido',
+    'form_message' => 'Mensaje',
+    'name_placeholder' => 'Juan Pérez',
+    'phone_placeholder' => 'Ej 0123456789',
+    'email_placeholder' => 'email@example.com',
+    'message_placeholder' => 'Ingresa tu mensaje...',
+    'send_consult' => 'Enviar mensaje',
+    'mark_as_read' => 'Marcar como leída',
+    'mark_as_unread' => 'Marcar como no leída',
+    'new_consult_notice' => 'Tienes <span class="bold">:count</span> Nuevas Consultas',
+    'view_all' => 'Ver todas',
+    'project' => 'Proyecto',
+    'property' => 'Propiedad',
+    'custom_field' => [
+        'name' => 'Campos Personalizados',
+        'create' => 'Crear Campo Personalizado',
+        'type' => 'Tipo',
+        'required' => 'Requerido',
+        'placeholder' => 'Marcador de posición',
+        'order' => 'Orden',
+        'options' => 'Opciones',
+        'option' => [
+            'label' => 'Etiqueta',
+            'value' => 'Valor',
+            'add' => 'Agregar nueva opción',
+        ],
+        'enums' => [
+            'types' => [
+                'text' => 'Texto',
+                'number' => 'Número',
+                'dropdown' => 'Lista desplegable',
+                'checkbox' => 'Casilla de verificación',
+                'radio' => 'Radio',
+                'textarea' => 'Área de texto',
+                'date' => 'Fecha',
+                'datetime' => 'Fecha y hora',
+                'time' => 'Hora',
+            ],
+        ],
+    ],
+];

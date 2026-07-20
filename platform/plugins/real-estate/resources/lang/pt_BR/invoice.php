@@ -1,0 +1,40 @@
+<?php
+
+return [
+    'name' => 'Invoices',
+    'amount' => 'Amount',
+    'code' => 'Code',
+    'show' => 'Fatura :code',
+    'print' => 'Imprimir fatura',
+    'download' => 'Baixar fatura',
+    'heading' => 'Invoice',
+    'purchase_at' => 'Compre em',
+    'sub_total' => 'Subtotal',
+    'tax_amount' => 'Valor do imposto',
+    'discount_amount' => 'Valor do desconto',
+    'total_amount' => 'Montante total',
+    'status' => 'Status',
+    'account' => 'Account',
+    'payment_info' => 'Informações de pagamento',
+    'payment_method' => 'Método de pagamento',
+    'payment_status' => 'Status do pagamento',
+    'item' => [
+        'name' => 'Name',
+        'qty' => 'Quantity',
+        'description' => 'Description',
+    ],
+    'statuses' => [
+        'pending' => 'Pending',
+        'processing' => 'Processing',
+        'completed' => 'Completed',
+        'canceled' => 'Canceled',
+    ],
+    'template' => [
+        'name' => 'Modelo de fatura',
+        'setting' => 'Configurações de fatura',
+        'setting_description' => 'Configurações do modelo de fatura',
+        'setting_content' => 'Content',
+        'preview' => 'Preview',
+        'preview_heading' => 'Visualizar modelo de fatura',
+    ],
+];

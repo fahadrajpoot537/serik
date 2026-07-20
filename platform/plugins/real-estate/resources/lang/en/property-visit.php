@@ -1,0 +1,26 @@
+<?php
+
+return [
+    'name' => 'Property Visits',
+    'account' => 'User',
+    'property' => 'Property',
+    'listing_key' => 'Listing Key',
+    'location' => 'Location',
+    'price' => 'Price',
+    'mls_status' => 'MLS Status',
+    'views' => 'Views',
+    'last_viewed' => 'Last Viewed',
+    'delete_requested' => 'Delete Requested',
+    'delete_requested_at' => 'Requested At',
+    'request_delete' => 'Request Delete',
+    'request_delete_confirm' => 'Send a request to admin to remove this property from your visit history?',
+    'request_sent' => 'Delete request sent to admin.',
+    'already_requested' => 'Delete request already pending.',
+    'approve_delete' => 'Approve Delete',
+    'approve_delete_confirm' => 'Soft-delete this visit for the user?',
+    'approved_delete' => 'Visit history removed for user.',
+    'no_visits' => 'No visited properties yet.',
+    'history' => 'Visit History',
+    'my_history' => 'My Visit History',
+    'pending_deletes' => 'Pending Delete Requests',
+];

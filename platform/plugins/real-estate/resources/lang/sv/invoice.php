@@ -1,0 +1,40 @@
+<?php
+
+return [
+    'name' => 'Invoices',
+    'amount' => 'Amount',
+    'code' => 'Code',
+    'show' => 'Faktura __ph0__',
+    'print' => 'Tryckfaktura',
+    'download' => 'Ladda ner faktura',
+    'heading' => 'Invoice',
+    'purchase_at' => 'Köpa på',
+    'sub_total' => 'Summan',
+    'tax_amount' => 'Skattebelopp',
+    'discount_amount' => 'Rabattbelopp',
+    'total_amount' => 'Totalt belopp',
+    'status' => 'Status',
+    'account' => 'Account',
+    'payment_info' => 'Betalningsinformation',
+    'payment_method' => 'Betalningsmetod',
+    'payment_status' => 'Betalningsstatus',
+    'item' => [
+        'name' => 'Name',
+        'qty' => 'Quantity',
+        'description' => 'Description',
+    ],
+    'statuses' => [
+        'pending' => 'Pending',
+        'processing' => 'Processing',
+        'completed' => 'Completed',
+        'canceled' => 'Canceled',
+    ],
+    'template' => [
+        'name' => 'Faktura mall',
+        'setting' => 'Fakturainställningar',
+        'setting_description' => 'Inställningar för fakturamall',
+        'setting_content' => 'Content',
+        'preview' => 'Preview',
+        'preview_heading' => 'Förhandsgranskning av fakturamall',
+    ],
+];

@@ -1,0 +1,24 @@
+# Compress API/JSON/text responses (map GeoJSON drops ~8x: 2MB -> ~256KB).
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE application/json application/javascript text/javascript text/css text/html text/plain application/xml image/svg+xml application/geo+json
+</IfModule>
+<IfModule mod_brotli.c>
+    AddOutputFilterByType BROTLI_COMPRESS application/json application/javascript text/javascript text/css text/html text/plain application/xml image/svg+xml application/geo+json
+</IfModule>
+
+<IfModule mod_rewrite.c>
+    Options -Indexes
+
+    RewriteEngine On
+
+    # Block direct /public/... probes (works when the document root IS the public folder)
+    RewriteRule ^public(/|$) - [F,L]
+
+    # Block hidden files and common backup/archive probes inside public document root
+    RewriteRule (^|/)\. - [F,L]
+    RewriteRule \.(bak|backup|old|orig|save|swp|sql|sqlite|zip|tar|tgz|gz|7z|rar)$ - [F,L,NC]
+
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^ index.php [L]
+</IfModule>

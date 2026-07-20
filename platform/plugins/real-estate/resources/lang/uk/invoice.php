@@ -1,0 +1,40 @@
+<?php
+
+return [
+    'name' => 'Рахунки',
+    'amount' => 'Сума',
+    'code' => 'Код',
+    'show' => 'Рахунок :code',
+    'print' => 'Роздрукувати рахунок',
+    'download' => 'Завантажити рахунок',
+    'heading' => 'Рахунок',
+    'purchase_at' => 'Придбано',
+    'sub_total' => 'Проміжна сума',
+    'tax_amount' => 'Сума податку',
+    'discount_amount' => 'Сума знижки',
+    'total_amount' => 'Загальна сума',
+    'status' => 'Статус',
+    'account' => 'Обліковий запис',
+    'payment_info' => 'Інформація про оплату',
+    'payment_method' => 'Спосіб оплати',
+    'payment_status' => 'Статус оплати',
+    'item' => [
+        'name' => 'Назва',
+        'qty' => 'Кількість',
+        'description' => 'Опис',
+    ],
+    'statuses' => [
+        'pending' => 'Очікує',
+        'processing' => 'Обробляється',
+        'completed' => 'Завершено',
+        'canceled' => 'Скасовано',
+    ],
+    'template' => [
+        'name' => 'Шаблон рахунку',
+        'setting' => 'Налаштування рахунку',
+        'setting_description' => 'Налаштування шаблону рахунку',
+        'setting_content' => 'Вміст',
+        'preview' => 'Попередній перегляд',
+        'preview_heading' => 'Попередній перегляд шаблону рахунку',
+    ],
+];

@@ -1,0 +1,40 @@
+<?php
+
+return [
+    'name' => 'Laskut',
+    'amount' => 'Summa',
+    'code' => 'Koodi',
+    'show' => 'Lasku :code',
+    'print' => 'Tulosta lasku',
+    'download' => 'Lataa lasku',
+    'heading' => 'Lasku',
+    'purchase_at' => 'Ostettu',
+    'sub_total' => 'Välisumma',
+    'tax_amount' => 'Verosumma',
+    'discount_amount' => 'Alennussumma',
+    'total_amount' => 'Kokonaissumma',
+    'status' => 'Tila',
+    'account' => 'Tili',
+    'payment_info' => 'Maksutiedot',
+    'payment_method' => 'Maksutapa',
+    'payment_status' => 'Maksun tila',
+    'item' => [
+        'name' => 'Nimi',
+        'qty' => 'Määrä',
+        'description' => 'Kuvaus',
+    ],
+    'statuses' => [
+        'pending' => 'Odottaa',
+        'processing' => 'Käsitellään',
+        'completed' => 'Valmis',
+        'canceled' => 'Peruutettu',
+    ],
+    'template' => [
+        'name' => 'Laskupohja',
+        'setting' => 'Laskuasetukset',
+        'setting_description' => 'Laskupohjan asetukset',
+        'setting_content' => 'Sisältö',
+        'preview' => 'Esikatselu',
+        'preview_heading' => 'Esikatsele laskupohjaa',
+    ],
+];

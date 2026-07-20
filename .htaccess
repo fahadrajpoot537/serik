@@ -1,0 +1,37 @@
+Options -Indexes
+ServerSignature Off
+
+RewriteEngine On
+
+# Block direct access to /public paths (bots commonly probe this on Laravel sites)
+RewriteCond %{THE_REQUEST} \s/+public[/?\s] [NC]
+RewriteRule ^public(?:/.*)?$ - [F,L]
+
+# Block sensitive Laravel/app files and common backup/archive probes
+RewriteRule (^|/)(\.env|\.git|\.svn|composer\.(json|lock)|package(-lock)?\.json|yarn\.lock|artisan|phpunit\.xml)(/|$) - [F,L,NC]
+RewriteRule \.(bak|backup|old|orig|save|swp|sql|sqlite|zip|tar|tgz|gz|7z|rar)$ - [F,L,NC]
+RewriteRule ^(app|bootstrap|config|database|resources|routes|storage|vendor|node_modules)(/|$) - [F,L,NC]
+
+# Force NON-WWW + HTTPS
+RewriteCond %{HTTP_HOST} ^www\.(.+)$ [NC]
+RewriteRule ^ https://%1%{REQUEST_URI} [R=301,L]
+
+RewriteCond %{HTTPS} !=on
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
+
+# Serve existing files/folders from PUBLIC folder
+RewriteCond %{DOCUMENT_ROOT}/public%{REQUEST_URI} -f [OR]
+RewriteCond %{DOCUMENT_ROOT}/public%{REQUEST_URI} -d
+RewriteRule ^(.*)$ public/$1 [L]
+
+# Otherwise send to Laravel
+RewriteRule ^ public/index.php [L]
+
+# Compression
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/plain text/html text/xml text/css
+    AddOutputFilterByType DEFLATE application/xml application/xhtml+xml
+    AddOutputFilterByType DEFLATE application/rss+xml application/javascript
+    AddOutputFilterByType DEFLATE application/x-javascript application/json
+    AddOutputFilterByType DEFLATE image/svg+xml
+</IfModule>

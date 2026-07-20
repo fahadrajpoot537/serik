@@ -1,0 +1,40 @@
+<?php
+
+return [
+    'name' => 'Računi',
+    'amount' => 'Iznos',
+    'code' => 'Kod',
+    'show' => 'Račun :code',
+    'print' => 'Ispiši račun',
+    'download' => 'Preuzmi račun',
+    'heading' => 'Račun',
+    'purchase_at' => 'Kupljeno',
+    'sub_total' => 'Međuzbroj',
+    'tax_amount' => 'Iznos poreza',
+    'discount_amount' => 'Iznos popusta',
+    'total_amount' => 'Ukupni iznos',
+    'status' => 'Status',
+    'account' => 'Račun',
+    'payment_info' => 'Informacije o plaćanju',
+    'payment_method' => 'Način plaćanja',
+    'payment_status' => 'Status plaćanja',
+    'item' => [
+        'name' => 'Naziv',
+        'qty' => 'Količina',
+        'description' => 'Opis',
+    ],
+    'statuses' => [
+        'pending' => 'Na čekanju',
+        'processing' => 'U obradi',
+        'completed' => 'Završeno',
+        'canceled' => 'Otkazano',
+    ],
+    'template' => [
+        'name' => 'Predložak računa',
+        'setting' => 'Postavke računa',
+        'setting_description' => 'Postavke za predložak računa',
+        'setting_content' => 'Sadržaj',
+        'preview' => 'Pregled',
+        'preview_heading' => 'Pregled predloška računa',
+    ],
+];

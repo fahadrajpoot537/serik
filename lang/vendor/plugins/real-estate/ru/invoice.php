@@ -1,0 +1,40 @@
+<?php
+
+return [
+    'name' => 'Invoices',
+    'amount' => 'Amount',
+    'code' => 'Code',
+    'show' => 'Счет :code',
+    'print' => 'Распечатать счет',
+    'download' => 'Скачать счет',
+    'heading' => 'Invoice',
+    'purchase_at' => 'Купить в',
+    'sub_total' => 'Промежуточный итог',
+    'tax_amount' => 'Сумма налога',
+    'discount_amount' => 'Сумма скидки',
+    'total_amount' => 'Общая сумма',
+    'status' => 'Status',
+    'account' => 'Account',
+    'payment_info' => 'Информация об оплате',
+    'payment_method' => 'Способ оплаты',
+    'payment_status' => 'Статус платежа',
+    'item' => [
+        'name' => 'Name',
+        'qty' => 'Quantity',
+        'description' => 'Description',
+    ],
+    'statuses' => [
+        'pending' => 'Pending',
+        'processing' => 'Processing',
+        'completed' => 'Completed',
+        'canceled' => 'Canceled',
+    ],
+    'template' => [
+        'name' => 'Шаблон счета-фактуры',
+        'setting' => 'Настройки счета',
+        'setting_description' => 'Настройки шаблона счета-фактуры',
+        'setting_content' => 'Content',
+        'preview' => 'Preview',
+        'preview_heading' => 'Предварительный просмотр шаблона счета-фактуры',
+    ],
+];

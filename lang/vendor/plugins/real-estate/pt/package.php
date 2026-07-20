@@ -1,0 +1,26 @@
+<?php
+
+return [
+    'name' => 'Pacotes',
+    'create' => 'Novo pacote',
+    'edit' => 'Editar pacote',
+    'price' => 'Preço',
+    'currency' => 'Moeda',
+    'percent_save' => 'Porcentagem de economia',
+    'number_of_listings' => 'Número de listagens',
+    'add_credit_success' => 'Adicione crédito com sucesso!',
+    'setup_payment_methods' => 'Configure os métodos de pagamento (PayPal, Stripe, COD, transferência bancária)',
+    'add_credit_warning' => 'Adicione seu crédito para criar suas próprias postagens aqui:',
+    'add_credit' => 'Adicionar crédito',
+    'account_limit' => 'Limitar compra por conta',
+    'account_limit_placeholder' => 'Uma conta pode comprar x vezes',
+    'subscribe_package' => 'Pacote de assinatura',
+    'add_credit_alert' => 'Adicione seu crédito para criar suas próprias postagens.',
+    'price_per_post' => ':price / por publicação',
+    'free_posts' => ':number publicação(ões) gratuitas',
+    'price_with_sale' => ':price total :percentage_sale',
+    'save_percentage' => 'Poupa :percentage %',
+    'features' => 'Funcionalidades',
+    'title' => 'Título',
+    'feature_example' => 'Ex.: Publicações de emprego por 60 dias',
+];

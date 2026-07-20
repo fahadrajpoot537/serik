@@ -1,0 +1,49 @@
+User-agent: *
+# Allow public assets
+Allow: /storage/
+Allow: /css/
+Allow: /js/
+Allow: /images/
+
+# Block API endpoints completely
+Disallow: /api/
+Disallow: /api/*
+
+# Disallow Laravel core directories
+Disallow: /app/
+Disallow: /bootstrap/
+Disallow: /config/
+Disallow: /database/
+Disallow: /resources/
+Disallow: /routes/
+Disallow: /vendor/
+
+# Disallow sensitive storage paths
+Disallow: /storage/logs/
+Disallow: /storage/framework/
+
+# Block system files
+Disallow: /.env
+Disallow: /.git
+Disallow: /.htaccess
+Disallow: /composer.json
+Disallow: /composer.lock
+
+# Block authentication & admin areas
+Disallow: /admin
+Disallow: /login
+Disallow: /register
+Disallow: /password
+Disallow: /dashboard
+
+# Optional: block query parameters (avoid duplicate content)
+Disallow: /*?*
+
+# Allow homepage and public pages
+Allow: /
+
+User-agent: MJ12bot
+Disallow: /
+
+# Sitemap
+Sitemap: https://serik.ca/sitemap.xml

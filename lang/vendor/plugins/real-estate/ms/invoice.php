@@ -1,0 +1,40 @@
+<?php
+
+return [
+    'name' => 'Invoices',
+    'amount' => 'Amount',
+    'code' => 'Code',
+    'show' => 'Invois __ph0__',
+    'print' => 'Cetak invois',
+    'download' => 'Muat turun invois',
+    'heading' => 'Invoice',
+    'purchase_at' => 'Membeli di',
+    'sub_total' => 'Sub Jumlah',
+    'tax_amount' => 'Jumlah cukai',
+    'discount_amount' => 'Jumlah diskaun',
+    'total_amount' => 'Jumlah jumlah',
+    'status' => 'Status',
+    'account' => 'Account',
+    'payment_info' => 'Maklumat pembayaran',
+    'payment_method' => 'Kaedah pembayaran',
+    'payment_status' => 'Status pembayaran',
+    'item' => [
+        'name' => 'Name',
+        'qty' => 'Quantity',
+        'description' => 'Description',
+    ],
+    'statuses' => [
+        'pending' => 'Pending',
+        'processing' => 'Processing',
+        'completed' => 'Completed',
+        'canceled' => 'Canceled',
+    ],
+    'template' => [
+        'name' => 'Templat invois',
+        'setting' => 'Tetapan invois',
+        'setting_description' => 'Tetapan untuk templat invois',
+        'setting_content' => 'Content',
+        'preview' => 'Preview',
+        'preview_heading' => 'Templat invois pratonton',
+    ],
+];

@@ -1,0 +1,78 @@
+<?php
+
+return [
+    'name' => '相談',
+    'edit' => '相談を表示',
+    'statuses' => [
+        'read' => '既読',
+        'unread' => '未読',
+    ],
+    'phone' => '電話番号',
+    'ip_address' => 'IPアドレス',
+    'content' => '詳細',
+    'consult_information' => '相談情報',
+    'email' => [
+        'header' => 'メール',
+        'title' => 'あなたのサイトから新しい相談',
+        'success' => '相談を正常に送信しました！',
+        'failed' => '現在リクエストを送信できません。後でもう一度お試しください！',
+    ],
+    'form' => [
+        'name' => [
+            'required' => '名前は必須です',
+        ],
+        'email' => [
+            'required' => 'メールアドレスは必須です',
+            'email' => 'メールアドレスが有効ではありません',
+        ],
+        'content' => [
+            'required' => 'メッセージは必須です',
+        ],
+    ],
+    'consult_sent_from' => 'この相談情報の送信元',
+    'time' => '時間',
+    'consult_id' => '相談ID',
+    'form_name' => '名前',
+    'form_email' => 'メールアドレス',
+    'form_phone' => '電話番号',
+    'form_content' => 'コンテンツ',
+    'form_message' => 'メッセージ',
+    'name_placeholder' => '山田太郎',
+    'phone_placeholder' => '例 0123456789',
+    'email_placeholder' => 'email@example.com',
+    'message_placeholder' => 'メッセージを入力してください...',
+    'send_consult' => 'メッセージを送信',
+    'mark_as_read' => '既読にする',
+    'mark_as_unread' => '未読にする',
+    'new_consult_notice' => '<span class="bold">:count</span>件の新しい相談があります',
+    'view_all' => 'すべて表示',
+    'project' => 'プロジェクト',
+    'property' => '物件',
+    'custom_field' => [
+        'name' => 'カスタムフィールド',
+        'create' => 'カスタムフィールド作成',
+        'type' => 'タイプ',
+        'required' => '必須',
+        'placeholder' => 'プレースホルダー',
+        'order' => '順序',
+        'options' => 'オプション',
+        'option' => [
+            'label' => 'ラベル',
+            'value' => '値',
+            'add' => '新しいオプションを追加',
+        ],
+        'enums' => [
+            'types' => [
+                'text' => 'テキスト',
+                'number' => '数値',
+                'dropdown' => 'ドロップダウン',
+                'checkbox' => 'チェックボックス',
+                'radio' => 'ラジオ',
+                'textarea' => 'テキストエリア',
+                'date' => '日付',
+                'datetime' => '日時',
+                'time' => '時刻',
+            ],
+        ],
+    ],
+];

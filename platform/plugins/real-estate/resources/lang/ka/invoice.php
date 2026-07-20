@@ -1,0 +1,40 @@
+<?php
+
+return [
+    'name' => 'Invoices',
+    'amount' => 'Amount',
+    'code' => 'Code',
+    'show' => 'ინვოისი __ph0__',
+    'print' => 'ბეჭდვა ინვოისი',
+    'download' => 'ჩამოტვირთეთ ინვოისი',
+    'heading' => 'Invoice',
+    'purchase_at' => 'შეძენა',
+    'sub_total' => 'ქვე ტოტალი',
+    'tax_amount' => 'საგადასახადო თანხა',
+    'discount_amount' => 'ფასდაკლების თანხა',
+    'total_amount' => 'მთლიანი თანხა',
+    'status' => 'Status',
+    'account' => 'Account',
+    'payment_info' => 'გადახდის ინფორმაცია',
+    'payment_method' => 'გადახდის მეთოდი',
+    'payment_status' => 'გადახდის სტატუსი',
+    'item' => [
+        'name' => 'Name',
+        'qty' => 'Quantity',
+        'description' => 'Description',
+    ],
+    'statuses' => [
+        'pending' => 'Pending',
+        'processing' => 'Processing',
+        'completed' => 'Completed',
+        'canceled' => 'Canceled',
+    ],
+    'template' => [
+        'name' => 'ინვოისის შაბლონი',
+        'setting' => 'ინვოისის პარამეტრები',
+        'setting_description' => 'პარამეტრები ინვოისის შაბლონისთვის',
+        'setting_content' => 'Content',
+        'preview' => 'Preview',
+        'preview_heading' => 'გადახედეთ ინვოისის შაბლონს',
+    ],
+];

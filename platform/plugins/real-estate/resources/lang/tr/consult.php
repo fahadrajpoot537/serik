@@ -1,0 +1,78 @@
+<?php
+
+return [
+    'name' => 'Danışmalar',
+    'edit' => 'Danışmayı görüntüle',
+    'statuses' => [
+        'read' => 'Okundu',
+        'unread' => 'Okunmadı',
+    ],
+    'phone' => 'Telefon',
+    'ip_address' => 'IP adresi',
+    'content' => 'Detaylar',
+    'consult_information' => 'Danışma bilgileri',
+    'email' => [
+        'header' => 'E-posta',
+        'title' => 'Sitenizden yeni danışma',
+        'success' => 'Danışma başarıyla gönderildi!',
+        'failed' => 'Şu anda istek gönderilemiyor, lütfen daha sonra tekrar deneyin!',
+    ],
+    'form' => [
+        'name' => [
+            'required' => 'İsim gereklidir',
+        ],
+        'email' => [
+            'required' => 'E-posta gereklidir',
+            'email' => 'E-posta adresi geçerli değil',
+        ],
+        'content' => [
+            'required' => 'Mesaj gereklidir',
+        ],
+    ],
+    'consult_sent_from' => 'Bu danışma bilgisi şuradan gönderildi',
+    'time' => 'Zaman',
+    'consult_id' => 'Danışma ID',
+    'form_name' => 'İsim',
+    'form_email' => 'E-posta',
+    'form_phone' => 'Telefon',
+    'form_content' => 'İçerik',
+    'form_message' => 'Mesaj',
+    'name_placeholder' => 'Ahmet Yılmaz',
+    'phone_placeholder' => 'Örnek 0123456789',
+    'email_placeholder' => 'email@example.com',
+    'message_placeholder' => 'Mesajınızı girin...',
+    'send_consult' => 'Mesaj Gönder',
+    'mark_as_read' => 'Okundu olarak işaretle',
+    'mark_as_unread' => 'Okunmadı olarak işaretle',
+    'new_consult_notice' => '<span class="bold">:count</span> Yeni Danışmanız var',
+    'view_all' => 'Tümünü görüntüle',
+    'project' => 'Proje',
+    'property' => 'Mülk',
+    'custom_field' => [
+        'name' => 'Özel Alanlar',
+        'create' => 'Özel Alan Oluştur',
+        'type' => 'Tür',
+        'required' => 'Gerekli',
+        'placeholder' => 'Yer tutucu',
+        'order' => 'Sıra',
+        'options' => 'Seçenekler',
+        'option' => [
+            'label' => 'Etiket',
+            'value' => 'Değer',
+            'add' => 'Yeni seçenek ekle',
+        ],
+        'enums' => [
+            'types' => [
+                'text' => 'Metin',
+                'number' => 'Sayı',
+                'dropdown' => 'Açılır liste',
+                'checkbox' => 'Onay kutusu',
+                'radio' => 'Radyo',
+                'textarea' => 'Metin alanı',
+                'date' => 'Tarih',
+                'datetime' => 'Tarih saat',
+                'time' => 'Saat',
+            ],
+        ],
+    ],
+];

@@ -1,0 +1,78 @@
+<?php
+
+return [
+    'name' => 'Konsultasi',
+    'edit' => 'Lihat konsultasi',
+    'statuses' => [
+        'read' => 'Dibaca',
+        'unread' => 'Belum dibaca',
+    ],
+    'phone' => 'Telepon',
+    'ip_address' => 'Alamat IP',
+    'content' => 'Detail',
+    'consult_information' => 'Informasi konsultasi',
+    'email' => [
+        'header' => 'Email',
+        'title' => 'Konsultasi baru dari situs Anda',
+        'success' => 'Konsultasi berhasil dikirim!',
+        'failed' => 'Tidak dapat mengirim permintaan saat ini, silakan coba lagi nanti!',
+    ],
+    'form' => [
+        'name' => [
+            'required' => 'Nama diperlukan',
+        ],
+        'email' => [
+            'required' => 'Email diperlukan',
+            'email' => 'Alamat email tidak valid',
+        ],
+        'content' => [
+            'required' => 'Pesan diperlukan',
+        ],
+    ],
+    'consult_sent_from' => 'Informasi konsultasi ini dikirim dari',
+    'time' => 'Waktu',
+    'consult_id' => 'ID Konsultasi',
+    'form_name' => 'Nama',
+    'form_email' => 'Email',
+    'form_phone' => 'Telepon',
+    'form_content' => 'Konten',
+    'form_message' => 'Pesan',
+    'name_placeholder' => 'Budi Santoso',
+    'phone_placeholder' => 'Contoh 0123456789',
+    'email_placeholder' => 'email@example.com',
+    'message_placeholder' => 'Masukkan pesan Anda...',
+    'send_consult' => 'Kirim Pesan',
+    'mark_as_read' => 'Tandai sebagai dibaca',
+    'mark_as_unread' => 'Tandai sebagai belum dibaca',
+    'new_consult_notice' => 'Anda memiliki <span class="bold">:count</span> Konsultasi Baru',
+    'view_all' => 'Lihat semua',
+    'project' => 'Proyek',
+    'property' => 'Properti',
+    'custom_field' => [
+        'name' => 'Field Kustom',
+        'create' => 'Buat Field Kustom',
+        'type' => 'Tipe',
+        'required' => 'Wajib',
+        'placeholder' => 'Placeholder',
+        'order' => 'Urutan',
+        'options' => 'Opsi',
+        'option' => [
+            'label' => 'Label',
+            'value' => 'Nilai',
+            'add' => 'Tambah opsi baru',
+        ],
+        'enums' => [
+            'types' => [
+                'text' => 'Teks',
+                'number' => 'Angka',
+                'dropdown' => 'Dropdown',
+                'checkbox' => 'Checkbox',
+                'radio' => 'Radio',
+                'textarea' => 'Textarea',
+                'date' => 'Tanggal',
+                'datetime' => 'Tanggal waktu',
+                'time' => 'Waktu',
+            ],
+        ],
+    ],
+];

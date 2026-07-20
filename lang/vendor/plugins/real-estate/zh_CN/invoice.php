@@ -1,0 +1,40 @@
+<?php
+
+return [
+    'name' => '发票',
+    'amount' => '金额',
+    'code' => '代码',
+    'show' => '发票 :code',
+    'print' => '打印发票',
+    'download' => '下载发票',
+    'heading' => '发票',
+    'purchase_at' => '购买于',
+    'sub_total' => '小计',
+    'tax_amount' => '税额',
+    'discount_amount' => '优惠金额',
+    'total_amount' => '总金额',
+    'status' => '状态',
+    'account' => '账号',
+    'payment_info' => '付款信息',
+    'payment_method' => '付款方式',
+    'payment_status' => '付款状态',
+    'item' => [
+        'name' => '名称',
+        'qty' => '数量',
+        'description' => '描述',
+    ],
+    'statuses' => [
+        'pending' => '待处理',
+        'processing' => '处理中',
+        'completed' => '已完成',
+        'canceled' => '已取消',
+    ],
+    'template' => [
+        'name' => '发票模板',
+        'setting' => '发票设置',
+        'setting_description' => '发票模板设置',
+        'setting_content' => '内容',
+        'preview' => '预览',
+        'preview_heading' => '预览发票模板',
+    ],
+];

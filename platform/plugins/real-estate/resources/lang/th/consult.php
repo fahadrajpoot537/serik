@@ -1,0 +1,78 @@
+<?php
+
+return [
+    'name' => 'คำปรึกษา',
+    'edit' => 'ดูคำปรึกษา',
+    'statuses' => [
+        'read' => 'อ่านแล้ว',
+        'unread' => 'ยังไม่อ่าน',
+    ],
+    'phone' => 'เบอร์โทร',
+    'ip_address' => 'IP address',
+    'content' => 'รายละเอียด',
+    'consult_information' => 'ข้อมูลคำปรึกษา',
+    'email' => [
+        'header' => 'อีเมล',
+        'title' => 'คำปรึกษาใหม่จากเว็บไซต์ของคุณ',
+        'success' => 'ส่งคำปรึกษาสำเร็จ!',
+        'failed' => 'ไม่สามารถส่งคำขอได้ในขณะนี้ กรุณาลองใหม่อีกครั้งในภายหลัง!',
+    ],
+    'form' => [
+        'name' => [
+            'required' => 'ชื่อเป็นสิ่งจำเป็น',
+        ],
+        'email' => [
+            'required' => 'อีเมลเป็นสิ่งจำเป็น',
+            'email' => 'รูปแบบอีเมลไม่ถูกต้อง',
+        ],
+        'content' => [
+            'required' => 'ข้อความเป็นสิ่งจำเป็น',
+        ],
+    ],
+    'consult_sent_from' => 'ข้อมูลคำปรึกษานี้ส่งมาจาก',
+    'time' => 'เวลา',
+    'consult_id' => 'รหัสคำปรึกษา',
+    'form_name' => 'ชื่อ',
+    'form_email' => 'อีเมล',
+    'form_phone' => 'เบอร์โทร',
+    'form_content' => 'เนื้อหา',
+    'form_message' => 'ข้อความ',
+    'name_placeholder' => 'สมชาย ใจดี',
+    'phone_placeholder' => 'ตัวอย่าง 0123456789',
+    'email_placeholder' => 'email@example.com',
+    'message_placeholder' => 'กรอกข้อความของคุณ...',
+    'send_consult' => 'ส่งข้อความ',
+    'mark_as_read' => 'ทำเครื่องหมายว่าอ่านแล้ว',
+    'mark_as_unread' => 'ทำเครื่องหมายว่าอ่านแล้ว',
+    'new_consult_notice' => 'คุณมี <span class="bold">:count</span> คำปรึกษาใหม่',
+    'view_all' => 'ดูทั้งหมด',
+    'project' => 'โครงการ',
+    'property' => 'อสังหาริมทรัพย์',
+    'custom_field' => [
+        'name' => 'ฟิลด์กำหนดเอง',
+        'create' => 'สร้างฟิลด์กำหนดเอง',
+        'type' => 'ประเภท',
+        'required' => 'จำเป็น',
+        'placeholder' => 'ข้อความตัวอย่าง',
+        'order' => 'ลำดับ',
+        'options' => 'ตัวเลือก',
+        'option' => [
+            'label' => 'ป้ายกำกับ',
+            'value' => 'ค่า',
+            'add' => 'เพิ่มตัวเลือกใหม่',
+        ],
+        'enums' => [
+            'types' => [
+                'text' => 'ข้อความ',
+                'number' => 'ตัวเลข',
+                'dropdown' => 'เมนูแบบเลื่อนลง',
+                'checkbox' => 'ช่องเลือก',
+                'radio' => 'ปุ่มเลือก',
+                'textarea' => 'กล่องข้อความ',
+                'date' => 'วันที่',
+                'datetime' => 'วันที่และเวลา',
+                'time' => 'เวลา',
+            ],
+        ],
+    ],
+];

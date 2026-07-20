@@ -1,0 +1,40 @@
+<?php
+
+return [
+    'name' => 'Arved',
+    'amount' => 'Summa',
+    'code' => 'Kood',
+    'show' => 'Arve :code',
+    'print' => 'Prindi arve',
+    'download' => 'Laadi alla arve',
+    'heading' => 'Arve',
+    'purchase_at' => 'Ostetud',
+    'sub_total' => 'Vahesumma',
+    'tax_amount' => 'Maksu summa',
+    'discount_amount' => 'Allahindluse summa',
+    'total_amount' => 'Kogusumma',
+    'status' => 'Olek',
+    'account' => 'Konto',
+    'payment_info' => 'Makse informatsioon',
+    'payment_method' => 'Makseviis',
+    'payment_status' => 'Makse olek',
+    'item' => [
+        'name' => 'Nimi',
+        'qty' => 'Kogus',
+        'description' => 'Kirjeldus',
+    ],
+    'statuses' => [
+        'pending' => 'Ootel',
+        'processing' => 'Töötlemisel',
+        'completed' => 'Lõpetatud',
+        'canceled' => 'Tühistatud',
+    ],
+    'template' => [
+        'name' => 'Arve mall',
+        'setting' => 'Arve seaded',
+        'setting_description' => 'Arve malli seaded',
+        'setting_content' => 'Sisu',
+        'preview' => 'Eelvaade',
+        'preview_heading' => 'Arve malli eelvaade',
+    ],
+];

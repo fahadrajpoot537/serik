@@ -1,0 +1,40 @@
+<?php
+
+return [
+    'name' => 'Invoices',
+    'amount' => 'Amount',
+    'code' => 'Code',
+    'show' => 'Faktura :code',
+    'print' => 'Wydrukuj fakturę',
+    'download' => 'Pobierz fakturę',
+    'heading' => 'Invoice',
+    'purchase_at' => 'Zakup w godz',
+    'sub_total' => 'Suma podrzędna',
+    'tax_amount' => 'Kwota podatku',
+    'discount_amount' => 'Kwota rabatu',
+    'total_amount' => 'Całkowita kwota',
+    'status' => 'Status',
+    'account' => 'Account',
+    'payment_info' => 'Informacje o płatnościach',
+    'payment_method' => 'Metoda płatności',
+    'payment_status' => 'Stan płatności',
+    'item' => [
+        'name' => 'Name',
+        'qty' => 'Quantity',
+        'description' => 'Description',
+    ],
+    'statuses' => [
+        'pending' => 'Pending',
+        'processing' => 'Processing',
+        'completed' => 'Completed',
+        'canceled' => 'Canceled',
+    ],
+    'template' => [
+        'name' => 'Szablon faktury',
+        'setting' => 'Ustawienia faktury',
+        'setting_description' => 'Ustawienia szablonu faktury',
+        'setting_content' => 'Content',
+        'preview' => 'Preview',
+        'preview_heading' => 'Podgląd szablonu faktury',
+    ],
+];

@@ -1,0 +1,40 @@
+<?php
+
+return [
+    'name' => 'Invoices',
+    'amount' => 'Amount',
+    'code' => 'Code',
+    'show' => 'Faktúra __ph0__',
+    'print' => 'Vytlačiť faktúru',
+    'download' => 'Stiahnite si faktúru',
+    'heading' => 'Invoice',
+    'purchase_at' => 'Nakupovať',
+    'sub_total' => 'Sub',
+    'tax_amount' => 'Daň',
+    'discount_amount' => 'Zľavu',
+    'total_amount' => 'Celková suma',
+    'status' => 'Status',
+    'account' => 'Account',
+    'payment_info' => 'Platobné informácie',
+    'payment_method' => 'Spôsob platby',
+    'payment_status' => 'Stav platby',
+    'item' => [
+        'name' => 'Name',
+        'qty' => 'Quantity',
+        'description' => 'Description',
+    ],
+    'statuses' => [
+        'pending' => 'Pending',
+        'processing' => 'Processing',
+        'completed' => 'Completed',
+        'canceled' => 'Canceled',
+    ],
+    'template' => [
+        'name' => 'Šablóna faktúry',
+        'setting' => 'Nastavenia faktúry',
+        'setting_description' => 'Nastavenia pre šablónu faktúry',
+        'setting_content' => 'Content',
+        'preview' => 'Preview',
+        'preview_heading' => 'Ukážka faktúry',
+    ],
+];

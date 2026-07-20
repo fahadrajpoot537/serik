@@ -1,0 +1,40 @@
+<?php
+
+return [
+    'name' => 'Invoices',
+    'amount' => 'Amount',
+    'code' => 'Code',
+    'show' => 'Faktura __Ph0__',
+    'print' => 'Skriv ut fakturaen',
+    'download' => 'Last ned faktura',
+    'heading' => 'Invoice',
+    'purchase_at' => 'Kjøp på',
+    'sub_total' => 'Sub totalt',
+    'tax_amount' => 'Skatteløp',
+    'discount_amount' => 'Rabattbeløp',
+    'total_amount' => 'Totalt beløp',
+    'status' => 'Status',
+    'account' => 'Account',
+    'payment_info' => 'Betalingsinformasjon',
+    'payment_method' => 'Betalingsmetode',
+    'payment_status' => 'Betalingsstatus',
+    'item' => [
+        'name' => 'Name',
+        'qty' => 'Quantity',
+        'description' => 'Description',
+    ],
+    'statuses' => [
+        'pending' => 'Pending',
+        'processing' => 'Processing',
+        'completed' => 'Completed',
+        'canceled' => 'Canceled',
+    ],
+    'template' => [
+        'name' => 'Fakturemal',
+        'setting' => 'Fakturainnstillinger',
+        'setting_description' => 'Innstillinger for fakturamal',
+        'setting_content' => 'Content',
+        'preview' => 'Preview',
+        'preview_heading' => 'Forhåndsvis fakturamal',
+    ],
+];

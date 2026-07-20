@@ -1,0 +1,40 @@
+<?php
+
+return [
+    'name' => 'חשבוניות',
+    'amount' => 'סכום',
+    'code' => 'קוד',
+    'show' => 'חשבונית :code',
+    'print' => 'הדפס חשבונית',
+    'download' => 'הורד חשבונית',
+    'heading' => 'חשבונית',
+    'purchase_at' => 'נרכש ב',
+    'sub_total' => 'סכום ביניים',
+    'tax_amount' => 'סכום מס',
+    'discount_amount' => 'סכום הנחה',
+    'total_amount' => 'סכום כולל',
+    'status' => 'סטטוס',
+    'account' => 'חשבון',
+    'payment_info' => 'מידע תשלום',
+    'payment_method' => 'אמצעי תשלום',
+    'payment_status' => 'סטטוס תשלום',
+    'item' => [
+        'name' => 'שם',
+        'qty' => 'כמות',
+        'description' => 'תיאור',
+    ],
+    'statuses' => [
+        'pending' => 'ממתין',
+        'processing' => 'מעבד',
+        'completed' => 'הושלם',
+        'canceled' => 'בוטל',
+    ],
+    'template' => [
+        'name' => 'תבנית חשבונית',
+        'setting' => 'הגדרות חשבונית',
+        'setting_description' => 'הגדרות עבור תבנית חשבונית',
+        'setting_content' => 'תוכן',
+        'preview' => 'תצוגה מקדימה',
+        'preview_heading' => 'תצוגה מקדימה של תבנית חשבונית',
+    ],
+];

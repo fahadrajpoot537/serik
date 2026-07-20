@@ -1,0 +1,35 @@
+<?php
+
+return [
+    'name' => 'Αναφορές',
+    'property_statistics' => 'Στατιστικά ακινήτων',
+    'project_statistics' => 'Στατιστικά έργων',
+    'account_statistics' => 'Στατιστικά λογαριασμών',
+    'recent_transactions' => 'Πρόσφατες συναλλαγές',
+    'property_by_type' => 'Ακίνητα ανά τύπο',
+    'property_by_location' => 'Ακίνητα ανά τοποθεσία',
+    'monthly_properties' => 'Μην
+
+ιαία ακίνητα',
+    'total_properties' => 'Σύνολο ακινήτων',
+    'active_properties' => 'Ενεργά ακίνητα',
+    'pending_properties' => 'Ακίνητα σε αναμονή',
+    'expired_properties' => 'Ακίνητα που έληξαν',
+    'total_projects' => 'Σύνολο έργων',
+    'featured_projects' => 'Επιλεγμένα έργα',
+    'total_accounts' => 'Σύνολο λογαριασμών',
+    'new_accounts_this_month' => 'Νέοι λογαριασμοί αυτόν τον μήνα',
+    'transaction_id' => 'ID συναλλαγής',
+    'account' => 'Λογαριασμός',
+    'amount' => 'Ποσό',
+    'created_at' => 'Δημιουργήθηκε στις',
+    'payment_method' => 'Μέθοδος πληρωμής',
+    'status' => 'Κατάσταση',
+    'no_transactions' => 'Δεν βρέθηκαν συναλλαγές',
+    'no_data' => 'Δεν υπάρχουν διαθέσιμα δεδομένα',
+    'location' => 'Τοποθεσία',
+    'count' => 'Πλήθος',
+    'month' => 'Μήνας',
+    'year' => 'Έτος',
+    'property_count' => 'Πλήθος ακινήτων',
+];

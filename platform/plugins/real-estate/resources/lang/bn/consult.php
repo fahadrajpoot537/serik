@@ -1,0 +1,78 @@
+<?php
+
+return [
+    'name' => 'পরামর্শ',
+    'edit' => 'পরামর্শ দেখুন',
+    'statuses' => [
+        'read' => 'পড়া হয়েছে',
+        'unread' => 'পড়া হয়নি',
+    ],
+    'phone' => 'ফোন',
+    'ip_address' => 'IP ঠিকানা',
+    'content' => 'বিস্তারিত',
+    'consult_information' => 'পরামর্শের তথ্য',
+    'email' => [
+        'header' => 'ইমেইল',
+        'title' => 'আপনার সাইট থেকে নতুন পরামর্শ',
+        'success' => 'পরামর্শ সফলভাবে পাঠানো হয়েছে!',
+        'failed' => 'এই সময়ে অনুরোধ পাঠানো যাচ্ছে না, অনুগ্রহ করে পরে আবার চেষ্টা করুন!',
+    ],
+    'form' => [
+        'name' => [
+            'required' => 'নাম প্রয়োজন',
+        ],
+        'email' => [
+            'required' => 'ইমেইল প্রয়োজন',
+            'email' => 'ইমেইল ঠিকানা বৈধ নয়',
+        ],
+        'content' => [
+            'required' => 'বার্তা প্রয়োজন',
+        ],
+    ],
+    'consult_sent_from' => 'এই পরামর্শের তথ্য পাঠানো হয়েছে',
+    'time' => 'সময়',
+    'consult_id' => 'পরামর্শ আইডি',
+    'form_name' => 'নাম',
+    'form_email' => 'ইমেইল',
+    'form_phone' => 'ফোন',
+    'form_content' => 'বিষয়বস্তু',
+    'form_message' => 'বার্তা',
+    'name_placeholder' => 'জনি ডেন',
+    'phone_placeholder' => 'উদা 0123456789',
+    'email_placeholder' => 'email@example.com',
+    'message_placeholder' => 'আপনার বার্তা লিখুন...',
+    'send_consult' => 'বার্তা পাঠান',
+    'mark_as_read' => 'পড়া হয়েছে হিসেবে চিহ্নিত করুন',
+    'mark_as_unread' => 'পড়া হয়নি হিসেবে চিহ্নিত করুন',
+    'new_consult_notice' => 'আপনার <span class="bold">:count</span>টি নতুন পরামর্শ রয়েছে',
+    'view_all' => 'সব দেখুন',
+    'project' => 'প্রকল্প',
+    'property' => 'সম্পত্তি',
+    'custom_field' => [
+        'name' => 'কাস্টম ফিল্ড',
+        'create' => 'কাস্টম ফিল্ড তৈরি করুন',
+        'type' => 'ধরন',
+        'required' => 'প্রয়োজনীয়',
+        'placeholder' => 'প্লেসহোল্ডার',
+        'order' => 'ক্রম',
+        'options' => 'বিকল্প',
+        'option' => [
+            'label' => 'লেবেল',
+            'value' => 'মান',
+            'add' => 'নতুন বিকল্প যোগ করুন',
+        ],
+        'enums' => [
+            'types' => [
+                'text' => 'টেক্সট',
+                'number' => 'সংখ্যা',
+                'dropdown' => 'ড্রপডাউন',
+                'checkbox' => 'চেকবক্স',
+                'radio' => 'রেডিও',
+                'textarea' => 'টেক্সটএরিয়া',
+                'date' => 'তারিখ',
+                'datetime' => 'তারিখ সময়',
+                'time' => 'সময়',
+            ],
+        ],
+    ],
+];

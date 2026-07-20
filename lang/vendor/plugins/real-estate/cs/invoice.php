@@ -1,0 +1,40 @@
+<?php
+
+return [
+    'name' => 'Faktury',
+    'amount' => 'Částka',
+    'code' => 'Kód',
+    'show' => 'Faktura :code',
+    'print' => 'Tisknout fakturu',
+    'download' => 'Stáhnout fakturu',
+    'heading' => 'Faktura',
+    'purchase_at' => 'Zakoupeno',
+    'sub_total' => 'Mezisoučet',
+    'tax_amount' => 'Částka daně',
+    'discount_amount' => 'Výše slevy',
+    'total_amount' => 'Celková částka',
+    'status' => 'Stav',
+    'account' => 'Účet',
+    'payment_info' => 'Platební informace',
+    'payment_method' => 'Způsob platby',
+    'payment_status' => 'Stav platby',
+    'item' => [
+        'name' => 'Název',
+        'qty' => 'Množství',
+        'description' => 'Popis',
+    ],
+    'statuses' => [
+        'pending' => 'Čeká',
+        'processing' => 'Zpracovává se',
+        'completed' => 'Dokončeno',
+        'canceled' => 'Zrušeno',
+    ],
+    'template' => [
+        'name' => 'Šablona faktury',
+        'setting' => 'Nastavení faktury',
+        'setting_description' => 'Nastavení pro šablonu faktury',
+        'setting_content' => 'Obsah',
+        'preview' => 'Náhled',
+        'preview_heading' => 'Náhled šablony faktury',
+    ],
+];

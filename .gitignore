@@ -1,0 +1,99 @@
+# =========================
+# Serik Laravel .gitignore
+# =========================
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies
+/vendor/
+/node_modules/
+
+# Logs
+*.log
+/storage/logs/*
+!/storage/logs/.gitignore
+
+# Framework caches
+/storage/framework/cache/*
+!/storage/framework/cache/.gitignore
+!/storage/framework/cache/data/
+/storage/framework/cache/data/*
+!/storage/framework/cache/data/.gitignore
+/storage/framework/sessions/*
+!/storage/framework/sessions/.gitignore
+/storage/framework/views/*
+!/storage/framework/views/.gitignore
+/storage/framework/testing/*
+!/storage/framework/testing/.gitignore
+
+/bootstrap/cache/*
+!/bootstrap/cache/.gitignore
+
+# Compiled / mixed assets cache
+/public/hot
+/public/storage
+/public/build
+/public/mix-manifest.json
+
+# Meilisearch runtime data & binary (rebuild via scout:import)
+/storage/meilisearch/
+
+# Local uploads (keep folder structure)
+/storage/app/private/*
+!/storage/app/private/.gitignore
+/storage/app/public/*
+!/storage/app/public/.gitignore
+!/storage/app/.gitignore
+!/storage/app/public/
+!/storage/app/private/
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Archives & DB dumps (not source)
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+*.sql
+*.sql.gz
+*.bak
+
+# PHPUnit / coverage
+.phpunit.result.cache
+.phpunit.cache
+/coverage
+
+# npm / yarn
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Optional local junk
+/tmp/
+/dumps/
+*.tmp
+*.cache
+
+# Homestead / Vagrant
+Homestead.json
+Homestead.yaml
+.vagrant
+
+# Auth keys accidentally dropped in repo root
+auth.json
+*.pem
+*.p12
+*.key
+!platform/**/*.key

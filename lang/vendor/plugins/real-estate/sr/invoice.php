@@ -1,0 +1,40 @@
+<?php
+
+return [
+    'name' => 'Invoices',
+    'amount' => 'Amount',
+    'code' => 'Code',
+    'show' => 'Фактура __пх0__',
+    'print' => 'Штампај фактуру',
+    'download' => 'Преузмите фактуру',
+    'heading' => 'Invoice',
+    'purchase_at' => 'Куповина на',
+    'sub_total' => 'Суб тотал',
+    'tax_amount' => 'Порески износ',
+    'discount_amount' => 'Износ попуста',
+    'total_amount' => 'Укупан износ',
+    'status' => 'Status',
+    'account' => 'Account',
+    'payment_info' => 'Информације о плаћању',
+    'payment_method' => 'Начин плаћања',
+    'payment_status' => 'Статус плаћања',
+    'item' => [
+        'name' => 'Name',
+        'qty' => 'Quantity',
+        'description' => 'Description',
+    ],
+    'statuses' => [
+        'pending' => 'Pending',
+        'processing' => 'Processing',
+        'completed' => 'Completed',
+        'canceled' => 'Canceled',
+    ],
+    'template' => [
+        'name' => 'Предложак фактуре',
+        'setting' => 'Подешавања фактуре',
+        'setting_description' => 'Подешавања за предложак фактуре',
+        'setting_content' => 'Content',
+        'preview' => 'Preview',
+        'preview_heading' => 'Прегледајте предложак фактуре',
+    ],
+];

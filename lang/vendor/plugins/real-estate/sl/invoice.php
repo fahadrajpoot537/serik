@@ -1,0 +1,40 @@
+<?php
+
+return [
+    'name' => 'Invoices',
+    'amount' => 'Amount',
+    'code' => 'Code',
+    'show' => 'Račun __ph0__',
+    'print' => 'Natisni račun',
+    'download' => 'Prenesite račun',
+    'heading' => 'Invoice',
+    'purchase_at' => 'Nakup pri',
+    'sub_total' => 'Sub skupaj',
+    'tax_amount' => 'Znesek davka',
+    'discount_amount' => 'Znesek popusta',
+    'total_amount' => 'Skupni znesek',
+    'status' => 'Status',
+    'account' => 'Account',
+    'payment_info' => 'Informacije o plačilu',
+    'payment_method' => 'Način plačila',
+    'payment_status' => 'Status plačila',
+    'item' => [
+        'name' => 'Name',
+        'qty' => 'Quantity',
+        'description' => 'Description',
+    ],
+    'statuses' => [
+        'pending' => 'Pending',
+        'processing' => 'Processing',
+        'completed' => 'Completed',
+        'canceled' => 'Canceled',
+    ],
+    'template' => [
+        'name' => 'Predloga računa',
+        'setting' => 'Nastavitve računa',
+        'setting_description' => 'Nastavitve za predlogo računov',
+        'setting_content' => 'Content',
+        'preview' => 'Preview',
+        'preview_heading' => 'Predloga za predogled računov',
+    ],
+];

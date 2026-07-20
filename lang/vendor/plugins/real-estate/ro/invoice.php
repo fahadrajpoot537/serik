@@ -1,0 +1,40 @@
+<?php
+
+return [
+    'name' => 'Invoices',
+    'amount' => 'Amount',
+    'code' => 'Code',
+    'show' => 'Factură __ph0__',
+    'print' => 'Imprimați factura',
+    'download' => 'Descărcați factura',
+    'heading' => 'Invoice',
+    'purchase_at' => 'Cumpărați la',
+    'sub_total' => 'Sub total',
+    'tax_amount' => 'Suma fiscală',
+    'discount_amount' => 'Suma de reducere',
+    'total_amount' => 'Valoare totală',
+    'status' => 'Status',
+    'account' => 'Account',
+    'payment_info' => 'Informații de plată',
+    'payment_method' => 'Modalitate de plată',
+    'payment_status' => 'Stare de plată',
+    'item' => [
+        'name' => 'Name',
+        'qty' => 'Quantity',
+        'description' => 'Description',
+    ],
+    'statuses' => [
+        'pending' => 'Pending',
+        'processing' => 'Processing',
+        'completed' => 'Completed',
+        'canceled' => 'Canceled',
+    ],
+    'template' => [
+        'name' => 'Șablon de factură',
+        'setting' => 'Setări factură',
+        'setting_description' => 'Setări pentru șablon de factură',
+        'setting_content' => 'Content',
+        'preview' => 'Preview',
+        'preview_heading' => 'Previzualizare șablon de factură',
+    ],
+];
