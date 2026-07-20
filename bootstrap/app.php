@@ -7,7 +7,7 @@ use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Log;
 
-return Application::configure(basePath: dirname(__DIR__))
+$app = Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__ . '/../routes/web.php',
         commands: __DIR__ . '/../routes/console.php',
@@ -183,4 +183,33 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
-    })->create();
+    })
+    ->create();
+
+// Before any provider boots: if storage/logs is locked on IIS, use error_log
+// so Log:: / report() never throw UnexpectedValueException on public pages.
+$app->booting(function () use ($app): void {
+    try {
+        $logDir = storage_path('logs');
+        if (! is_dir($logDir)) {
+            @mkdir($logDir, 0775, true);
+        }
+        $probe = $logDir . DIRECTORY_SEPARATOR . '.write_probe';
+        $ok = @file_put_contents($probe, (string) time()) !== false;
+        if ($ok) {
+            @unlink($probe);
+
+            return;
+        }
+
+        config(['logging.default' => 'errorlog']);
+        $app->forgetInstance('log');
+        \Illuminate\Support\Facades\Log::clearResolvedInstances();
+    } catch (\Throwable) {
+        config(['logging.default' => 'errorlog']);
+        $app->forgetInstance('log');
+        \Illuminate\Support\Facades\Log::clearResolvedInstances();
+    }
+});
+
+return $app;

@@ -686,7 +686,11 @@ class Theme implements ThemeContract
                 throw $exception;
             }
 
-            report($exception);
+            try {
+                report($exception);
+            } catch (Throwable) {
+                // Locked storage/logs on IIS must not turn a view error into HTTP 500.
+            }
 
             $content = str_replace(base_path('/'), '', $exception->getMessage());
         }

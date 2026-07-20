@@ -21,6 +21,7 @@ class AppServiceProvider extends ServiceProvider
         // binding cannot race during AJAX shortcode / Blade rendering on IIS.
         $this->app->booting(function (): void {
             \App\Support\EnsuresTranslator::ensure();
+            self::ensureWritableLoggingOrFallback();
         });
     }
 
@@ -30,9 +31,11 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         \App\Support\EnsuresTranslator::ensure();
+        self::ensureWritableLoggingOrFallback();
+    }
 
-        // If storage/logs is not writable (common on IIS), fall back to PHP error_log
-        // so Monolog never throws UnexpectedValueException during page renders.
+    protected static function ensureWritableLoggingOrFallback(): void
+    {
         try {
             $logDir = storage_path('logs');
             if (! is_dir($logDir)) {
@@ -42,14 +45,16 @@ class AppServiceProvider extends ServiceProvider
             $ok = @file_put_contents($probe, (string) time()) !== false;
             if ($ok) {
                 @unlink($probe);
-            } else {
-                config(['logging.default' => 'errorlog']);
-                $this->app->forgetInstance('log');
-                \Illuminate\Support\Facades\Log::clearResolvedInstances();
+
+                return;
             }
+
+            config(['logging.default' => 'errorlog']);
+            app()->forgetInstance('log');
+            \Illuminate\Support\Facades\Log::clearResolvedInstances();
         } catch (\Throwable) {
             config(['logging.default' => 'errorlog']);
-            $this->app->forgetInstance('log');
+            app()->forgetInstance('log');
             \Illuminate\Support\Facades\Log::clearResolvedInstances();
         }
     }

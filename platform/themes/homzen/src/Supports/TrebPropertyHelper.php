@@ -2486,7 +2486,11 @@ class TrebPropertyHelper
 
             return $rows;
         } catch (\Throwable $e) {
-            report($e);
+            try {
+                report($e);
+            } catch (\Throwable) {
+                // ignore locked log files on IIS
+            }
 
             return [];
         }

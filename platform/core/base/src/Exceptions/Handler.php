@@ -183,7 +183,11 @@ class Handler extends ExceptionHandler
             }
         }
 
-        parent::report($e);
+        try {
+            parent::report($e);
+        } catch (Throwable) {
+            // Never let Monolog permission errors mask the original exception.
+        }
     }
 
     protected function getErrorFilePath(Throwable $e): string

@@ -321,9 +321,87 @@ if (isset($_GET['fix_logs']) && (string) $_GET['fix_logs'] === '1') {
     $today = $logDir . '/laravel-' . date('Y-m-d') . '.log';
     $ok = @file_put_contents($today, '[' . date('Y-m-d H:i:s') . '] local.INFO: log permissions probe' . PHP_EOL, FILE_APPEND);
     echo "\nprobe write " . basename($today) . ': ' . ($ok !== false ? 'OK' : 'FAILED') . "\n";
+
+    $envPath = $base . '/.env';
+    if ($ok === false) {
+        echo "\n--- applying LOG_CHANNEL=errorlog fallback in .env ---\n";
+        if (upsertEnvValue($envPath, 'LOG_CHANNEL', 'errorlog')) {
+            echo "LOG_CHANNEL=errorlog saved\n";
+        } else {
+            echo "WARN: could not write .env — set LOG_CHANNEL=errorlog manually\n";
+        }
+        $cfg = deleteFile($base . '/bootstrap/cache/config.php');
+        echo 'bootstrap/cache/config.php deleted: ' . ($cfg ? 'yes' : 'no/missing') . "\n";
+    }
+
     echo "deleted={$deleted} kept={$kept}\n\n";
-    echo "Next: hard refresh https://serik.ca/\n";
-    echo "Also deploy the code fix that stops Log::info from crashing the properties shortcode.\n";
+    echo "If probe FAILED: queue workers may lock laravel-*.log.\n";
+    echo "Run as admin: icacls storage\\logs /grant \"IIS_IUSRS:(OI)(CI)M\" /T\n";
+    echo "Then: git pull && php artisan config:clear && php artisan view:clear\n";
+    echo "Test property: https://serik.ca/clear-serik-cache.php?key=serik2026clear&diag_property=1&slug=156-sparling-street-huron-east-on-n0k-1w0-x12501646\n";
+    exit;
+}
+
+// Property detail page diagnostic (captures the real Blade/AMP exception).
+if (isset($_GET['diag_property']) && (string) $_GET['diag_property'] === '1') {
+    header('Content-Type: text/plain; charset=utf-8');
+    $slugKey = trim((string) ($_GET['slug'] ?? '156-sparling-street-huron-east-on-n0k-1w0-x12501646'));
+    echo "=== property detail diagnostic ===\n";
+    echo 'slug=' . $slugKey . "\n\n";
+
+    try {
+        require $base . '/vendor/autoload.php';
+        $app = require $base . '/bootstrap/app.php';
+        $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+
+        echo 'logging.default=' . config('logging.default') . "\n";
+        echo 'stack.ignore_exceptions=' . var_export(config('logging.channels.stack.ignore_exceptions'), true) . "\n";
+        echo 'AppServiceProvider fallback: ' . (is_file($base . '/app/Providers/AppServiceProvider.php') ? 'present' : 'MISSING') . "\n\n";
+
+        $row = Illuminate\Support\Facades\DB::table('slugs')->where('key', $slugKey)->first();
+        if (! $row) {
+            echo "FAIL: slug not found in slugs table\n";
+            exit;
+        }
+
+        $property = \Botble\RealEstate\Models\Property::find($row->reference_id);
+        if (! $property) {
+            echo "FAIL: property id={$row->reference_id} missing\n";
+            exit;
+        }
+
+        echo "property id={$property->id} key={$property->external_id}\n";
+        echo "name={$property->name}\n\n";
+
+        $request = Illuminate\Http\Request::create(
+            'https://serik.ca/on/detached-houses-for-sale-in-ontario/map/' . $slugKey,
+            'GET'
+        );
+        $app->instance('request', $request);
+        event(new Illuminate\Routing\Events\RouteMatched(
+            new Illuminate\Routing\Route(['GET'], '/', fn () => null),
+            $request
+        ));
+
+        if (class_exists(\App\Support\EnsuresTranslator::class)) {
+            \App\Support\EnsuresTranslator::ensure();
+        }
+
+        echo "--- render real-estate.property ---\n";
+        $started = microtime(true);
+        $html = Botble\Theme\Facades\Theme::scope(
+            'real-estate.property',
+            ['property' => $property, 'model' => $property],
+            'plugins/real-estate::themes.property'
+        )->render();
+        $ms = round((microtime(true) - $started) * 1000, 1);
+        echo "OK bytes=" . strlen((string) $html) . " ms={$ms}\n";
+    } catch (Throwable $e) {
+        echo 'FAIL: ' . $e::class . "\n";
+        echo 'message: ' . $e->getMessage() . "\n";
+        echo 'file: ' . $e->getFile() . ':' . $e->getLine() . "\n";
+        echo "trace:\n" . $e->getTraceAsString() . "\n";
+    }
     exit;
 }
 
