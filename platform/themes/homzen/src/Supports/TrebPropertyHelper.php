@@ -2852,6 +2852,38 @@ class TrebPropertyHelper
     }
 
     /**
+     * AMPRE OData rule: when $expand=Media is present, $top may not exceed 100.
+     * Larger $top returns HTTP 400 ("$top limited to 100 if $expand is specified")
+     * and aborts the whole Property page (SyncLiveJob then imports 0 rows).
+     */
+    public static function clampAmpODataTopForMediaExpand(string $url): string
+    {
+        if ($url === '' || ! preg_match('/(?:\?|&|\$)expand=Media\b/i', $url)) {
+            return $url;
+        }
+
+        return (string) preg_replace_callback(
+            '/(?:\$|%24)top=(\d+)/i',
+            static function (array $m) use ($url): string {
+                $requested = (int) $m[1];
+                if ($requested <= 100) {
+                    return $m[0];
+                }
+
+                Log::warning('AMP URL clamped: $expand=Media requires $top<=100', [
+                    'from' => $requested,
+                    'to' => 100,
+                    'url' => substr($url, 0, 300),
+                ]);
+
+                return str_replace((string) $requested, '100', $m[0]);
+            },
+            $url,
+            1
+        );
+    }
+
+    /**
      * @param  'live'|'historical'|'all'  $tokenProfile
      * @return array{ok:bool,data:?array,status:?int,url:string,body:?string,error:?string,token_profile:?string}
      */
@@ -2863,6 +2895,8 @@ class TrebPropertyHelper
         ?string $listingKey = null,
         string $tokenProfile = 'all'
     ): array {
+        $url = self::clampAmpODataTopForMediaExpand($url);
+
         $result = [
             'ok' => false,
             'data' => null,

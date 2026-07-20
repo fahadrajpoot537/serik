@@ -167,7 +167,8 @@ class PropertyController extends BaseController
     public function addproperties()
     {
         $skip = 0;//cache()->get('amp_skip', 1000); and PropertySubType eq 'Condo Apartment'
-        $top = 1000;
+        // AMPRE: $expand=Media requires $top <= 100
+        $top = 100;
 
         $filter = rawurlencode("MlsStatus eq 'New' and contains(City,'Ottawa') and ListingContractDate ge 2026-05-15 and  PropertySubType ne 'Industrial' and PropertySubType ne 'Commercial Retail'");
 
@@ -319,7 +320,8 @@ class PropertyController extends BaseController
         try {
 
             $skip = 0;//cache()->get('amp_skip', 1000); and PropertySubType eq 'Condo Apartment'
-            $top = 1000;
+            // AMPRE: $expand=Media requires $top <= 100
+            $top = 100;
 
             $filter = rawurlencode("PropertySubType ne 'Industrial' and PropertySubType ne 'Commercial Retail'");
 
@@ -828,6 +830,11 @@ class PropertyController extends BaseController
      * ~1 hour regardless of city.
      *
      * Reuses the exact same upsert as the per-city cron, so no data drift.
+     *
+     * IMPORTANT: Do NOT add $expand=Media here. AMPRE rejects $top>100 with
+     * Media expand (HTTP 400), which zeroes SyncLiveJob imports. Cover images
+     * are filled later via Media endpoint / getMediaUrl when needed.
+     * Page size may be >100 because this query has no $expand.
      */
     public function importRecentModifiedAmpListings(
         int $days = 3,
@@ -889,6 +896,7 @@ class PropertyController extends BaseController
                     break;
                 }
 
+                // No $expand=Media — keeps $top valid above 100 and avoids AMP 400.
                 $url =
                     'https://query.ampre.ca/odata/Property?'
                     . '$filter=' . rawurlencode($filterBody)
@@ -940,6 +948,38 @@ class PropertyController extends BaseController
                 }
 
                 $skip += $top;
+            }
+
+            // Light cover-image fill for brand-new rows only (separate Media API —
+            // never via Property $expand). Bounded so SyncLiveJob stays fast.
+            if ($newPropertyIds !== [] && microtime(true) < $deadline) {
+                $hydrateIds = array_slice($newPropertyIds, 0, min(40, count($newPropertyIds)));
+                $props = Property::query()
+                    ->select(['id', 'external_id', 'image_val'])
+                    ->whereIn('id', $hydrateIds)
+                    ->where(function ($q) {
+                        $q->whereNull('image_val')->orWhere('image_val', '');
+                    })
+                    ->get();
+
+                foreach ($props as $property) {
+                    if (microtime(true) > $deadline) {
+                        break;
+                    }
+                    $key = (string) $property->external_id;
+                    if ($key === '') {
+                        continue;
+                    }
+                    try {
+                        $image = $this->getMediaUrl($key);
+                        if (! empty($image)) {
+                            $property->image_val = $image;
+                            $property->saveQuietly();
+                        }
+                    } catch (\Throwable $e) {
+                        // Non-fatal — listing is already imported.
+                    }
+                }
             }
 
             // Geocoding + history are owned by serik:sync-live pipeline
@@ -3691,6 +3731,10 @@ class PropertyController extends BaseController
 
     private function ampCurl($url, int $timeout = 6, string $tokenProfile = 'live')
     {
+        // AMPRE: $expand=Media rejects $top > 100 (HTTP 400). Clamp before request
+        // so live/cron/manual Property queries never send an invalid combo.
+        $url = TrebPropertyHelper::clampAmpODataTopForMediaExpand($url);
+
         // live → TRREB_AUTH first (new/active). historical → TRREB_AUTH1 first (archive).
         $tokens = TrebPropertyHelper::ampTokens($tokenProfile);
 
@@ -6475,7 +6519,8 @@ class PropertyController extends BaseController
 
         $listingKey = $request->input('listing_key');
         $address = $request->input('address');
-        $top = (int) $request->input('top', 5);
+        // AMPRE: $expand=Media requires $top <= 100
+        $top = min(100, max(1, (int) $request->input('top', 5)));
         $filter = $request->input('filter');
 
         if ($listingKey) {
