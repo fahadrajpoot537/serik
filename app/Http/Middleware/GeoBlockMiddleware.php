@@ -10,12 +10,10 @@ use Symfony\Component\HttpFoundation\Response;
 
 class GeoBlockMiddleware
 {
-    /**
-     * Handle an incoming request.
-     */
     public function handle(Request $request, Closure $next): Response
     {
-        if (! filter_var(env('GEO_BLOCK_ENABLED', true), FILTER_VALIDATE_BOOLEAN)) {
+        // Use config() (not env()) so config:cache on production works correctly.
+        if (! (bool) config('serik.geo_block.enabled', false)) {
             return $next($request);
         }
 
@@ -29,49 +27,44 @@ class GeoBlockMiddleware
             return $next($request);
         }
 
-        // 1. Check Cloudflare Header (fastest & most reliable in production)
         $country = $request->header('CF-IPCountry') ?: ($request->server('HTTP_CF_IPCOUNTRY') ?: null);
 
         if (! $country) {
-            // 2. Fetch from GeoIP APIs with caching to prevent overhead
-            $country = Cache::remember("geoip_country_{$ip}", 86400, function () use ($ip) {
+            $country = Cache::remember('geoip_country_' . $ip, 86400, function () use ($ip) {
                 try {
-                    $response = Http::timeout(3)->get("http://ip-api.com/json/{$ip}");
+                    $response = Http::timeout(3)->get('http://ip-api.com/json/' . $ip);
                     if ($response->successful() && $response->json('status') === 'success') {
-                        return strtoupper($response->json('countryCode'));
+                        return strtoupper((string) $response->json('countryCode'));
                     }
                 } catch (\Throwable) {
-                    // Fall back to next API or default
+                    // continue
                 }
 
                 try {
-                    $response = Http::timeout(3)->get("https://ipapi.co/{$ip}/json/");
+                    $response = Http::timeout(3)->get('https://ipapi.co/' . $ip . '/json/');
                     if ($response->successful()) {
-                        return strtoupper($response->json('country_code'));
+                        return strtoupper((string) $response->json('country_code'));
                     }
                 } catch (\Throwable) {
-                    // Fall back to next API or default
+                    // continue
                 }
 
-                // Default to CA so we don't accidentally block legitimate users on API failure
+                // Fail-open so API outages do not lock the whole site.
                 return 'CA';
             });
         }
 
         $country = strtoupper((string) $country);
 
-        // Cloudflare unknown / no country — allow rather than block
         if (in_array($country, ['XX', 'T1', ''], true)) {
             return $next($request);
         }
 
-        $allowedCountries = array_map(
-            'trim',
-            explode(',', (string) env('GEO_BLOCK_ALLOWED_COUNTRIES', 'US,CA'))
-        );
+        $allowed = config('serik.geo_block.allowed_countries', ['US', 'CA']);
+        $allowed = array_map('strtoupper', (array) $allowed);
 
-        if (! in_array($country, $allowedCountries, true)) {
-            abort(403, 'Access denied: Website is only accessible from the United States and Canada.');
+        if (! in_array($country, $allowed, true)) {
+            abort(403, 'Access denied: Website is only accessible from allowed countries (' . implode(', ', $allowed) . '). Your country: ' . $country);
         }
 
         return $next($request);
@@ -87,10 +80,7 @@ class GeoBlockMiddleware
             'iftheynopaysmywages',
             'paidmywagesthanks',
             'up',
-            // Homepage lazy shortcodes — must not be geo/API blocked.
             'ajax/render-ui-blocks',
-            // Public map/search APIs — must work for CA/US users even when
-            // CF-IPCountry is missing on origin hits; HTML pages stay geo-gated.
             'api/v1/map-properties',
             'api/v1/map-thumbnails',
             'api/v1/map-property-bundle',
@@ -121,35 +111,28 @@ class GeoBlockMiddleware
             return false;
         }
 
-        $whitelist = array_filter(array_map('trim', explode(',', (string) env('GEO_BLOCK_BYPASS_IPS', ''))));
+        $whitelist = config('serik.geo_block.bypass_ips', []);
 
-        return in_array($ip, $whitelist, true);
+        return in_array($ip, (array) $whitelist, true);
     }
 
-    /**
-     * Check if the IP is local or private.
-     */
     protected function isLocalOrPrivateIp(?string $ip): bool
     {
         if (empty($ip) || $ip === '127.0.0.1' || $ip === '::1') {
             return true;
         }
 
-        // Check RFC1918 private ranges
         $ipParts = explode('.', $ip);
         if (count($ipParts) === 4) {
             $first = (int) $ipParts[0];
             $second = (int) $ipParts[1];
 
-            // 10.0.0.0/8
             if ($first === 10) {
                 return true;
             }
-            // 172.16.0.0/12
             if ($first === 172 && $second >= 16 && $second <= 31) {
                 return true;
             }
-            // 192.168.0.0/16
             if ($first === 192 && $second === 168) {
                 return true;
             }

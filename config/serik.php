@@ -49,4 +49,23 @@ return [
         'retry_failed_limit' => (int) env('SERIK_GEOCODE_RETRY_FAILED_LIMIT', 100),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Geo block (public site)
+    |--------------------------------------------------------------------------
+    | When enabled, only listed ISO country codes may view the public site.
+    | Admin + API + ajax shortcode routes are bypassed (see middleware).
+    */
+    'geo_block' => [
+        'enabled' => filter_var(env('GEO_BLOCK_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        'allowed_countries' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('GEO_BLOCK_ALLOWED_COUNTRIES', 'US,CA'))
+        ))),
+        'bypass_ips' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('GEO_BLOCK_BYPASS_IPS', ''))
+        ))),
+    ],
+
 ];
