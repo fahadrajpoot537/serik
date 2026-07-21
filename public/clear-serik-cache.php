@@ -554,9 +554,14 @@ $geoBefore = readEnvValue($envPath, 'GEO_BLOCK_ENABLED');
 $countriesBefore = readEnvValue($envPath, 'GEO_BLOCK_ALLOWED_COUNTRIES');
 
 $geoDisabled = false;
+$geoEnabled = false;
 if (isset($_GET['disable_geo']) && (string) $_GET['disable_geo'] === '1') {
     $geoDisabled = upsertEnvValue($envPath, 'GEO_BLOCK_ENABLED', 'false');
-    // Also allow PK while testing (harmless if geo remains off)
+    upsertEnvValue($envPath, 'GEO_BLOCK_ALLOWED_COUNTRIES', 'US,CA,PK');
+}
+
+if (isset($_GET['enable_geo']) && (string) $_GET['enable_geo'] === '1') {
+    $geoEnabled = upsertEnvValue($envPath, 'GEO_BLOCK_ENABLED', 'true');
     upsertEnvValue($envPath, 'GEO_BLOCK_ALLOWED_COUNTRIES', 'US,CA,PK');
 }
 
@@ -588,10 +593,13 @@ echo 'GEO_BLOCK_ENABLED before: ' . ($geoBefore ?? '(missing → app may default
 echo 'GEO_BLOCK_ENABLED after:  ' . ($geoAfter ?? '(missing)') . "\n";
 echo 'ALLOWED_COUNTRIES before: ' . ($countriesBefore ?? '(missing)') . "\n";
 echo 'ALLOWED_COUNTRIES after:  ' . ($countriesAfter ?? '(missing)') . "\n";
-echo 'disable_geo applied: ' . ($geoDisabled ? 'yes' : (isset($_GET['disable_geo']) ? 'FAILED (check .env writable)' : 'no')) . "\n\n";
+echo 'disable_geo applied: ' . ($geoDisabled ? 'yes' : (isset($_GET['disable_geo']) ? 'FAILED (check .env writable)' : 'no')) . "\n";
+echo 'enable_geo applied: ' . ($geoEnabled ? 'yes' : (isset($_GET['enable_geo']) ? 'FAILED (check .env writable)' : 'no')) . "\n\n";
 
-if (! isset($_GET['disable_geo'])) {
-    echo "Homepage 403 from Pakistan? Open this next:\n";
+if (! isset($_GET['disable_geo']) && ! isset($_GET['enable_geo'])) {
+    echo "Enable geo block (US, CA, PK only):\n";
+    echo "https://serik.ca/clear-serik-cache.php?key=serik2026clear&enable_geo=1\n\n";
+    echo "Disable geo block (allow all countries):\n";
     echo "https://serik.ca/clear-serik-cache.php?key=serik2026clear&disable_geo=1\n\n";
 }
 
