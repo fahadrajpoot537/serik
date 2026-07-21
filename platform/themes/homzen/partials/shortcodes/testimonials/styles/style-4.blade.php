@@ -367,7 +367,7 @@ Getting ready for a showing is easy with a checklist. Here is a simple checklist
 
 <section class="hero   pt-0 flat-testimonial-v3 wow fadeInUpSmall">
 
-<h1>Ready to Sell? Let Serik Realty Guide You</h1>
+<h2>Ready to Sell? Let Serik Realty Guide You</h2>
 
 <p>
 To sell a house in a changing Ontario market can feel very overwhelming. However, you do not have to go through this alone. Let us handle the details so you have less to worry about. Our local knowledge helps you get top dollar for your home fast.

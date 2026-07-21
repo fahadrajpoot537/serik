@@ -1,12 +1,11 @@
 @php
     Theme::set('pageTitle', __('Agents'));
+    Theme::set('pageH1', \App\Support\PageH1::utilityH1ForSlug('agents'));
 
     if (theme_option('breadcrumb_background_image_agents')) {
         Theme::set('breadcrumbBackgroundImage', theme_option('breadcrumb_background_image_agents'));
     }
 @endphp
-
-<h1 class="d-none">{{ __('Agents') }}</h1>
 
 <section class="flat-section flat-agents">
     <div class="container">

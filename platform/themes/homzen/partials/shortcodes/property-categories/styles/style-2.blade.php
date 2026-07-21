@@ -273,7 +273,7 @@ h2 {
 <section class="flat-section-v3" style="padding:0px 0px 50px 0px;" id="appointment-schedule">
 
 <!--div class="hero">
-  <h1>Hello, Let’s Talk!</h1>
+  <h2>Hello, Let’s Talk!</h2>
   <p style="color:white;">Schedule a one-to-one call to discuss your goals and challenges</p>
   <div class="alert">
     <span>!</span> This call is optional but highly recommended!

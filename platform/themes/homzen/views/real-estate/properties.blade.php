@@ -1,7 +1,9 @@
 @php
     Theme::layout('full-width');
     Theme::set('pageTitle', __('Properties'));
+    Theme::set('pageH1', \App\Support\PageH1::utilityH1ForSlug('properties'));
     Theme::set('breadcrumbEnabled', 'no');
+    Theme::set('pageH1Variant', 'visually-compact');
     Theme::addBodyAttributes(['class' => Theme::getBodyAttribute('class') . ' serik-properties-page listing-no-map']);
     Theme::asset()->container('footer')->usePath()->add('nice-select', 'js/jquery.nice-select.min.js');
 
@@ -12,8 +14,6 @@
         ? $properties->total()
         : Cache::get('serik_active_listing_count_v1');
 @endphp
-
-<h1 class="d-none">{{ __('Properties') }}</h1>
 
 @include(Theme::getThemeNamespace('views.real-estate.partials.listing'), [
     'actionUrl' => RealEstateHelper::getPropertiesListPageUrl(),

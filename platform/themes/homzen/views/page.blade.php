@@ -4,6 +4,8 @@
     Theme::set('breadcrumbTextColor', $page->getMetaData('breadcrumb_text_color', true));
     Theme::set('breadcrumbBackgroundImage', $page->getMetaData('breadcrumb_background_image', true));
     Theme::set('pageTitle', $page->name);
+
+    \App\Support\PageH1::configureForPage($page);
 @endphp
 
 {!! apply_filters(

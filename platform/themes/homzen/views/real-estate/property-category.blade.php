@@ -1,9 +1,8 @@
 @php
     Theme::layout('full-width');
     Theme::set('pageTitle', $category->name);
+    Theme::set('pageH1', $category->name);
 @endphp
-
-<h1 class="d-none">{{ $category->name }}</h1>
 
 @include(Theme::getThemeNamespace('views.real-estate.partials.listing'), [
     'actionUrl' => RealEstateHelper::getPropertiesListPageUrl(),

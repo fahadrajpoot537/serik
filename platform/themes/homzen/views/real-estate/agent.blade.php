@@ -1,6 +1,7 @@
 @php
     Theme::set('breadcrumbEnabled', 'no');
     Theme::set('pageTitle', $account->name);
+    Theme::set('pageH1ProvidedByContent', true);
 @endphp
 
 <section class="agent-detail-section">

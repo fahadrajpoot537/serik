@@ -1,9 +1,8 @@
 @php
     Theme::layout('full-width');
     Theme::set('pageTitle', __('Projects'));
+    Theme::set('pageH1', __('Projects'));
 @endphp
-
-<h1 class="d-none">{{ __('Projects') }}</h1>
 
 @include(Theme::getThemeNamespace('views.real-estate.partials.listing'), [
     'actionUrl' => RealEstateHelper::getProjectsListPageUrl(),

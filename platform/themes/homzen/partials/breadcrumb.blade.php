@@ -7,6 +7,9 @@
 
     $showBreadcrumb = Theme::get('breadcrumbEnabled', 'yes');
     $breadcrumbStyle = Theme::get('breadcrumbStyle', 'default');
+    $pageH1 = \App\Support\PageH1::resolve();
+    $isAboutUs = request()->is('about-us');
+    $useHeroStyle = $isAboutUs || $backgroundImage;
 @endphp
 
 
@@ -21,7 +24,7 @@
     left:0;
     width:100%;
     height:100%;
-    background:rgba(0,0,0,0.55); /* adjust opacity here */
+    background:rgba(0,0,0,0.55);
 }
 
 .hero-overlay .container{
@@ -49,7 +52,6 @@
 }
 
 
-/* Default (desktop stays same) */
 .about-mobile-style {
     padding: 200px 0;
     height: auto !important;
@@ -58,7 +60,6 @@
     font-size:100px;font-weight: 0;
 }
 
-/* Only mobile */
 @media (max-width: 991px) {
     .about-mobile-style {
         padding: 40px 0 !important;
@@ -73,47 +74,53 @@
 
 
 @if ($showBreadcrumb === 'yes')
-    <section class="flat-title-page style-2 hero-overlay {{ request()->is('about-us') ? 'about-mobile-style' : '' }}"
+    <section @class([
+        'flat-title-page style-2',
+        'hero-overlay' => $useHeroStyle,
+        'about-mobile-style' => $isAboutUs,
+    ])
     id="sectionhead"
     @style([
         "background-color: $backgroundColor",
-        "background-image: url($backgroundImage); background-size: cover; background-position: center !important",
+        "color: $textColor",
+        "background-image: url($backgroundImage); background-size: cover; background-position: center !important" => $backgroundImage,
     ])>
 
-   @if(request()->is('about-us'))
-    <div class="overlay"></div>
-
-
-    <div class="container position-relative">
-       
-
-        @if ($breadcrumbStyle !== 'without-title')
-            <h1 class="text-center page-title mt-3 mb-0 text-white heading-breadcrumb" style="">
-                {!! BaseHelper::clean(Theme::get('pageTitle') ? Theme::get('pageTitle') : SeoHelper::getTitleOnly()) !!}
-            </h1>
+        @if ($useHeroStyle)
+            <div class="overlay"></div>
         @endif
 
-        <p class="text-center text-white fw-semibold fs-5">
-            Guiding you through every step of your real estate journey with expertise and integrity.
-        </p>
-        
-         <ul class="breadcrumb text-white">
-            @foreach(Theme::breadcrumb()->getCrumbs() as $crumb)
-                <li>
-                    @if($loop->last)
-                        {!! BaseHelper::clean($crumb['label']) !!}
-                    @else
-                        <a href="{{ $crumb['url'] }}" class="text-white">
+        <div class="container position-relative py-3 py-md-4">
+            @if ($breadcrumbStyle !== 'without-title' && $pageH1)
+                <h1 @class([
+                    'page-title mt-3 mb-0',
+                    'text-center text-white heading-breadcrumb' => $useHeroStyle,
+                    'text-start' => ! $useHeroStyle,
+                ])>
+                    {!! BaseHelper::clean($pageH1) !!}
+                </h1>
+            @endif
+
+            @if ($isAboutUs)
+                <p class="text-center text-white fw-semibold fs-5">
+                    Guiding you through every step of your real estate journey with expertise and integrity.
+                </p>
+            @endif
+
+            <ul @class(['breadcrumb', 'text-white' => $useHeroStyle, 'mt-3' => $pageH1])>
+                @foreach(Theme::breadcrumb()->getCrumbs() as $crumb)
+                    <li>
+                        @if($loop->last)
                             {!! BaseHelper::clean($crumb['label']) !!}
-                        </a>
-                        <span class="ms-1">/</span>
-                    @endif
-                </li>
-            @endforeach
-        </ul>
-    </div>
-@else
-    <div></div>
-@endif
-</section>
+                        @else
+                            <a href="{{ $crumb['url'] }}" @class(['text-white' => $useHeroStyle])>
+                                {!! BaseHelper::clean($crumb['label']) !!}
+                            </a>
+                            <span class="ms-1">/</span>
+                        @endif
+                    </li>
+                @endforeach
+            </ul>
+        </div>
+    </section>
 @endif

@@ -3541,6 +3541,11 @@ position: absolute;
         || request()->is('on/*/map')
         || (bool) preg_match('#^on/.+-for-(sale|lease)(?:-in-.+)?/map$#', $serikRequestPath)
         || (bool) preg_match('#^.+-for-(sale|lease)(?:-in-.+)?$#', $serikRequestPath);
+    $mapPageH1 = $isMapSearchPageView ? \App\Support\PageH1::resolveMap() : null;
+
+    if ($mapPageH1) {
+        Theme::set('pageH1ProvidedByContent', true);
+    }
 @endphp
 
 @if (! $isMapSearchPageView)
@@ -3569,6 +3574,10 @@ position: absolute;
 
 @if ($isMapSearchPageView)
 <section class="flat-map hero-banner-4 map-housesigma" id="secondMain">
+
+    @if ($mapPageH1)
+        {!! Theme::partial('page-h1', ['text' => $mapPageH1, 'variant' => 'map']) !!}
+    @endif
 
     <!-- ===== TOP BAR UI ===== -->
     <div class="hs-topbar">

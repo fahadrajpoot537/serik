@@ -16,6 +16,7 @@
     $style = theme_option('real_estate_property_detail_layout', 1);
     $style = in_array($style, range(1, 4)) ? $style : 1;
     Theme::set('pageTitle', $property->name);
+    Theme::set('pageH1ProvidedByContent', true);
 @endphp
 
 @include(Theme::getThemeNamespace("views.real-estate.single-layouts.style-$style"), ['model' => $property])

@@ -1,8 +1,7 @@
 @php
     Theme::set('pageTitle', __('Wishlist'));
+    Theme::set('pageH1', __('Wishlist'));
 @endphp
-
-<h1 class="d-none">{{ __('Wishlist') }}</h1>
 
 <div class="flat-section">
     @if($properties->isNotEmpty() || $projects->isNotEmpty())

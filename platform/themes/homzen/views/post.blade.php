@@ -6,6 +6,7 @@
     $bottomPostDetailSidebar = dynamic_sidebar('bottom_post_detail_sidebar');
     Theme::layout('full-width');
     Theme::set('pageTitle', $post->name);
+    Theme::set('pageH1ProvidedByContent', true);
 @endphp
 
 
