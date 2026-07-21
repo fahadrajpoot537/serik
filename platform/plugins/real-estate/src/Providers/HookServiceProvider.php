@@ -608,6 +608,8 @@ class HookServiceProvider extends ServiceProvider
 
                         // Add RealEstateListing schema for properties
                         if (get_class($model) == Property::class) {
+                            $postedAt = $model->created_at ?? $model->updated_at;
+
                             $schema = [
                                 '@context' => 'https://schema.org',
                                 '@type' => 'RealEstateListing',
@@ -639,8 +641,11 @@ class HookServiceProvider extends ServiceProvider
                                     'price' => $model->price,
                                     'priceCurrency' => strtoupper(get_application_currency()->title),
                                 ],
-                                'datePosted' => $model->created_at->toIso8601String(),
                             ];
+
+                            if ($postedAt) {
+                                $schema['datePosted'] = $postedAt->toIso8601String();
+                            }
 
                             if ($model->project_id && $model->project) {
                                 $schema['containedInPlace'] = [
