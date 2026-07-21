@@ -186,6 +186,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
             ->appendOutputTo(storage_path('logs/treb-reconcile.log'));
     })
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->prepend(\App\Http\Middleware\ForceCanonicalDomainMiddleware::class);
         $middleware->prepend(\App\Http\Middleware\BlockSensitivePathsMiddleware::class);
         $middleware->prepend(\App\Http\Middleware\WagesMaintenanceMiddleware::class);
         $middleware->appendToGroup('web', \App\Http\Middleware\GeoBlockMiddleware::class);

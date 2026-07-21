@@ -318,7 +318,7 @@
 
       <!-- CTA -->
       <div>
-       <a href="contact-us"> <button class="sr4-btn">Claim Your Discount Now</button></a>
+       <a href="{{ url('/contact-us') }}"> <button class="sr4-btn">Claim Your Discount Now</button></a>
       </div>
 
     </div>

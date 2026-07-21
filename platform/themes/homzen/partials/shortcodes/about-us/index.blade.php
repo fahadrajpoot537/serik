@@ -431,7 +431,7 @@ Professional real estate services designed to guide you through every stage of y
 </p>
 </div>
 
-<a href="contact-us" class="services-btn" style="color:white">
+<a href="{{ url('/contact-us') }}" class="services-btn" style="color:white">
 Book Your Free Consultation
 </a>
 

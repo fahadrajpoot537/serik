@@ -19,6 +19,12 @@
     $statusLabel = $property->isSoldHistory()
         ? TrebPropertyHelper::soldStatusLabel($property->MlsStatus)
         : ($property->TransactionType ?? __('For Sale'));
+
+    $galleryAlt = collect([
+        $property->name,
+        $property->external_id ?? $property->unique_id ?? null,
+        $property->type?->name ?? (is_string($property->type ?? null) ? $property->type : null),
+    ])->filter()->unique()->implode(' - ') ?: __('Property listing');
 @endphp
 
 @include(Theme::getThemeNamespace('partials.property-photo-lightbox'))
@@ -184,7 +190,7 @@
 
         <div class="gallery-main">
             <a href="{{ $images[0] }}" data-gallery-index="0" class="js-property-gallery-open" style="height:100%">
-                <img src="{{ $images[0] }}" alt="{{ $property->name }}" onerror="this.src='{{ RvMedia::getDefaultImage() }}'">
+                <img src="{{ $images[0] }}" alt="{{ $galleryAlt }}" onerror="this.src='{{ RvMedia::getDefaultImage() }}'">
                 <span class="badge-sale @if($property->isSoldHistory()) status-sold-wrap @endif">
                     @if($property->isSoldHistory())
                         {!! TrebPropertyHelper::soldStatusBadgeHtml($property->MlsStatus) !!}
@@ -199,7 +205,7 @@
             <div class="gallery-row">
                 @foreach(array_slice($images, 1, 2) as $offset => $image)
                     <a href="{{ $image }}" data-gallery-index="{{ $offset + 1 }}" class="js-property-gallery-open">
-                        <img src="{{ $image }}" alt="" loading="eager" onerror="this.style.display='none'">
+                        <img src="{{ $image }}" alt="{{ $galleryAlt }}" loading="eager" onerror="this.style.display='none'">
                     </a>
                 @endforeach
             </div>
@@ -207,7 +213,7 @@
             <div class="gallery-row">
                 @foreach(array_slice($images, 3, 2) as $offset => $image)
                     <a href="{{ $image }}" data-gallery-index="{{ $offset + 3 }}" class="js-property-gallery-open">
-                        <img src="{{ $image }}" alt="" loading="lazy" onerror="this.style.display='none'">
+                        <img src="{{ $image }}" alt="{{ $galleryAlt }}" loading="lazy" onerror="this.style.display='none'">
                     </a>
                 @endforeach
             </div>
@@ -299,11 +305,11 @@
 
             const statusHtml = gallery.querySelector('.badge-sale');
             const statusBadge = statusHtml ? statusHtml.outerHTML : '';
-            const propertyName = @json($property->name ?? 'Property');
+            const propertyName = @json($galleryAlt);
             const defaultImg = @json(RvMedia::getDefaultImage());
 
             const sideRows = (start, count) => images.slice(start, start + count).map((src, i) =>
-                `<a href="${src}" data-gallery-index="${start + i}" class="js-property-gallery-open"><img src="${src}" alt="" loading="lazy" onerror="this.style.display='none'"></a>`
+                `<a href="${src}" data-gallery-index="${start + i}" class="js-property-gallery-open"><img src="${src}" alt="${propertyName}" loading="lazy" onerror="this.style.display='none'"></a>`
             ).join('');
 
             gallery.innerHTML = `

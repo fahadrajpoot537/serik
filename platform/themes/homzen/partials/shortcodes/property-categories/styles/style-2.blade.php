@@ -381,7 +381,7 @@ h2 {
             <!-- Card 1 -->
             <div class="col-md-4">
                 <div class="sr-card">
-                    <img src="images/expert-guidance.jpg" class="sr-img" alt="">
+                    <img src="images/expert-guidance.jpg" class="sr-img" alt="{{ __('Expert real estate guidance from Serik Realty') }}">
                     <div class="sr-icon-box mx-auto">
                         <i class="ti ti-users"></i>
                     </div>
@@ -393,7 +393,7 @@ h2 {
             <!-- Card 2 -->
             <div class="col-md-4">
                 <div class="sr-card">
-                    <img src="images/custom-solutions.jpg" class="sr-img" alt="">
+                    <img src="images/custom-solutions.jpg" class="sr-img" alt="{{ __('Custom real estate solutions from Serik Realty') }}">
                     <div class="sr-icon-box mx-auto">
                         <i class="ti ti-home-heart"></i>
                     </div>
@@ -405,7 +405,7 @@ h2 {
             <!-- Card 3 -->
             <div class="col-md-4">
                 <div class="sr-card">
-                    <img src="images/market-insights.jpg" class="sr-img" alt="">
+                    <img src="images/market-insights.jpg" class="sr-img" alt="{{ __('Ontario real estate market insights from Serik Realty') }}">
                     <div class="sr-icon-box mx-auto">
                         <i class="ti ti-map-pin"></i>
                     </div>
@@ -418,7 +418,7 @@ h2 {
 
         <!-- CTA -->
         <div class="mt-5">
-            <a href="contact-us" class="btn btn-primary sr-btn" style="color:#fff">See How We Work</a>
+            <a href="{{ url('/contact-us') }}" class="btn btn-primary sr-btn" style="color:#fff">See How We Work</a>
         </div>
 
     </div>

@@ -18,7 +18,7 @@
        
        
         
-        <a href="blog" class="btn-view button-prop" style="float:right; margin-top:-45px;">
+        <a href="{{ url('/blog') }}" class="btn-view button-prop" style="float:right; margin-top:-45px;">
                 <span class="text" style="font-weight: 500;">View All</span>
                 <x-core::icon name="ti ti-arrow-right" class="icon" style="stroke-width: 2" />
             </a>

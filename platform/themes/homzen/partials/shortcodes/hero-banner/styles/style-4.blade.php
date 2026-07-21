@@ -2,7 +2,7 @@
 <link href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.3/mapbox-gl-draw.css" rel="stylesheet" />
 @include(Theme::getThemeNamespace('partials.property-photo-lightbox'))
 @if(request()->has('city'))
-<link rel="canonical" href="{{ url(request()->path()) }}">
+<link rel="canonical" href="{{ \App\Support\CanonicalUrl::normalize(url(request()->path())) }}">
 @endif
 <style>
 .map-housesigma{
@@ -944,6 +944,12 @@ button {
     justify-content: center;
     align-items: center;
     z-index: 5;
+    pointer-events: auto;
+}
+
+.iframe-loader.is-hidden {
+    display: none !important;
+    pointer-events: none !important;
 }
 
 /* Spinner animation */
@@ -2245,14 +2251,21 @@ position: absolute;
         inset: 0;
         width: 100%;
         height: 100%;
-        z-index: 99999;
+        z-index: 100000;
         background: #fff;
+    }
+
+    html.hs-property-modal-open,
+    html.hs-property-modal-open body {
+        overflow: hidden !important;
+        height: 100%;
     }
 
     #propertyModal .modal-content {
         display: flex;
         flex-direction: column;
-        position: relative;
+        position: fixed;
+        inset: 0;
         top: 0;
         left: 0;
         transform: none;
@@ -2261,6 +2274,7 @@ position: absolute;
         max-height: 100dvh;
         border-radius: 0;
         overflow: hidden;
+        touch-action: manipulation;
     }
 
     #propertyFrame {
@@ -2270,6 +2284,7 @@ position: absolute;
         height: 100% !important;
         border: none;
         display: block;
+        touch-action: pan-y;
     }
 
     #propertyModal .close-modal {
@@ -2820,9 +2835,21 @@ position: absolute;
     display: none !important;
 }
 
-.map-housesigma.view-list .hs-mobile-list-panel {
-    display: flex !important;
-}
+    .map-housesigma.view-list .hs-mobile-list-panel {
+        display: flex !important;
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .map-housesigma.view-list .hs-mobile-list-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        touch-action: pan-y;
+    }
 
 @media (min-width: 992px) {
     .hs-mobile-view-bar,
@@ -2976,26 +3003,33 @@ position: absolute;
         width: 100vw !important;
         max-width: 100vw !important;
         padding: 0 !important;
+        max-height: none;
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: hidden !important;
+        display: flex;
+        flex-direction: column;
+        overscroll-behavior: contain;
+    }
+
+    .map-housesigma .hs-map-cluster-mobile-popup .clusterpopup {
+        flex: 1 1 auto;
+        min-height: 0;
+        max-height: none !important;
+        height: auto;
+        overflow: hidden;
     }
 
     .map-housesigma .hs-cluster-popup-list {
-        max-height: min(52vh, 420px);
-        overflow-y: auto;
+        flex: 1 1 auto;
+        min-height: 0;
+        max-height: none !important;
+        overflow-y: auto !important;
         overflow-x: hidden;
         -webkit-overflow-scrolling: touch;
         overscroll-behavior: contain;
         touch-action: pan-y;
-    }
-
-    .map-housesigma .hs-map-cluster-mobile-popup .maplibregl-popup-content,
-    .map-housesigma .hs-map-cluster-mobile-popup {
-        padding: 12px 14px calc(32px + env(safe-area-inset-bottom, 0px));
-        max-height: none;
-        flex: 1 1 auto;
-        min-height: 0;
-        overflow-y: auto;
-        overscroll-behavior: contain;
-        -webkit-overflow-scrolling: touch;
+        padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
     }
 
     .map-housesigma .hs-cluster-list-item {
@@ -4274,13 +4308,13 @@ position: absolute;
         </div>
 
         <div class="footer-center">
-            <a href="https://serik.ca/about-us">About Us</a>
+            <a href="{{ url('/about-us') }}">About Us</a>
             <!--a href="#">Recently Sold Listings</a>
             <a href="#">Careers</a-->
-            <a href="https://serik.ca/frequently-asked-questions">FAQs</a>
-            <a href="https://serik.ca/contact-us">Contact Us</a>
-            <a href="https://serik.ca/privacy-policy">Privacy Policy</a>
-            <a href="https://serik.ca/terms-conditions">Terms & Conditions</a>
+            <a href="{{ url('/faqs') }}">FAQs</a>
+            <a href="{{ url('/contact-us') }}">Contact Us</a>
+            <a href="{{ url('/privacy-policy') }}">Privacy Policy</a>
+            <a href="{{ url('/terms-conditions') }}">Terms & Conditions</a>
         </div>
 
         <!--div class="footer-right">
@@ -4306,6 +4340,7 @@ position: absolute;
 <script>
 
 window.SERIK_IS_MAP_SEARCH_PAGE = @json($isMapSearchPageView);
+window.SERIK_CANONICAL_ORIGIN = @json(rtrim(\App\Support\CanonicalUrl::normalize(url('/')), '/'));
 
 function updateSeoUrlpassed() {
 
@@ -7140,7 +7175,22 @@ function mapMovedEnoughToRefetch() {
         return (prefix + ' ' + monthYear).trim();
     }
 
-    function buildMapPopupGalleryHtml(images, statusLabel) {
+    function serikCanonicalOrigin() {
+        return window.SERIK_CANONICAL_ORIGIN || window.location.origin;
+    }
+
+    function buildMapImageAlt(props) {
+        const parts = [
+            props?.name || props?.display_address,
+            props?.external_id,
+            props?.property_type || props?.property_subtype || props?.type,
+        ].filter(Boolean);
+
+        return parts.join(' - ') || 'Property listing photo';
+    }
+
+    function buildMapPopupGalleryHtml(images, statusLabel, props) {
+        const imageAlt = buildMapImageAlt(props || {});
         const safeImages = (images && images.length) ? images : ['https://serik.ca/storage/avatars/1.jpg'];
         const nav = safeImages.length > 1 ? `
             <button type="button" class="hs-map-gallery-nav prev" aria-label="Previous">‹</button>
@@ -7150,14 +7200,14 @@ function mapMovedEnoughToRefetch() {
         ` : '';
         const thumbs = safeImages.length > 1 ? `
             <div class="hs-map-gallery-thumbs">
-                ${safeImages.map((src, i) => `<img src="${escapeMapHtml(src)}" data-index="${i}" class="${i === 0 ? 'active' : ''}" loading="lazy" alt="">`).join('')}
+                ${safeImages.map((src, i) => `<img src="${escapeMapHtml(src)}" data-index="${i}" class="${i === 0 ? 'active' : ''}" loading="lazy" alt="${escapeMapHtml(imageAlt)}">`).join('')}
             </div>
         ` : '';
 
         return `
             <div class="hs-map-popup-gallery" data-images='${JSON.stringify(safeImages)}' data-index="0">
                 <div class="hs-map-gallery-main">
-                    <img src="${escapeMapHtml(safeImages[0])}" class="property-popup-img hs-map-gallery-active js-map-gallery-lightbox-open" loading="lazy" alt="">
+                    <img src="${escapeMapHtml(safeImages[0])}" class="property-popup-img hs-map-gallery-active js-map-gallery-lightbox-open" loading="lazy" alt="${escapeMapHtml(imageAlt)}">
                     ${nav}
                     <div class="property-popup-sale">${escapeMapHtml(statusLabel)}</div>
                 </div>
@@ -7434,7 +7484,7 @@ function mapMovedEnoughToRefetch() {
         const displayName = detail?.display_address || props.name || 'Property';
         const displayLocation = detail?.display_location || '';
         const displayType = detail?.PropertySubType || props.property_subtype || '';
-        const shareUrl = props.url ? (window.location.origin + '/properties/' + props.url) : window.location.href;
+        const shareUrl = props.url ? (serikCanonicalOrigin() + '/properties/' + props.url) : window.location.href;
         const actionsHtml = `
             <div class="hs-map-actions">
                 <button type="button" class="hs-map-action-btn" data-map-share data-share-url="${escapeMapHtml(shareUrl)}" data-share-title="${escapeMapHtml(displayName)}" title="Share" aria-label="Share">
@@ -7506,7 +7556,7 @@ function mapMovedEnoughToRefetch() {
                 data-property-id="${escapeMapHtml(propertyId)}">
                 <div class="hs-map-gallery-col">
                     <div class="popup-img-div hs-map-popup-gallery-wrap">
-                        ${buildMapPopupGalleryHtml(images, statusLabel)}
+                        ${buildMapPopupGalleryHtml(images, statusLabel, props)}
                     </div>
                 </div>
                 <div class="hs-map-details-col popupspace">${actionsHtml}${centerBody}</div>
@@ -7602,7 +7652,7 @@ function mapMovedEnoughToRefetch() {
         if (images.length > 1) {
             const wrap = root.querySelector('.hs-map-popup-gallery-wrap');
             if (wrap) {
-                wrap.innerHTML = buildMapPopupGalleryHtml(images, statusLabel);
+                wrap.innerHTML = buildMapPopupGalleryHtml(images, statusLabel, props);
                 if (el) delete el.dataset.galleryBound;
                 bindMapPopupGallery(el);
             }
@@ -7634,7 +7684,52 @@ function mapMovedEnoughToRefetch() {
 
     window.hsMergeMapBundle = hsMergeMapBundle;
 
+    function showPropertyIframeLoader() {
+        const loader = document.getElementById('iframeLoader');
+        if (!loader) return;
+        loader.classList.remove('is-hidden');
+        loader.style.display = 'flex';
+    }
+
+    function hidePropertyIframeLoader() {
+        const loader = document.getElementById('iframeLoader');
+        if (!loader) return;
+        loader.style.display = 'none';
+        loader.classList.add('is-hidden');
+    }
+
+    function enablePropertyIframeScroll(iframe) {
+        if (!iframe) return;
+        try {
+            const doc = iframe.contentDocument || iframe.contentWindow?.document;
+            if (!doc) return;
+            doc.documentElement.style.overflowY = 'auto';
+            doc.documentElement.style.webkitOverflowScrolling = 'touch';
+            doc.body.style.overflowY = 'auto';
+            doc.body.style.webkitOverflowScrolling = 'touch';
+            doc.body.style.touchAction = 'pan-y';
+        } catch (e) {
+            // Cross-origin iframe — rely on scrolling="yes"
+        }
+    }
+
+    function bindPropertyIframeLoad(iframe) {
+        if (!iframe) return;
+        iframe.onload = function () {
+            hidePropertyIframeLoader();
+            enablePropertyIframeScroll(iframe);
+        };
+    }
+
+    function ensurePropertyModalOnBody() {
+        const modal = document.getElementById('propertyModal');
+        if (modal && modal.parentElement !== document.body) {
+            document.body.appendChild(modal);
+        }
+    }
+
     function lockBodyForPropertyModal() {
+        ensurePropertyModalOnBody();
         document.documentElement.classList.add('hs-property-modal-open');
         document.body.dataset.hsModalScrollY = String(window.scrollY || 0);
         document.body.style.position = 'fixed';
@@ -7642,6 +7737,7 @@ function mapMovedEnoughToRefetch() {
         document.body.style.left = '0';
         document.body.style.right = '0';
         document.body.style.width = '100%';
+        document.body.style.overflow = 'hidden';
     }
 
     function unlockBodyForPropertyModal() {
@@ -7684,18 +7780,34 @@ function mapMovedEnoughToRefetch() {
         if (content) {
             const maxH = 'calc(100dvh - 60px - 52px - env(safe-area-inset-bottom, 0px))';
             content.style.maxHeight = maxH;
-            content.style.overflowY = 'auto';
+            content.style.height = maxH;
+            content.style.overflowY = 'hidden';
             content.style.overflowX = 'hidden';
+            content.style.display = 'flex';
+            content.style.flexDirection = 'column';
             content.style.webkitOverflowScrolling = 'touch';
             content.style.overscrollBehavior = 'contain';
             content.style.touchAction = 'pan-y';
         }
 
+        const cluster = container.querySelector('.clusterpopup');
+        if (cluster) {
+            cluster.style.display = 'flex';
+            cluster.style.flexDirection = 'column';
+            cluster.style.flex = '1 1 auto';
+            cluster.style.minHeight = '0';
+            cluster.style.maxHeight = '100%';
+            cluster.style.overflow = 'hidden';
+        }
+
         const list = container.querySelector('.hs-cluster-popup-list');
         if (list) {
+            list.style.flex = '1 1 auto';
+            list.style.minHeight = '0';
             list.style.maxHeight = 'none';
             list.style.overflowY = 'auto';
             list.style.webkitOverflowScrolling = 'touch';
+            list.style.overscrollBehavior = 'contain';
             list.style.touchAction = 'pan-y';
         }
 
@@ -7820,7 +7932,6 @@ function mapMovedEnoughToRefetch() {
 
         const modal = document.getElementById('propertyModal');
         const iframe = document.getElementById('propertyFrame');
-        const loader1 = document.getElementById('iframeLoader');
         if (!modal || !iframe) return;
 
         const slug = props.url || '';
@@ -7833,18 +7944,17 @@ function mapMovedEnoughToRefetch() {
 
         let url = '/properties/' + String(slug).replace(/^\/+/, '');
         if (!url.startsWith('http')) {
-            url = window.location.origin + url;
+            url = serikCanonicalOrigin() + url;
         }
         url += (url.includes('?') ? '&' : '?') + 'iframe=1&t=' + Date.now();
 
         document.querySelectorAll('.maplibregl-popup').forEach((popup) => popup.remove());
 
+        ensurePropertyModalOnBody();
         modal.style.display = 'block';
-        if (loader1) loader1.style.display = 'flex';
+        showPropertyIframeLoader();
         lockBodyForPropertyModal();
-        iframe.onload = function () {
-            if (loader1) loader1.style.display = 'none';
-        };
+        bindPropertyIframeLoad(iframe);
         iframe.src = url;
     }
 
@@ -7931,7 +8041,7 @@ function mapMovedEnoughToRefetch() {
             <article class="hs-cluster-list-item ${locked}" data-cluster-idx="${index}" role="button" tabindex="0">
                 <div class="hs-cluster-card-img">
                     ${props.image
-                        ? `<img src="${escapeMapHtml(props.image)}" alt="" loading="lazy" onerror="this.style.display='none';this.parentNode.classList.add('hs-img-empty');">`
+                        ? `<img src="${escapeMapHtml(props.image)}" alt="${escapeMapHtml(buildMapImageAlt(props))}" loading="lazy" onerror="this.style.display='none';this.parentNode.classList.add('hs-img-empty');">`
                         : '<div class="hs-img-empty-fill"></div>'}
                     <span class="hs-cluster-card-badge">${escapeMapHtml(props.transaction || itemStatus || '')}</span>
                 </div>
@@ -8271,6 +8381,7 @@ function buildHsListCardHtml(props, geometry) {
     }
 
     const img = (!locked && props.image) ? props.image : '';
+    const imageAlt = escapeMapHtml(buildMapImageAlt(props));
     const meta = [
         (props.bedrooms ?? '-') + ' bed',
         (props.bathrooms ?? '-') + ' bath',
@@ -8281,7 +8392,7 @@ function buildHsListCardHtml(props, geometry) {
         gate +
         '<article class="hs-list-card ' + locked + '">' +
         (img
-            ? '<img src="' + img + '" alt="" loading="lazy">'
+            ? '<img src="' + img + '" alt="' + imageAlt + '" loading="lazy">'
             : '<div class="hs-list-card-img hs-img-empty" style="width:100px;min-width:100px;height:76px;border-radius:8px;"><div class="hs-img-empty-fill"></div></div>') +
         '<div class="hs-list-card-body">' +
         '<div class="hs-list-card-price">' + priceHtml + '</div>' +
@@ -8841,17 +8952,17 @@ document.addEventListener('click', function (e) {
         if (popupRoot && popupRoot.dataset.url) {
             const modal = document.getElementById('propertyModal');
             const iframe = document.getElementById('propertyFrame');
-            const loader1 = document.getElementById('iframeLoader');
             if (modal && iframe) {
                 let url = popupRoot.dataset.url.trim();
                 if (!url.startsWith('http')) {
-                    url = window.location.origin + (url.startsWith('/') ? url : '/' + url);
+                    url = serikCanonicalOrigin() + (url.startsWith('/') ? url : '/' + url);
                 }
                 url += (url.includes('?') ? '&' : '?') + 'iframe=1&t=' + Date.now();
+                ensurePropertyModalOnBody();
                 modal.style.display = 'block';
-                if (loader1) loader1.style.display = 'flex';
+                showPropertyIframeLoader();
                 lockBodyForPropertyModal();
-                iframe.onload = function () { if (loader1) loader1.style.display = 'none'; };
+                bindPropertyIframeLoad(iframe);
                 iframe.src = url;
             }
         }
@@ -8889,13 +9000,12 @@ document.addEventListener('click', function (e) {
 
     const modal = document.getElementById('propertyModal');
     const iframe = document.getElementById('propertyFrame');
-    const loader1 = document.getElementById('iframeLoader');
 
     let url = property.dataset.url.trim();
 
     // Ensure absolute URL
     if (!url.startsWith('https')) {
-        url = window.location.origin + url;
+        url = serikCanonicalOrigin() + (url.startsWith('/') ? url : '/' + url);
     }
 
     url += (url.includes('?') ? '&' : '?') + 'iframe=1&t=' + Date.now();
@@ -8910,10 +9020,12 @@ document.addEventListener('click', function (e) {
             return;
         }
 
+        ensurePropertyModalOnBody();
         modal.style.display = 'block';
-        iframe.src = url;
-
+        showPropertyIframeLoader();
         lockBodyForPropertyModal();
+        bindPropertyIframeLoad(iframe);
+        iframe.src = url;
 
         return; // stop here for mobile
     }
@@ -8923,15 +9035,10 @@ document.addEventListener('click', function (e) {
     // ============================
     modal.style.display = 'block';
 
-    loader1.style.display = 'flex';
+    showPropertyIframeLoader();
     lockBodyForPropertyModal();
 
-    iframe.onload = null;
-
-    iframe.onload = function () {
-        loader1.style.display = 'none';
-    };
-
+    bindPropertyIframeLoad(iframe);
     iframe.src = url;
 });
 
@@ -8939,8 +9046,8 @@ const iframe = document.getElementById('propertyFrame');
 
 
 iframe.addEventListener('load', function() {
-     const loader1 = document.getElementById('iframeLoader');
-    loader1.style.display = 'none';
+    hidePropertyIframeLoader();
+    enablePropertyIframeScroll(iframe);
 });
 
 const clearBtn_popup = document.getElementById("clearBtn_popup");
@@ -8948,13 +9055,12 @@ const clearBtn_popup = document.getElementById("clearBtn_popup");
 clearBtn_popup.addEventListener("click", function(){
 const modal = document.getElementById('propertyModal');
 const iframe = document.getElementById('propertyFrame');
- const loader1 = document.getElementById('iframeLoader');
 
     modal.style.display = 'none';
 
     //Clear iframe
     iframe.src = '';
-    loader1.style.display = 'flex';
+    showPropertyIframeLoader();
     unlockBodyForPropertyModal();
 
 });

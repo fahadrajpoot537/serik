@@ -1,6 +1,6 @@
 <section class="flat-section">
     <div class="container">
-        {!! Theme::partial('shortcode-heading', ['shortcode' => $shortcode]) !!}
+        {!! Theme::partial('shortcode-heading', ['shortcode' => $shortcode, 'headingTag' => 'h1', 'defaultTitle' => __('Frequently Asked Questions')]) !!}
 
         <div class="row justify-content-center">
             <div class="col-lg-8">

@@ -612,7 +612,7 @@
                     <div class="header-account">
                         @if (is_plugin_active('real-estate') && RealEstateHelper::isLoginEnabled())
                             <div class="flat-bt-top">
-                                <a class="tf-btn primary" href="contact-us">{{ __('Contact Us') }}</a>
+                                <a class="tf-btn primary" href="{{ url('/contact-us') }}">{{ __('Contact Us') }}</a>
                             </div>
                         @endif
                     </div>
@@ -729,9 +729,9 @@
                     
                     
                              
-                                <a style="font-size:14px; font-weight:600;padding: 5px 10px;" href="blog">{{ __('Blog') }}</a>
+                                <a style="font-size:14px; font-weight:600;padding: 5px 10px;" href="{{ url('/blog') }}">{{ __('Blog') }}</a>
                                 <br><br>
-                        <a class="tf-btn primary" href="contact-us">{{ __('Contact Us') }}</a>
+                        <a class="tf-btn primary" href="{{ url('/contact-us') }}">{{ __('Contact Us') }}</a>
                         
                     </div>
                 @endif
@@ -795,7 +795,7 @@
         <small>Search</small>
     </a>
 
-    <a href="/mortgage-calculator" class="nav-item">
+    <a href="{{ url('/mortgage-calculator') }}" class="nav-item">
         <x-core::icon name="ti ti-calculator" />
         <small>Mortgage</small>
     </a>

@@ -11,6 +11,14 @@
 
     RewriteEngine On
 
+    # Canonical host: https://serik.ca (non-www)
+    RewriteCond %{HTTP_HOST} ^www\.serik\.ca$ [NC]
+    RewriteRule ^(.*)$ https://serik.ca/$1 [R=301,L]
+
+    RewriteCond %{HTTP_HOST} ^serik\.ca$ [NC]
+    RewriteCond %{HTTPS} !=on
+    RewriteRule ^(.*)$ https://serik.ca/$1 [R=301,L]
+
     # Block direct /public/... probes (works when the document root IS the public folder)
     RewriteRule ^public(/|$) - [F,L]
 

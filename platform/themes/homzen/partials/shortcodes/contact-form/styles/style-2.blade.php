@@ -353,10 +353,11 @@ $faqs = collect([
    style="background-image: url('https://serik.ca/storage/f27763e877bd758b84a315e1.jpg') !important"
 >
     <div class="container">
+        <h1 class="srk-privacy-title text-center mb-4">{{ __('Frequently Asked Questions') }}</h1>
         <div class="row content-wrap">
             <div class="col-lg-7">
                 <div class="content-left" style="padding-right: 100px;">
-                    <img src="https://serik.ca/storage/faqs.jpg" alt="Serik Realty"  style="height:100%">
+                    <img src="https://serik.ca/storage/faqs.jpg" alt="{{ __('Serik Realty FAQs') }}" style="height:100%">
                     <div class="tf-faq" style="zoom:0.8;">
                         <ul class="box-faq" id="wrapper-faq">
                             @foreach($faqs as $index => $faq)

@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Support\CanonicalUrl;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -32,6 +33,12 @@ class AppServiceProvider extends ServiceProvider
     {
         \App\Support\EnsuresTranslator::ensure();
         self::ensureWritableLoggingOrFallback();
+
+        CanonicalUrl::forceApplicationUrl();
+
+        add_filter('core_seo_canonical', function (string $url): string {
+            return CanonicalUrl::normalize($url);
+        }, 999);
     }
 
     protected static function ensureWritableLoggingOrFallback(): void

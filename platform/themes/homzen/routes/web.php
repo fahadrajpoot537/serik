@@ -30,6 +30,9 @@ Route::middleware(['web', 'core'])
     
 Route::middleware(['web', 'core'])->group(function (): void {
     Route::redirect('/evaluation', '/free-home-evaluation', 301);
+    Route::redirect('/frequently-asked-questions', '/faqs', 301);
+    Route::redirect('/blogs', '/blog', 301);
+    Route::redirect('/agents/sadaqat', '/agents', 301);
 
     Route::get(
         '/on/{filters}/map/{slug}',

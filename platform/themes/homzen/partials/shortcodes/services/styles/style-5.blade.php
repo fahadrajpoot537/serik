@@ -19,7 +19,7 @@
                         <p class="description text-white body-3">{!! BaseHelper::clean($shortcode->description) !!}</p>
                     @endif
                     <div class="box-navigation">
-                        <a href="contact-us" class="services-btn" style="color:white">
+                        <a href="{{ url('/contact-us') }}" class="services-btn" style="color:white">
                         Join our team
                         </a>
                     </div>

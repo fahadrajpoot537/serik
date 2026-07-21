@@ -10,11 +10,11 @@
             <div class="col-xl-8 col-lg-7">
                 <div class="slider-content">
                     <div class="heading">
-                        <h2 class="title wow fadeIn animationtext clip" style="color: {{ $titleColor }} !important;" data-wow-delay=".2s" data-wow-duration="2000ms">
+                        <h1 class="title wow fadeIn animationtext clip" style="color: {{ $titleColor }} !important;" data-wow-delay=".2s" data-wow-duration="2000ms">
                             {!! BaseHelper::clean($shortcode->title) !!}
                             <br>
                             {!! Theme::partial('shortcodes.hero-banner.partials.animation-text', compact('shortcode')) !!}
-                        </h2>
+                        </h1>
                         @if ($shortcode->description)
                             <p class="subtitle body-1 wow fadeIn" style="color: {{ $descriptionColor }} !important;" data-wow-delay=".8s" data-wow-duration="2000ms">
                                 {!! BaseHelper::clean($shortcode->description) !!}

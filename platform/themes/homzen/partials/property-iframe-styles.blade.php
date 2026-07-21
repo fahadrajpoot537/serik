@@ -8,6 +8,7 @@
         height: 100%;
         overflow-y: auto !important;
         -webkit-overflow-scrolling: touch;
+        overscroll-behavior-y: contain;
     }
     body {
         margin: 0 !important;
@@ -19,6 +20,8 @@
         overflow-y: auto !important;
         -webkit-overflow-scrolling: touch;
         touch-action: pan-y;
+        overscroll-behavior-y: contain;
+        position: relative !important;
     }
     #wrapper {
         overflow: visible !important;

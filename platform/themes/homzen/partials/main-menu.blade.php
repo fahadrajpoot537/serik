@@ -468,7 +468,7 @@
                         {{-- LEFT --}}
                         <div class="mega-left">
                             
-                            <a href="properties" class="feature-box">
+                            <a href="{{ url('/properties') }}" class="feature-box">
                                 <span>🏠</span>
                                 <span>Find Home →</span>
                             </a>
@@ -495,7 +495,7 @@
                         {{-- LEFT --}}
                         <div class="mega-left">
                             
-                            <a href="properties" class="feature-box">
+                            <a href="{{ url('/properties') }}" class="feature-box">
                                 <span>🏠</span>
                                 <span>Find Home →</span>
                             </a>
