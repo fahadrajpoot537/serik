@@ -6,7 +6,7 @@
     $altParts = array_filter([
         $property->name,
         $property->external_id ?? $property->unique_id ?? null,
-        $property->type?->name ?? (is_string($property->type ?? null) ? $property->type : null),
+        ($property->type && method_exists($property->type, 'label')) ? $property->type->label() : ($property->PropertySubType ?? null),
     ]);
     $imageAlt = $altParts ? implode(' - ', array_unique($altParts)) : __('Property listing');
 @endphp

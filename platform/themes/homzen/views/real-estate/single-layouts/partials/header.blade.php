@@ -10,13 +10,25 @@
         'TransactionType' => $model->TransactionType,
         'PropertySubType' => $model->PropertySubType,
     ];
-    $factRecord = $listingKey
-        ? TrebPropertyHelper::resolveFactRecordForDetail($listingKey, $localHeader)
-        : TrebPropertyHelper::enrichRecordAddress(TrebPropertyHelper::recordFromLocal($localHeader, $listingKey));
+    $factRecord = [];
+    $displayName = $model->name ?? '';
+    $displayLocation = '';
+    $displayType = $model->PropertySubType ?? '';
 
-    $displayName = TrebPropertyHelper::formatDisplayAddress($factRecord);
-    $displayLocation = TrebPropertyHelper::formatLocationLine($factRecord);
-    $displayType = $factRecord['PropertySubType'] ?? $model->PropertySubType ?? '';
+    try {
+        $factRecord = $listingKey
+            ? TrebPropertyHelper::resolveFactRecordForDetail($listingKey, $localHeader)
+            : TrebPropertyHelper::enrichRecordAddress(TrebPropertyHelper::recordFromLocal($localHeader, $listingKey));
+
+        $displayName = TrebPropertyHelper::formatDisplayAddress($factRecord) ?: ($model->name ?? '');
+        $displayLocation = TrebPropertyHelper::formatLocationLine($factRecord);
+        $displayType = $factRecord['PropertySubType'] ?? $model->PropertySubType ?? '';
+    } catch (\Throwable $e) {
+        try {
+            report($e);
+        } catch (\Throwable) {
+        }
+    }
 @endphp
 
 

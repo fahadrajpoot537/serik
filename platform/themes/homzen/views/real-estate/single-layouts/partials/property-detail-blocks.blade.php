@@ -30,26 +30,46 @@
 
     $isAuthenticated = auth('account')->check() || auth()->check();
 
-    $factRecord = $listingKey
-        ? TrebPropertyHelper::resolveFactRecordForDetail($listingKey, $localData)
-        : [];
+    $factRecord = [];
+    $listingHistory = [];
+    $priceChanges = [];
+    $keyFacts = [];
+    $propertyDetails = [];
+    $rooms = [];
+    $displayName = $model->name ?? '';
+    $displayLocation = '';
+    $displayType = $model->PropertySubType ?? '';
+    $addedLabel = $model->created_at ?? null;
+    $bedroomsLabel = '';
+    $bathrooms = $localData['number_bathroom'] ?? null;
+    $garage = $localData['CoveredSpaces'] ?? null;
 
-    $displayName = TrebPropertyHelper::formatDisplayAddress($factRecord);
-    $displayLocation = TrebPropertyHelper::formatLocationLine($factRecord);
-    $displayType = $factRecord['PropertySubType'] ?? $model->PropertySubType ?? '';
-    // Always fetch history so sold/leased guests see count + locked rows (not Listing History (0)).
-    $listingHistory = $listingKey
-        ? TrebPropertyHelper::fetchListingHistoryForDetail($listingKey, $localData, $factRecord)
-        : [];
-    $priceChanges = (! $isLocked && $listingKey) ? TrebPropertyHelper::fetchPriceChanges($listingKey) : [];
-    $keyFacts = TrebPropertyHelper::buildKeyFacts($factRecord, $localData);
-    $propertyDetails = TrebPropertyHelper::buildPropertyDetails($factRecord, $localData);
-    $rooms = (! $isLocked && $listingKey) ? TrebPropertyHelper::fetchPropertyRoomsForDetail($listingKey) : [];
-    $addedLabel = $factRecord['ListingContractDate'] ?? $factRecord['OriginalEntryTimestamp'] ?? $model->created_at ?? null;
+    try {
+        $factRecord = $listingKey
+            ? TrebPropertyHelper::resolveFactRecordForDetail($listingKey, $localData)
+            : [];
 
-    $bedroomsLabel = TrebPropertyHelper::formatBedroomLabel($factRecord, $localData);
-    $bathrooms = $factRecord['BathroomsTotalInteger'] ?? $localData['number_bathroom'] ?? null;
-    $garage = $factRecord['CoveredSpaces'] ?? $localData['CoveredSpaces'] ?? null;
+        $displayName = TrebPropertyHelper::formatDisplayAddress($factRecord) ?: ($model->name ?? '');
+        $displayLocation = TrebPropertyHelper::formatLocationLine($factRecord);
+        $displayType = $factRecord['PropertySubType'] ?? $model->PropertySubType ?? '';
+        $listingHistory = $listingKey
+            ? TrebPropertyHelper::fetchListingHistoryForDetail($listingKey, $localData, $factRecord)
+            : [];
+        $priceChanges = (! $isLocked && $listingKey) ? TrebPropertyHelper::fetchPriceChanges($listingKey) : [];
+        $keyFacts = TrebPropertyHelper::buildKeyFacts($factRecord, $localData);
+        $propertyDetails = TrebPropertyHelper::buildPropertyDetails($factRecord, $localData);
+        $rooms = (! $isLocked && $listingKey) ? TrebPropertyHelper::fetchPropertyRoomsForDetail($listingKey) : [];
+        $addedLabel = $factRecord['ListingContractDate'] ?? $factRecord['OriginalEntryTimestamp'] ?? $model->created_at ?? null;
+        $bedroomsLabel = TrebPropertyHelper::formatBedroomLabel($factRecord, $localData);
+        $bathrooms = $factRecord['BathroomsTotalInteger'] ?? $localData['number_bathroom'] ?? null;
+        $garage = $factRecord['CoveredSpaces'] ?? $localData['CoveredSpaces'] ?? null;
+    } catch (\Throwable $e) {
+        try {
+            report($e);
+        } catch (\Throwable) {
+        }
+    }
+
     $hsShow = [TrebPropertyHelper::class, 'hasDisplayValue'];
     $hsDetailShow = [TrebPropertyHelper::class, 'hasDetailFieldValue'];
     $keyFactFields = [

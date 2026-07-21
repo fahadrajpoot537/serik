@@ -33,6 +33,17 @@
             position: static !important;
             top: auto !important;
         }
+
+        html,
+        body {
+            height: auto !important;
+            min-height: 100%;
+            overflow-x: hidden !important;
+            overflow-y: visible !important;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-y;
+            position: relative !important;
+        }
     }
 
     /* Keep the action bar (wishlist / share / fullscreen) visible & pinned in popup */

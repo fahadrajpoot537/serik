@@ -182,9 +182,17 @@
         'CoveredSpaces' => $model->CoveredSpaces,
         'created_at' => $model->created_at,
     ];
-    $item = $listingKey
-        ? TrebPropertyHelper::resolveFactRecordForDetail($listingKey, $localDesc)
-        : [];
+    $item = [];
+    try {
+        $item = $listingKey
+            ? TrebPropertyHelper::resolveFactRecordForDetail($listingKey, $localDesc)
+            : [];
+    } catch (\Throwable $e) {
+        try {
+            report($e);
+        } catch (\Throwable) {
+        }
+    }
 
     if ($item === []) {
         $item = $model ? [
@@ -548,9 +556,12 @@ View::share('cityName', $city);
             
           @if(!empty($item['Basement']))
             @php
-                $basements = is_array($item['Basement']) 
-                    ? $item['Basement'] 
-                    : json_decode($item['Basement'], true);
+                $basements = is_array($item['Basement'])
+                    ? $item['Basement']
+                    : (is_string($item['Basement']) ? json_decode($item['Basement'], true) : []);
+                if (! is_array($basements)) {
+                    $basements = array_filter([(string) $item['Basement']]);
+                }
             @endphp
             
             <div class="col item">

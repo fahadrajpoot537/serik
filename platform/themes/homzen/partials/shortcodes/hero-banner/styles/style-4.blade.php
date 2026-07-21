@@ -2273,15 +2273,18 @@ position: absolute;
         height: 100dvh;
         max-height: 100dvh;
         border-radius: 0;
-        overflow: hidden;
-        touch-action: manipulation;
+        overflow-x: hidden;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        touch-action: pan-y;
     }
 
     #propertyFrame {
-        flex: 1 1 auto;
-        min-height: 0;
+        flex: 0 0 auto;
         width: 100%;
-        height: 100% !important;
+        min-height: 100dvh;
+        height: auto !important;
         border: none;
         display: block;
         touch-action: pan-y;
@@ -7698,18 +7701,44 @@ function mapMovedEnoughToRefetch() {
         loader.classList.add('is-hidden');
     }
 
+    function resizePropertyIframeForMobile(iframe) {
+        if (!iframe || window.innerWidth > 991) {
+            return;
+        }
+
+        try {
+            const doc = iframe.contentDocument || iframe.contentWindow?.document;
+            if (!doc) {
+                return;
+            }
+
+            const height = Math.max(
+                doc.documentElement?.scrollHeight || 0,
+                doc.body?.scrollHeight || 0,
+                window.innerHeight
+            );
+
+            iframe.style.height = height + 'px';
+            iframe.style.minHeight = window.innerHeight + 'px';
+        } catch (e) {
+            // Cross-origin or not yet ready.
+        }
+    }
+
     function enablePropertyIframeScroll(iframe) {
         if (!iframe) return;
+        resizePropertyIframeForMobile(iframe);
         try {
             const doc = iframe.contentDocument || iframe.contentWindow?.document;
             if (!doc) return;
-            doc.documentElement.style.overflowY = 'auto';
+            doc.documentElement.style.overflowY = 'visible';
             doc.documentElement.style.webkitOverflowScrolling = 'touch';
-            doc.body.style.overflowY = 'auto';
+            doc.body.style.overflowY = 'visible';
             doc.body.style.webkitOverflowScrolling = 'touch';
             doc.body.style.touchAction = 'pan-y';
+            doc.body.style.minHeight = '100%';
         } catch (e) {
-            // Cross-origin iframe — rely on scrolling="yes"
+            // Cross-origin iframe — parent container scrolls instead.
         }
     }
 
@@ -7718,6 +7747,11 @@ function mapMovedEnoughToRefetch() {
         iframe.onload = function () {
             hidePropertyIframeLoader();
             enablePropertyIframeScroll(iframe);
+            if (window.innerWidth <= 991) {
+                [250, 800, 1600].forEach((delay) => {
+                    setTimeout(() => resizePropertyIframeForMobile(iframe), delay);
+                });
+            }
         };
     }
 
@@ -7732,6 +7766,14 @@ function mapMovedEnoughToRefetch() {
         ensurePropertyModalOnBody();
         document.documentElement.classList.add('hs-property-modal-open');
         document.body.dataset.hsModalScrollY = String(window.scrollY || 0);
+
+        if (window.innerWidth <= 991) {
+            document.body.style.overflow = 'hidden';
+            document.documentElement.style.overflow = 'hidden';
+
+            return;
+        }
+
         document.body.style.position = 'fixed';
         document.body.style.top = `-${document.body.dataset.hsModalScrollY}px`;
         document.body.style.left = '0';
@@ -7743,6 +7785,7 @@ function mapMovedEnoughToRefetch() {
     function unlockBodyForPropertyModal() {
         document.documentElement.classList.remove('hs-property-modal-open');
         const scrollY = parseInt(document.body.dataset.hsModalScrollY || '0', 10);
+        document.documentElement.style.overflow = '';
         document.body.style.position = '';
         document.body.style.top = '';
         document.body.style.left = '';

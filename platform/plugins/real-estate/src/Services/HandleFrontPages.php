@@ -91,18 +91,20 @@ class HandleFrontPages
                     abort(404);
                 }
 
-                if ($property->slugable->key !== $slug->key) {
+                if ($property->slugable && $property->slugable->key !== $slug->key) {
                     return redirect()->to($property->url);
                 }
 
+                $description = (string) ($property->description ?? '');
+
                 SeoHelper::setTitle($property->name)
-                    ->setDescription(Str::words($property->description, 120));
+                    ->setDescription(Str::words($description, 120));
 
                 $meta = new SeoOpenGraph();
                 if ($property->image) {
                     $meta->setImage(RvMedia::getImageUrl($property->image));
                 }
-                $meta->setDescription($property->description);
+                $meta->setDescription($description);
                 $meta->setUrl($property->url);
                 $meta->setTitle($property->name);
                 $meta->setType('article');

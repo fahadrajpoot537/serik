@@ -2305,27 +2305,36 @@ class TrebPropertyHelper
             return [];
         }
 
-        return Cache::remember($cacheKey, 1800, function () use ($listingKey, $local): array {
-            $record = self::fetchPropertyRecord($listingKey) ?: self::fetchPropertyRecordRaw($listingKey);
+        try {
+            return Cache::remember($cacheKey, 1800, function () use ($listingKey, $local): array {
+                $record = self::fetchPropertyRecord($listingKey) ?: self::fetchPropertyRecordRaw($listingKey);
 
-            if ($record) {
-                $record = self::enrichRecordAddress($record);
-                $candidates = self::fetchUnitPropertyRecords($record);
+                if ($record) {
+                    $record = self::enrichRecordAddress($record);
+                    $candidates = self::fetchUnitPropertyRecords($record);
 
-                if ($candidates === []) {
-                    $candidates = [$record];
+                    if ($candidates === []) {
+                        $candidates = [$record];
+                    }
+
+                    $changes = self::extractPriceChangesFromRecords($candidates);
+                    if ($changes !== []) {
+                        return $changes;
+                    }
                 }
 
-                $changes = self::extractPriceChangesFromRecords($candidates);
-                if ($changes !== []) {
-                    return $changes;
-                }
+                $history = self::fetchListingHistory($listingKey, $local);
+
+                return self::extractPriceChangesFromHistory($history);
+            });
+        } catch (\Throwable $e) {
+            try {
+                report($e);
+            } catch (\Throwable) {
             }
 
-            $history = self::fetchListingHistory($listingKey, $local);
-
-            return self::extractPriceChangesFromHistory($history);
-        });
+            return [];
+        }
     }
 
     protected static function schedulePriceChangesWarm(string $listingKey, ?array $local, string $cacheKey): void
@@ -2830,7 +2839,17 @@ class TrebPropertyHelper
         ];
 
         foreach ($urls as $url) {
-            $payload = self::ampGetFresh($url, 12, 2);
+            try {
+                $payload = self::ampGetFresh($url, 12, 2);
+            } catch (\Throwable $e) {
+                try {
+                    report($e);
+                } catch (\Throwable) {
+                }
+
+                continue;
+            }
+
             $rooms = $payload['value'] ?? [];
 
             if ($rooms !== []) {

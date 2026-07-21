@@ -23,7 +23,7 @@
     $galleryAlt = collect([
         $property->name,
         $property->external_id ?? $property->unique_id ?? null,
-        $property->type?->name ?? (is_string($property->type ?? null) ? $property->type : null),
+        ($property->type && method_exists($property->type, 'label')) ? $property->type->label() : ($property->PropertySubType ?? null),
     ])->filter()->unique()->implode(' - ') ?: __('Property listing');
 @endphp
 
