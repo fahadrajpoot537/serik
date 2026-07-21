@@ -12,9 +12,28 @@ use Botble\RealEstate\Models\Property;
 use Botble\Theme\Events\RenderingSiteMapEvent;
 use Botble\Theme\Facades\SiteMapManager;
 use Illuminate\Support\Arr;
+use Theme\homzen\Supports\TrebPropertyHelper;
 
 class AddSitemapListener
 {
+    /**
+     * Property subtypes excluded from properties-*.xml sitemaps.
+     *
+     * @return array<int, string>
+     */
+    private function excludedPropertySubTypes(): array
+    {
+        return array_values(array_unique(array_merge(
+            TrebPropertyHelper::excludedCommercialSubTypes(),
+            [
+                'Investment',
+                'MobileTrailer',
+                'Modular Home',
+                'Lower Level',
+            ]
+        )));
+    }
+
     public function handle(RenderingSiteMapEvent $event): void
     {
         if ($key = $event->key) {
@@ -33,11 +52,17 @@ class AddSitemapListener
 
                     $items = Account::query()
                         ->latest('created_at')
-                        ->get();
+                        ->select(['id', 'first_name', 'last_name', 'username', 'updated_at', 'created_at'])
+                        ->with(['slugable'])
+                        ->chunkById(200, function ($accounts): void {
+                            foreach ($accounts as $item) {
+                                if (! $item->slugable) {
+                                    continue;
+                                }
 
-                    foreach ($items as $item) {
-                        SiteMapManager::add($item->url, $item->updated_at, '0.8');
-                    }
+                                SiteMapManager::add($item->url, $item->updated_at, '0.8');
+                            }
+                        });
 
                     break;
 
@@ -87,22 +112,26 @@ class AddSitemapListener
 
             if (preg_match('/^properties-((?:19|20|21|22)\d{2})-(0?[1-9]|1[012])$/', $key, $matches)) {
                 if (($year = Arr::get($matches, 1)) && ($month = Arr::get($matches, 2))) {
-                    $properties = Property::query()
+                    Property::query()
                         ->active()
                         ->whereYear('updated_at', $year)
                         ->whereMonth('updated_at', $month)
+                        ->where(function ($query): void {
+                            $query->whereNull('PropertySubType')
+                                ->orWhereNotIn('PropertySubType', $this->excludedPropertySubTypes());
+                        })
                         ->latest('updated_at')
                         ->select(['id', 'name', 'updated_at'])
                         ->with(['slugable'])
-                        ->get();
+                        ->chunkById(250, function ($properties): void {
+                            foreach ($properties as $property) {
+                                if (! $property->slugable) {
+                                    continue;
+                                }
 
-                    foreach ($properties as $property) {
-                        if (! $property->slugable) {
-                            continue;
-                        }
-
-                        SiteMapManager::add($property->url, $property->updated_at, '0.8');
-                    }
+                                SiteMapManager::add($property->url, $property->updated_at, '0.8');
+                            }
+                        });
                 }
             }
 

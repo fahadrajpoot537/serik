@@ -15,6 +15,8 @@
 
     @if(Theme::get('breadcrumbEnabled', 'yes') === 'yes')
         {!! Theme::breadcrumb()->render(Theme::getThemeNamespace('partials.breadcrumb')) !!}
+    @elseif (! Theme::get('pageH1ProvidedByContent') && \App\Support\PageH1::resolve())
+        {!! Theme::partial('page-h1', ['variant' => Theme::get('pageH1Variant', 'inline')]) !!}
     @endif
 
     <div class="container">

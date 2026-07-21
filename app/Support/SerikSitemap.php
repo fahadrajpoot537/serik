@@ -43,6 +43,10 @@ final class SerikSitemap
             }
         }
 
+        if (preg_match('#^on/.+/map/[^/]+$#', $lower)) {
+            return false;
+        }
+
         return true;
     }
 }

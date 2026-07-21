@@ -2,6 +2,22 @@
 
 use Illuminate\Support\Str;
 
+$mysqlPdoOptions = static function (): array {
+    if (! extension_loaded('pdo_mysql')) {
+        return [];
+    }
+
+    $options = array_filter([
+        PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+    ]);
+
+    if (defined('PDO::MYSQL_ATTR_CONNECT_TIMEOUT')) {
+        $options[PDO::MYSQL_ATTR_CONNECT_TIMEOUT] = (int) env('DB_CONNECT_TIMEOUT', 5);
+    }
+
+    return $options;
+};
+
 return [
 
     /*
@@ -58,9 +74,7 @@ return [
             'prefix_indexes' => true,
             'strict' => true,
             'engine' => null,
-            'options' => extension_loaded('pdo_mysql') ? array_filter([
-                PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
-            ]) : [],
+            'options' => $mysqlPdoOptions(),
         ],
 
         'mariadb' => [
@@ -78,9 +92,7 @@ return [
             'prefix_indexes' => true,
             'strict' => true,
             'engine' => null,
-            'options' => extension_loaded('pdo_mysql') ? array_filter([
-                PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
-            ]) : [],
+            'options' => $mysqlPdoOptions(),
         ],
 
         'pgsql' => [

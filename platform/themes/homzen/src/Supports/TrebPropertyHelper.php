@@ -1031,52 +1031,11 @@ class TrebPropertyHelper
     }
 
     /**
-     * Fast SEO URL for property cards on /properties (no per-card AMP/address parsing).
+     * Canonical property detail URL: /properties/{slug}
      */
     public static function listingSeoUrl(\Botble\RealEstate\Models\Property $property): string
     {
-        static $subtypeMap = [
-            'Detached' => 'detached-houses',
-            'Detached Condo' => 'detached-houses',
-            'Semi-Detached' => 'semi-detached-houses',
-            'Link' => 'link-houses',
-            'Att/Row/Townhouse' => 'townhouses',
-            'Condo Townhouse' => 'townhouses',
-            'Condo Apartment' => 'condos',
-            'Co-op Apartment' => 'condos',
-            'Co-Ownership Apartment' => 'condos',
-            'Leasehold Condo' => 'condos',
-            'Common Element Condo' => 'condos',
-            'Duplex' => 'duplex',
-            'Fourplex' => 'fourplex',
-            'Multiplex' => 'multiplex',
-            'Other' => 'houses',
-        ];
-
-        static $citySlugs = [
-            'brampton', 'mississauga', 'vaughan', 'milton', 'oakville', 'niagarafalls', 'toronto',
-            'kitchener', 'waterloo', 'cambridge', 'hamilton', 'ottawa', 'london', 'markham',
-            'windsor', 'richmondhill', 'burlington', 'oshawa', 'barrie', 'guelph', 'kingston',
-            'whitby', 'ajax', 'peterborough', 'sarnia', 'thunderbay', 'sudbury', 'northbay',
-            'orillia', 'brantford', 'stcatharines', 'welland', 'pickering', 'clarington',
-            'newmarket', 'aurora', 'orangeville', 'midland', 'collingwood', 'timmins', 'kenora',
-            'elliotlake', 'brockville', 'cornwall', 'stratford', 'woodstock', 'leamington',
-            'chatham', 'belleville', 'pembroke',
-        ];
-
-        $slug = strtolower((string) ($property->slug ?? ''));
-        $city = 'ontario';
-
-        foreach ($citySlugs as $citySlug) {
-            if (str_contains($slug, '-' . $citySlug . '-')) {
-                $city = $citySlug;
-                break;
-            }
-        }
-
-        $subtype = $subtypeMap[(string) $property->PropertySubType] ?? 'houses';
-
-        return url("on/{$subtype}-for-sale-in-{$city}/map/{$property->slug}");
+        return \App\Support\PropertyUrl::forProperty($property);
     }
 
     public static function formatListingActiveMonthYear(mixed $value): ?string

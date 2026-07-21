@@ -429,7 +429,7 @@ if (isset($_GET['diag_property']) && (string) $_GET['diag_property'] === '1') {
         echo "name={$property->name}\n\n";
 
         $request = Illuminate\Http\Request::create(
-            'https://serik.ca/on/detached-houses-for-sale-in-ontario/map/' . $slugKey,
+            'https://serik.ca/properties/' . $slugKey,
             'GET'
         );
         $app->instance('request', $request);

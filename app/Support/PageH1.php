@@ -25,6 +25,7 @@ final class PageH1
         'our-services' => 'Our Real Estate Services',
         'terms-conditions' => 'Terms & Conditions',
         'tips-for-home-selling' => 'Tips for Selling Your Home in Ontario',
+        'categories' => 'Categories',
         'faqs' => 'Frequently Asked Questions',
         'properties' => 'Properties for Sale in Ontario',
         'agents' => 'Our Real Estate Agents',
@@ -37,7 +38,6 @@ final class PageH1
      */
     private const CONTENT_H1_SLUGS = [
         'faqs',
-        'tips-for-home-selling',
     ];
 
     /**

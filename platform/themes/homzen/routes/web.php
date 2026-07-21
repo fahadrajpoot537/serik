@@ -1,5 +1,6 @@
 <?php
 
+use App\Support\PropertyUrl;
 use Botble\Base\Http\Middleware\RequiresJsonRequestMiddleware;
 use Botble\Theme\Facades\Theme;
 use Botble\Theme\Http\Controllers\PublicController;
@@ -36,10 +37,10 @@ Route::middleware(['web', 'core'])->group(function (): void {
 
     Route::get(
         '/on/{filters}/map/{slug}',
-        function (PublicController $controller, string $filters, string $slug) {
-            return $controller->getViewWithPrefix('properties', $slug);
+        function (string $filters, string $slug) {
+            return redirect()->to(PropertyUrl::forSlug($slug), 301);
         }
-    )->where('filters', '.*');
+    )->where(['filters' => '.*', 'slug' => '.*']);
 
     Route::get('/on/{seo}/map', function (Request $request, $seo) {
 

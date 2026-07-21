@@ -93,6 +93,7 @@ class CanonicalUrl
 
         $path = $parsed['path'] ?? '';
         $path = PublicPrefixPath::stripFromUrlPath($path);
+        $path = PropertyUrl::normalizePath($path);
         $query = isset($parsed['query']) ? '?' . $parsed['query'] : '';
         $fragment = isset($parsed['fragment']) ? '#' . $parsed['fragment'] : '';
 

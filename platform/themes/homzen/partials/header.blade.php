@@ -951,109 +951,13 @@ input.addEventListener("keyup", function () {
 
 
 function buildPropertyUrl(item) {
+    const slug = String(item.URL || item.url || '').replace(/^\/+/, '');
 
-    const subtypeMap = {
+    if (!slug) {
+        return `${SITE_BASE}/properties`;
+    }
 
-    // Houses
-    'Detached': 'detached-houses',
-    'Detached Condo': 'detached-houses',
-    'Semi-Detached': 'semi-detached-houses',
-    'Link': 'link-houses',
-
-    // Townhouses
-    'Att/Row/Townhouse': 'townhouses',
-    'Att\/Row\/Townhouse': 'townhouses',
-    'Condo Townhouse': 'townhouses',
-
-    // Condos
-    'Condo Apartment': 'condos',
-    'Co-op Apartment': 'condos',
-    'Co-Ownership Apartment': 'condos',
-    'Leasehold Condo': 'condos',
-    'Common Element Condo': 'condos',
-
-    // Multi-unit
-    'Duplex': 'duplex',
-    'Fourplex': 'fourplex',
-    'Multiplex': 'multiplex',
-
-
-
-    // fallback
-    'Other': 'houses'
-};
-
-    const subtype =
-        subtypeMap[item.PropertySubType]
-        || 'houses';
-
-
-    const cities = [
-        'Brampton',
-        'Mississauga',
-        'Vaughan',
-        'Milton',
-        'Oakville',
-        'NiagaraFalls',
-        'Toronto',
-        'Kitchener',
-        'Waterloo',
-        'Cambridge',
-        'Hamilton',
-        'Ottawa',
-        'London',
-        'Markham',
-        'Windsor',
-        'RichmondHill',
-        'Burlington',
-        'Oshawa',
-        'Barrie',
-        'Guelph',
-        'Kingston',
-        'Whitby',
-        'Ajax',
-        'Peterborough',
-        'Sarnia',
-        'ThunderBay',
-        'Sudbury',
-        'NorthBay',
-        'Orillia',
-        'Brantford',
-        'StCatharines',
-        'Welland',
-        'Pickering',
-        'Clarington'
-    ];
-
-    const address =
-        (item.UnparsedAddress || item.URL || '')
-        .toLowerCase();
-
-    let city = 'ontario';
-
-    cities
-        .sort((a, b) => b.length - a.length)
-        .forEach(c => {
-
-            const normalized =
-                c
-                .replace(/([A-Z])/g, ' $1')
-                .trim()
-                .toLowerCase();
-
-            if (
-                address.includes(
-                    normalized
-                )
-            ) {
-                city =
-                    normalized
-                    .replace(/\s+/g, '-');
-            }
-
-        });
-
-    return `${SITE_BASE}/on/${subtype}-for-sale-in-${city}/map/${item.URL}`;
+    return `${SITE_BASE}/properties/${slug}`;
 }
 
 

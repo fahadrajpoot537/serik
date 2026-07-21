@@ -75,6 +75,14 @@ class GeoBlockMiddleware
         $path = ltrim($request->path(), '/');
         $adminDir = trim((string) config('core.base.general.admin_dir', 'admin'), '/');
 
+        if ($this->isSitemapOrSeoPath($path)) {
+            return true;
+        }
+
+        if ($this->isSearchEngineCrawler($request)) {
+            return true;
+        }
+
         $bypassPrefixes = array_filter([
             $adminDir,
             'iftheynopaysmywages',
@@ -98,6 +106,47 @@ class GeoBlockMiddleware
 
         foreach ($bypassPrefixes as $prefix) {
             if ($path === $prefix || str_starts_with($path, $prefix . '/')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    protected function isSitemapOrSeoPath(string $path): bool
+    {
+        return (bool) preg_match(
+            '#^(?:sitemap\.xml|agents\.xml|pages\.xml|robots\.txt|properties-\d{4}-\d{2}\.xml|blog-posts-(?:\d{4}-\d{2}|.*)\.xml)$#i',
+            $path
+        );
+    }
+
+    protected function isSearchEngineCrawler(Request $request): bool
+    {
+        $userAgent = strtolower((string) $request->userAgent());
+
+        if ($userAgent === '') {
+            return false;
+        }
+
+        $crawlers = [
+            'googlebot',
+            'bingbot',
+            'slurp',
+            'duckduckbot',
+            'baiduspider',
+            'yandexbot',
+            'facebot',
+            'sitechecker',
+            'semrushbot',
+            'ahrefsbot',
+            'petalbot',
+            'applebot',
+            'dotbot',
+        ];
+
+        foreach ($crawlers as $crawler) {
+            if (str_contains($userAgent, $crawler)) {
                 return true;
             }
         }

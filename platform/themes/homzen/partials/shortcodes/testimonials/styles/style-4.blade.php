@@ -13,7 +13,8 @@
     background:#f5f5f5;
 }
 
-.hero h1{
+.hero h1,
+.hero h2.hero-heading{
     font-size:40px;
     margin-bottom:10px;
 }
@@ -93,7 +94,7 @@
 <div id="formSecond">
 <section class="hero  pt-0 flat-testimonial-v3 wow fadeInUpSmall">
 
-<h1>The Ultimate Guide and Tips for Selling a House in Ontario</h1>
+<h2 class="hero-heading">The Ultimate Guide and Tips for Selling a House in Ontario</h2>
 
 <p>
 Selling a property in Ontario in 2026 requires a smart data-driven approach. With more homes for sale and careful buyers, having a clear plan to sell your house is more important than ever. Here, Serik Realty provides you with simple tips to sell your house with confidence in today’s competitive market.
