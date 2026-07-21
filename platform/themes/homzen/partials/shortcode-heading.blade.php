@@ -46,7 +46,7 @@
         @if($shortcode->subtitle == 'Latest News' )
            
 
-            <a href="{{ url('/blog') }}" class="btn-view button-prop" style="float:right; margin-top:-70px;">
+            <a href="{{ get_blog_page_url() }}" class="btn-view button-prop" style="float:right; margin-top:-70px;">
                 <span class="text" style="font-weight: 700;">View All</span>
                 <x-core::icon name="ti ti-arrow-right" class="icon" style="stroke-width: 2" />
             </a>

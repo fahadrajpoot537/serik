@@ -12,6 +12,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->singleton(\Botble\Theme\Supports\SiteMapManager::class, \App\Support\SerikSiteMapManager::class);
+
         $this->app->singleton(\App\Services\Geocoding\GeocodingManager::class);
         $this->app->bind(
             \App\Contracts\GeocodingProviderInterface::class,

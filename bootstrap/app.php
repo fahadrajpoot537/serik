@@ -200,6 +200,11 @@ $app = Application::configure(basePath: dirname(__DIR__))
 // Before any provider boots: if storage/logs is locked on IIS, use error_log
 // so Log:: / report() never throw UnexpectedValueException on public pages.
 $app->booting(function () use ($app): void {
+    $app->singleton(
+        \Botble\Theme\Supports\SiteMapManager::class,
+        \App\Support\SerikSiteMapManager::class
+    );
+
     try {
         $logDir = storage_path('logs');
         if (! is_dir($logDir)) {
