@@ -34,14 +34,19 @@
             top: auto !important;
         }
 
-        html,
+        html {
+            height: 100% !important;
+            overflow: hidden !important;
+        }
+
         body {
-            height: auto !important;
-            min-height: 100%;
+            height: 100% !important;
+            min-height: 100% !important;
             overflow-x: hidden !important;
-            overflow-y: visible !important;
-            -webkit-overflow-scrolling: touch;
+            overflow-y: auto !important;
+            -webkit-overflow-scrolling: touch !important;
             touch-action: pan-y;
+            overscroll-behavior-y: contain;
             position: relative !important;
         }
     }

@@ -2253,41 +2253,34 @@ position: absolute;
         height: 100%;
         z-index: 100000;
         background: #fff;
-    }
-
-    html.hs-property-modal-open,
-    html.hs-property-modal-open body {
-        overflow: hidden !important;
-        height: 100%;
+        overflow: hidden;
+        touch-action: none;
     }
 
     #propertyModal .modal-content {
         display: flex;
         flex-direction: column;
-        position: fixed;
+        position: absolute;
         inset: 0;
         top: 0;
         left: 0;
         transform: none;
         width: 100%;
-        height: 100dvh;
+        height: 100%;
         max-height: 100dvh;
         border-radius: 0;
-        overflow-x: hidden;
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-        overscroll-behavior: contain;
-        touch-action: pan-y;
+        overflow: hidden;
+        touch-action: none;
     }
 
     #propertyFrame {
-        flex: 0 0 auto;
+        flex: 1 1 auto;
         width: 100%;
-        min-height: 100dvh;
-        height: auto !important;
+        min-height: 0;
+        height: 100% !important;
         border: none;
         display: block;
-        touch-action: pan-y;
+        touch-action: auto;
     }
 
     #propertyModal .close-modal {
@@ -2838,21 +2831,49 @@ position: absolute;
     display: none !important;
 }
 
-    .map-housesigma.view-list .hs-mobile-list-panel {
+@media (max-width: 991px) {
+    .map-housesigma.view-list .map-mobile-view {
         display: flex !important;
-        flex: 1 1 auto;
-        min-height: 0;
-        overflow: hidden;
+        flex-direction: column !important;
+        overflow: hidden !important;
+    }
+
+    .map-housesigma.view-list .map-search-wrapper {
+        display: flex !important;
+        flex-direction: column !important;
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        height: 100% !important;
+        overflow: hidden !important;
+        position: relative !important;
+    }
+
+    .map-housesigma.view-list .hs-mobile-list-panel {
+        position: absolute !important;
+        inset: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        z-index: 12 !important;
+        background: #fff !important;
+        overflow: hidden !important;
+    }
+
+    .map-housesigma.view-list .hs-mobile-list-header {
+        flex-shrink: 0;
     }
 
     .map-housesigma.view-list .hs-mobile-list-body {
-        flex: 1 1 auto;
-        min-height: 0;
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
         overflow-y: auto !important;
-        -webkit-overflow-scrolling: touch;
-        overscroll-behavior: contain;
-        touch-action: pan-y;
+        overflow-x: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
+        overscroll-behavior: contain !important;
+        touch-action: pan-y !important;
     }
+}
 
 @media (min-width: 992px) {
     .hs-mobile-view-bar,
@@ -7701,44 +7722,85 @@ function mapMovedEnoughToRefetch() {
         loader.classList.add('is-hidden');
     }
 
+    function ensureMobileScrollContainer(el) {
+        if (!el || window.innerWidth > 991) {
+            return;
+        }
+
+        el.style.flex = '1 1 auto';
+        el.style.minHeight = '0';
+        el.style.overflowY = 'auto';
+        el.style.overflowX = 'hidden';
+        el.style.webkitOverflowScrolling = 'touch';
+        el.style.overscrollBehavior = 'contain';
+        el.style.touchAction = 'pan-y';
+    }
+
+    function setupMobileListScroll() {
+        if (window.innerWidth > 991) {
+            return;
+        }
+
+        const panel = document.getElementById('hsMobileListPanel');
+        const body = document.getElementById('hsMobileListBody');
+        if (!panel || !body) {
+            return;
+        }
+
+        ensureMobileScrollContainer(body);
+
+        const mapCanvas = window.hsMap?.getCanvas?.();
+        if (mapCanvas) {
+            mapCanvas.style.pointerEvents = document.querySelector('.map-housesigma')?.classList.contains('view-list') ? 'none' : '';
+        }
+    }
+
+    window.setupMobileListScroll = setupMobileListScroll;
+
     function resizePropertyIframeForMobile(iframe) {
         if (!iframe || window.innerWidth > 991) {
             return;
         }
 
-        try {
-            const doc = iframe.contentDocument || iframe.contentWindow?.document;
-            if (!doc) {
-                return;
-            }
-
-            const height = Math.max(
-                doc.documentElement?.scrollHeight || 0,
-                doc.body?.scrollHeight || 0,
-                window.innerHeight
-            );
-
-            iframe.style.height = height + 'px';
-            iframe.style.minHeight = window.innerHeight + 'px';
-        } catch (e) {
-            // Cross-origin or not yet ready.
-        }
+        iframe.style.height = '100%';
+        iframe.style.minHeight = '0';
+        iframe.style.flex = '1 1 auto';
     }
 
     function enablePropertyIframeScroll(iframe) {
         if (!iframe) return;
-        resizePropertyIframeForMobile(iframe);
+
+        if (window.innerWidth <= 991) {
+            resizePropertyIframeForMobile(iframe);
+            try {
+                const doc = iframe.contentDocument || iframe.contentWindow?.document;
+                if (!doc) return;
+                doc.documentElement.style.height = '100%';
+                doc.documentElement.style.overflow = 'hidden';
+                doc.documentElement.style.webkitOverflowScrolling = 'touch';
+                doc.body.style.height = '100%';
+                doc.body.style.overflowX = 'hidden';
+                doc.body.style.overflowY = 'auto';
+                doc.body.style.webkitOverflowScrolling = 'touch';
+                doc.body.style.touchAction = 'pan-y';
+                doc.body.style.overscrollBehaviorY = 'contain';
+            } catch (e) {
+                // Cross-origin iframe — fall back to full page.
+            }
+
+            return;
+        }
+
         try {
             const doc = iframe.contentDocument || iframe.contentWindow?.document;
             if (!doc) return;
-            doc.documentElement.style.overflowY = 'visible';
+            doc.documentElement.style.overflowY = 'auto';
             doc.documentElement.style.webkitOverflowScrolling = 'touch';
-            doc.body.style.overflowY = 'visible';
+            doc.body.style.overflowY = 'auto';
             doc.body.style.webkitOverflowScrolling = 'touch';
             doc.body.style.touchAction = 'pan-y';
-            doc.body.style.minHeight = '100%';
         } catch (e) {
-            // Cross-origin iframe — parent container scrolls instead.
+            // Cross-origin iframe.
         }
     }
 
@@ -7748,8 +7810,8 @@ function mapMovedEnoughToRefetch() {
             hidePropertyIframeLoader();
             enablePropertyIframeScroll(iframe);
             if (window.innerWidth <= 991) {
-                [250, 800, 1600].forEach((delay) => {
-                    setTimeout(() => resizePropertyIframeForMobile(iframe), delay);
+                [100, 400, 1000].forEach((delay) => {
+                    setTimeout(() => enablePropertyIframeScroll(iframe), delay);
                 });
             }
         };
@@ -7767,10 +7829,13 @@ function mapMovedEnoughToRefetch() {
         document.documentElement.classList.add('hs-property-modal-open');
         document.body.dataset.hsModalScrollY = String(window.scrollY || 0);
 
-        if (window.innerWidth <= 991) {
-            document.body.style.overflow = 'hidden';
-            document.documentElement.style.overflow = 'hidden';
+        const mapCanvas = window.hsMap?.getCanvas?.();
+        if (mapCanvas) {
+            mapCanvas.dataset.hsModalPointerEvents = mapCanvas.style.pointerEvents || '';
+            mapCanvas.style.pointerEvents = 'none';
+        }
 
+        if (window.innerWidth <= 991) {
             return;
         }
 
@@ -7793,6 +7858,13 @@ function mapMovedEnoughToRefetch() {
         document.body.style.width = '';
         document.body.style.overflow = '';
         delete document.body.dataset.hsModalScrollY;
+
+        const mapCanvas = window.hsMap?.getCanvas?.();
+        if (mapCanvas) {
+            mapCanvas.style.pointerEvents = mapCanvas.dataset.hsModalPointerEvents || '';
+            delete mapCanvas.dataset.hsModalPointerEvents;
+        }
+
         window.scrollTo(0, scrollY);
     }
 
@@ -7804,6 +7876,7 @@ function mapMovedEnoughToRefetch() {
         container.classList.add('hs-map-mobile-sheet');
 
         const bottomOffset = 52 + (parseInt(getComputedStyle(document.documentElement).getPropertyValue('env(safe-area-inset-bottom)')) || 0);
+        const maxH = 'calc(100dvh - 60px - 52px - env(safe-area-inset-bottom, 0px))';
         container.style.cssText = [
             'position:fixed',
             'left:0',
@@ -7812,25 +7885,30 @@ function mapMovedEnoughToRefetch() {
             'bottom:' + bottomOffset + 'px',
             'width:100%',
             'max-width:100vw',
+            'max-height:' + maxH,
             'transform:none',
             'z-index:10050',
             'margin:0',
             'padding:0',
-            'touch-action:pan-y',
+            'display:flex',
+            'flex-direction:column',
+            'overflow:hidden',
+            'touch-action:none',
         ].join(';');
 
         const content = container.querySelector('.maplibregl-popup-content');
         if (content) {
-            const maxH = 'calc(100dvh - 60px - 52px - env(safe-area-inset-bottom, 0px))';
             content.style.maxHeight = maxH;
             content.style.height = maxH;
             content.style.overflowY = 'hidden';
             content.style.overflowX = 'hidden';
             content.style.display = 'flex';
             content.style.flexDirection = 'column';
+            content.style.flex = '1 1 auto';
+            content.style.minHeight = '0';
             content.style.webkitOverflowScrolling = 'touch';
             content.style.overscrollBehavior = 'contain';
-            content.style.touchAction = 'pan-y';
+            content.style.touchAction = 'none';
         }
 
         const cluster = container.querySelector('.clusterpopup');
@@ -7840,18 +7918,25 @@ function mapMovedEnoughToRefetch() {
             cluster.style.flex = '1 1 auto';
             cluster.style.minHeight = '0';
             cluster.style.maxHeight = '100%';
+            cluster.style.height = '100%';
             cluster.style.overflow = 'hidden';
         }
 
         const list = container.querySelector('.hs-cluster-popup-list');
         if (list) {
-            list.style.flex = '1 1 auto';
-            list.style.minHeight = '0';
+            ensureMobileScrollContainer(list);
             list.style.maxHeight = 'none';
-            list.style.overflowY = 'auto';
-            list.style.webkitOverflowScrolling = 'touch';
-            list.style.overscrollBehavior = 'contain';
-            list.style.touchAction = 'pan-y';
+            list.style.height = 'auto';
+        }
+
+        const mapCanvas = window.hsMap?.getCanvas?.();
+        if (mapCanvas) {
+            mapCanvas.dataset.hsPopupPointerEvents = mapCanvas.style.pointerEvents || '';
+            mapCanvas.style.pointerEvents = 'none';
+            popup.once('close', () => {
+                mapCanvas.style.pointerEvents = mapCanvas.dataset.hsPopupPointerEvents || '';
+                delete mapCanvas.dataset.hsPopupPointerEvents;
+            });
         }
 
         if (window.hsMap?.dragPan?.disable) {
@@ -8473,6 +8558,10 @@ function renderMapListCards(features) {
     if (typeof hydrateMapThumbnailsForFeatures === 'function') {
         hydrateMapThumbnailsForFeatures(capped, '.hs-list-item');
     }
+
+    if (isListView && window.innerWidth < 992) {
+        requestAnimationFrame(() => setupMobileListScroll());
+    }
 }
 
 function setDesktopListOpen(open) {
@@ -8513,6 +8602,18 @@ function setHsViewMode(mode) {
     }
     if (isList && window.innerWidth < 992 && lastMapFeatures.length) {
         renderMapListCards(lastMapFeatures);
+    }
+
+    if (isList && window.innerWidth < 992) {
+        requestAnimationFrame(() => {
+            setupMobileListScroll();
+            setTimeout(setupMobileListScroll, 120);
+        });
+    } else if (window.innerWidth < 992) {
+        const mapCanvas = window.hsMap?.getCanvas?.();
+        if (mapCanvas) {
+            mapCanvas.style.pointerEvents = '';
+        }
     }
 
     if (!isList && window.innerWidth < 992) {
