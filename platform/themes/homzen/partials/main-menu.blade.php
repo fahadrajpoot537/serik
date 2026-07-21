@@ -227,7 +227,7 @@
             $row->css_class
         ])>
 
-            <a href="{{ $row->url === 'https://serik.ca/properties' ? '#' : $row->url }}"
+            <a href="{{ $row->has_child ? '#' : \App\Support\MenuUrl::resolve($row->url) }}"
                target="{{ $row->target }}"
                class="menu-link">
                 {!! BaseHelper::clean($row->icon_html) !!}
@@ -508,7 +508,7 @@
                             <h4>Features</h4>
 
                             @foreach ($row->child as $child)
-                                <a href="{{ $child->url }}">
+                                <a href="{{ \App\Support\MenuUrl::resolve($child->url) }}">
                                     {{ $child->title }}
                                 </a>
                             @endforeach

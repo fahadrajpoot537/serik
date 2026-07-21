@@ -66,6 +66,14 @@ class AppServiceProvider extends ServiceProvider
         add_filter('theme_logo_image', static function ($html) use ($rewriteLegacyMediaUrls) {
             return $rewriteLegacyMediaUrls((string) $html);
         }, 999);
+
+        add_filter(MENU_FILTER_NODE_URL, static function (?string $url): ?string {
+            if (! is_string($url) || $url === '') {
+                return $url;
+            }
+
+            return \App\Support\MenuUrl::resolve($url);
+        }, 1200);
     }
 
     protected static function ensureWritableLoggingOrFallback(): void
