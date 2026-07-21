@@ -1475,6 +1475,18 @@ body[dir="rtl"] {
     .flat-title-page {
         padding: 0;
     }
+
+    .flat-recommended-v2 {
+        margin-top: 0;
+        padding-top: 28px;
+    }
+
+    @media only screen and (max-width: 991px) {
+        .flat-recommended-v2 {
+            margin-top: 0;
+            padding-top: 28px;
+        }
+    }
 }
 
 .flat-property-detail-v2 {

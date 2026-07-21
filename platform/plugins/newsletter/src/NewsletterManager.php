@@ -123,12 +123,7 @@ class NewsletterManager extends Manager implements Factory
                     return $html;
                 }
 
-                return $html . '<link rel="preload" as="image" href="' . e(\App\Support\SerikMediaUrl::resolvePublic([
-                    $image,
-                    'newsletter-1.webp',
-                    'newsletter.webp',
-                    'general/newsletter-image.jpg',
-                ])) . '" />';
+                return $html . '<link rel="preload" as="image" href="' . e(\App\Support\SerikMediaUrl::newsletterPopupImage($image)) . '" />';
             });
 
             add_filter(THEME_FRONT_BODY, function (?string $html): string {

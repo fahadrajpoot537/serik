@@ -71,24 +71,101 @@ final class SerikMediaUrl
     public static function resolvePublic(array $candidates, ?string $fallback = null): string
     {
         foreach ($candidates as $candidate) {
-            $candidate = trim((string) $candidate);
-            if ($candidate === '') {
-                continue;
-            }
+            $relative = self::resolveExistingRelativePath($candidate);
 
-            $relative = ltrim(str_replace('\\', '/', $candidate), '/');
-            if (str_starts_with($relative, 'storage/')) {
-                $relative = substr($relative, strlen('storage/'));
-            }
-
-            $publicPath = public_path('storage/' . $relative);
-            $diskPath = storage_path('app/public/' . $relative);
-
-            if (is_file($publicPath) || is_file($diskPath)) {
+            if ($relative !== null) {
                 return self::toPublic($relative);
             }
         }
 
         return $fallback ?? self::placeholder();
+    }
+
+    /**
+     * Newsletter popup image candidates (JPG first when theme option points at missing/broken webp).
+     *
+     * @return array<int, string>
+     */
+    public static function newsletterPopupCandidates(?string $themeOptionValue = null): array
+    {
+        $normalized = self::normalizeStorageRelativePath($themeOptionValue);
+        $fallbacks = [
+            'general/newsletter-image.jpg',
+            'newsletter-1.webp',
+            'newsletter.webp',
+        ];
+
+        if ($normalized === null) {
+            return $fallbacks;
+        }
+
+        if (in_array($normalized, ['newsletter-1.webp', 'newsletter.webp'], true)) {
+            return array_values(array_unique(array_merge(['general/newsletter-image.jpg'], [$normalized], $fallbacks)));
+        }
+
+        return array_values(array_unique(array_merge([$normalized], $fallbacks)));
+    }
+
+    public static function newsletterPopupImage(?string $themeOptionValue = null): string
+    {
+        return self::resolvePublic(self::newsletterPopupCandidates($themeOptionValue));
+    }
+
+    private static function normalizeStorageRelativePath(?string $path): ?string
+    {
+        $path = trim((string) $path);
+
+        if ($path === '') {
+            return null;
+        }
+
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://') || str_starts_with($path, '//')) {
+            if (! preg_match('#/storage/(.+)$#i', $path, $matches)) {
+                return null;
+            }
+
+            $path = $matches[1];
+        }
+
+        $relative = ltrim(str_replace('\\', '/', $path), '/');
+
+        if (str_starts_with($relative, 'storage/')) {
+            $relative = substr($relative, strlen('storage/'));
+        }
+
+        return $relative !== '' ? $relative : null;
+    }
+
+    private static function resolveExistingRelativePath(string $candidate): ?string
+    {
+        $relative = self::normalizeStorageRelativePath($candidate);
+
+        if ($relative === null) {
+            return null;
+        }
+
+        $diskPath = storage_path('app/public/' . $relative);
+        $publicPath = public_path('storage/' . $relative);
+
+        if (self::isUsableMediaFile($diskPath)) {
+            return $relative;
+        }
+
+        if (self::isUsableMediaFile($publicPath)) {
+            return $relative;
+        }
+
+        return null;
+    }
+
+    private static function isUsableMediaFile(string $path): bool
+    {
+        if (! is_file($path) || ! is_readable($path)) {
+            return false;
+        }
+
+        $size = @filesize($path);
+
+        return $size !== false && $size > 0 && realpath($path) !== false;
     }
 }

@@ -128,6 +128,61 @@ if (isset($_GET['fix_resend']) && (string) $_GET['fix_resend'] === '1') {
     exit;
 }
 
+// Fix newsletter popup image (missing .webp → working .jpg on disk).
+if (isset($_GET['fix_newsletter']) && (string) $_GET['fix_newsletter'] === '1') {
+    header('Content-Type: text/plain; charset=utf-8');
+    echo "=== fix newsletter popup image ===\n\n";
+
+    $publicStorage = $base . '/public/storage';
+    $appPublic = $base . '/storage/app/public';
+    $candidates = [
+        'general/newsletter-image.jpg',
+        'newsletter-1.webp',
+        'newsletter.webp',
+    ];
+
+    $chosen = null;
+    foreach ($candidates as $candidate) {
+        if (is_file($publicStorage . '/' . $candidate) || is_file($appPublic . '/' . $candidate)) {
+            $chosen = $candidate;
+            break;
+        }
+    }
+
+    if (! $chosen) {
+        echo "FAIL: No newsletter image found under public/storage or storage/app/public.\n";
+        exit;
+    }
+
+    echo 'newsletter-1.webp on disk: ' . ((is_file($publicStorage . '/newsletter-1.webp') || is_file($appPublic . '/newsletter-1.webp')) ? 'yes' : 'NO') . "\n";
+    echo "chosen: {$chosen}\n\n";
+
+    try {
+        require $base . '/vendor/autoload.php';
+        $app = require $base . '/bootstrap/app.php';
+        $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+
+        echo 'before newsletter_popup_image=' . theme_option('newsletter_popup_image') . "\n";
+
+        \Botble\Theme\Facades\ThemeOption::setOption('newsletter_popup_image', $chosen);
+        \Botble\Theme\Facades\ThemeOption::saveOptions();
+
+        echo 'after newsletter_popup_image=' . theme_option('newsletter_popup_image') . "\n";
+        echo 'resolved URL=' . \App\Support\SerikMediaUrl::newsletterPopupImage($chosen) . "\n";
+
+        try {
+            Illuminate\Support\Facades\Artisan::call('cache:clear');
+            Illuminate\Support\Facades\Artisan::call('view:clear');
+            echo "cache+view cleared\n";
+        } catch (Throwable $e) {
+            echo 'cache clear skipped: ' . $e->getMessage() . "\n";
+        }
+    } catch (Throwable $e) {
+        echo 'ERROR: ' . $e->getMessage() . "\n";
+    }
+    exit;
+}
+
 // Fix missing site logo (.webp 404 → working .jpeg that exists on disk).
 if (isset($_GET['fix_logo']) && (string) $_GET['fix_logo'] === '1') {
     header('Content-Type: text/plain; charset=utf-8');

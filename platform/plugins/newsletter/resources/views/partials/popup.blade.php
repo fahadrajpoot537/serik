@@ -4,12 +4,7 @@
     $title = theme_option('newsletter_popup_title');
     $image = theme_option('newsletter_popup_image');
     $imageUrl = $image
-        ? SerikMediaUrl::resolvePublic([
-            $image,
-            'newsletter-1.webp',
-            'newsletter.webp',
-            'general/newsletter-image.jpg',
-        ])
+        ? SerikMediaUrl::newsletterPopupImage($image)
         : null;
     $placeholderUrl = SerikMediaUrl::placeholder();
 @endphp

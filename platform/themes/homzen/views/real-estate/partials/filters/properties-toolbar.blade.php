@@ -201,7 +201,19 @@
 .serik-properties-page .flat-title-page { display: none !important; }
 .serik-properties-page.listing-no-map .flat-title-page { padding: 0 !important; }
 .serik-properties-page .serik-properties-filters-section { padding-top: 0; background: #fff; }
-.serik-properties-page .flat-section-v5 { padding-top: 28px; padding-bottom: 48px; }
+.serik-properties-page .flat-section-v5,
+.serik-properties-page .flat-recommended-v2 {
+    margin-top: 0;
+    padding-top: 28px;
+    padding-bottom: 48px;
+}
+@media (max-width: 991px) {
+    .serik-properties-page .flat-section-v5,
+    .serik-properties-page .flat-recommended-v2 {
+        margin-top: 0;
+        padding-top: 28px;
+    }
+}
 .serik-properties-page [data-bb-toggle="data-listing"] {
     margin-top: 16px;
     padding-top: 8px;

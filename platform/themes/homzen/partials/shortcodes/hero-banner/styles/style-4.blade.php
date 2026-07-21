@@ -8691,6 +8691,12 @@ function initHsViewMode() {
 
     document.getElementById('hsListSidebarBody')?.addEventListener('click', onHsListCardClick);
     document.getElementById('hsMobileListBody')?.addEventListener('click', onHsListCardClick);
+
+    window.addEventListener('resize', () => {
+        if (typeof window.setupMobileListScroll === 'function') {
+            window.setupMobileListScroll();
+        }
+    });
 }
 
 function buildHsDateColumns() {
