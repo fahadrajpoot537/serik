@@ -1146,7 +1146,7 @@ function loadResults(keyword, reset = false){
                                 class="property-image"
                                 loading="lazy"
                                 style="width:100px;height:80px;object-fit:cover;border-radius:6px;"
-                                onerror="this.src='/storage/general/placeholder.png'"
+                                onerror="this.onerror=null;this.src='{{ \App\Support\SerikMediaUrl::placeholder() }}'"
                             />
                         <div style="width: 100%">
                             <div class="price">
