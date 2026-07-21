@@ -801,24 +801,26 @@
     </a>
 
     {{-- AUTH SECTION --}}
-    @auth('account')
-        <a href="{{ route('public.account.dashboard') }}" class="nav-item">
-            <x-core::icon name="ti ti-user" />
-            <small>Account</small>
-        </a>
-    @else
-        <a 
-            @if (theme_option('use_modal_for_authentication', true))
-                href="#modalLogin" data-bs-toggle="modal"
-            @else
-                href="{{ route('public.account.login') }}"
-            @endif
-            class="nav-item"
-        >
-            <x-core::icon name="ti ti-login" />
-            <small>Login</small>
-        </a>
-    @endauth
+    @if (is_plugin_active('real-estate') && RealEstateHelper::isLoginEnabled())
+        @auth('account')
+            <a href="{{ route('public.account.dashboard') }}" class="nav-item">
+                <x-core::icon name="ti ti-user" />
+                <small>Account</small>
+            </a>
+        @else
+            <a 
+                @if (theme_option('use_modal_for_authentication', true))
+                    href="#modalLogin" data-bs-toggle="modal"
+                @else
+                    href="{{ route('public.account.login') }}"
+                @endif
+                class="nav-item"
+            >
+                <x-core::icon name="ti ti-login" />
+                <small>Login</small>
+            </a>
+        @endauth
+    @endif
 
 </div>
 <script>
@@ -904,7 +906,7 @@ const loadMoreBtn = document.getElementById("loadMoreBtn");
 const loader = document.getElementById("dropdownLoader");
 const clearBtn = document.getElementById("clearBtn");
 const SITE_BASE = @json(rtrim(url('/'), '/'));
-const isLoggedIn = @json(auth('account')->check() || auth()->check());
+const isLoggedIn = @json((is_plugin_active('real-estate') && auth('account')->check()) || auth()->check());
 const SOLD_STATUSES = ['Sold', 'Leased', 'Sold Conditional', 'Sold Conditional Escape'];
 let skip = 0;
 let currentKeyword = "";

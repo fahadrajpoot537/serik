@@ -223,7 +223,7 @@ class RealEstateServiceProvider extends ServiceProvider
             if (! setting('real_estate_enable_account_verification', false)) {
                 config([
                     'plugins.real-estate.email.templates' => Arr::except(
-                        config('plugins.real-estate.email.templates'),
+                        config('plugins.real-estate.email.templates') ?? [],
                         ['account-approved', 'account-rejected']
                     ),
                 ]);

@@ -51,23 +51,6 @@
 }
 </style>
 
-{{-- Main Website Content --}}
-<!--div class="@guest('account') blurred-content @endguest">
-    <!-- Your entire website content goes here >
-</div-->
-
-{{-- Overlay for Guests --}}
-@guest('account')
-<!--div class="full-overlay">
-    <div class="overlay-content">
-        <h1>🚧 Coming Soon</h1>
-        <p>This website is currently under development.</p>
-        
-    </div>
-</div-->
-@endguest
-
-
 @php
     $announcements = apply_filters('announcement_display_html', null);
     $canRenderAnnouncements = is_plugin_active('announcement') && $announcements && \ArchiElite\Announcement\Models\Announcement::query()->exists();

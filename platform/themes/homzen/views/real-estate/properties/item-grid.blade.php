@@ -39,6 +39,8 @@
     .serik-prop-card__mls { font-size: 11px; color: #9ca3af; line-height: 1.3; }
     .serik-prop-card__listed-date { font-size: 12px; color: #6b7280; margin-top: 6px; line-height: 1.3; font-weight: 500; }
     .property-login-overlay { position: absolute; inset: 0; background: rgba(0,0,0,.55); z-index: 9; display: flex; align-items: center; justify-content: center; padding: 16px; }
+    .property-login-overlay-caption { color: #fff !important; font-size: 14px; line-height: 1.5; margin-bottom: 16px; }
+    .property-login-overlay-caption a { color: #fff !important; font-weight: 600; text-decoration: underline; }
 </style>
 @endonce
 
