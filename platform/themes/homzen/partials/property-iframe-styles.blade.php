@@ -82,6 +82,27 @@
         border-radius: 8px !important;
     }
 
+    @media (min-width: 992px) {
+        html {
+            height: auto;
+            min-height: 100%;
+            overflow-y: scroll !important;
+            overflow-x: hidden !important;
+        }
+        body {
+            min-height: 100%;
+            height: auto !important;
+            overflow-x: hidden !important;
+            overflow-y: visible !important;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-y;
+        }
+        #wrapper {
+            overflow: visible !important;
+            min-height: 100%;
+        }
+    }
+
     /* Pin the contact / schedule-viewing form while details scroll */
     .flat-property-detail .row > .col-lg-4 {
         align-self: flex-start;
