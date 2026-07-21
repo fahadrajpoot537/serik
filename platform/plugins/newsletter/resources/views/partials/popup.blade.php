@@ -1,7 +1,17 @@
 @php
+    use App\Support\SerikMediaUrl;
+
     $title = theme_option('newsletter_popup_title');
     $image = theme_option('newsletter_popup_image');
-    $imageUrl = $image ? RvMedia::getImageUrl($image) : null;
+    $imageUrl = $image
+        ? SerikMediaUrl::resolvePublic([
+            $image,
+            'newsletter-1.webp',
+            'newsletter.webp',
+            'general/newsletter-image.jpg',
+        ])
+        : null;
+    $placeholderUrl = SerikMediaUrl::placeholder();
 @endphp
 
 <style>
@@ -195,11 +205,11 @@
     ])>
         @if ($imageUrl)
             <div class="newsletter-popup-bg newsletter-popup-bg--mobile d-md-none">
-                <img src="{{ $imageUrl }}" alt="{{ $title }}" loading="eager" decoding="async">
+                <img src="{{ $imageUrl }}" alt="{{ $title }}" loading="eager" decoding="async" onerror="this.onerror=null;this.src='{{ $placeholderUrl }}'">
             </div>
 
             <div class="d-none d-md-block col-6 newsletter-popup-bg">
-                <img src="{{ $imageUrl }}" alt="{{ $title }}" loading="eager" decoding="async">
+                <img src="{{ $imageUrl }}" alt="{{ $title }}" loading="eager" decoding="async" onerror="this.onerror=null;this.src='{{ $placeholderUrl }}'">
             </div>
         @endif
 

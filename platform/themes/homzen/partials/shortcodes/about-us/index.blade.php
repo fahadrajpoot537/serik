@@ -208,7 +208,7 @@
 
         <!-- RIGHT IMAGE -->
         <div class="who-image-wrapper">
-            <img src="storage/deb5731634efc4bfedb339edde9e025d7701e885-2000x1308.jpg" alt="Serik Realty Inc">
+            <img src="{{ \App\Support\SerikMediaUrl::toPublic('deb5731634efc4bfedb339edde9e025d7701e885-2000x1308.jpg') }}" alt="Serik Realty Inc">
 
             <div class="years-box">
                 <div class="years-number">15+</div>

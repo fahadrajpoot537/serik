@@ -1,3 +1,9 @@
+@php
+    use App\Support\SerikMediaUrl;
+
+    $ctaImage = static fn (string $file): string => SerikMediaUrl::toPublic($file);
+@endphp
+
 <style>
     /* Layout wrapper */
     .page-wrapper {
@@ -127,40 +133,40 @@
                         <!-- LEFT COLUMN (UP) -->
                         <div class="scroll-container">
                             <div class="scroll-track scroll-up">
-                                <img src="https://vke.899.mytemp.website/storage/images-1.jfif">
-                                <img src="https://vke.899.mytemp.website/storage/images-2.jfif">
-                                <img src="https://vke.899.mytemp.website/storage/images-3.jfif">
+                                <img src="{{ $ctaImage('images-1.jfif') }}">
+                                <img src="{{ $ctaImage('images-2.jfif') }}">
+                                <img src="{{ $ctaImage('images-3.jfif') }}">
                     
                                 <!-- Duplicate for seamless loop -->
-                                <img src="https://vke.899.mytemp.website/storage/images-1.jfif">
-                                <img src="https://vke.899.mytemp.website/storage/images-2.jfif">
-                                <img src="https://vke.899.mytemp.website/storage/images-3.jfif">
+                                <img src="{{ $ctaImage('images-1.jfif') }}">
+                                <img src="{{ $ctaImage('images-2.jfif') }}">
+                                <img src="{{ $ctaImage('images-3.jfif') }}">
                             </div>
                         </div>
                     
                         <!-- RIGHT COLUMN (DOWN) -->
                         <div class="scroll-container">
                             <div class="scroll-track scroll-down">
-                                <img src="https://vke.899.mytemp.website/storage/images.jfif">
-                                <img src="https://vke.899.mytemp.website/storage/images-4.jfif">
-                                <img src="https://vke.899.mytemp.website/storage/images-5.jfif">
+                                <img src="{{ $ctaImage('images.jfif') }}">
+                                <img src="{{ $ctaImage('images-4.jfif') }}">
+                                <img src="{{ $ctaImage('images-5.jfif') }}">
                     
                                 <!-- Duplicate for seamless loop -->
-                                <img src="https://vke.899.mytemp.website/storage/images.jfif">
-                                <img src="https://vke.899.mytemp.website/storage/images-4.jfif">
-                                <img src="https://vke.899.mytemp.website/storage/images-5.jfif">
+                                <img src="{{ $ctaImage('images.jfif') }}">
+                                <img src="{{ $ctaImage('images-4.jfif') }}">
+                                <img src="{{ $ctaImage('images-5.jfif') }}">
                             </div>
                         </div>
                          <div class="scroll-container">
                             <div class="scroll-track scroll-up">
-                                <img src="https://vke.899.mytemp.website/storage/images-1.jfif">
-                                <img src="https://vke.899.mytemp.website/storage/images-2.jfif">
-                                <img src="https://vke.899.mytemp.website/storage/images-3.jfif">
+                                <img src="{{ $ctaImage('images-1.jfif') }}">
+                                <img src="{{ $ctaImage('images-2.jfif') }}">
+                                <img src="{{ $ctaImage('images-3.jfif') }}">
                     
                                 <!-- Duplicate for seamless loop -->
-                                <img src="https://vke.899.mytemp.website/storage/images-1.jfif">
-                                <img src="https://vke.899.mytemp.website/storage/images-2.jfif">
-                                <img src="https://vke.899.mytemp.website/storage/images-3.jfif">
+                                <img src="{{ $ctaImage('images-1.jfif') }}">
+                                <img src="{{ $ctaImage('images-2.jfif') }}">
+                                <img src="{{ $ctaImage('images-3.jfif') }}">
                             </div>
                         </div>
                     
@@ -175,7 +181,7 @@
                 <div class="box-title">
                    
                     <div>
-                    <img style="height: 50px;" src=" https://vke.899.mytemp.website/storage/backgroundbordershadow.png">
+                    <img style="height: 50px;" src="{{ $ctaImage('backgroundbordershadow.png') }}">
                 </div><br>
                     @if($shortcode->subtitle)
                         <div class="text-subtitle text-primary" style="font-size:30px;color:linear-gradient(#000000, #2C638B);">{!! BaseHelper::clean($shortcode->subtitle) !!}</div>
@@ -185,7 +191,7 @@
                     @endif
                 </div>
                 <div>
-                    <img src="https://vke.899.mytemp.website/storage/container.png">
+                    <img src="{{ $ctaImage('container.png') }}">
                 </div>
                 <br>
                 @if($shortcode->button_label)

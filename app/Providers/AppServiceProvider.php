@@ -39,6 +39,33 @@ class AppServiceProvider extends ServiceProvider
         add_filter('core_seo_canonical', function (string $url): string {
             return CanonicalUrl::normalize($url);
         }, 999);
+
+        $rewriteLegacyMediaUrls = static function (?string $html): string {
+            if (! is_string($html) || $html === '') {
+                return (string) $html;
+            }
+
+            $origin = CanonicalUrl::origin();
+
+            $html = preg_replace(
+                '#https?://[^"\']*mytemp\.website/storage/#i',
+                $origin . '/storage/',
+                $html
+            ) ?? $html;
+
+            return preg_replace(
+                '#(["\'])storage/([^"\']+)#i',
+                '$1' . $origin . '/storage/$2',
+                $html
+            ) ?? $html;
+        };
+
+        add_filter(THEME_FRONT_HEADER, $rewriteLegacyMediaUrls, 999);
+        add_filter(THEME_FRONT_FOOTER, $rewriteLegacyMediaUrls, 999);
+        add_filter(THEME_FRONT_BODY, $rewriteLegacyMediaUrls, 999);
+        add_filter('theme_logo_image', static function ($html) use ($rewriteLegacyMediaUrls) {
+            return $rewriteLegacyMediaUrls((string) $html);
+        }, 999);
     }
 
     protected static function ensureWritableLoggingOrFallback(): void

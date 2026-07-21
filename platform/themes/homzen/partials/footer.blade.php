@@ -36,7 +36,7 @@
  </style>  
  
    <!--div class="icon-bar">
-      <a href="https://api.whatsapp.com/send?phone=16475789400" class="whatsapp" target="_blank"><img src="https://vke.899.mytemp.website/storage/whatsapp-icon-free-png.png" width="50"/></a> 
+      <a href="https://api.whatsapp.com/send?phone=16475789400" class="whatsapp" target="_blank"><img src="{{ \App\Support\SerikMediaUrl::toPublic('whatsapp-icon-free-png.png') }}" width="50" alt="WhatsApp"/></a> 
      
     </div-->
     <footer class="footer footer-main" @style(["background-color: $footerBackgroundColor" => $footerBackgroundColor, "background-image: url('$footerBackgroundImage') !important" => theme_option('footer_background_image')])>
