@@ -19,8 +19,15 @@
     RewriteCond %{HTTPS} !=on
     RewriteRule ^(.*)$ https://serik.ca/$1 [R=301,L]
 
-    # Block direct /public/... probes (works when the document root IS the public folder)
-    RewriteRule ^public(/|$) - [F,L]
+    # Block sensitive /public/... probes (never redirect framework paths)
+    RewriteRule ^public/((\.env|vendor/|storage/|bootstrap/|config/|\.git|\.svn).*)$ - [R=404,L,NC]
+    RewriteRule ^public/(composer\.(json|lock)|phpinfo\.php|wp-admin|wp-login\.php|xmlrpc\.php|adminer\.php|phpmyadmin|server-status|artisan|phpunit\.xml|package(-lock)?\.json|yarn\.lock|dockerfile|docker-compose\.ya?ml|web\.config|\.htaccess|\.htpasswd)(/.*)?$ - [R=404,L,NC]
+    RewriteRule ^public/.*(^|/)\. - [R=404,L]
+    RewriteRule ^public/.*\.(bak|backup|old|orig|save|swp|swo|sql|sqlite|db|dump|zip|tar|tgz|gz|bz2|7z|rar|log|ini|conf|sh|bash|pem|key)$ - [R=404,L,NC]
+
+    # Redirect harmless /public/... URLs to clean canonical paths
+    RewriteRule ^public/?$ / [R=301,L]
+    RewriteRule ^public/(.+)$ /$1 [R=301,L,QSA]
 
     # Block hidden files and common backup/archive probes inside public document root
     RewriteRule (^|/)\. - [F,L]

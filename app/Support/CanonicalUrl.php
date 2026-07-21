@@ -92,6 +92,7 @@ class CanonicalUrl
         $port = isset($canonical['port']) ? ':' . $canonical['port'] : '';
 
         $path = $parsed['path'] ?? '';
+        $path = PublicPrefixPath::stripFromUrlPath($path);
         $query = isset($parsed['query']) ? '?' . $parsed['query'] : '';
         $fragment = isset($parsed['fragment']) ? '#' . $parsed['fragment'] : '';
 

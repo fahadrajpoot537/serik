@@ -27,6 +27,11 @@ final class SerikSitemap
     public static function shouldInclude(string $url): bool
     {
         $path = trim((string) parse_url($url, PHP_URL_PATH), '/');
+        $lower = strtolower($path);
+
+        if ($lower === 'public' || str_starts_with($lower, 'public/')) {
+            return false;
+        }
 
         if ($path === '') {
             return true;
