@@ -35,8 +35,8 @@ if ($accountSocials !== null && $accountSocials !== '[]') {
 }
 .box-agent .box-img .agent-social li a svg,
 .box-agent .box-img .agent-social li a img {
-    width: 150px;
-    height: 150px;
+    width: 24px;
+    height: 24px;
 }
     
 </style>

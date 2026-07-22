@@ -19,19 +19,35 @@
     }
 }
 
-/* Make every card square */
-.box-location-v2 .box-img{
+/* Location cards: shorter height, proportional width */
+.flat-location-v2 .box-location-v2 .box-img{
     width:100%;
-    aspect-ratio:1 / 1;
+    aspect-ratio:4 / 3;
+    max-height:none !important;
     overflow:hidden;
     border-radius:12px;
 }
 
-/* Image fit inside square */
-.box-location-v2 .box-img img{
+.flat-location-v2 .box-location-v2 .box-img img{
     width:100%;
     height:100%;
     object-fit:cover;
+}
+
+.flat-location-v2 .box-location-v2 .content{
+    padding-top:10px;
+}
+
+.flat-location-v2 .box-location-v2 .content .link{
+    font-size:15px !important;
+    line-height:1.35;
+    margin:0;
+}
+
+@media (max-width: 767px) {
+    .flat-location-v2 .box-location-v2 .content .link{
+        font-size:13px !important;
+    }
 }
 .tf-sw-locations {
     overflow: hidden;
@@ -82,11 +98,11 @@ $locations = $locations->sortBy(function ($location) use ($order) {
                    class="box-location-v2 hover-img location-item">
 
                     <div class="box-img img-style">
-                        {{ RvMedia::image($location->image, $location->name, 'medium-rectangle-column') }}
+                        {{ RvMedia::image($location->image, $location->name, 'medium-rectangle') }}
                     </div>
 
                     <div class="content">
-                        <h3 class="link" style="font-size: 20px;">
+                        <h3 class="link">
                             House for sale {{ $location->name }}
                         </h3>
                     </div>

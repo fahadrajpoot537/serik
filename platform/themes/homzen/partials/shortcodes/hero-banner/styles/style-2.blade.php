@@ -10,7 +10,7 @@
 .calculator-box{
     box-shadow:5px 5px 15px 2px #ccc;
     border-radius:12px;
-    padding:0px 20px;
+    padding:16px 18px;
     background:#fff;
 }
 
@@ -38,8 +38,9 @@
 
 .calculator-buttons{
     display:flex;
-    gap:5px;
+    gap:8px;
     align-items:center;
+    flex-shrink:0;
 }
 
 .calculator-buttons .tf-btn{
@@ -68,51 +69,153 @@
 
 
 
-/* make sure container doesn't force vertical stack */
-.wd-find-select{
+/* Desktop: field + buttons in one row */
+.cashback-calculator .wd-find-select.calculator-box{
+    display:flex;
+    flex-direction:row;
+    align-items:flex-end;
+    gap:12px;
+}
+
+.cashback-calculator .wd-find-select .inner-group{
+    flex:1 1 46%;
+    min-width:160px;
+    max-width:46%;
+    padding:0 !important;
+    display:block !important;
+}
+
+.cashback-calculator .wd-find-select .form-style,
+.cashback-calculator .wd-find-select .form-group-1{
+    width:100%;
+    border-inline-end:none !important;
+    margin:0;
+}
+
+.cashback-calculator .wd-find-select .form-style label,
+.cashback-calculator .wd-find-select .form-group-1 label{
+    display:block;
+    margin-bottom:6px;
+    font-size:13px;
+    font-weight:600;
+    color:#334155;
+    line-height:1.2;
+}
+
+.cashback-calculator .wd-find-select .position-relative{
+    width:100%;
+}
+
+.cashback-calculator .wd-find-select .form-control#amount{
+    display:block;
+    width:100% !important;
+    min-width:0;
+    min-height:50px;
+    height:50px;
+    padding:12px 14px !important;
+    padding-inline-end:14px !important;
+    border:1px solid #cbd5e1 !important;
+    border-radius:8px;
+    background:#fff !important;
+    font-size:15px !important;
+    font-weight:600 !important;
+    line-height:1.35 !important;
+    color:#0f172a !important;
+    box-sizing:border-box;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+.cashback-calculator .wd-find-select .form-control#amount:focus{
+    border-color:#0255a1 !important;
+    outline:none;
+    box-shadow:0 0 0 3px rgba(2,85,161,0.12);
+    white-space:normal;
+}
+
+.cashback-calculator .wd-find-select .form-control#amount::placeholder{
+    color:#64748b !important;
+    opacity:1 !important;
+    font-size:14px !important;
+    font-weight:500 !important;
+}
+
+.cashback-calculator .calculator-buttons{
+    flex:0 0 54%;
+    max-width:54%;
+    width:54%;
+    min-width:0;
+    padding-bottom:2px;
+    align-items:stretch;
+}
+
+.cashback-calculator .calculator-buttons button,
+.cashback-calculator .calculator-buttons a{
+    flex:1 1 0;
+    min-width:0;
+    min-height:54px;
     display:flex;
     align-items:center;
-    gap:20px;
+    justify-content:center;
 }
 
-.wd-find-select .inner-group{
-    padding: 10px 30px 10px 20px;
-    flex:1;
+.cashback-calculator .calculator-buttons img{
+    display:block;
+    width:100%;
+    height:54px;
+    min-height:54px;
+    object-fit:contain;
+    object-position:center;
 }
 
-/* Mobile */
+/* Mobile: field and buttons on separate lines */
 @media (max-width:768px){
 
     .cashback-calculator{
         padding:20px 10px;
     }
 
-    .wd-find-select{
+    .calculator-box{
+        padding:14px 14px;
+    }
+
+    .cashback-calculator .wd-find-select.calculator-box{
         flex-direction:column;
         align-items:stretch;
-    }
-.wd-find-select{
-       gap:0px;
-    }
-    .wd-find-select .inner-group{
-        padding: 0px 30px 00px 20px;
-        width:100%;
+        gap:12px;
     }
 
-    .calculator-buttons{
-        display:flex;
-        flex-direction:column;
+    .cashback-calculator .wd-find-select .inner-group{
         width:100%;
-        gap:10px;
+        max-width:100%;
+        flex:none;
     }
 
-    .calculator-buttons .tf-btn{
-        width:100%;
-        padding:15px 0px !important;
-        display:block;
-        text-align:center;
+    .cashback-calculator .wd-find-select .form-control#amount{
+        font-size:16px !important;
+        min-height:48px;
+        height:48px;
+        white-space:normal;
     }
 
+    .cashback-calculator .wd-find-select .form-control#amount::placeholder{
+        font-size:15px !important;
+    }
+
+    .cashback-calculator .calculator-buttons{
+        width:100%;
+        max-width:100%;
+        flex:none;
+        flex-direction:row;
+        gap:6px;
+        padding-bottom:0;
+    }
+
+    .cashback-calculator .calculator-buttons img{
+        height:50px;
+        min-height:50px;
+    }
 }
 
 .title1 {
@@ -159,7 +262,7 @@
        margin-bottom: 10px;
    }
    .calculator-box{
-       padding: 20px 0px;
+       padding: 14px 14px;
    }
    .swiper{
            overflow: visible !important;
@@ -174,17 +277,20 @@
 
 .calculator-buttons button,
 .calculator-buttons a {
-    flex: 1; /* equal width */
+    flex: 1 1 0;
     display: flex;
     align-items: center;
     justify-content: center;
+    min-width: 0;
 }
 
-
 .calculator-buttons img {
-   
-    height: 50px;
-    object-fit: cover;
+    width: 100%;
+    max-width: 100%;
+    height: 54px;
+    min-height: 54px;
+    object-fit: contain;
+    object-position: center;
     border-radius: 6px;
 }
     
@@ -293,7 +399,7 @@
 
                                 </div>
 
-                                <div class="calculator-buttons" style="zoom:0.8">
+                                <div class="calculator-buttons">
 
                                     <button type="submit" style="border: none; background: none;"
                                         

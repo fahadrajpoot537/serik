@@ -6,6 +6,53 @@ $accounts = $accounts->sortBy(function ($account) use ($order) {
     return $index === false ? 999 : $index;
 });
 @endphp
+<style>
+    #about-agent.flat-agents .box-agent {
+        gap: 12px;
+    }
+
+    #about-agent.flat-agents .box-agent .box-img {
+        aspect-ratio: 3 / 4;
+        max-height: 210px;
+        overflow: hidden;
+        border-radius: 12px;
+    }
+
+    #about-agent.flat-agents .box-agent .box-img img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: top center;
+    }
+
+    #about-agent.flat-agents .box-agent .content h6 {
+        font-size: 15px;
+        line-height: 1.35;
+        margin-bottom: 4px;
+    }
+
+    #about-agent.flat-agents .box-agent .list-info {
+        margin-top: 0 !important;
+        margin-bottom: 0 !important;
+    }
+
+    #about-agent.flat-agents .box-agent .list-info li {
+        margin-bottom: 0 !important;
+        font-size: 13px;
+    }
+
+    @media (min-width: 992px) {
+        #about-agent.flat-agents > .container > .row {
+            --bs-gutter-x: 1.25rem;
+        }
+    }
+
+    @media (max-width: 767px) {
+        #about-agent.flat-agents .box-agent .box-img {
+            max-height: 170px;
+        }
+    }
+</style>
 <section id="about-agent" class="flat-section flat-agents" @style(["background-color: $shortcode->background_color" => $shortcode->background_color])>
     <div class="container">
          @if($shortcode->subtitle)
@@ -22,7 +69,7 @@ $accounts = $accounts->sortBy(function ($account) use ($order) {
             
         @endif
          <br>
-        <div class="row row-cols-2 row-cols-sm-2 row-cols-md-{{ $shortcode->items_per_row ?: 4 }}">
+        <div class="row row-cols-2 row-cols-sm-2 row-cols-md-4 row-cols-lg-4">
             @foreach ($accounts as $account)
                 <div class="box col">
                     <div class="box-agent hover-img wow fadeIn" data-wow-delay=".2s" data-wow-duration="2000ms">
