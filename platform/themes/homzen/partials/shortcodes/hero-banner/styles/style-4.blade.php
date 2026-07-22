@@ -10511,7 +10511,46 @@ let currentKeyword = "";
 let searchAbortController = null;
 loadMoreBtn.style.display = "block";
 let typingTimer;        // REQUIRED
-const typingDelay = 280;
+const typingDelay = 200;
+
+function isMlsSearchKeyword(keyword) {
+    return /^[a-z]{1,2}\d{5,}$/i.test(String(keyword || '').trim());
+}
+
+function buildCitySuggestionsHtml(keyword) {
+    let cityHTML = '';
+    const isChineseText = (text) => {
+        const t = String(text ?? '').trim().toLowerCase();
+        if (!t) return false;
+        return t === 'chinese' || t.includes('chinese') || t.includes('中文') || t.includes('香港') || t.includes('台灣');
+    };
+
+    getMatchingCities(keyword).forEach((city) => {
+        const coords = cityCoordinates[city];
+        if (isChineseText(city) || !coords) {
+            return;
+        }
+
+        cityHTML += `
+            <div class="location-item city-item"
+                data-city="${city}"
+                data-lat="${coords.lat}"
+                data-lng="${coords.lng}">
+                🌆 ${city}
+            </div>
+        `;
+    });
+
+    return cityHTML;
+}
+
+function buildSmartSearchUrl(keyword) {
+    let url = `/api/v1/smart-search?keyword=${encodeURIComponent(keyword)}&skip=${skip}`;
+    if (!isMlsSearchKeyword(keyword) && selectedTransaction && selectedTransaction !== 'all') {
+        url += `&transaction=${encodeURIComponent(selectedTransaction)}`;
+    }
+    return url;
+}
 
 // Client-side cache for smart-search responses (keyed by full URL incl. keyword+skip)
 const smartSearchCache = new Map();
@@ -10553,8 +10592,17 @@ input.addEventListener("keyup", function () {
         return;
     }
 
+    const cityHTML = buildCitySuggestionsHtml(keyword);
+    document.getElementById("locationResults").innerHTML = cityHTML;
+    document.getElementById("listingResults").innerHTML = "";
+
     loader.style.display = "flex";
     dropdown.style.display = "block";
+
+    if (isMlsSearchKeyword(keyword)) {
+        loadResults(keyword, true);
+        return;
+    }
 
     typingTimer = setTimeout(() => {
         loadResults(keyword, true);
@@ -10588,7 +10636,6 @@ function getMatchingCities(keyword) {
 
 function loadResults(keyword, reset = false){
 
-    let cityHTML = "";
     let addressHTML = "";
     let listingsHTML = "";
 
@@ -10598,38 +10645,21 @@ function loadResults(keyword, reset = false){
         return t === 'chinese' || t.includes('chinese') || t.includes('中文') || t.includes('香港') || t.includes('台灣');
     };
 
-    // 🔹 Cities
-    const matchedCities = getMatchingCities(keyword);
-    
-  
+    const cityHTML = buildCitySuggestionsHtml(keyword);
 
-    matchedCities.forEach(city => {
-        const coords = cityCoordinates[city];
-        if (isChineseText(city)) {
-            return;
-        }
-
-        cityHTML += `
-            <div class="location-item city-item"
-                data-city="${city}"
-                data-lat="${coords.lat}"
-                data-lng="${coords.lng}">
-                🌆 ${city}
-            </div>
-        `;
-    });
-
-    document.getElementById("listingResults").innerHTML = "";
-    document.getElementById("locationResults").innerHTML = "";
+    if (reset) {
+        document.getElementById("locationResults").innerHTML = cityHTML;
+        document.getElementById("listingResults").innerHTML = "";
+    }
 
     if (searchAbortController) {
         searchAbortController.abort();
     }
     searchAbortController = new AbortController();
-    const isMlsKey = /^[a-z]{1,2}\d{5,}$/i.test(String(keyword || '').trim());
-    const searchTimeoutId = setTimeout(() => searchAbortController.abort(), isMlsKey ? 45000 : 15000);
+    const isMlsKey = isMlsSearchKeyword(keyword);
+    const searchTimeoutId = setTimeout(() => searchAbortController.abort(), isMlsKey ? 45000 : 12000);
 
-    const searchUrl = `/api/v1/smart-search?keyword=${encodeURIComponent(keyword)}&skip=${skip}`;
+    const searchUrl = buildSmartSearchUrl(keyword);
     smartSearchFetch(searchUrl, searchAbortController.signal)
     .then(data => {
 
@@ -10639,7 +10669,9 @@ function loadResults(keyword, reset = false){
         if(!Array.isArray(data) || data.length === 0){
             if (reset) {
                 document.getElementById("locationResults").innerHTML = cityHTML;
-                document.getElementById("listingResults").innerHTML = '';
+                document.getElementById("listingResults").innerHTML = isMlsKey
+                    ? '<div style="padding:12px;color:#666;">MLS listing not found. Try again or search by address.</div>'
+                    : (cityHTML ? '' : '<div style="padding:12px;color:#666;">No listings found. Try another address.</div>');
             }
             return;
         }
@@ -10714,7 +10746,7 @@ function loadResults(keyword, reset = false){
         const finalSuggestions = cityHTML + addressHTML;
 
         if(reset){
-            document.getElementById("locationResults").innerHTML = finalSuggestions;
+            document.getElementById("locationResults").innerHTML = finalSuggestions || cityHTML;
             document.getElementById("listingResults").innerHTML = listingsHTML;
         } else {
             document.getElementById("listingResults")
@@ -10727,6 +10759,11 @@ function loadResults(keyword, reset = false){
     .catch(err => {
         if (err.name !== 'AbortError') {
             console.log(err);
+            if (reset) {
+                document.getElementById("locationResults").innerHTML = cityHTML;
+                document.getElementById("listingResults").innerHTML =
+                    '<div style="padding:12px;color:#666;">Search timed out. Try MLS# or a shorter address.</div>';
+            }
         }
     })
     .finally(() => {

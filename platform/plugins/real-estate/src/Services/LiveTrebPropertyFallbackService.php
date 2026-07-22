@@ -252,7 +252,7 @@ class LiveTrebPropertyFallbackService
         $unit = trim((string) ($parsed['unit_number'] ?? ''));
         $escapedNumber = str_replace("'", "''", $streetNumber);
         $escapedName = str_replace("'", "''", $streetName);
-        $filter = "StreetNumber eq '{$escapedNumber}' and StreetName eq '{$escapedName}'";
+        $filter = "StreetNumber eq '{$escapedNumber}' and startswith(StreetName,'{$escapedName}')";
 
         if ($unit !== '') {
             $escapedUnit = str_replace("'", "''", $unit);
