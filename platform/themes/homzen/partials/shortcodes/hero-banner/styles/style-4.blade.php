@@ -5586,7 +5586,7 @@ async function showCityBoundary(cityName) {
     let mapHistoryNavigating = false;
     let lastPushedMapUrl = '';
     let hsMapListFeatures = [];
-    let lastMapFeatures = [];
+    window.lastMapFeatures = window.lastMapFeatures || [];
 
     function isClusterPanelOpen() {
         return window.HsMapInteractionState?.isClusterPanelOpen?.() || false;
@@ -9826,7 +9826,7 @@ function setDesktopListOpen(open) {
     sidebar.setAttribute('aria-hidden', open ? 'false' : 'true');
     wrapper?.classList.toggle('list-open', open);
     if (open) {
-        renderMapListCards(lastMapFeatures || []);
+        renderMapListCards(window.lastMapFeatures || []);
     }
     if (window.innerWidth >= 992) {
         setTimeout(() => map?.resize(), 320);
@@ -9859,7 +9859,7 @@ function setHsViewMode(mode) {
         if (typeof window.closeHsMapCenterPanel === 'function') {
             window.closeHsMapCenterPanel();
         }
-        renderMapListCards(lastMapFeatures || []);
+        renderMapListCards(window.lastMapFeatures || []);
         requestAnimationFrame(() => {
             if (typeof window.setupMobileListScroll === 'function') {
                 window.setupMobileListScroll();
@@ -9878,7 +9878,6 @@ function setHsViewMode(mode) {
 
 window.setHsViewMode = setHsViewMode;
 window.renderMapListCards = renderMapListCards;
-window.lastMapFeatures = lastMapFeatures;
 
 function onHsListCardClick(e) {
     const item = e.target.closest('.hs-list-item');
