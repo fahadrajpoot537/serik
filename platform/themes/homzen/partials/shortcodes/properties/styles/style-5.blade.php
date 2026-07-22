@@ -10,7 +10,7 @@
             display: flex;
             flex-wrap: nowrap;
             overflow-x: auto;
-            gap: 10px;
+            gap: 14px;
             padding-bottom: 8px;
             scroll-snap-type: x mandatory;
             -webkit-overflow-scrolling: touch;
@@ -51,6 +51,50 @@
         margin: 18px 0 16px;
         border-top: 1px solid #e2e8f0;
         padding-top: 0;
+    }
+
+    .flat-recommended-v2 .serik-prop-card__media {
+        aspect-ratio: 16 / 9;
+    }
+
+    .flat-recommended-v2 .serik-prop-card__body {
+        padding: 6px 8px 8px;
+    }
+
+    .flat-recommended-v2 .serik-prop-card__price {
+        font-size: 1rem;
+    }
+
+    .flat-recommended-v2 .serik-prop-card__stats {
+        font-size: 12px;
+        margin-bottom: 3px;
+    }
+
+    .flat-recommended-v2 .serik-prop-card__address {
+        font-size: 13px;
+        margin-bottom: 2px;
+    }
+
+    .flat-recommended-v2 .serik-prop-card__mls,
+    .flat-recommended-v2 .serik-prop-card__listed-date {
+        font-size: 10px;
+    }
+
+    .flat-recommended-v2 .serik-prop-card__listed-date {
+        margin-top: 4px;
+    }
+
+    .flat-recommended-v2 .serik-prop-card__badge,
+    .flat-recommended-v2 .serik-prop-card__days {
+        font-size: 10px;
+        padding: 3px 7px;
+    }
+
+    @media (min-width: 992px) {
+        .flat-recommended-v2 .prop-box {
+            padding-left: 10px;
+            padding-right: 10px;
+        }
     }
 
     @media (max-width: 768px) {
@@ -103,7 +147,7 @@
         </div>
 
         @if (isset($propertiesForSale) && $propertiesForSale->isNotEmpty())
-            <div class="row g-2 wow fadeInUpSmall mb-2 mb-md-3" data-wow-delay=".2s" data-wow-duration="2000ms">
+            <div class="row g-3 wow fadeInUpSmall mb-2 mb-md-3" data-wow-delay=".2s" data-wow-duration="2000ms">
                 @foreach($propertiesForSale as $property)
                     <div class="col-6 col-md-4 col-lg-3 col-xl-3 prop-box">
                         @include(Theme::getThemeNamespace('views.real-estate.properties.item-grid'))
@@ -131,7 +175,7 @@
         </div>
 
         @if (isset($propertiesSold) && $propertiesSold->isNotEmpty())
-            <div class="row g-2 wow fadeInUpSmall" data-wow-delay=".2s" data-wow-duration="2000ms">
+            <div class="row g-3 wow fadeInUpSmall" data-wow-delay=".2s" data-wow-duration="2000ms">
                 @foreach($propertiesSold as $property)
                     <div class="col-6 col-md-4 col-lg-3 col-xl-3 prop-box">
                         @include(Theme::getThemeNamespace('views.real-estate.properties.item-grid'))

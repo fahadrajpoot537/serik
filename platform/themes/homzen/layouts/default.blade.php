@@ -19,9 +19,17 @@
         {!! Theme::partial('page-h1', ['variant' => Theme::get('pageH1Variant', 'inline')]) !!}
     @endif
 
-    <div class="container">
+    @php
+        $isHomepage = request()->is('/') || request()->path() === '';
+    @endphp
+
+    @if ($isHomepage)
         {!! Theme::content() !!}
-    </div>
+    @else
+        <div class="container">
+            {!! Theme::content() !!}
+        </div>
+    @endif
 
     {!! apply_filters('ads_render', null, 'footer_before') !!}
 

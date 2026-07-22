@@ -47,8 +47,27 @@
 
 @media (max-width: 991px) {
    #sectionhead{
-    height:100px;
-}
+    height: auto;
+    min-height: 130px;
+   }
+
+   .hero-overlay .container {
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+   }
+
+   .hero-overlay .page-title {
+    margin-top: 0 !important;
+   }
+
+   .hero-overlay .breadcrumb {
+    font-size: 12px;
+    line-height: 1.4;
+    margin-top: 0.5rem !important;
+    margin-bottom: 0;
+    justify-content: center;
+    flex-wrap: wrap;
+   }
 }
 
 
@@ -66,7 +85,9 @@
         height: auto !important;
     }
     .heading-breadcrumb{
-        font-size:40px;font-weight: 0;
+        font-size: clamp(1.35rem, 5.5vw, 2rem);
+        line-height: 1.2;
+        font-weight: 600;
     }
 
 }

@@ -84,6 +84,21 @@
             .modal-content {
                 border-radius: 12px;
             }
+
+            /* Homepage: use fluid width with modest side padding instead of narrow container */
+            #page-home .container {
+                max-width: 100%;
+                width: 100%;
+                padding-left: clamp(16px, 2.5vw, 40px);
+                padding-right: clamp(16px, 2.5vw, 40px);
+            }
+
+            /* Keep cashback calculator at original contained width */
+            #page-home .cashback-calculator > .container {
+                max-width: 1320px;
+                margin-left: auto;
+                margin-right: auto;
+            }
         </style>
 <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css">

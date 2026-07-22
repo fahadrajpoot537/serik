@@ -1,6 +1,6 @@
 <div class="row blog-posts-grid">
     @forelse($posts as $post)
-        <div class="col-md-4 col-sm-6">
+        <div class="col-12 col-md-6 col-lg-4">
             <article class="flat-blog-item">
                 <a class="img-style" href="{{ $post->url }}" aria-label="{{ $post->name }}">
                     @if ($post->image)

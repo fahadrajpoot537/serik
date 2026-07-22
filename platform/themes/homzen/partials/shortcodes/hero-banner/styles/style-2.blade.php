@@ -196,10 +196,8 @@
 @endphp
 
 @php
-    $heroAltContext = trim(strip_tags((string) ($shortcode->title ?: $shortcode->subtitle ?: __('Ontario homes for sale'))));
-@endphp
+    use App\Support\ImageAlt;
 
-@php
     $heroAltContext = trim(strip_tags((string) ($shortcode->title ?: $shortcode->subtitle ?: __('Ontario homes for sale'))));
 @endphp
 
@@ -236,7 +234,7 @@
 
     @if ($shortcode->background_image)
         <div class="img-banner-left">
-            {{ RvMedia::image($shortcode->background_image, img_alt($shortcode->title, $shortcode->background_image, $heroAltContext)) }}
+            {{ RvMedia::image($shortcode->background_image, ImageAlt::resolve($shortcode->title, $shortcode->background_image, $heroAltContext)) }}
         </div>
     @endif
 
@@ -248,7 +246,7 @@
 
                     <div class="swiper-slide">
                         <div class="slider-home2 img-animation wow">
-                            {{ RvMedia::image($shortcode->{"slider_image_$i"}, img_alt($shortcode->title, $shortcode->{"slider_image_$i"}, $heroAltContext)) }}
+                            {{ RvMedia::image($shortcode->{"slider_image_$i"}, ImageAlt::resolve($shortcode->title, $shortcode->{"slider_image_$i"}, $heroAltContext)) }}
                         </div>
                     </div>
                 @endforeach
@@ -264,7 +262,7 @@
         <div class="container relative">
             <div class="row justify-content-center">
 
-                <div class="col-lg-10 col-md-10 col-12">
+                <div class="col-lg-6 col-md-8 col-12">
                     <div class="tab-pane fade active show" role="tabpanel">
 
                         <form id="myForm">
