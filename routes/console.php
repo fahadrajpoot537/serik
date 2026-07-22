@@ -3530,60 +3530,182 @@ Artisan::command('serik:repair-listing-history
 })->purpose('Repair purged AMP address history (e.g. W4929276 / 77 Stillman)');
 
 Artisan::command('serik:treb-images-webp
-    {--limit=50 : Max properties per run}
-    {--gallery : Also persist full gallery to images JSON}
-    {--offset=0 : Skip this many matching rows}
+    {--chunk=100 : Properties per batch}
+    {--gallery : Also download and convert full gallery}
+    {--fresh : Clear checkpoint and start from the beginning}
+    {--max-runtime=0 : Stop after N seconds (0 = run until complete)}
+    {--delay=50 : Milliseconds between AMP image fetches}
 ', function () {
-    $limit = max(1, (int) $this->option('limit'));
-    $offset = max(0, (int) $this->option('offset'));
+    @set_time_limit(0);
+    @ini_set('memory_limit', '512M');
+
+    $chunkSize = max(10, min(500, (int) $this->option('chunk')));
     $withGallery = (bool) $this->option('gallery');
-    $controller = app(\Botble\RealEstate\Http\Controllers\API\PropertyController::class);
+    $maxRuntime = max(0, (int) $this->option('max-runtime'));
+    $delayMs = max(0, min(2000, (int) $this->option('delay')));
+    $deadline = $maxRuntime > 0 ? microtime(true) + $maxRuntime : null;
+    $stateKey = 'serik_treb_images_webp_state';
+
+    if ((bool) $this->option('fresh')) {
+        Cache::forget($stateKey);
+        $this->warn('Checkpoint cleared — starting from property id 0.');
+    }
+
+    $saved = Cache::get($stateKey, []);
+    $lastId = is_array($saved) ? (int) ($saved['last_id'] ?? 0) : 0;
+    $stats = [
+        'processed' => is_array($saved) ? (int) ($saved['processed'] ?? 0) : 0,
+        'converted' => is_array($saved) ? (int) ($saved['converted'] ?? 0) : 0,
+        'skipped' => is_array($saved) ? (int) ($saved['skipped'] ?? 0) : 0,
+        'failed' => is_array($saved) ? (int) ($saved['failed'] ?? 0) : 0,
+    ];
+    $startedAt = is_array($saved) ? (float) ($saved['started_at'] ?? microtime(true)) : microtime(true);
+
+    $controller = app(PropertyController::class);
     $store = app(\App\Support\TrebImageStore::class);
 
-    $processed = 0;
-    $converted = 0;
-    $skipped = 0;
+    $needsWork = function (\Botble\RealEstate\Models\Property $property) use ($store, $withGallery): bool {
+        if (! $store->storedWebpExists($property->image_val)) {
+            return true;
+        }
+
+        if (! $withGallery) {
+            return false;
+        }
+
+        $images = is_array($property->images) ? $property->images : [];
+        if ($images === []) {
+            return true;
+        }
+
+        foreach ($images as $path) {
+            if (! $store->storedWebpExists(is_string($path) ? $path : null)) {
+                return true;
+            }
+        }
+
+        return false;
+    };
+
+    $remaining = \Botble\RealEstate\Models\Property::query()
+        ->whereNotNull('external_id')
+        ->where('external_id', '!=', '')
+        ->where('id', '>', $lastId)
+        ->count();
+
+    $mode = $withGallery ? 'cover + gallery' : 'cover only';
+    $this->info("TREB WebP backfill ({$mode}) — resuming after id > {$lastId}, {$remaining} listings remaining.");
+
+    if ($remaining === 0) {
+        Cache::forget($stateKey);
+        $this->info('Nothing left to process — backfill complete.');
+
+        return 0;
+    }
+
+    $stoppedEarly = false;
 
     \Botble\RealEstate\Models\Property::query()
         ->whereNotNull('external_id')
         ->where('external_id', '!=', '')
-        ->where(function ($q) use ($store) {
-            $q->whereNull('image_val')
-                ->orWhere('image_val', '')
-                ->orWhere('image_val', 'like', 'http%')
-                ->orWhere('image_val', 'like', '%/rs:%')
-                ->orWhere('image_val', 'like', 'rs:fit%')
-                ->orWhere('image_val', 'like', 'L3RycmVi%')
-                ->orWhere(function ($inner) {
-                    $inner->whereNotNull('image_val')
-                        ->where('image_val', 'not like', '%.webp')
-                        ->where('image_val', 'not like', 'http%');
-                })
-                ->orWhere(function ($inner) use ($store) {
-                    $inner->where('image_val', 'like', '%.webp')
-                        ->where('image_val', 'not like', 'http%');
-                });
-        })
+        ->where('id', '>', $lastId)
         ->orderBy('id')
-        ->offset($offset)
-        ->limit($limit)
-        ->get()
-        ->each(function ($property) use ($controller, $withGallery, $store, &$processed, &$converted, &$skipped) {
-            $processed++;
+        ->chunkById($chunkSize, function ($rows) use (
+            $controller,
+            $withGallery,
+            $delayMs,
+            $deadline,
+            $stateKey,
+            $startedAt,
+            &$stats,
+            &$stoppedEarly,
+            &$lastId,
+            $needsWork
+        ) {
+            @set_time_limit(0);
 
-            if ($store->storedWebpExists($property->image_val)) {
-                $skipped++;
+            foreach ($rows as $property) {
+                if ($deadline !== null && microtime(true) >= $deadline) {
+                    $stoppedEarly = true;
 
-                return;
+                    return false;
+                }
+
+                $stats['processed']++;
+
+                if (! $needsWork($property)) {
+                    $stats['skipped']++;
+
+                    continue;
+                }
+
+                try {
+                    if ($controller->persistTrebImagesForProperty($property, $withGallery)) {
+                        $stats['converted']++;
+                        if ($delayMs > 0) {
+                            usleep($delayMs * 1000);
+                        }
+                    } else {
+                        $stats['failed']++;
+                    }
+                } catch (\Throwable $e) {
+                    $stats['failed']++;
+                    \Illuminate\Support\Facades\Log::warning('serik:treb-images-webp failed', [
+                        'property_id' => $property->id,
+                        'external_id' => $property->external_id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
             }
 
-            if ($controller->persistTrebImagesForProperty($property, $withGallery)) {
-                $converted++;
-            }
-        });
+            $lastId = (int) $rows->last()->id;
+            Cache::put($stateKey, [
+                'last_id' => $lastId,
+                'processed' => $stats['processed'],
+                'converted' => $stats['converted'],
+                'skipped' => $stats['skipped'],
+                'failed' => $stats['failed'],
+                'gallery' => $withGallery,
+                'started_at' => $startedAt,
+                'updated_at' => now()->toIso8601String(),
+            ], 86400 * 30);
 
-    $this->info("Processed {$processed} listings, converted {$converted}, already stored {$skipped}.");
-    $this->line('Run again with a higher --offset until converted stays 0.');
+            if ($stoppedEarly) {
+                return false;
+            }
+        }, 'id');
+
+    $elapsed = round(microtime(true) - $startedAt);
+    $this->table(
+        ['Metric', 'Count'],
+        [
+            ['processed', $stats['processed']],
+            ['converted', $stats['converted']],
+            ['already_ok', $stats['skipped']],
+            ['no_source_or_failed', $stats['failed']],
+            ['elapsed_seconds', $elapsed],
+            ['last_property_id', $lastId],
+        ]
+    );
+
+    if ($stoppedEarly) {
+        $this->warn('Time limit reached — cron will resume automatically, or re-run the same command.');
+
+        return 0;
+    }
+
+    $left = \Botble\RealEstate\Models\Property::query()
+        ->whereNotNull('external_id')
+        ->where('external_id', '!=', '')
+        ->where('id', '>', $lastId)
+        ->count();
+
+    if ($left === 0) {
+        Cache::forget($stateKey);
+        $this->info('Backfill complete — all listings scanned.');
+    } else {
+        $this->warn("Unexpected stop with {$left} listings remaining — re-run to continue.");
+    }
 
     return 0;
-})->purpose('Download TREB cover images and store as local WebP files');
+})->purpose('Download missing TREB images and convert all to local WebP (resumable)');

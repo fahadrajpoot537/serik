@@ -184,6 +184,28 @@ $app = Application::configure(basePath: dirname(__DIR__))
             ->dailyAt('03:30')
             ->withoutOverlapping(10)
             ->appendOutputTo(storage_path('logs/treb-reconcile.log'));
+
+        // F) TREB image WebP backfill — resumes checkpoint, runs on LOW queue worker.
+        $schedule->call(function () {
+            try {
+                \App\Jobs\RunArtisanOnLowQueueJob::dispatch(
+                    'serik:treb-images-webp',
+                    [
+                        '--chunk' => 100,
+                        '--gallery' => true,
+                        '--max-runtime' => 3300,
+                    ]
+                )->onQueue(\App\Support\SerikQueue::low());
+            } catch (\Throwable $e) {
+                Log::error('[schedule] treb-images-webp dispatch failed: ' . $e->getMessage());
+            }
+
+            return 0;
+        })
+            ->name('serik-treb-images-webp-dispatch')
+            ->everyTenMinutes()
+            ->withoutOverlapping(60)
+            ->appendOutputTo(storage_path('logs/treb-images-webp.log'));
     })
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->prepend(\App\Http\Middleware\ForceCanonicalDomainMiddleware::class);
