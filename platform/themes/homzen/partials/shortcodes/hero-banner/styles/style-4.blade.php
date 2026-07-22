@@ -324,6 +324,39 @@
     grid-template-rows: auto minmax(0, 1fr);
 }
 
+/* Cluster list: flex layout — grid minmax(0,1fr) collapses to 0px on hover/scroll */
+.hs-map-center-panel.is-cluster.is-open .clusterpopup {
+    display: flex !important;
+    flex-direction: column !important;
+    grid-template-rows: unset !important;
+    grid-template-columns: unset !important;
+    min-height: min(420px, 72vh) !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    overflow: hidden !important;
+}
+
+.hs-map-center-panel.is-cluster.is-open .hs-cluster-popup-header {
+    flex: 0 0 auto;
+    grid-column: unset;
+    grid-row: unset;
+}
+
+.hs-map-center-panel.is-cluster.is-open .hs-cluster-popup-list {
+    flex: 1 1 auto !important;
+    min-height: 200px !important;
+    max-height: none !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    grid-column: unset;
+    grid-row: unset;
+    visibility: visible !important;
+    opacity: 1 !important;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+}
+
 .hs-map-center-panel.is-open .hs-cluster-popup-header {
     grid-column: 1;
     grid-row: 1;
@@ -341,18 +374,18 @@
     touch-action: pan-y;
 }
 
-.hs-map-center-panel.is-cluster.is-open .clusterpopup {
-    grid-template-rows: auto minmax(200px, 1fr) !important;
-    min-height: min(420px, 72vh) !important;
-    height: 100% !important;
-}
-
 .hs-map-center-panel.is-cluster.is-open .hs-cluster-popup-list {
     min-height: 200px !important;
     flex: 1 1 auto !important;
     overflow-y: auto !important;
     visibility: visible !important;
     opacity: 1 !important;
+}
+
+@media (max-width: 767px) {
+    .hs-map-center-panel.is-cluster.is-open .hs-map-center-panel-backdrop {
+        pointer-events: auto;
+    }
 }
 
 @media (min-width: 1200px) {
@@ -1530,6 +1563,27 @@ button {
     filter: blur(5px);
     pointer-events: none;
     user-select: none;
+}
+
+.hs-cluster-list-item.is-sold-locked {
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+.hs-cluster-list-item.is-sold-locked .hs-cluster-card-img,
+.hs-cluster-list-item.is-sold-locked .hs-cluster-card-body {
+    filter: blur(5px);
+    pointer-events: none;
+    user-select: none;
+}
+
+.hs-cluster-list-item.is-sold-locked .map-sold-login-gate {
+    pointer-events: auto;
+}
+
+.hs-cluster-list-item:hover {
+    border-color: #cbd5e1;
+    box-shadow: 0 6px 18px rgba(2, 85, 161, 0.1);
 }
 
 .map-sold-login-gate {
@@ -7782,6 +7836,7 @@ function mapMovedEnoughToRefetch() {
         }
 
         list.innerHTML = snapshot.map((feature, index) => buildClusterListCardHtml(feature, index)).join('');
+        setupClusterPopupLayout(document.getElementById('hsMapCenterPanelBody'));
         if (typeof hydrateMapThumbnailsForFeatures === 'function') {
             hydrateMapThumbnailsForFeatures(snapshot, '.hs-map-center-panel-body .hs-cluster-list-item');
         }
@@ -9166,6 +9221,41 @@ function mapMovedEnoughToRefetch() {
     ensureHsMapCenterPanelInWrapper();
     window.ensureHsMapCenterPanelInWrapper = ensureHsMapCenterPanelInWrapper;
 
+    function setupClusterPopupLayout(rootEl) {
+        if (!rootEl) {
+            return;
+        }
+
+        const popup = rootEl.querySelector('.clusterpopup');
+        const list = rootEl.querySelector('.hs-cluster-popup-list');
+        if (!popup || !list) {
+            return;
+        }
+
+        popup.style.display = 'flex';
+        popup.style.flexDirection = 'column';
+        popup.style.height = '100%';
+        popup.style.minHeight = '280px';
+        popup.style.maxHeight = '100%';
+        popup.style.overflow = 'hidden';
+
+        list.style.flex = '1 1 auto';
+        list.style.minHeight = '200px';
+        list.style.maxHeight = 'none';
+        list.style.overflowY = 'auto';
+        list.style.overflowX = 'hidden';
+        list.style.webkitOverflowScrolling = 'touch';
+        list.style.overscrollBehavior = 'contain';
+        list.style.touchAction = 'pan-y';
+        list.style.visibility = 'visible';
+        list.style.opacity = '1';
+
+        if (!list.dataset.wheelBound) {
+            list.dataset.wheelBound = '1';
+            list.addEventListener('wheel', (ev) => ev.stopPropagation(), { passive: true });
+        }
+    }
+
     function setupMapPopupScrollAreas(rootEl) {
         if (!rootEl) {
             return;
@@ -9251,16 +9341,31 @@ function mapMovedEnoughToRefetch() {
 
         setupMapPopupScrollAreas(body);
         bindMapPopupScrollIsolation(adapter);
+        if (options.isCluster) {
+            setupClusterPopupLayout(body);
+        }
 
         if (!HsMapInteractionLock.isLocked()) {
             const mapCanvas = map?.getCanvas?.();
             if (mapCanvas) {
-                mapCanvas.style.pointerEvents = 'auto';
-                delete mapCanvas.dataset.hsModalPointerEvents;
+                if (options.isCluster && window.innerWidth < 768) {
+                    mapCanvas.style.pointerEvents = 'none';
+                    mapCanvas.dataset.hsClusterPanelLock = '1';
+                } else {
+                    mapCanvas.style.pointerEvents = 'auto';
+                    delete mapCanvas.dataset.hsModalPointerEvents;
+                }
             }
         }
 
-        if (!options.skipMapResize && typeof map?.resize === 'function') {
+        if (options.isCluster) {
+            setTimeout(() => {
+                if (isClusterPanelOpen() && typeof map?.resize === 'function') {
+                    suppressMapMoveFetch(2000);
+                    map.resize();
+                }
+            }, 280);
+        } else if (!options.skipMapResize && typeof map?.resize === 'function') {
             requestAnimationFrame(() => {
                 map.resize();
                 requestAnimationFrame(() => map.resize());
@@ -9279,6 +9384,9 @@ function mapMovedEnoughToRefetch() {
                 return;
             }
             setupMapPopupScrollAreas(body);
+            if (options.isCluster) {
+                setupClusterPopupLayout(body);
+            }
             if (typeof options.onRendered === 'function') {
                 options.onRendered(adapter, token);
             }
@@ -9324,6 +9432,12 @@ function mapMovedEnoughToRefetch() {
         }
 
         clearHsMapSelectedMarker();
+
+        const mapCanvas = map?.getCanvas?.();
+        if (mapCanvas?.dataset?.hsClusterPanelLock === '1') {
+            mapCanvas.style.pointerEvents = 'auto';
+            delete mapCanvas.dataset.hsClusterPanelLock;
+        }
 
         if (typeof map?.resize === 'function') {
             requestAnimationFrame(() => map.resize());
@@ -9542,6 +9656,9 @@ function mapMovedEnoughToRefetch() {
     }
 
     document.addEventListener('mouseover', function (e) {
+        if (isClusterPanelOpen() && e.target.closest('.hs-cluster-popup-list')) {
+            return;
+        }
         hsPrefetchMapBundleFromItem(e.target.closest('.hs-list-item, .hs-cluster-list-item'));
     });
 
@@ -9559,6 +9676,7 @@ function mapMovedEnoughToRefetch() {
         const props = feature.properties || {};
         const itemStatus = mapListingStatus(props);
         const locked = mapBlurClass(itemStatus, props);
+        const soldLocked = locked ? ' is-sold-locked' : '';
         const priceHtml = buildMapPriceHtml(props, itemStatus, locked);
         const areaText = props.area
             ? String(props.area).split('-').map((n) => Number(n).toLocaleString()).join('-') + ' ft²'
@@ -9566,7 +9684,7 @@ function mapMovedEnoughToRefetch() {
 
         return `
             ${mapLoginGateHtml(itemStatus, props)}
-            <article class="hs-cluster-list-item ${locked}" data-cluster-idx="${index}" role="button" tabindex="0">
+            <article class="hs-cluster-list-item${soldLocked}" data-cluster-idx="${index}" role="button" tabindex="0">
                 <div class="hs-cluster-card-img">
                     ${props.image
                         ? `<img src="${escapeMapHtml(props.image)}" alt="${escapeMapHtml(buildMapImageAlt(props))}" loading="lazy" onerror="this.style.display='none';this.parentNode.classList.add('hs-img-empty');">`
