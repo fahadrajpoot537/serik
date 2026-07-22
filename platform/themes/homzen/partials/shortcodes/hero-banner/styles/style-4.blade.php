@@ -341,6 +341,11 @@
     touch-action: pan-y;
 }
 
+.hs-map-center-panel.is-cluster.is-open .hs-cluster-popup-list {
+    min-height: 220px !important;
+    flex: 1 1 auto;
+}
+
 @media (min-width: 1200px) {
     .hs-map-center-panel.is-open .property-popup.hs-map-popup-full {
         grid-template-columns: minmax(0, 34%) minmax(0, 1fr) minmax(260px, 280px);
@@ -5569,6 +5574,7 @@ async function showCityBoundary(cityName) {
     let lastPushedMapUrl = '';
     let hsMapListFeatures = [];
     let lastMapFeatures = [];
+    let hsSuppressMapMoveFetchUntil = 0;
 
     const HS_MOBILE_PROPERTY_TYPES = [
         { label: 'All property types', value: '' },
@@ -7192,6 +7198,14 @@ function getTransactionFromUrl() {
 
     map.on('moveend', function () {
         if (!mapLayersReady) return;
+        if (Date.now() < hsSuppressMapMoveFetchUntil) return;
+
+        const clusterPanelOpen = document.getElementById('hsMapCenterPanel')?.classList.contains('is-open')
+            && document.getElementById('hsMapCenterPanel')?.classList.contains('is-cluster');
+        if (clusterPanelOpen && !userHasMovedMap) {
+            return;
+        }
+
         clearTimeout(moveTimer);
         moveTimer = setTimeout(() => {
             if (!mapMovedEnoughToRefetch()) return;
@@ -7666,6 +7680,9 @@ function mapMovedEnoughToRefetch() {
                 if (typeof renderMapListCards === 'function') {
                     renderMapListCards(filteredFeatures);
                 }
+                if (typeof restoreClusterPanelIfNeeded === 'function') {
+                    restoreClusterPanelIfNeeded();
+                }
             })
             .catch(err => {
                 if (err.name !== "AbortError") {
@@ -7694,6 +7711,40 @@ function mapMovedEnoughToRefetch() {
         hsMapSuppressBackgroundClickUntil = Date.now() + 900;
         window._hsMapSelectionOpenedAt = Date.now();
     }
+
+    function suppressMapMoveFetch(ms = 3000) {
+        hsSuppressMapMoveFetchUntil = Date.now() + ms;
+    }
+
+    function isClusterPanelOpen() {
+        const panel = document.getElementById('hsMapCenterPanel');
+        return !!(panel?.classList.contains('is-open') && panel.classList.contains('is-cluster'));
+    }
+
+    function restoreClusterPanelIfNeeded() {
+        if (!isClusterPanelOpen()) {
+            return;
+        }
+
+        const leaves = window._hsLastClusterLeaves;
+        const coords = window._hsLastClusterCoords;
+        if (!Array.isArray(leaves) || !leaves.length || !coords) {
+            return;
+        }
+
+        const list = document.querySelector('#hsMapCenterPanelBody .hs-cluster-popup-list');
+        const renderedCount = list ? list.querySelectorAll('.hs-cluster-list-item').length : 0;
+        if (!list || renderedCount < leaves.length) {
+            showClusterPopup(leaves, coords);
+            return;
+        }
+
+        if (typeof hydrateMapThumbnailsForFeatures === 'function') {
+            hydrateMapThumbnailsForFeatures(leaves, '.hs-map-center-panel-body .hs-cluster-list-item');
+        }
+    }
+
+    window.restoreClusterPanelIfNeeded = restoreClusterPanelIfNeeded;
 
     function shouldIgnoreMapBackgroundClick() {
         return Date.now() < hsMapSuppressBackgroundClickUntil;
@@ -7742,7 +7793,7 @@ function mapMovedEnoughToRefetch() {
             return;
         }
 
-        source.getClusterLeaves(clusterId, 20, 0, function (err, leaves) {
+        source.getClusterLeaves(clusterId, 50, 0, function (err, leaves) {
             if (err || !leaves?.length) return;
 
             if (leaves.length === 1) {
@@ -9113,6 +9164,9 @@ function mapMovedEnoughToRefetch() {
         panel.classList.add('is-open');
         wrapper?.classList.add('panel-open');
         markHsMapSelectionOpened();
+        if (options.isCluster) {
+            suppressMapMoveFetch(3500);
+        }
 
         if (options.feature) {
             setHsMapSelectedMarker(options.feature);
@@ -9175,9 +9229,15 @@ function mapMovedEnoughToRefetch() {
         }
 
         hsMapCenterPanelOpenToken += 1;
+        const wasCluster = panel.classList.contains('is-cluster');
         panel.classList.remove('is-open', 'is-cluster');
         panel.setAttribute('aria-hidden', 'true');
         document.querySelector('.map-search-wrapper')?.classList.remove('panel-open');
+
+        if (wasCluster) {
+            window._hsLastClusterLeaves = [];
+            window._hsLastClusterCoords = null;
+        }
 
         const body = document.getElementById('hsMapCenterPanelBody');
         if (body) {
@@ -9497,14 +9557,17 @@ function mapMovedEnoughToRefetch() {
     window.showPropertyMapPopup = showPropertyMapPopup;
 
     function showClusterPopup(leaves, coordinates) {
-        window._hsLastClusterLeaves = leaves || [];
+        const snapshot = (leaves || []).slice();
+        window._hsLastClusterLeaves = snapshot;
         const markerCoords = coordinates.slice ? coordinates.slice() : [coordinates[0], coordinates[1]];
+        window._hsLastClusterCoords = markerCoords;
+        suppressMapMoveFetch(3500);
 
-        const cards = (leaves || []).map((feature, index) => buildClusterListCardHtml(feature, index)).join('');
+        const cards = snapshot.map((feature, index) => buildClusterListCardHtml(feature, index)).join('');
         const html = `
             <div class="clusterpopup">
                 <div class="hs-cluster-popup-header">
-                    <h6>${leaves.length} Listings</h6>
+                    <h6>${snapshot.length} Listings</h6>
                     <p>Tap a listing to open full details</p>
                 </div>
                 <div class="hs-cluster-popup-list">${cards}</div>
@@ -9515,10 +9578,10 @@ function mapMovedEnoughToRefetch() {
             coordinates: markerCoords,
             html,
             isCluster: true,
-            leaves,
+            leaves: snapshot,
             onRendered: () => {
-                hydrateMapThumbnailsForFeatures(leaves, '.hs-map-center-panel-body .hs-cluster-list-item');
-                prefetchMapBundlesForFeatures(leaves);
+                hydrateMapThumbnailsForFeatures(snapshot, '.hs-map-center-panel-body .hs-cluster-list-item');
+                prefetchMapBundlesForFeatures(snapshot);
             },
         });
     }
