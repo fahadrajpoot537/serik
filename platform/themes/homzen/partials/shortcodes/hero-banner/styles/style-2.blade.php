@@ -169,6 +169,42 @@
     object-position:center;
 }
 
+@media (min-width: 992px) {
+    .cashback-calculator .wd-find-select .inner-group{
+        flex:1 1 38%;
+        max-width:38%;
+    }
+
+    .cashback-calculator .calculator-buttons{
+        flex:0 0 62%;
+        max-width:62%;
+        width:62%;
+        gap:10px;
+    }
+
+    .cashback-calculator .calculator-buttons button,
+    .cashback-calculator .calculator-buttons a{
+        min-height:72px;
+    }
+
+    .cashback-calculator .calculator-buttons img{
+        height:72px;
+        min-height:72px;
+    }
+}
+
+@media (min-width: 1200px) {
+    .cashback-calculator .calculator-buttons button,
+    .cashback-calculator .calculator-buttons a{
+        min-height:80px;
+    }
+
+    .cashback-calculator .calculator-buttons img{
+        height:80px;
+        min-height:80px;
+    }
+}
+
 /* Mobile: field and buttons on separate lines */
 @media (max-width:768px){
 
@@ -368,7 +404,7 @@
         <div class="container relative">
             <div class="row justify-content-center">
 
-                <div class="col-lg-6 col-md-8 col-12">
+                <div class="col-lg-8 col-xl-7 col-md-10 col-12">
                     <div class="tab-pane fade active show" role="tabpanel">
 
                         <form id="myForm">

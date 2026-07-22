@@ -12,17 +12,18 @@ $accounts = $accounts->sortBy(function ($account) use ($order) {
     }
 
     #about-agent.flat-agents .box-agent .box-img {
-        aspect-ratio: 3 / 4;
-        max-height: 210px;
         overflow: hidden;
         border-radius: 12px;
+        background: #f8fafc;
+        line-height: 0;
     }
 
     #about-agent.flat-agents .box-agent .box-img img {
         width: 100%;
-        height: 100%;
-        object-fit: cover;
-        object-position: top center;
+        height: auto;
+        display: block;
+        object-fit: contain;
+        object-position: center top;
     }
 
     #about-agent.flat-agents .box-agent .content h6 {
@@ -48,8 +49,8 @@ $accounts = $accounts->sortBy(function ($account) use ($order) {
     }
 
     @media (max-width: 767px) {
-        #about-agent.flat-agents .box-agent .box-img {
-            max-height: 170px;
+        #about-agent.flat-agents .box-agent .box-img img {
+            max-height: none;
         }
     }
 </style>
