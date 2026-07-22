@@ -97,6 +97,11 @@ class CanonicalUrl
         $query = isset($parsed['query']) ? '?' . $parsed['query'] : '';
         $fragment = isset($parsed['fragment']) ? '#' . $parsed['fragment'] : '';
 
+        // Homepage canonical must be exactly https://serik.ca/ (trailing slash, no query).
+        if (($path === '' || $path === '/') && $query === '' && $fragment === '') {
+            return $scheme . '://' . $host . $port . '/';
+        }
+
         return $scheme . '://' . $host . $port . $path . $query . $fragment;
     }
 

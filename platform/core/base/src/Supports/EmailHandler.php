@@ -10,6 +10,7 @@ use Carbon\Carbon;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\URL;
 use Symfony\Component\ErrorHandler\ErrorRenderer\HtmlErrorRenderer;
 use Symfony\Component\ErrorHandler\Exception\FlattenException;
@@ -401,6 +402,13 @@ class EmailHandler
         $subject = null
     ): bool {
         if (! $this->templateEnabled($template)) {
+            Log::warning('[mail] Template disabled — email not sent', [
+                'module' => $this->module,
+                'template' => $template,
+                'to' => $email,
+                'type' => $type,
+            ]);
+
             return false;
         }
 
@@ -444,6 +452,13 @@ class EmailHandler
             if ($debug) {
                 throw $throwable;
             }
+
+            Log::error('[mail] Send failed', [
+                'module' => $this->module,
+                'template' => $this->template,
+                'to' => $to,
+                'error' => $throwable->getMessage(),
+            ]);
 
             BaseHelper::logError($throwable);
 

@@ -255,4 +255,10 @@ $app->booting(function () use ($app): void {
     }
 });
 
+$app->booted(function () use ($app): void {
+    $app->make('view')->composer('packages/theme::partials.header', function (): void {
+        \App\Support\SerikSeo::apply();
+    });
+});
+
 return $app;

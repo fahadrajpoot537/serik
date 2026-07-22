@@ -2,6 +2,7 @@
 
 namespace Botble\RealEstate\Notifications;
 
+use App\Support\SerikQueue;
 use Botble\Base\Facades\EmailHandler;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -15,6 +16,7 @@ class ResetPasswordNotification extends Notification implements ShouldQueue
 
     public function __construct(public string $token)
     {
+        $this->onQueue(SerikQueue::high());
     }
 
     public function via($notifiable): array

@@ -152,7 +152,7 @@ return [
             'description' => 'Send a confirmation email to the person who submitted a consult request',
             'subject' => 'Thank you for your consult request on {{ site_title }}',
             'can_off' => true,
-            'enabled' => false,
+            'enabled' => true,
             'variables' => [
                 'consult_name' => 'Name',
                 'consult_phone' => 'Phone',

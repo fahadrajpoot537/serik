@@ -15,6 +15,20 @@ class ForceCanonicalDomainMiddleware
             return $next($request);
         }
 
+        $pathInfo = (string) $request->getPathInfo();
+
+        // /index.php and /index.php/... are non-canonical homepage variants.
+        if ($pathInfo === '/index.php' || str_starts_with($pathInfo, '/index.php/')) {
+            $cleanPath = substr($pathInfo, strlen('/index.php')) ?: '/';
+            $target = CanonicalUrl::normalize(rtrim(CanonicalUrl::origin(), '/') . $cleanPath);
+
+            if ($request->getQueryString()) {
+                $target .= '?' . $request->getQueryString();
+            }
+
+            return redirect()->away($target, Response::HTTP_MOVED_PERMANENTLY);
+        }
+
         $host = strtolower((string) $request->getHost());
         $needsHttps = ! $request->isSecure();
         $needsNonWww = str_starts_with($host, 'www.');

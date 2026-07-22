@@ -2,6 +2,7 @@
 
 namespace Botble\RealEstate\Notifications;
 
+use App\Support\SerikQueue;
 use Botble\Base\Facades\EmailHandler;
 use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
@@ -14,6 +15,11 @@ use Illuminate\Support\HtmlString;
 class ConfirmEmailNotification extends Notification implements ShouldQueue
 {
     use Queueable;
+
+    public function __construct()
+    {
+        $this->onQueue(SerikQueue::high());
+    }
 
     public function via($notifiable): array
     {

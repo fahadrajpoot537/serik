@@ -114,9 +114,12 @@ class PublicController extends BaseController
                     'consult_custom_fields' => $data['custom_fields'] ?? [],
                 ]);
 
-            // Send notification to admin/agent
-            $emailHandler->sendUsingTemplate('notice', 'sadaqat@serikrealty.ca');
-           // $emailHandler->sendUsingTemplate('notice', 'info@serik.ca');
+            // Send notification to admin/agent (author email or admin fallback).
+            if ($sendTo) {
+                $emailHandler->sendUsingTemplate('notice', $sendTo);
+            } else {
+                $emailHandler->sendUsingTemplate('notice');
+            }
 
             // Send confirmation to the person who submitted the consult request
             if ($consult->email) {

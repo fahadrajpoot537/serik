@@ -2,13 +2,22 @@
 
 namespace Botble\Newsletter\Listeners;
 
+use App\Support\SerikQueue;
 use Botble\Newsletter\Events\SubscribeNewsletterEvent;
 use Botble\Newsletter\Facades\Newsletter;
+use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Arr;
 
 class AddSubscriberToSendGridContactListListener implements ShouldQueue
 {
+    use Queueable;
+
+    public function __construct()
+    {
+        $this->onQueue(SerikQueue::high());
+    }
+
     public function handle(SubscribeNewsletterEvent $event): void
     {
         if (! setting('enable_newsletter_contacts_list_api')) {

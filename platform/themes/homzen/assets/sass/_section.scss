@@ -242,6 +242,25 @@
     }
 }
 
+.blog-list-page {
+    overflow-x: clip;
+
+    .flat-blog-list {
+        padding-right: 0;
+        min-width: 0;
+
+        .flat-blog-item {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+    }
+
+    .sidebar-blog {
+        min-width: 0;
+    }
+}
+
 .sidebar-blog {
     .search-box {
         margin-top: 20px;

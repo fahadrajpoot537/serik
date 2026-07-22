@@ -2,14 +2,25 @@
 
 namespace Botble\Contact\Listeners;
 
+use App\Support\EmailRecipients;
+use App\Support\SerikQueue;
 use Botble\Base\Facades\EmailHandler;
 use Botble\Contact\Events\SentContactEvent;
 use Botble\Contact\Models\Contact;
+use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Log;
 
 class SendContactEmailListener implements ShouldQueue
 {
+    use Queueable;
+
+    public function __construct()
+    {
+        $this->onQueue(SerikQueue::high());
+    }
+
     public function handle(SentContactEvent $event): void
     {
         $contact = $event->data;
@@ -18,7 +29,7 @@ class SendContactEmailListener implements ShouldQueue
             return;
         }
 
-        $receiverEmails = $this->getReceiverEmails();
+        $receiverEmails = EmailRecipients::contactNoticeRecipients();
         $customFields = $contact->custom_fields ?? [];
 
         $args = [];
@@ -38,36 +49,20 @@ class SendContactEmailListener implements ShouldQueue
                 'contact_custom_fields' => $customFields,
             ]);
 
-        $emailHandler->sendUsingTemplate('notice', 'sadaqat@serikrealty.ca' ?: null, $args);
-        // $emailHandler->sendUsingTemplate('notice', 'info@serik.ca' ?: null, $args);
+        if (! $emailHandler->sendUsingTemplate('notice', $receiverEmails, $args)) {
+            Log::warning('[mail] Contact notice not sent', [
+                'contact_id' => $contact->getKey(),
+                'to' => $receiverEmails,
+            ]);
+        }
 
         $args = ['replyTo' => is_array($receiverEmails) ? Arr::first($receiverEmails) : $receiverEmails];
 
-        $emailHandler->sendUsingTemplate('sender-confirmation', $contact->email, $args);
-    }
-
-    protected function getReceiverEmails(): string|array|null
-    {
-        $receiverEmails = null;
-
-        if ($receiverEmailsSetting = setting('receiver_emails', '')) {
-            $receiverEmails = trim($receiverEmailsSetting);
+        if (! $emailHandler->sendUsingTemplate('sender-confirmation', $contact->email, $args)) {
+            Log::warning('[mail] Contact sender-confirmation not sent', [
+                'contact_id' => $contact->getKey(),
+                'to' => $contact->email,
+            ]);
         }
-
-        if ($receiverEmails) {
-            $receiverEmails = collect(json_decode($receiverEmails, true))
-                ->pluck('value')
-                ->all();
-        }
-
-        if (is_array($receiverEmails)) {
-            $receiverEmails = array_filter($receiverEmails);
-
-            if (count($receiverEmails) === 1) {
-                $receiverEmails = Arr::first($receiverEmails);
-            }
-        }
-
-        return $receiverEmails;
     }
 }

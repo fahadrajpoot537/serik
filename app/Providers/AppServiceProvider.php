@@ -4,6 +4,11 @@ namespace App\Providers;
 
 use App\Support\CanonicalUrl;
 use App\Support\ImageAlt;
+use App\Support\SerikSeo;
+use App\Support\TrustBadgeImageAlt;
+use Illuminate\Queue\Events\JobFailed;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
@@ -47,6 +52,26 @@ class AppServiceProvider extends ServiceProvider
             return CanonicalUrl::normalize($url);
         }, 999);
 
+        add_action(BASE_ACTION_PUBLIC_RENDER_SINGLE, function (string $screen, object $data): void {
+            SerikSeo::applyForModel($screen, $data);
+        }, 9999, 2);
+
+        Event::listen(JobFailed::class, function (JobFailed $event): void {
+            $payload = $event->job->payload();
+            $displayName = $payload['displayName'] ?? $event->job->resolveName();
+
+            if (! self::isEmailQueueJob($displayName)) {
+                return;
+            }
+
+            Log::error('[queue] Email job failed', [
+                'job' => $displayName,
+                'queue' => $event->job->getQueue(),
+                'connection' => $event->connectionName,
+                'exception' => $event->exception->getMessage(),
+            ]);
+        });
+
         $rewriteLegacyMediaUrls = static function (?string $html): string {
             if (! is_string($html) || $html === '') {
                 return (string) $html;
@@ -73,6 +98,14 @@ class AppServiceProvider extends ServiceProvider
         add_filter('theme_logo_image', static function ($html) use ($rewriteLegacyMediaUrls) {
             return $rewriteLegacyMediaUrls((string) $html);
         }, 999);
+
+        add_filter(PAGE_FILTER_FRONT_PAGE_CONTENT, static function (?string $html): ?string {
+            if (! is_string($html) || $html === '') {
+                return $html;
+            }
+
+            return TrustBadgeImageAlt::apply($html);
+        }, 1200);
 
         add_filter(MENU_FILTER_NODE_URL, static function (?string $url): ?string {
             if (! is_string($url) || $url === '') {
@@ -137,5 +170,27 @@ class AppServiceProvider extends ServiceProvider
             app()->forgetInstance('log');
             \Illuminate\Support\Facades\Log::clearResolvedInstances();
         }
+    }
+
+    protected static function isEmailQueueJob(string $displayName): bool
+    {
+        $needles = [
+            'SendContactEmailListener',
+            'SendEmailNotificationAboutNewSubscriberListener',
+            'ResetPasswordNotification',
+            'ConfirmEmailNotification',
+            'SendMailListener',
+            'EmailHandler',
+            'MailchimpContactListListener',
+            'SendGridContactListListener',
+        ];
+
+        foreach ($needles as $needle) {
+            if (str_contains($displayName, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
