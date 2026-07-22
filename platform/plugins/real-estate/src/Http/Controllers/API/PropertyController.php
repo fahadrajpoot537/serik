@@ -3578,15 +3578,31 @@ class PropertyController extends BaseController
     private function assignTrebCoverImage(Property $property, string $listingKey, ?string $remoteUrl = null): bool
     {
         $store = $this->trebImageStore();
+        $imageVal = trim((string) ($property->image_val ?? ''));
 
-        if ($store->isStoredWebp($property->image_val)) {
+        if ($store->storedWebpExists($imageVal)) {
             return false;
         }
 
         $remote = trim((string) ($remoteUrl ?: ''));
-        if ($remote === '' && $store->isRemoteUrl($property->image_val)) {
-            $remote = (string) $property->image_val;
+
+        if ($remote === '' && $store->isRemoteUrl($imageVal)) {
+            $remote = $imageVal;
         }
+
+        if ($remote === '' && $imageVal !== '' && ! $store->isRemoteUrl($imageVal)) {
+            if (preg_match('/^L3RycmVi/i', $imageVal) || str_contains($imageVal, '/rs:') || str_contains($imageVal, 'rs:fit')) {
+                $remote = \App\Support\SerikMediaUrl::resolveTrebRemoteUrl($imageVal) ?? '';
+            } elseif (! str_ends_with(strtolower($imageVal), '.webp')) {
+                $local = $store->persistFromLocalRelativePath($listingKey, $imageVal, 'cover.webp');
+                if ($local) {
+                    $property->image_val = $local;
+
+                    return true;
+                }
+            }
+        }
+
         if ($remote !== '' && (str_contains($remote, '/rs:') || str_contains($remote, 'rs:fit') || preg_match('/^L3RycmVi/i', $remote))) {
             $remote = \App\Support\SerikMediaUrl::resolveTrebRemoteUrl($remote) ?? '';
         }
@@ -3602,10 +3618,6 @@ class PropertyController extends BaseController
             $property->image_val = $local;
 
             return true;
-        }
-
-        if ($store->isRemoteUrl($remote) && empty($property->image_val)) {
-            $property->image_val = $remote;
         }
 
         return false;

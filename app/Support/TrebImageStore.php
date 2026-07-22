@@ -44,6 +44,63 @@ final class TrebImageStore
             && str_ends_with(strtolower($value), '.webp');
     }
 
+    public function storedWebpExists(?string $value): bool
+    {
+        if (! $this->isStoredWebp($value)) {
+            return false;
+        }
+
+        $relative = $this->normalizeRelativePath((string) $value);
+
+        return $relative !== null && Storage::disk(self::DISK)->exists($relative);
+    }
+
+    public function persistFromLocalRelativePath(string $listingKey, string $sourcePath, string $filename = 'cover.webp'): ?string
+    {
+        $listingKey = strtoupper(trim($listingKey));
+        $relative = $this->normalizeRelativePath($sourcePath);
+
+        if ($listingKey === '' || $relative === null) {
+            return null;
+        }
+
+        $disk = Storage::disk(self::DISK);
+        if (! $disk->exists($relative)) {
+            return null;
+        }
+
+        $filename = $this->sanitizeFilename($filename);
+        $targetPath = self::relativePath($listingKey, $filename);
+
+        if ($disk->exists($targetPath)) {
+            return $targetPath;
+        }
+
+        try {
+            $binary = $disk->get($relative);
+            if ($binary === '') {
+                return null;
+            }
+
+            $encoded = (string) $this->imageManager()
+                ->read($binary)
+                ->encode(new WebpEncoder(quality: 82));
+
+            $disk->makeDirectory(dirname($targetPath));
+            $disk->put($targetPath, $encoded, 'public');
+
+            return $targetPath;
+        } catch (\Throwable $e) {
+            Log::warning('TrebImageStore: failed to convert local image', [
+                'listing_key' => $listingKey,
+                'source' => $relative,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
     public function persistFromRemoteUrl(string $listingKey, string $remoteUrl, string $filename = 'cover.webp'): ?string
     {
         $listingKey = strtoupper(trim($listingKey));
@@ -144,6 +201,25 @@ final class TrebImageStore
         }
 
         return $filename;
+    }
+
+    private function normalizeRelativePath(string $path): ?string
+    {
+        $path = trim(str_replace('\\', '/', $path));
+        if ($path === '') {
+            return null;
+        }
+
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return null;
+        }
+
+        $relative = ltrim($path, '/');
+        if (str_starts_with($relative, 'storage/')) {
+            $relative = substr($relative, strlen('storage/'));
+        }
+
+        return $relative !== '' ? $relative : null;
     }
 
     private function imageManager(): ImageManager

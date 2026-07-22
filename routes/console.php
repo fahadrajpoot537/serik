@@ -3532,32 +3532,58 @@ Artisan::command('serik:repair-listing-history
 Artisan::command('serik:treb-images-webp
     {--limit=50 : Max properties per run}
     {--gallery : Also persist full gallery to images JSON}
+    {--offset=0 : Skip this many matching rows}
 ', function () {
     $limit = max(1, (int) $this->option('limit'));
+    $offset = max(0, (int) $this->option('offset'));
     $withGallery = (bool) $this->option('gallery');
     $controller = app(\Botble\RealEstate\Http\Controllers\API\PropertyController::class);
+    $store = app(\App\Support\TrebImageStore::class);
 
     $processed = 0;
     $converted = 0;
+    $skipped = 0;
 
     \Botble\RealEstate\Models\Property::query()
         ->whereNotNull('external_id')
-        ->where(function ($q) {
+        ->where('external_id', '!=', '')
+        ->where(function ($q) use ($store) {
             $q->whereNull('image_val')
                 ->orWhere('image_val', '')
-                ->orWhere('image_val', 'like', 'http%');
+                ->orWhere('image_val', 'like', 'http%')
+                ->orWhere('image_val', 'like', '%/rs:%')
+                ->orWhere('image_val', 'like', 'rs:fit%')
+                ->orWhere('image_val', 'like', 'L3RycmVi%')
+                ->orWhere(function ($inner) {
+                    $inner->whereNotNull('image_val')
+                        ->where('image_val', 'not like', '%.webp')
+                        ->where('image_val', 'not like', 'http%');
+                })
+                ->orWhere(function ($inner) use ($store) {
+                    $inner->where('image_val', 'like', '%.webp')
+                        ->where('image_val', 'not like', 'http%');
+                });
         })
         ->orderBy('id')
+        ->offset($offset)
         ->limit($limit)
         ->get()
-        ->each(function ($property) use ($controller, $withGallery, &$processed, &$converted) {
+        ->each(function ($property) use ($controller, $withGallery, $store, &$processed, &$converted, &$skipped) {
             $processed++;
+
+            if ($store->storedWebpExists($property->image_val)) {
+                $skipped++;
+
+                return;
+            }
+
             if ($controller->persistTrebImagesForProperty($property, $withGallery)) {
                 $converted++;
             }
         });
 
-    $this->info("Processed {$processed} listings, converted {$converted} cover images to WebP.");
+    $this->info("Processed {$processed} listings, converted {$converted}, already stored {$skipped}.");
+    $this->line('Run again with a higher --offset until converted stays 0.');
 
     return 0;
 })->purpose('Download TREB cover images and store as local WebP files');

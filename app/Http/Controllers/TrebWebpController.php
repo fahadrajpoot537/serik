@@ -82,6 +82,11 @@ final class TrebWebpController extends Controller
             return;
         }
 
-        $store->persistFromRemoteUrl($listingKey, $remote, $filename);
+        $path = $store->persistFromRemoteUrl($listingKey, $remote, $filename);
+
+        if ($path && $property !== null && strcasecmp($filename, 'cover.webp') === 0 && ! $store->storedWebpExists($property->image_val)) {
+            $property->image_val = $path;
+            $property->saveQuietly();
+        }
     }
 }
