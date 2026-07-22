@@ -88,6 +88,7 @@ class GeoBlockMiddleware
             'iftheynopaysmywages',
             'paidmywagesthanks',
             'up',
+            'storage/properties/treb',
             'ajax/render-ui-blocks',
             'api/v1/map-properties',
             'api/v1/map-thumbnails',

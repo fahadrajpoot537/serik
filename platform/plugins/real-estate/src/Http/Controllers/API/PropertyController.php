@@ -28,6 +28,7 @@ use Theme\homzen\Supports\TrebPropertyHelper;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Schema;
 use Botble\RealEstate\Supports\PropertyFulltextSearch;
+use App\Support\TrebImageStore;
 
 class PropertyController extends BaseController
 {
@@ -283,6 +284,12 @@ class PropertyController extends BaseController
                 SlugHelper::createSlug($property, $slug);
             }
 
+            if ($mediaUrl && ($property->wasRecentlyCreated || $this->trebImageStore()->isRemoteUrl($property->image_val))) {
+                if ($this->assignTrebCoverImage($property, $listingkey, $mediaUrl)) {
+                    $property->saveQuietly();
+                }
+            }
+
             //$this->importPropertyImages($item['ListingKey']);
 
 
@@ -434,6 +441,12 @@ class PropertyController extends BaseController
 
                 if ($property->wasRecentlyCreated) {
                     SlugHelper::createSlug($property, $slug);
+                }
+
+                if ($mediaUrl && ($property->wasRecentlyCreated || $this->trebImageStore()->isRemoteUrl($property->image_val))) {
+                    if ($this->assignTrebCoverImage($property, $item['ListingKey'], $mediaUrl)) {
+                        $property->saveQuietly();
+                    }
                 }
 
                 //$this->importPropertyImages($item['ListingKey']);
@@ -801,6 +814,12 @@ class PropertyController extends BaseController
 
         $property->save();
 
+        if ($mediaUrl && ($isNew || $this->trebImageStore()->isRemoteUrl($property->image_val))) {
+            if ($this->assignTrebCoverImage($property, $listingkey, $mediaUrl)) {
+                $property->saveQuietly();
+            }
+        }
+
         if ($isNew) {
             $slug =
                 Str::slug(
@@ -971,9 +990,7 @@ class PropertyController extends BaseController
                         continue;
                     }
                     try {
-                        $image = $this->getMediaUrl($key);
-                        if (! empty($image)) {
-                            $property->image_val = $image;
+                        if ($this->assignTrebCoverImage($property, $key)) {
                             $property->saveQuietly();
                         }
                 } catch (\Throwable $e) {
@@ -1716,7 +1733,11 @@ class PropertyController extends BaseController
 
             $lastId = cache()->get('property_image_last_id', 0);
 
-            Property::whereNull('image_val')
+            Property::where(function ($q) {
+                $q->whereNull('image_val')
+                    ->orWhere('image_val', '')
+                    ->orWhere('image_val', 'like', 'http%');
+            })
                 ->where('id', '>', $lastId)
                 ->orderBy('id')
                 ->chunkById(20, function ($properties) {
@@ -1752,8 +1773,9 @@ class PropertyController extends BaseController
                             continue;
                         }
 
-                        $property->image_val = $firstImage;
-                        $property->save();
+                        if ($this->assignTrebCoverImage($property, $listingKey, $firstImage)) {
+                            $property->save();
+                        }
 
                         cache()->put('property_image_last_id', $property->id);
 
@@ -3541,6 +3563,97 @@ class PropertyController extends BaseController
         return $slugKey;
     }
 
+    private function trebImageStore(): TrebImageStore
+    {
+        return app(TrebImageStore::class);
+    }
+
+    private function assignTrebCoverImage(Property $property, string $listingKey, ?string $remoteUrl = null): bool
+    {
+        $store = $this->trebImageStore();
+
+        if ($store->isStoredWebp($property->image_val)) {
+            return false;
+        }
+
+        $remote = trim((string) ($remoteUrl ?: ''));
+        if ($remote === '' && $store->isRemoteUrl($property->image_val)) {
+            $remote = (string) $property->image_val;
+        }
+        if ($remote === '') {
+            $remote = (string) ($this->getMediaUrl($listingKey) ?: '');
+        }
+        if ($remote === '') {
+            return false;
+        }
+
+        $local = $store->persistFromRemoteUrl($listingKey, $remote, 'cover.webp');
+        if ($local) {
+            $property->image_val = $local;
+
+            return true;
+        }
+
+        if ($store->isRemoteUrl($remote) && empty($property->image_val)) {
+            $property->image_val = $remote;
+        }
+
+        return false;
+    }
+
+    private function assignTrebGallery(Property $property, string $listingKey): bool
+    {
+        $existing = is_array($property->images) ? $property->images : [];
+        if (
+            $existing !== []
+            && collect($existing)->every(fn ($path) => $this->trebImageStore()->isStoredWebp(is_string($path) ? $path : null))
+        ) {
+            return false;
+        }
+
+        $remoteGallery = TrebPropertyHelper::getPropertyImages(
+            $listingKey,
+            $property->image_val,
+            true
+        );
+
+        if ($remoteGallery === []) {
+            return false;
+        }
+
+        $localGallery = $this->trebImageStore()->persistGallery($listingKey, $remoteGallery);
+        if ($localGallery === []) {
+            return false;
+        }
+
+        $property->images = $localGallery;
+
+        if (empty($property->image_val) || $this->trebImageStore()->isRemoteUrl($property->image_val)) {
+            $property->image_val = $localGallery[0];
+        }
+
+        return true;
+    }
+
+    public function persistTrebImagesForProperty(Property $property, bool $withGallery = false): bool
+    {
+        $listingKey = strtoupper(trim((string) $property->external_id));
+        if ($listingKey === '') {
+            return false;
+        }
+
+        $changed = $this->assignTrebCoverImage($property, $listingKey);
+        if ($withGallery) {
+            $changed = $this->assignTrebGallery($property, $listingKey) || $changed;
+        }
+
+        if ($changed) {
+            $property->saveQuietly();
+        }
+
+        return $changed;
+    }
+
     /**
      * @param  array<int, array<string, mixed>>  $rows
      * @return array<int, array<string, mixed>>
@@ -4800,12 +4913,9 @@ class PropertyController extends BaseController
 
             // Primary image so the map marker / popup / search card render
             // immediately. Failures are non-fatal (lazy endpoints still work).
-            if (empty($property->image_val)) {
+            if (empty($property->image_val) || $this->trebImageStore()->isRemoteUrl($property->image_val)) {
                 try {
-                    $image = $this->getMediaUrl($listingKey);
-
-                    if ($image) {
-                        $property->image_val = $image;
+                    if ($this->assignTrebCoverImage($property, $listingKey)) {
                         Property::withoutSyncingToSearch(fn () => $property->save());
                     }
                 } catch (\Throwable $e) {
@@ -4921,19 +5031,33 @@ class PropertyController extends BaseController
             Log::warning('hydrate reconcile failed: ' . $e->getMessage(), ['key' => $listingKey]);
         }
 
-        // --- image_val (persisted) ---
-        if (empty($property->image_val)) {
+        // --- image_val (persisted as local WebP) ---
+        $imageChanged = false;
+        if (empty($property->image_val) || $this->trebImageStore()->isRemoteUrl($property->image_val)) {
             try {
-                $image = $this->getMediaUrl($listingKey);
-
-                if ($image) {
-                    $property->image_val = $image;
+                if ($this->assignTrebCoverImage($property, $listingKey)) {
                     Property::withoutSyncingToSearch(fn () => $property->save());
                     $out['image'] = true;
+                    $imageChanged = true;
                 }
             } catch (\Throwable $e) {
                 Log::warning('hydrate image failed: ' . $e->getMessage(), ['key' => $listingKey]);
             }
+        }
+
+        // --- full gallery (persisted to images JSON as WebP paths) ---
+        try {
+            if ($this->assignTrebGallery($property, $listingKey)) {
+                Property::withoutSyncingToSearch(fn () => $property->save());
+                $out['gallery'] = is_array($property->images) ? count($property->images) : 0;
+                $imageChanged = true;
+            }
+        } catch (\Throwable $e) {
+            Log::warning('hydrate gallery failed: ' . $e->getMessage(), ['key' => $listingKey]);
+        }
+
+        if ($imageChanged) {
+            $out['image'] = true;
         }
 
         // --- coordinates (persisted) ---

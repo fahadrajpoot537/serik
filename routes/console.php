@@ -3528,3 +3528,36 @@ Artisan::command('serik:repair-listing-history
 
     return 0;
 })->purpose('Repair purged AMP address history (e.g. W4929276 / 77 Stillman)');
+
+Artisan::command('serik:treb-images-webp
+    {--limit=50 : Max properties per run}
+    {--gallery : Also persist full gallery to images JSON}
+', function () {
+    $limit = max(1, (int) $this->option('limit'));
+    $withGallery = (bool) $this->option('gallery');
+    $controller = app(\Botble\RealEstate\Http\Controllers\API\PropertyController::class);
+
+    $processed = 0;
+    $converted = 0;
+
+    \Botble\RealEstate\Models\Property::query()
+        ->whereNotNull('external_id')
+        ->where(function ($q) {
+            $q->whereNull('image_val')
+                ->orWhere('image_val', '')
+                ->orWhere('image_val', 'like', 'http%');
+        })
+        ->orderBy('id')
+        ->limit($limit)
+        ->get()
+        ->each(function ($property) use ($controller, $withGallery, &$processed, &$converted) {
+            $processed++;
+            if ($controller->persistTrebImagesForProperty($property, $withGallery)) {
+                $converted++;
+            }
+        });
+
+    $this->info("Processed {$processed} listings, converted {$converted} cover images to WebP.");
+
+    return 0;
+})->purpose('Download TREB cover images and store as local WebP files');

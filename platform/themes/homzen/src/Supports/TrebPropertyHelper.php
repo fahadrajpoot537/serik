@@ -908,6 +908,23 @@ class TrebPropertyHelper
     {
         if (! empty($listingKey)) {
             $normalizedKey = strtoupper(trim($listingKey));
+
+            $property = \Botble\RealEstate\Models\Property::query()
+                ->where('external_id', $normalizedKey)
+                ->orWhere('external_id', $listingKey)
+                ->first(['images', 'image_val']);
+
+            if ($property && is_array($property->images) && count($property->images) > 0) {
+                return array_values(array_filter(array_map(
+                    static fn ($path) => \App\Support\SerikMediaUrl::toPublic(is_string($path) ? $path : ''),
+                    $property->images
+                )));
+            }
+
+            if ($property && ! empty($property->image_val) && ! str_starts_with((string) $property->image_val, 'http')) {
+                return [\App\Support\SerikMediaUrl::toPublic((string) $property->image_val)];
+            }
+
             $cacheKeys = [
                 'treb_images_v3_' . $normalizedKey,
                 'treb_property_images_' . $normalizedKey,
