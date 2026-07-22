@@ -341,9 +341,18 @@
     touch-action: pan-y;
 }
 
+.hs-map-center-panel.is-cluster.is-open .clusterpopup {
+    grid-template-rows: auto minmax(200px, 1fr) !important;
+    min-height: min(420px, 72vh) !important;
+    height: 100% !important;
+}
+
 .hs-map-center-panel.is-cluster.is-open .hs-cluster-popup-list {
-    min-height: 220px !important;
-    flex: 1 1 auto;
+    min-height: 200px !important;
+    flex: 1 1 auto !important;
+    overflow-y: auto !important;
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 
 @media (min-width: 1200px) {
@@ -3757,7 +3766,7 @@ position: absolute;
 
     .map-housesigma .hs-cluster-popup-list {
         flex: 1 1 auto;
-        min-height: 0;
+        min-height: 180px;
         max-height: none !important;
         overflow-y: auto !important;
         overflow-x: hidden;
@@ -5575,6 +5584,31 @@ async function showCityBoundary(cityName) {
     let hsMapListFeatures = [];
     let lastMapFeatures = [];
     let hsSuppressMapMoveFetchUntil = 0;
+    let hsDeferredMapReloadAfterCluster = false;
+
+    function suppressMapMoveFetch(ms = 3000) {
+        hsSuppressMapMoveFetchUntil = Date.now() + ms;
+    }
+
+    function isClusterPanelOpen() {
+        const panel = document.getElementById('hsMapCenterPanel');
+        return !!(panel?.classList.contains('is-open') && panel.classList.contains('is-cluster'));
+    }
+
+    function shouldSkipLoadPropertiesWhileClusterOpen(options = {}) {
+        if (options.forceWhileClusterOpen || options.fromFilters) {
+            return false;
+        }
+        if (!isClusterPanelOpen()) {
+            return false;
+        }
+        if (options.fromMapMove && userHasMovedMap) {
+            return false;
+        }
+        return true;
+    }
+
+    window.isClusterPanelOpen = isClusterPanelOpen;
 
     const HS_MOBILE_PROPERTY_TYPES = [
         { label: 'All property types', value: '' },
@@ -6834,7 +6868,12 @@ applyAll.addEventListener('click', function () {
         dropdownMenu1.style.display = 'none';
     }
 
-    loadProperties(); // only loads here
+    hsDeferredMapReloadAfterCluster = false;
+    if (typeof closeHsMapCenterPanel === 'function') {
+        closeHsMapCenterPanel();
+    }
+
+    loadProperties({ fromFilters: true }); // only loads here
 });
 
 
@@ -7568,6 +7607,11 @@ function mapMovedEnoughToRefetch() {
     function loadProperties(options = {}) {
         const fromMapMove = options.fromMapMove === true;
 
+        if (shouldSkipLoadPropertiesWhileClusterOpen(options)) {
+            hsDeferredMapReloadAfterCluster = true;
+            return;
+        }
+
         if (!skipSeoUrlOnNextLoad) {
             updateSeoUrl();
         }
@@ -7712,13 +7756,38 @@ function mapMovedEnoughToRefetch() {
         window._hsMapSelectionOpenedAt = Date.now();
     }
 
-    function suppressMapMoveFetch(ms = 3000) {
-        hsSuppressMapMoveFetchUntil = Date.now() + ms;
-    }
+    function refreshClusterListDom(leaves, coords) {
+        const snapshot = (leaves || []).slice();
+        if (!snapshot.length) {
+            return;
+        }
 
-    function isClusterPanelOpen() {
-        const panel = document.getElementById('hsMapCenterPanel');
-        return !!(panel?.classList.contains('is-open') && panel.classList.contains('is-cluster'));
+        window._hsLastClusterLeaves = snapshot;
+        const markerCoords = coords
+            ? (coords.slice ? coords.slice() : [coords[0], coords[1]])
+            : window._hsLastClusterCoords;
+        if (markerCoords) {
+            window._hsLastClusterCoords = markerCoords;
+        }
+
+        const header = document.querySelector('#hsMapCenterPanelBody .hs-cluster-popup-header h6');
+        if (header) {
+            header.textContent = snapshot.length + ' Listings';
+        }
+
+        let list = document.querySelector('#hsMapCenterPanelBody .hs-cluster-popup-list');
+        if (!list) {
+            showClusterPopup(snapshot, markerCoords || window._hsLastClusterCoords);
+            return;
+        }
+
+        list.innerHTML = snapshot.map((feature, index) => buildClusterListCardHtml(feature, index)).join('');
+        if (typeof hydrateMapThumbnailsForFeatures === 'function') {
+            hydrateMapThumbnailsForFeatures(snapshot, '.hs-map-center-panel-body .hs-cluster-list-item');
+        }
+        if (typeof prefetchMapBundlesForFeatures === 'function') {
+            prefetchMapBundlesForFeatures(snapshot);
+        }
     }
 
     function restoreClusterPanelIfNeeded() {
@@ -7735,7 +7804,7 @@ function mapMovedEnoughToRefetch() {
         const list = document.querySelector('#hsMapCenterPanelBody .hs-cluster-popup-list');
         const renderedCount = list ? list.querySelectorAll('.hs-cluster-list-item').length : 0;
         if (!list || renderedCount < leaves.length) {
-            showClusterPopup(leaves, coords);
+            refreshClusterListDom(leaves, coords);
             return;
         }
 
@@ -7745,6 +7814,7 @@ function mapMovedEnoughToRefetch() {
     }
 
     window.restoreClusterPanelIfNeeded = restoreClusterPanelIfNeeded;
+    window.refreshClusterListDom = refreshClusterListDom;
 
     function shouldIgnoreMapBackgroundClick() {
         return Date.now() < hsMapSuppressBackgroundClickUntil;
@@ -9165,7 +9235,7 @@ function mapMovedEnoughToRefetch() {
         wrapper?.classList.add('panel-open');
         markHsMapSelectionOpened();
         if (options.isCluster) {
-            suppressMapMoveFetch(3500);
+            suppressMapMoveFetch(8000);
         }
 
         if (options.feature) {
@@ -9190,7 +9260,7 @@ function mapMovedEnoughToRefetch() {
             }
         }
 
-        if (typeof map?.resize === 'function') {
+        if (!options.skipMapResize && typeof map?.resize === 'function') {
             requestAnimationFrame(() => {
                 map.resize();
                 requestAnimationFrame(() => map.resize());
@@ -9239,6 +9309,9 @@ function mapMovedEnoughToRefetch() {
             window._hsLastClusterCoords = null;
         }
 
+        const shouldReloadMap = wasCluster && hsDeferredMapReloadAfterCluster;
+        hsDeferredMapReloadAfterCluster = false;
+
         const body = document.getElementById('hsMapCenterPanelBody');
         if (body) {
             body.innerHTML = '';
@@ -9254,6 +9327,14 @@ function mapMovedEnoughToRefetch() {
 
         if (typeof map?.resize === 'function') {
             requestAnimationFrame(() => map.resize());
+        }
+
+        if (shouldReloadMap) {
+            setTimeout(() => {
+                if (!isClusterPanelOpen()) {
+                    loadProperties({ fromMapMove: true });
+                }
+            }, 150);
         }
     }
 
@@ -9561,7 +9642,7 @@ function mapMovedEnoughToRefetch() {
         window._hsLastClusterLeaves = snapshot;
         const markerCoords = coordinates.slice ? coordinates.slice() : [coordinates[0], coordinates[1]];
         window._hsLastClusterCoords = markerCoords;
-        suppressMapMoveFetch(3500);
+        suppressMapMoveFetch(8000);
 
         const cards = snapshot.map((feature, index) => buildClusterListCardHtml(feature, index)).join('');
         const html = `
