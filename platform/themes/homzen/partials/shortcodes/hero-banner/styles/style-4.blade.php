@@ -343,10 +343,11 @@
 }
 
 .hs-map-center-panel.is-cluster.is-open .hs-cluster-popup-list {
-    flex: 1 1 auto !important;
-    min-height: 200px !important;
-    max-height: none !important;
-    overflow-y: auto !important;
+    flex: none !important;
+    min-height: 260px !important;
+    height: auto !important;
+    max-height: min(520px, calc(72vh - 72px)) !important;
+    overflow-y: scroll !important;
     overflow-x: hidden !important;
     grid-column: unset;
     grid-row: unset;
@@ -355,6 +356,7 @@
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
     touch-action: pan-y;
+    contain: layout style;
 }
 
 .hs-map-center-panel.is-open .hs-cluster-popup-header {
@@ -375,16 +377,17 @@
 }
 
 .hs-map-center-panel.is-cluster.is-open .hs-cluster-popup-list {
-    min-height: 200px !important;
-    flex: 1 1 auto !important;
-    overflow-y: auto !important;
+    min-height: 260px !important;
+    max-height: min(520px, calc(72vh - 72px)) !important;
+    overflow-y: scroll !important;
     visibility: visible !important;
     opacity: 1 !important;
 }
 
-@media (max-width: 767px) {
-    .hs-map-center-panel.is-cluster.is-open .hs-map-center-panel-backdrop {
-        pointer-events: auto;
+@media (min-width: 768px) {
+    .hs-map-center-panel.is-cluster.is-open .hs-cluster-popup-list {
+        max-height: calc(100dvh - 260px) !important;
+        min-height: 300px !important;
     }
 }
 
@@ -5653,14 +5656,41 @@ async function showCityBoundary(cityName) {
         if (options.forceWhileClusterOpen || options.fromFilters) {
             return false;
         }
-        if (!isClusterPanelOpen()) {
-            return false;
-        }
-        if (options.fromMapMove && userHasMovedMap) {
-            return false;
-        }
-        return true;
+        return isClusterPanelOpen();
     }
+
+    function setMapClusterPanelLock(locked) {
+        if (!map) {
+            return;
+        }
+
+        if (locked) {
+            if (map.__hsClusterLockActive) {
+                return;
+            }
+            map.__hsClusterLockActive = true;
+            map.__hsClusterHadScrollZoom = map.scrollZoom?.isEnabled?.() !== false;
+            map.scrollZoom?.disable?.();
+            map.boxZoom?.disable?.();
+            map.doubleClickZoom?.disable?.();
+            suppressMapMoveFetch(600000);
+            return;
+        }
+
+        if (!map.__hsClusterLockActive) {
+            return;
+        }
+
+        if (map.__hsClusterHadScrollZoom) {
+            map.scrollZoom?.enable?.();
+        }
+        map.boxZoom?.enable?.();
+        map.doubleClickZoom?.enable?.();
+        delete map.__hsClusterLockActive;
+        delete map.__hsClusterHadScrollZoom;
+    }
+
+    window.setMapClusterPanelLock = setMapClusterPanelLock;
 
     window.isClusterPanelOpen = isClusterPanelOpen;
 
@@ -7275,15 +7305,18 @@ function getTransactionFromUrl() {
 
 
     map.on('dragstart', function () {
-        if (!autoCenteringMap) {
-            userHasMovedMap = true;
-            // Keep the boundary + polygon clip when a city/area is locked.
-            if (!activeCityPolygon) clearCityBoundaryLock();
+        if (isClusterPanelOpen() || autoCenteringMap) {
+            return;
         }
+        userHasMovedMap = true;
+        if (!activeCityPolygon) clearCityBoundaryLock();
     });
 
     map.on('zoomstart', function (event) {
-        if (!autoCenteringMap && event.originalEvent) {
+        if (isClusterPanelOpen() || autoCenteringMap) {
+            return;
+        }
+        if (event.originalEvent) {
             userHasMovedMap = true;
             if (!activeCityPolygon) clearCityBoundaryLock();
         }
@@ -7291,13 +7324,8 @@ function getTransactionFromUrl() {
 
     map.on('moveend', function () {
         if (!mapLayersReady) return;
+        if (isClusterPanelOpen()) return;
         if (Date.now() < hsSuppressMapMoveFetchUntil) return;
-
-        const clusterPanelOpen = document.getElementById('hsMapCenterPanel')?.classList.contains('is-open')
-            && document.getElementById('hsMapCenterPanel')?.classList.contains('is-cluster');
-        if (clusterPanelOpen && !userHasMovedMap) {
-            return;
-        }
 
         clearTimeout(moveTimer);
         moveTimer = setTimeout(() => {
@@ -7778,7 +7806,7 @@ function mapMovedEnoughToRefetch() {
                 if (typeof renderMapListCards === 'function') {
                     renderMapListCards(filteredFeatures);
                 }
-                if (typeof restoreClusterPanelIfNeeded === 'function') {
+                if (!isClusterPanelOpen() && typeof restoreClusterPanelIfNeeded === 'function') {
                     restoreClusterPanelIfNeeded();
                 }
             })
@@ -9221,6 +9249,32 @@ function mapMovedEnoughToRefetch() {
     ensureHsMapCenterPanelInWrapper();
     window.ensureHsMapCenterPanelInWrapper = ensureHsMapCenterPanelInWrapper;
 
+    function bindClusterListScrollGuard(list) {
+        if (!list || list.dataset.hsScrollGuardBound === '1') {
+            return;
+        }
+
+        list.dataset.hsScrollGuardBound = '1';
+
+        const onWheel = (ev) => {
+            ev.stopPropagation();
+            const maxScroll = list.scrollHeight - list.clientHeight;
+            if (maxScroll <= 0) {
+                ev.preventDefault();
+                return;
+            }
+            const goingUp = ev.deltaY < 0;
+            const goingDown = ev.deltaY > 0;
+            if ((goingUp && list.scrollTop <= 0) || (goingDown && list.scrollTop >= maxScroll - 1)) {
+                ev.preventDefault();
+            }
+        };
+
+        list.addEventListener('wheel', onWheel, { passive: false, capture: true });
+        list.addEventListener('touchstart', (ev) => ev.stopPropagation(), { passive: true, capture: true });
+        list.addEventListener('touchmove', (ev) => ev.stopPropagation(), { passive: false, capture: true });
+    }
+
     function setupClusterPopupLayout(rootEl) {
         if (!rootEl) {
             return;
@@ -9232,28 +9286,37 @@ function mapMovedEnoughToRefetch() {
             return;
         }
 
-        popup.style.display = 'flex';
-        popup.style.flexDirection = 'column';
-        popup.style.height = '100%';
-        popup.style.minHeight = '280px';
-        popup.style.maxHeight = '100%';
-        popup.style.overflow = 'hidden';
+        const applyLayout = () => {
+            const dialog = rootEl.closest('.hs-map-center-panel-dialog');
+            const header = popup.querySelector('.hs-cluster-popup-header');
+            const dialogHeight = dialog?.clientHeight || rootEl.clientHeight || 420;
+            const headerHeight = header?.offsetHeight || 68;
+            const listHeight = Math.max(260, dialogHeight - headerHeight - 12);
 
-        list.style.flex = '1 1 auto';
-        list.style.minHeight = '200px';
-        list.style.maxHeight = 'none';
-        list.style.overflowY = 'auto';
-        list.style.overflowX = 'hidden';
-        list.style.webkitOverflowScrolling = 'touch';
-        list.style.overscrollBehavior = 'contain';
-        list.style.touchAction = 'pan-y';
-        list.style.visibility = 'visible';
-        list.style.opacity = '1';
+            popup.style.display = 'flex';
+            popup.style.flexDirection = 'column';
+            popup.style.height = '100%';
+            popup.style.minHeight = '320px';
+            popup.style.maxHeight = '100%';
+            popup.style.overflow = 'hidden';
 
-        if (!list.dataset.wheelBound) {
-            list.dataset.wheelBound = '1';
-            list.addEventListener('wheel', (ev) => ev.stopPropagation(), { passive: true });
-        }
+            list.style.flex = 'none';
+            list.style.height = listHeight + 'px';
+            list.style.minHeight = listHeight + 'px';
+            list.style.maxHeight = listHeight + 'px';
+            list.style.overflowY = 'scroll';
+            list.style.overflowX = 'hidden';
+            list.style.webkitOverflowScrolling = 'touch';
+            list.style.overscrollBehavior = 'contain';
+            list.style.touchAction = 'pan-y';
+            list.style.visibility = 'visible';
+            list.style.opacity = '1';
+
+            bindClusterListScrollGuard(list);
+        };
+
+        applyLayout();
+        requestAnimationFrame(applyLayout);
     }
 
     function setupMapPopupScrollAreas(rootEl) {
@@ -9325,7 +9388,10 @@ function mapMovedEnoughToRefetch() {
         wrapper?.classList.add('panel-open');
         markHsMapSelectionOpened();
         if (options.isCluster) {
-            suppressMapMoveFetch(8000);
+            suppressMapMoveFetch(600000);
+            setMapClusterPanelLock(true);
+        } else {
+            setMapClusterPanelLock(false);
         }
 
         if (options.feature) {
@@ -9348,21 +9414,18 @@ function mapMovedEnoughToRefetch() {
         if (!HsMapInteractionLock.isLocked()) {
             const mapCanvas = map?.getCanvas?.();
             if (mapCanvas) {
-                if (options.isCluster && window.innerWidth < 768) {
-                    mapCanvas.style.pointerEvents = 'none';
-                    mapCanvas.dataset.hsClusterPanelLock = '1';
-                } else {
-                    mapCanvas.style.pointerEvents = 'auto';
-                    delete mapCanvas.dataset.hsModalPointerEvents;
-                }
+                // Keep map clickable while cluster list is open so users can pick another circle.
+                mapCanvas.style.pointerEvents = 'auto';
+                delete mapCanvas.dataset.hsModalPointerEvents;
+                delete mapCanvas.dataset.hsClusterPanelLock;
             }
         }
 
         if (options.isCluster) {
             setTimeout(() => {
                 if (isClusterPanelOpen() && typeof map?.resize === 'function') {
-                    suppressMapMoveFetch(2000);
                     map.resize();
+                    setupClusterPopupLayout(body);
                 }
             }, 280);
         } else if (!options.skipMapResize && typeof map?.resize === 'function') {
@@ -9415,6 +9478,8 @@ function mapMovedEnoughToRefetch() {
         if (wasCluster) {
             window._hsLastClusterLeaves = [];
             window._hsLastClusterCoords = null;
+            setMapClusterPanelLock(false);
+            hsSuppressMapMoveFetchUntil = 0;
         }
 
         const shouldReloadMap = wasCluster && hsDeferredMapReloadAfterCluster;
@@ -9760,7 +9825,8 @@ function mapMovedEnoughToRefetch() {
         window._hsLastClusterLeaves = snapshot;
         const markerCoords = coordinates.slice ? coordinates.slice() : [coordinates[0], coordinates[1]];
         window._hsLastClusterCoords = markerCoords;
-        suppressMapMoveFetch(8000);
+        suppressMapMoveFetch(600000);
+        setMapClusterPanelLock(true);
 
         const cards = snapshot.map((feature, index) => buildClusterListCardHtml(feature, index)).join('');
         const html = `
