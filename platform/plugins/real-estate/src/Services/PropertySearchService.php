@@ -417,6 +417,28 @@ class PropertySearchService
             $filters[] = 'number_bathroom >= ' . (int) $opts['min_bathrooms'];
         }
 
+        if (! empty($opts['subtypes']) && is_array($opts['subtypes'])) {
+            $vals = array_values(array_filter(array_map(
+                fn ($v) => '"' . $this->escape((string) $v) . '"',
+                $opts['subtypes']
+            )));
+            if ($vals !== []) {
+                $filters[] = 'property_sub_type IN [' . implode(', ', $vals) . ']';
+            }
+        }
+
+        if (isset($opts['min_square']) && $opts['min_square'] > 0) {
+            $filters[] = 'square >= ' . (int) $opts['min_square'];
+        }
+
+        if (isset($opts['max_square']) && $opts['max_square'] > 0) {
+            $filters[] = 'square <= ' . (int) $opts['max_square'];
+        }
+
+        if (isset($opts['min_covered_spaces']) && $opts['min_covered_spaces'] > 0) {
+            $filters[] = 'covered_spaces >= ' . (int) $opts['min_covered_spaces'];
+        }
+
         // Date-window filters use the indexed numeric timestamps so "Last N days"
         // resolves entirely inside Meilisearch instead of a slow MySQL scan.
         // 'listing_contract_ts' => active "Listed On" date; 'close_ts' => sold date.

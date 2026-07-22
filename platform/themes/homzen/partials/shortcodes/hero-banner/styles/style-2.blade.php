@@ -297,6 +297,9 @@
    .flat-slider.home-2 .slider-content .heading .subtitle{
        margin-bottom: 10px;
    }
+   .flat-slider.home-2 .slider-content .heading h1.hero-banner-headline {
+       margin: 0;
+   }
    .calculator-box{
        padding: 14px 14px;
    }
@@ -349,17 +352,17 @@
             <div class="col-xl-10">
                 <div class="slider-content">
                     <div class="heading">
-					<p class="subtitle body-1 wow fadeIn" style="color: {{ $descriptionColor }} !important; font-weight:700;" data-wow-delay=".8s" data-wow-duration="2000ms">
-                                Top Realtor in Ontario - Buy or Sell Homes and Get
-                            </p>
-                        <h1 class="title title1 wow fadeIn animationtext clip" style="color: {{ $titleColor }} !important; font-weight:700; font-size: 35px;" data-wow-delay=".2s" data-wow-duration="2000ms">
+                        <h1 class="subtitle body-1 hero-banner-headline wow fadeIn" style="color: {{ $descriptionColor }} !important; font-weight:700;" data-wow-delay=".8s" data-wow-duration="2000ms">
+                            Top Realtor in Ontario - Buy or Sell Homes and Get
+                        </h1>
+                        <div class="title title1 wow fadeIn animationtext clip" style="color: {{ $titleColor }} !important; font-weight:700; font-size: 35px;" data-wow-delay=".2s" data-wow-duration="2000ms">
                            <div>  {!! Theme::partial('shortcodes.hero-banner.partials.animation-text', compact('shortcode')) !!}
 						   </div>
                             <div style="margin-top: 15px;">
                            
                            <p style="color:red;">*Terms and Conditions Apply</p>
 							</div>
-                        </h1>
+                        </div>
                         @if ($shortcode->description)
                             <p class="subtitle body-1 wow fadeIn" style="color: {{ $descriptionColor }} !important; font-weight:700;" data-wow-delay=".8s" data-wow-duration="2000ms">
                                 {!! BaseHelper::clean($shortcode->description) !!}

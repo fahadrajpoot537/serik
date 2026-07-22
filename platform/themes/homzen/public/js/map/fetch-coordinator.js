@@ -63,15 +63,26 @@
 
     function scheduleLoad(buildRequest, options, delayMs) {
         const state = global.HsMapInteractionState;
+        options = options || {};
         if (state && !state.canFetchMarkers() && !options.force) {
             return;
+        }
+
+        if (delayMs == null) {
+            if (options.fromMapMove) {
+                delayMs = 200;
+            } else if (options.fromFilters) {
+                delayMs = 350;
+            } else {
+                delayMs = 200;
+            }
         }
 
         clearDebounce();
         debounceTimer = setTimeout(() => {
             debounceTimer = null;
             executeLoad(buildRequest, options);
-        }, delayMs == null ? 200 : delayMs);
+        }, delayMs);
     }
 
     function executeLoad(buildRequest, options) {
@@ -100,6 +111,7 @@
         const generation = state ? state.beginFetch() : 0;
         controller = new AbortController();
         isLoading = true;
+        document.body.classList.add('hs-map-fetching');
 
         fetch(built.url, {
             signal: controller.signal,
@@ -145,6 +157,7 @@
             .finally(() => {
                 isLoading = false;
                 controller = null;
+                document.body.classList.remove('hs-map-fetching');
             });
     }
 

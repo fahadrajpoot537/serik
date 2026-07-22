@@ -746,6 +746,11 @@
     align-items: center;
 }
 
+body.hs-map-fetching .filter-bar {
+    opacity: 0.88;
+    pointer-events: auto;
+}
+
 .filter-group {
     display: flex;
     flex-wrap: nowrap;
@@ -7651,15 +7656,23 @@ function mapMovedEnoughToRefetch() {
             url: `/api/v1/map-properties?${fetchKey}`,
             key: fetchKey,
             postProcess(features) {
-                return filterFeaturesByCityPolygon(filterFeaturesByWatchedPolygon(features));
+                let out = filterFeaturesByWatchedPolygon(features);
+                const cityLocked = !userHasMovedMap
+                    && ((selectedCity && selectedCity.toLowerCase() !== 'ontario')
+                        || (cityFromUrl && cityFromUrl.toLowerCase() !== 'ontario'));
+                if (!cityLocked) {
+                    out = filterFeaturesByCityPolygon(out);
+                }
+                return out;
             },
         };
     }
 
     function loadProperties(options = {}) {
         const fromMapMove = options.fromMapMove === true;
+        const fromFilters = options.fromFilters === true || (!fromMapMove && !options.fromInit);
 
-        if (options.fromFilters && isMapPanelOpen()) {
+        if (fromFilters && isMapPanelOpen()) {
             closeHsMapCenterPanel();
         }
 
@@ -7668,9 +7681,13 @@ function mapMovedEnoughToRefetch() {
         }
 
         if (!skipSeoUrlOnNextLoad) {
-            updateSeoUrl();
+            if (fromFilters) {
+                requestAnimationFrame(() => updateSeoUrl());
+            } else {
+                updateSeoUrl();
+            }
         }
-        if (!fromMapMove) {
+        if (options.bustCache) {
             bustMapFetchCache();
         }
         skipSeoUrlOnNextLoad = false;
@@ -7679,7 +7696,11 @@ function mapMovedEnoughToRefetch() {
             return;
         }
 
-        window.HsMapFetchCoordinator?.scheduleLoad?.(buildMapPropertiesRequest, options, 200);
+        window.HsMapFetchCoordinator?.scheduleLoad?.(
+            buildMapPropertiesRequest,
+            Object.assign({}, options, { fromFilters }),
+            options.delayMs
+        );
     }
 
   

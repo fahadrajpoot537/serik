@@ -2919,6 +2919,10 @@ class PropertyController extends BaseController
             'bath=' . trim((string) $request->input('bathrooms', '')),
             'date=' . trim((string) $request->input('date', '')),
             'dsold=' . trim((string) $request->input('date_sold', '')),
+            'sqmin=' . (int) $request->input('square_min', 0),
+            'sqmax=' . (int) $request->input('square_max', 0),
+            'gar=' . trim((string) $request->input('basement', '')),
+            'bsm=' . trim((string) $request->input('basement1', '')),
             'auth=' . ((auth('account')->check() || auth()->check()) ? '1' : '0'),
         ]);
     }
@@ -4128,6 +4132,74 @@ class PropertyController extends BaseController
             'more_than_60_days' => 60,
             'more_than_90_days' => 90,
         ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function expandMapSubtypeValues(string $subtypes): array
+    {
+        if ($subtypes === '' || strtolower($subtypes) === 'all') {
+            return [];
+        }
+
+        $subtypesArray = array_values(array_filter(array_map('trim', explode(',', $subtypes))));
+        if ($subtypesArray === [] || in_array('All', $subtypesArray, true)) {
+            return [];
+        }
+
+        $expanded = [];
+        foreach ($subtypesArray as $subtype) {
+            $trimmed = trim($subtype);
+            $expanded[] = $trimmed;
+            $expanded[] = $trimmed . ' ';
+            $expanded[] = str_replace('-', ' ', $trimmed);
+            $expanded[] = str_replace('-', ' ', $trimmed) . ' ';
+            $expanded[] = str_replace(' ', '-', $trimmed);
+            $expanded[] = str_replace(' ', '-', $trimmed) . ' ';
+        }
+
+        return array_values(array_unique(array_filter($expanded)));
+    }
+
+    /**
+     * Map UI date chips to Meili timestamp filters. Returns false when MySQL is required.
+     *
+     * @param  array<string, mixed>  $opts
+     * @param  array<int, string>  $statuses
+     */
+    private function applyMeiliMapDateOptions(array &$opts, string $finalDate, bool $usesSoldDate, array $statuses): bool
+    {
+        if ($finalDate === '' || $finalDate === 'all') {
+            return true;
+        }
+
+        $daysMap = $this->mapDateDaysMap();
+        $moreThanMap = $this->mapDateMoreThanMap();
+        $delistedStatuses = ['Expired', 'Terminated', 'Suspended'];
+        $isDelisted = $statuses !== [] && ! empty(array_intersect($statuses, $delistedStatuses));
+
+        if (isset($daysMap[$finalDate])) {
+            $cutoff = now()->subDays($daysMap[$finalDate])->startOfDay()->getTimestamp();
+
+            if ($usesSoldDate) {
+                if ($isDelisted) {
+                    $opts['updated_ts_gte'] = $cutoff;
+                } else {
+                    $opts['close_ts_gte'] = $cutoff;
+                }
+            } else {
+                $opts['listing_contract_ts_gte'] = $cutoff;
+            }
+
+            return true;
+        }
+
+        if (isset($moreThanMap[$finalDate]) || preg_match('/^year_(\d{4})$/', $finalDate)) {
+            return false;
+        }
+
+        return false;
     }
 
     private function parseAmpDateValue(?string $value): ?Carbon
@@ -5961,36 +6033,28 @@ class PropertyController extends BaseController
      */
     private function fetchMapPropertiesViaMeili(Request $request, float $south, float $north, float $west, float $east): ?array
     {
-        // Complex cases stay on the exact MySQL logic.
         $status = trim((string) $request->input('status', ''));
         $statuses = $status !== '' ? array_values(array_filter(array_map('trim', explode(',', $status)))) : [];
         $soldStatuses = ['Sold', 'Sold Conditional', 'Sold Conditional Escape', 'Leased', 'Leased Conditional'];
         $delistedStatuses = ['Expired', 'Terminated', 'Suspended'];
         $soldOrDelisted = array_merge($soldStatuses, $delistedStatuses);
         $subtypes = trim((string) $request->input('subtypes', ''));
-
-        // Subtype chips + sold-date windows + "more than" / specific-year windows
-        // still need the exact MySQL logic. Plain Sold/De-listed status chips use
-        // Meili mls_status IN (verified accurate).
         $isSoldOrDelistedFilter = $statuses !== [] && ! empty(array_intersect($statuses, $soldOrDelisted));
-        $activeDate = trim((string) $request->input('date', ''));
-        $daysMap = $this->mapDateDaysMap();
 
-        // "Last N days" for active listings resolves via the indexed
-        // listing_contract_ts inside Meili (instant). Everything else defers.
-        $activeDateCutoffTs = null;
-        if ($activeDate !== '' && $activeDate !== 'all' && ! $isSoldOrDelistedFilter && isset($daysMap[$activeDate])) {
-            $activeDateCutoffTs = now()->subDays($daysMap[$activeDate])->startOfDay()->getTimestamp();
+        // Basement type JSON filter still needs exact MySQL logic.
+        $basement1 = trim((string) $request->input('basement1', ''));
+        if ($basement1 !== '' && strtolower($basement1) !== 'null') {
+            return null;
         }
 
-        $unhandledActiveDate = $activeDate !== '' && $activeDate !== 'all' && $activeDateCutoffTs === null;
-
-        if (
-            $request->filled('date_sold')
-            || $unhandledActiveDate
-            || ($subtypes !== '' && strtolower($subtypes) !== 'all')
-        ) {
-            return null;
+        $activeDate = trim((string) $request->input('date', ''));
+        $dateSold = trim((string) $request->input('date_sold', ''));
+        $usesSoldDate = $isSoldOrDelistedFilter;
+        $finalDate = '';
+        if ($usesSoldDate && $dateSold !== '' && $dateSold !== 'all') {
+            $finalDate = $dateSold;
+        } elseif (! $usesSoldDate && $activeDate !== '' && $activeDate !== 'all') {
+            $finalDate = $activeDate;
         }
 
         $city = trim((string) $request->input('city'));
@@ -6027,14 +6091,33 @@ class PropertyController extends BaseController
             'min_bathrooms' => str_contains((string) $request->input('bathrooms'), '+') ? (int) $request->input('bathrooms') : 0,
         ];
 
+        $subtypeValues = $this->expandMapSubtypeValues($subtypes);
+        if ($subtypeValues !== []) {
+            $opts['subtypes'] = $subtypeValues;
+        }
+
+        $squareMin = (int) $request->input('square_min', 0);
+        $squareMax = (int) $request->input('square_max', 0);
+        if ($squareMin > 0) {
+            $opts['min_square'] = $squareMin;
+        }
+        if ($squareMax > 0) {
+            $opts['max_square'] = $squareMax;
+        }
+
+        $basement = trim((string) $request->input('basement', ''));
+        if ($basement !== '' && strtolower($basement) !== 'null') {
+            $opts['min_covered_spaces'] = (int) str_replace('+', '', $basement);
+        }
+
+        if ($finalDate !== '' && ! $this->applyMeiliMapDateOptions($opts, $finalDate, $usesSoldDate, $statuses)) {
+            return null;
+        }
+
         if ($statuses !== []) {
             $opts['statuses'] = $statuses;
         } elseif (! empty($transaction) && $transaction !== 'null') {
             $opts['exclude_statuses'] = $soldOrDelisted;
-        }
-
-        if ($activeDateCutoffTs !== null) {
-            $opts['listing_contract_ts_gte'] = $activeDateCutoffTs;
         }
 
         $hits = app(\Botble\RealEstate\Services\PropertySearchService::class)->geoSearch(
