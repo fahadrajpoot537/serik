@@ -29,15 +29,46 @@
     display: none;
     flex-direction: column;
     overflow: hidden;
-    background: #fff;
-    pointer-events: auto;
-    z-index: 20;
-    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
-    transition: flex-basis 0.25s ease, width 0.25s ease, min-width 0.25s ease;
+    background: transparent;
+    pointer-events: none;
+    z-index: 30;
+    box-shadow: none;
 }
 
 .hs-map-center-panel.is-open {
-    display: flex;
+    display: block;
+    pointer-events: auto;
+}
+
+/* Desktop/tablet: marker-anchored overlay — map container size never changes */
+@media (min-width: 768px) {
+    .hs-map-center-panel {
+        position: absolute;
+        width: min(520px, calc(100% - 32px));
+        max-width: min(520px, calc(100% - 32px));
+        max-height: min(85vh, 720px);
+        height: auto;
+        flex: none !important;
+        min-width: 0 !important;
+    }
+
+    .hs-map-center-panel.is-cluster {
+        width: min(400px, calc(100% - 32px));
+        max-width: min(400px, calc(100% - 32px));
+        max-height: min(72vh, 560px);
+    }
+
+    .hs-map-center-panel-dialog {
+        max-height: min(85vh, 720px);
+        height: min(85vh, 720px);
+        border-radius: 12px;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+    }
+
+    .hs-map-center-panel.is-cluster .hs-map-center-panel-dialog {
+        max-height: min(72vh, 560px);
+        height: min(72vh, 560px);
+    }
 }
 
 .hs-map-center-panel-backdrop {
@@ -102,7 +133,7 @@
     overflow: hidden;
 }
 
-/* Desktop/tablet: property panel sits beside the map (no overlay) */
+/* Desktop/tablet: map fills wrapper; popup floats over map stage */
 @media (min-width: 768px) {
     .map-housesigma .map-search-wrapper {
         display: flex;
@@ -123,108 +154,20 @@
         min-width: 0;
         order: 1;
         height: 100%;
+        position: relative;
     }
 
     .map-housesigma .map-search-wrapper .hs-map-stage #map {
         height: 100% !important;
         min-height: 0 !important;
     }
-
-    .hs-map-center-panel {
-        position: relative;
-        order: 3;
-        flex: 0 0 0;
-        width: 0;
-        min-width: 0;
-        height: auto;
-        align-self: stretch;
-    }
-
-    .hs-map-center-panel.is-open {
-        flex: 0 0 min(520px, 42vw);
-        width: min(520px, 42vw);
-        min-width: min(520px, 42vw);
-    }
-
-    .hs-map-center-panel.is-cluster.is-open {
-        flex: 0 0 min(420px, 36vw);
-        width: min(420px, 36vw);
-        min-width: min(420px, 36vw);
-    }
-
-    .map-search-wrapper.panel-open .hs-map-stage {
-        flex: 1 1 auto;
-        min-width: 0;
-    }
-
-    .hs-map-center-panel.is-open .hs-map-popup-full {
-        display: flex;
-        flex-direction: column;
-        height: 100%;
-        min-height: 0;
-    }
-
-    .hs-map-center-panel.is-open .hs-map-popup-full .hs-map-gallery-col {
-        flex: 0 0 auto;
-        width: 100%;
-        max-height: 220px;
-        min-height: 0;
-        border-right: none;
-        border-bottom: 1px solid #e2e8f0;
-    }
-
-    .hs-map-center-panel.is-open .hs-map-popup-full .hs-map-gallery-main,
-    .hs-map-center-panel.is-open .hs-map-popup-full .hs-map-gallery-main img,
-    .hs-map-center-panel.is-open .hs-map-popup-full .hs-map-gallery-main .property-popup-img {
-        height: 200px;
-        min-height: 200px;
-        max-height: 200px;
-    }
-
-    .hs-map-center-panel.is-open .hs-map-popup-full .hs-map-details-col {
-        flex: 1 1 0;
-        min-height: 0;
-        width: 100%;
-        max-height: none;
-        height: auto;
-        overflow-y: auto !important;
-        overflow-x: hidden;
-        -webkit-overflow-scrolling: touch;
-        overscroll-behavior: contain;
-        touch-action: pan-y;
-        border-right: none;
-    }
-
-    .hs-map-center-panel.is-open .hs-map-popup-full .hs-map-inquiry-col {
-        flex: 0 0 auto;
-        width: 100%;
-        max-height: none;
-        overflow: hidden !important;
-        overscroll-behavior: none;
-        border-top: 1px solid #e2e8f0;
-        background: #f7f9fc;
-    }
-
-    .hs-map-center-panel.is-open .hs-map-popup-full .hs-map-inquiry-card {
-        position: sticky;
-        bottom: 0;
-        top: auto;
-    }
-
-    .hs-map-center-panel.is-open .hs-cluster-popup-list {
-        flex: 1 1 0;
-        min-height: 0;
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-    }
 }
 
-/* Large screens: three-column layout inside the side panel */
+/* Large screens: wider anchored popup dialog */
 @media (min-width: 1200px) {
-    .hs-map-center-panel.is-open {
-        flex: 0 0 min(680px, 46vw);
-        width: min(680px, 46vw);
-        min-width: min(680px, 46vw);
+    .hs-map-center-panel {
+        width: min(680px, calc(100% - 32px));
+        max-width: min(680px, calc(100% - 32px));
     }
 
     .hs-map-center-panel.is-open .hs-map-popup-full {
@@ -4992,13 +4935,13 @@ position: absolute;
             <div id="map-property-count" class="map-count-box">
                 Available Properties : 0
             </div>
-        </div>
 
-        <div id="hsMapCenterPanel" class="hs-map-center-panel" aria-hidden="true">
-            <div class="hs-map-center-panel-backdrop" data-hs-map-panel-close aria-hidden="true"></div>
-            <div class="hs-map-center-panel-dialog" role="dialog" aria-modal="true">
-                <button type="button" class="hs-map-center-panel-close" data-hs-map-panel-close aria-label="Close listing preview">&times;</button>
-                <div class="hs-map-center-panel-body" id="hsMapCenterPanelBody"></div>
+            <div id="hsMapCenterPanel" class="hs-map-center-panel" aria-hidden="true">
+                <div class="hs-map-center-panel-backdrop" data-hs-map-panel-close aria-hidden="true"></div>
+                <div class="hs-map-center-panel-dialog" role="dialog" aria-modal="true">
+                    <button type="button" class="hs-map-center-panel-close" data-hs-map-panel-close aria-label="Close listing preview">&times;</button>
+                    <div class="hs-map-center-panel-body" id="hsMapCenterPanelBody"></div>
+                </div>
             </div>
         </div>
 
@@ -5166,6 +5109,10 @@ position: absolute;
 <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
 
 <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.3/mapbox-gl-draw.js"></script>
+<script src="{{ Theme::asset()->url('js/map/interaction-state.js') }}?v={{ get_cms_version() }}"></script>
+<script src="{{ Theme::asset()->url('js/map/marker-manager.js') }}?v={{ get_cms_version() }}"></script>
+<script src="{{ Theme::asset()->url('js/map/fetch-coordinator.js') }}?v={{ get_cms_version() }}"></script>
+<script src="{{ Theme::asset()->url('js/map/anchored-popup.js') }}?v={{ get_cms_version() }}"></script>
 @endif
 
 
@@ -5640,150 +5587,14 @@ async function showCityBoundary(cityName) {
     let lastPushedMapUrl = '';
     let hsMapListFeatures = [];
     let lastMapFeatures = [];
-    let hsSuppressMapMoveFetchUntil = 0;
-    let hsDeferredMapReloadAfterCluster = false;
-
-    function suppressMapMoveFetch(ms = 3000) {
-        hsSuppressMapMoveFetchUntil = Date.now() + ms;
-    }
 
     function isClusterPanelOpen() {
-        const panel = document.getElementById('hsMapCenterPanel');
-        return !!(panel?.classList.contains('is-open') && panel.classList.contains('is-cluster'));
+        return window.HsMapInteractionState?.isClusterPanelOpen?.() || false;
     }
 
-    function shouldSkipLoadPropertiesWhileClusterOpen(options = {}) {
-        if (options.forceWhileClusterOpen || options.fromFilters) {
-            return false;
-        }
-        return isClusterPanelOpen();
+    function isMapPanelOpen() {
+        return window.HsMapInteractionState?.isPanelOpen?.() || false;
     }
-
-    function cloneClusterFeatures(leaves) {
-        return (leaves || []).map((feature) => {
-            const props = feature?.properties || {};
-            const geometry = feature?.geometry;
-            let coordinates = geometry?.coordinates;
-
-            if (Array.isArray(coordinates)) {
-                coordinates = coordinates.slice();
-            }
-
-            return {
-                type: 'Feature',
-                geometry: geometry
-                    ? {
-                        type: geometry.type || 'Point',
-                        coordinates,
-                    }
-                    : null,
-                properties: { ...props },
-            };
-        });
-    }
-
-    function pauseMapDataRefreshForCluster() {
-        clearTimeout(requestTimer);
-        requestTimer = null;
-
-        if (controller) {
-            try {
-                controller.abort();
-            } catch (e) {
-                /* ignore */
-            }
-            controller = null;
-        }
-
-        isLoading = false;
-    }
-
-    let hsClusterListWatchTimer = null;
-
-    function stopClusterListWatchdog() {
-        if (hsClusterListWatchTimer) {
-            clearInterval(hsClusterListWatchTimer);
-            hsClusterListWatchTimer = null;
-        }
-    }
-
-    function ensureClusterListVisible() {
-        if (!isClusterPanelOpen()) {
-            stopClusterListWatchdog();
-            return;
-        }
-
-        const list = document.querySelector('#hsMapCenterPanelBody .hs-cluster-popup-list');
-        const expected = window._hsLastClusterLeaves?.length || 0;
-        const renderedCount = list ? list.querySelectorAll('.hs-cluster-list-item').length : 0;
-
-        if (!list || !expected) {
-            return;
-        }
-
-        if (renderedCount >= expected) {
-            return;
-        }
-
-        if (window._hsLastClusterListHtml) {
-            list.innerHTML = window._hsLastClusterListHtml;
-            setupClusterPopupLayout(document.getElementById('hsMapCenterPanelBody'));
-            if (typeof hydrateMapThumbnailsForFeatures === 'function') {
-                hydrateMapThumbnailsForFeatures(
-                    window._hsLastClusterLeaves,
-                    '.hs-map-center-panel-body .hs-cluster-list-item'
-                );
-            }
-            return;
-        }
-
-        if (typeof refreshClusterListDom === 'function') {
-            refreshClusterListDom(window._hsLastClusterLeaves, window._hsLastClusterCoords);
-        }
-    }
-
-    function startClusterListWatchdog() {
-        stopClusterListWatchdog();
-        ensureClusterListVisible();
-        hsClusterListWatchTimer = setInterval(ensureClusterListVisible, 350);
-    }
-
-    function setMapClusterPanelLock(locked) {
-        if (!map) {
-            return;
-        }
-
-        if (locked) {
-            pauseMapDataRefreshForCluster();
-            startClusterListWatchdog();
-            if (map.__hsClusterLockActive) {
-                return;
-            }
-            map.__hsClusterLockActive = true;
-            map.__hsClusterHadScrollZoom = map.scrollZoom?.isEnabled?.() !== false;
-            map.scrollZoom?.disable?.();
-            map.boxZoom?.disable?.();
-            map.doubleClickZoom?.disable?.();
-            suppressMapMoveFetch(600000);
-            return;
-        }
-
-        if (!map.__hsClusterLockActive) {
-            return;
-        }
-
-        stopClusterListWatchdog();
-
-        if (map.__hsClusterHadScrollZoom) {
-            map.scrollZoom?.enable?.();
-        }
-        map.boxZoom?.enable?.();
-        map.doubleClickZoom?.enable?.();
-        delete map.__hsClusterLockActive;
-        delete map.__hsClusterHadScrollZoom;
-    }
-
-    window.setMapClusterPanelLock = setMapClusterPanelLock;
 
     window.isClusterPanelOpen = isClusterPanelOpen;
 
@@ -6228,7 +6039,7 @@ function getEffectiveSubtypes() {
 }
 
 function bustMapFetchCache() {
-    lastMapFetchKey = '';
+    window.HsMapFetchCoordinator?.bustCache?.();
     lastFetchCenter = null;
     lastFetchZoom = null;
 }
@@ -6447,10 +6258,6 @@ if (urlLocation) {
 
         if (resolvedCityLower === 'ontario') {
             skipSeoUrlOnNextLoad = true;
-            map.once('idle', () => {
-                loadProperties();
-                updateSeoUrl();
-            });
         }
 
         initMapDraw();
@@ -7045,12 +6852,11 @@ applyAll.addEventListener('click', function () {
         dropdownMenu1.style.display = 'none';
     }
 
-    hsDeferredMapReloadAfterCluster = false;
     if (typeof closeHsMapCenterPanel === 'function') {
         closeHsMapCenterPanel();
     }
 
-    loadProperties({ fromFilters: true }); // only loads here
+    loadProperties({ fromFilters: true, force: true });
 });
 
 
@@ -7201,7 +7007,9 @@ function flyMapToDetectedLocation(detectedLocation) {
         }
         centeringFinished = true;
         autoCenteringMap = false;
-        loadProperties();
+        if (!isMapPanelOpen()) {
+            loadProperties({ fromMapMove: true });
+        }
     };
 
     map.once('moveend', finishCentering);
@@ -7212,9 +7020,6 @@ function flyMapToDetectedLocation(detectedLocation) {
         duration: 1500,
         essential: true,
     });
-
-    // flyTo may not fire moveend when already at the same center
-    setTimeout(finishCentering, 1800);
 }
 
 function applyOntarioDefaultLocation() {
@@ -7398,7 +7203,7 @@ function getTransactionFromUrl() {
 
 
     map.on('dragstart', function () {
-        if (isClusterPanelOpen() || autoCenteringMap) {
+        if (autoCenteringMap) {
             return;
         }
         userHasMovedMap = true;
@@ -7406,7 +7211,7 @@ function getTransactionFromUrl() {
     });
 
     map.on('zoomstart', function (event) {
-        if (isClusterPanelOpen() || autoCenteringMap) {
+        if (autoCenteringMap) {
             return;
         }
         if (event.originalEvent) {
@@ -7417,23 +7222,22 @@ function getTransactionFromUrl() {
 
     map.on('moveend', function () {
         if (!mapLayersReady) return;
-        if (isClusterPanelOpen()) return;
-        if (Date.now() < hsSuppressMapMoveFetchUntil) return;
+        if (isMapPanelOpen()) {
+            window.HsMapAnchoredPopup?.reposition?.();
+            return;
+        }
+        if (autoCenteringMap) return;
 
         clearTimeout(moveTimer);
         moveTimer = setTimeout(() => {
-            if (!mapMovedEnoughToRefetch()) return;
+            if (!window.HsMapFetchCoordinator?.movedEnoughToRefetch?.(map)) return;
             skipSeoUrlOnNextLoad = true;
             loadProperties({ fromMapMove: true });
         }, 500);
     });
     
  
-    let controller = null;
-    let requestTimer = null;
-    let isLoading = false;
     let skipSeoUrlOnNextLoad = false;
-    let lastMapFetchKey = '';
     let lastFetchCenter = null;
     let lastFetchZoom = null;
 
@@ -7760,30 +7564,75 @@ function getFetchBoundsFromMap() {
 
 
 function mapMovedEnoughToRefetch() {
-    const zoom = Math.round(map.getZoom());
-    const center = map.getCenter();
-    if (lastFetchZoom === null || lastFetchCenter === null) {
-        return true;
-    }
-    if (zoom !== lastFetchZoom) {
-        return true;
-    }
-    const bounds = map.getBounds();
-    const latSpan = bounds.getNorth() - bounds.getSouth();
-    const lngSpan = bounds.getEast() - bounds.getWest();
-    const movedLat = Math.abs(center.lat - lastFetchCenter.lat);
-    const movedLng = Math.abs(center.lng - lastFetchCenter.lng);
-    return movedLat > latSpan * 0.2 || movedLng > lngSpan * 0.2;
+    return window.HsMapFetchCoordinator?.movedEnoughToRefetch?.(map) !== false;
 }
 
 
 
 
+    function buildMapPropertiesRequest(mapInstance) {
+        if (!userHasMovedMap && !selectedCity && cityFromUrl && cityFromUrl.toLowerCase() !== 'ontario') {
+            selectedCity = cityFromUrl;
+        }
+
+        const selectedDate = getSelectedDate();
+        const selectedDateSold = getSelectedDateSold();
+        const effectiveSubtypes = getEffectiveSubtypes();
+        let apiCity = userHasMovedMap ? '' : selectedCity;
+        if (apiCity && apiCity.toLowerCase() === 'ontario') {
+            apiCity = '';
+        }
+        if (!apiCity && !userHasMovedMap && cityFromUrl && cityFromUrl.toLowerCase() !== 'ontario') {
+            apiCity = cityFromUrl;
+        }
+
+        const fetchBounds = getFetchBoundsFromMap();
+        const params = new URLSearchParams({
+            south: fetchBounds.south,
+            north: fetchBounds.north,
+            west: fetchBounds.west,
+            east: fetchBounds.east,
+            zoom: Math.round(mapInstance.getZoom()),
+            transaction: selectedTransaction || '',
+            min_price: selectedMinPrice || 0,
+            max_price: isDefaultMaxPrice(selectedMaxPrice) ? PRICE_NO_LIMIT : selectedMaxPrice,
+            status: selectedStatus ? selectedStatus.join(',') : '',
+            square_min: selectedMinSquare || 0,
+            square_max: selectedMaxSquare === 4000 ? '' : selectedMaxSquare,
+            bedrooms: selectedBedrooms || '',
+            bathrooms: selectedBathrooms || '',
+            basement: selectedBasement || '',
+            basement1: selectedBasement1 || '',
+            subtypes: effectiveSubtypes.join(','),
+            city: apiCity || '',
+        });
+
+        if (selectedDate && selectedDate !== 'all') {
+            params.set('date', selectedDate);
+        }
+        if (selectedDateSold && selectedDateSold !== 'all') {
+            params.set('date_sold', selectedDateSold);
+        }
+
+        const fetchKey = params.toString();
+
+        return {
+            url: `/api/v1/map-properties?${fetchKey}`,
+            key: fetchKey,
+            postProcess(features) {
+                return filterFeaturesByCityPolygon(filterFeaturesByWatchedPolygon(features));
+            },
+        };
+    }
+
     function loadProperties(options = {}) {
         const fromMapMove = options.fromMapMove === true;
 
-        if (shouldSkipLoadPropertiesWhileClusterOpen(options)) {
-            hsDeferredMapReloadAfterCluster = true;
+        if (options.fromFilters && isMapPanelOpen()) {
+            closeHsMapCenterPanel();
+        }
+
+        if (isMapPanelOpen() && !options.force) {
             return;
         }
 
@@ -7794,136 +7643,12 @@ function mapMovedEnoughToRefetch() {
             bustMapFetchCache();
         }
         skipSeoUrlOnNextLoad = false;
-    
-        if (!map || !mapLayersReady || !map.getSource('properties')) return;
-    
-        clearTimeout(requestTimer);
-        
-        if (!userHasMovedMap && !selectedCity && cityFromUrl && cityFromUrl.toLowerCase() !== 'ontario') {
-            selectedCity = cityFromUrl;
+
+        if (!map || !mapLayersReady || !map.getSource('properties')) {
+            return;
         }
-    
-        requestTimer = setTimeout(() => {
-            if (isClusterPanelOpen()) {
-                hsDeferredMapReloadAfterCluster = true;
-                isLoading = false;
-                return;
-            }
 
-            if (isLoading && controller) {
-                controller.abort();
-            }
-    
-            controller = new AbortController();
-            isLoading = true;
-
-            const selectedDate = getSelectedDate();
-            const selectedDateSold = getSelectedDateSold();
-            const effectiveSubtypes = getEffectiveSubtypes();
-            let apiCity = userHasMovedMap ? '' : selectedCity;
-            if (apiCity && apiCity.toLowerCase() === 'ontario') {
-                apiCity = '';
-            }
-            if (!apiCity && !userHasMovedMap && cityFromUrl && cityFromUrl.toLowerCase() !== 'ontario') {
-                apiCity = cityFromUrl;
-            }
-    
-            const fetchBounds = getFetchBoundsFromMap();
-            const params = new URLSearchParams({
-                south: fetchBounds.south,
-                north: fetchBounds.north,
-                west: fetchBounds.west,
-                east: fetchBounds.east,
-                zoom: Math.round(map.getZoom()),
-                transaction: selectedTransaction || '',
-                min_price: selectedMinPrice || 0,
-                max_price: isDefaultMaxPrice(selectedMaxPrice) ? PRICE_NO_LIMIT : selectedMaxPrice,
-                status: selectedStatus ? selectedStatus.join(',') : '',
-                square_min: selectedMinSquare || 0,
-                square_max: selectedMaxSquare === 4000 ? '' : selectedMaxSquare,
-                bedrooms: selectedBedrooms || '',
-                bathrooms: selectedBathrooms || '',
-                basement: selectedBasement || '',
-                basement1: selectedBasement1 || '',
-                subtypes: effectiveSubtypes.join(','),
-                city: apiCity || ''
-            });
-
-            if (selectedDate && selectedDate !== 'all') {
-                params.set('date', selectedDate);
-            }
-            if (selectedDateSold && selectedDateSold !== 'all') {
-                params.set('date_sold', selectedDateSold);
-            }
-
-            const fetchKey = params.toString();
-            if (fetchKey === lastMapFetchKey) {
-                isLoading = false;
-                return;
-            }
-    
-            fetch(`/api/v1/map-properties?${params.toString()}`, {
-                signal: controller.signal,
-                credentials: 'same-origin',
-                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-            })
-            .then(res => {
-                if (!res.ok) throw new Error("Network error");
-                return res.json();
-            })
-            .then(data => {
-                if (!map.getSource('properties')) return;
-                if (isClusterPanelOpen()) {
-                    return;
-                }
-
-                if (!data || data.type !== 'FeatureCollection' || !Array.isArray(data.features)) {
-                    console.error('Invalid map properties response', data);
-                    if (!isClusterPanelOpen()) {
-                        map.getSource('properties').setData({ type: 'FeatureCollection', features: [] });
-                    }
-                    lastMapFetchKey = '';
-                    return;
-                }
-
-                lastMapFetchKey = fetchKey;
-                lastFetchCenter = map.getCenter();
-                lastFetchZoom = Math.round(map.getZoom());
-
-                // Always clip to the active city polygon (no-op when no city is
-                // locked) so panning/zooming stays inside the selected area.
-                const filteredFeatures = filterFeaturesByCityPolygon(
-                    filterFeaturesByWatchedPolygon(data.features)
-                );
-                const featureCollection = { type: 'FeatureCollection', features: filteredFeatures };
-                map.getSource('properties').setData(featureCollection);
-
-                lastMapFeatures = filteredFeatures;
-                window.lastMapFeatures = filteredFeatures;
-
-                const total = filteredFeatures.length;
-                const countEl = document.getElementById('map-property-count');
-                if (countEl) {
-                    countEl.innerText = 'Available Properties : ' + total;
-                }
-                if (typeof renderMapListCards === 'function') {
-                    renderMapListCards(filteredFeatures);
-                }
-                if (!isClusterPanelOpen() && typeof restoreClusterPanelIfNeeded === 'function') {
-                    restoreClusterPanelIfNeeded();
-                }
-            })
-            .catch(err => {
-                if (err.name !== "AbortError") {
-                    console.error("API Error:", err);
-                    lastMapFetchKey = '';
-                }
-            })
-            .finally(() => {
-                isLoading = false;
-            });
-    
-        }, 200);
+        window.HsMapFetchCoordinator?.scheduleLoad?.(buildMapPropertiesRequest, options, 200);
     }
 
   
@@ -7941,8 +7666,21 @@ function mapMovedEnoughToRefetch() {
         window._hsMapSelectionOpenedAt = Date.now();
     }
 
+    function snapshotClusterLeaves(leaves) {
+        return (leaves || []).map((feature) => ({
+            type: 'Feature',
+            geometry: feature.geometry
+                ? {
+                    type: feature.geometry.type || 'Point',
+                    coordinates: feature.geometry.coordinates?.slice?.() || feature.geometry.coordinates,
+                }
+                : null,
+            properties: { ...(feature.properties || {}) },
+        }));
+    }
+
     function refreshClusterListDom(leaves, coords) {
-        const snapshot = cloneClusterFeatures(leaves);
+        const snapshot = snapshotClusterLeaves(leaves);
         if (!snapshot.length) {
             return;
         }
@@ -7977,30 +7715,6 @@ function mapMovedEnoughToRefetch() {
         }
     }
 
-    function restoreClusterPanelIfNeeded() {
-        if (!isClusterPanelOpen()) {
-            return;
-        }
-
-        const leaves = window._hsLastClusterLeaves;
-        const coords = window._hsLastClusterCoords;
-        if (!Array.isArray(leaves) || !leaves.length || !coords) {
-            return;
-        }
-
-        const list = document.querySelector('#hsMapCenterPanelBody .hs-cluster-popup-list');
-        const renderedCount = list ? list.querySelectorAll('.hs-cluster-list-item').length : 0;
-        if (!list || renderedCount < leaves.length) {
-            refreshClusterListDom(leaves, coords);
-            return;
-        }
-
-        if (typeof hydrateMapThumbnailsForFeatures === 'function') {
-            hydrateMapThumbnailsForFeatures(leaves, '.hs-map-center-panel-body .hs-cluster-list-item');
-        }
-    }
-
-    window.restoreClusterPanelIfNeeded = restoreClusterPanelIfNeeded;
     window.refreshClusterListDom = refreshClusterListDom;
 
     function shouldIgnoreMapBackgroundClick() {
@@ -8025,6 +7739,9 @@ function mapMovedEnoughToRefetch() {
     }
 
     function handleClusterMarkerClick(e) {
+        window.HsMapFetchCoordinator?.abortInFlight?.();
+        window.HsMapFetchCoordinator?.clearDebounce?.();
+
         const features = map.queryRenderedFeatures(e.point, {
             layers: ['clusters']
         });
@@ -8917,9 +8634,6 @@ function mapMovedEnoughToRefetch() {
                 canvas.style.pointerEvents = 'auto';
                 delete canvas.dataset.hsModalPointerEvents;
             }
-            if (window.hsMap && typeof window.hsMap.resize === 'function') {
-                requestAnimationFrame(() => window.hsMap.resize());
-            }
         }
 
         function lock() {
@@ -9339,45 +9053,12 @@ function mapMovedEnoughToRefetch() {
     }
 
     function ensureHsMapCenterPanelInWrapper() {
-        const panel = document.getElementById('hsMapCenterPanel');
-        const wrapper = document.querySelector('.map-search-wrapper');
-        if (!panel || !wrapper) {
-            return panel;
-        }
-        if (panel.parentElement !== wrapper) {
-            wrapper.appendChild(panel);
-        }
-        return panel;
+        window.HsMapAnchoredPopup?.mountPanelInStage?.();
+        return document.getElementById('hsMapCenterPanel');
     }
 
     ensureHsMapCenterPanelInWrapper();
     window.ensureHsMapCenterPanelInWrapper = ensureHsMapCenterPanelInWrapper;
-
-    function bindClusterListScrollGuard(list) {
-        if (!list || list.dataset.hsScrollGuardBound === '1') {
-            return;
-        }
-
-        list.dataset.hsScrollGuardBound = '1';
-
-        const onWheel = (ev) => {
-            ev.stopPropagation();
-            const maxScroll = list.scrollHeight - list.clientHeight;
-            if (maxScroll <= 0) {
-                ev.preventDefault();
-                return;
-            }
-            const goingUp = ev.deltaY < 0;
-            const goingDown = ev.deltaY > 0;
-            if ((goingUp && list.scrollTop <= 0) || (goingDown && list.scrollTop >= maxScroll - 1)) {
-                ev.preventDefault();
-            }
-        };
-
-        list.addEventListener('wheel', onWheel, { passive: false, capture: true });
-        list.addEventListener('touchstart', (ev) => ev.stopPropagation(), { passive: true, capture: true });
-        list.addEventListener('touchmove', (ev) => ev.stopPropagation(), { passive: false, capture: true });
-    }
 
     function setupClusterPopupLayout(rootEl) {
         if (!rootEl) {
@@ -9408,20 +9089,11 @@ function mapMovedEnoughToRefetch() {
             list.style.height = listHeight + 'px';
             list.style.minHeight = listHeight + 'px';
             list.style.maxHeight = listHeight + 'px';
-            list.style.overflowY = 'scroll';
+            list.style.overflowY = 'auto';
             list.style.overflowX = 'hidden';
             list.style.webkitOverflowScrolling = 'touch';
             list.style.overscrollBehavior = 'contain';
             list.style.touchAction = 'pan-y';
-            list.style.visibility = 'visible';
-            list.style.opacity = '1';
-
-            bindClusterListScrollGuard(list);
-
-            if (!list.dataset.hsClusterEnsureBound) {
-                list.dataset.hsClusterEnsureBound = '1';
-                list.addEventListener('scroll', () => ensureClusterListVisible(), { passive: true });
-            }
         };
 
         applyLayout();
@@ -9483,30 +9155,31 @@ function mapMovedEnoughToRefetch() {
             return null;
         }
 
-        ensureHsMapCenterPanelInWrapper();
+        window.HsMapFetchCoordinator?.abortInFlight?.();
+        window.HsMapFetchCoordinator?.clearDebounce?.();
 
-        hsMapCenterPanelOpenToken += 1;
-        const token = hsMapCenterPanelOpenToken;
-        const { panel, body } = ui;
-        const wrapper = document.querySelector('.map-search-wrapper');
+        const coordinates = options.coordinates
+            ? options.coordinates.slice()
+            : options.feature?.geometry?.coordinates?.slice();
 
-        panel.classList.toggle('is-cluster', !!options.isCluster);
-        body.innerHTML = options.html;
-        panel.setAttribute('aria-hidden', 'false');
-        panel.classList.add('is-open');
-        wrapper?.classList.add('panel-open');
+        const anchored = window.HsMapAnchoredPopup?.open?.({
+            html: options.html,
+            isCluster: !!options.isCluster,
+            coordinates,
+            feature: options.feature,
+            props: options.props,
+        });
+
+        const token = anchored?.token || 0;
+        hsMapCenterPanelOpenToken = token;
+        const { body } = ui;
+
         markHsMapSelectionOpened();
-        if (options.isCluster) {
-            suppressMapMoveFetch(600000);
-            setMapClusterPanelLock(true);
-        } else {
-            setMapClusterPanelLock(false);
-        }
 
         if (options.feature) {
             setHsMapSelectedMarker(options.feature);
-        } else if (options.coordinates) {
-            setHsMapSelectedMarker(options.coordinates);
+        } else if (coordinates) {
+            setHsMapSelectedMarker(coordinates);
         }
 
         const adapter = createMapPanelAdapter(body);
@@ -9520,30 +9193,6 @@ function mapMovedEnoughToRefetch() {
             setupClusterPopupLayout(body);
         }
 
-        if (!HsMapInteractionLock.isLocked()) {
-            const mapCanvas = map?.getCanvas?.();
-            if (mapCanvas) {
-                // Keep map clickable while cluster list is open so users can pick another circle.
-                mapCanvas.style.pointerEvents = 'auto';
-                delete mapCanvas.dataset.hsModalPointerEvents;
-                delete mapCanvas.dataset.hsClusterPanelLock;
-            }
-        }
-
-        if (options.isCluster) {
-            setTimeout(() => {
-                if (isClusterPanelOpen() && typeof map?.resize === 'function') {
-                    map.resize();
-                    setupClusterPopupLayout(body);
-                }
-            }, 280);
-        } else if (!options.skipMapResize && typeof map?.resize === 'function') {
-            requestAnimationFrame(() => {
-                map.resize();
-                requestAnimationFrame(() => map.resize());
-            });
-        }
-
         if (options.isCluster && options.leaves) {
             hydrateMapThumbnailsForFeatures(options.leaves, '.hs-map-center-panel-body .hs-cluster-list-item');
             prefetchMapBundlesForFeatures(options.leaves);
@@ -9552,7 +9201,7 @@ function mapMovedEnoughToRefetch() {
         }
 
         const finalize = () => {
-            if (token !== hsMapCenterPanelOpenToken) {
+            if (token && window.HsMapInteractionState?.getPanelToken?.() !== token) {
                 return;
             }
             setupMapPopupScrollAreas(body);
@@ -9579,53 +9228,13 @@ function mapMovedEnoughToRefetch() {
         }
 
         hsMapCenterPanelOpenToken += 1;
-        const wasCluster = panel.classList.contains('is-cluster');
-        panel.classList.remove('is-open', 'is-cluster');
-        panel.setAttribute('aria-hidden', 'true');
-        document.querySelector('.map-search-wrapper')?.classList.remove('panel-open');
+        window.HsMapAnchoredPopup?.close?.();
 
-        if (wasCluster) {
-            window._hsLastClusterLeaves = [];
-            window._hsLastClusterCoords = null;
-            window._hsLastClusterListHtml = '';
-            stopClusterListWatchdog();
-            setMapClusterPanelLock(false);
-            hsSuppressMapMoveFetchUntil = 0;
-        }
-
-        const shouldReloadMap = wasCluster && hsDeferredMapReloadAfterCluster;
-        hsDeferredMapReloadAfterCluster = false;
-
-        const body = document.getElementById('hsMapCenterPanelBody');
-        if (body) {
-            body.innerHTML = '';
-        }
-
-        if (window._hsActiveMapPopup?.getElement?.() === body) {
-            window._hsActiveMapPopup = null;
-            window._hsActiveMapPopupProps = null;
-            window._hsActiveMapPopupStatus = null;
-        }
+        window._hsActiveMapPopup = null;
+        window._hsActiveMapPopupProps = null;
+        window._hsActiveMapPopupStatus = null;
 
         clearHsMapSelectedMarker();
-
-        const mapCanvas = map?.getCanvas?.();
-        if (mapCanvas?.dataset?.hsClusterPanelLock === '1') {
-            mapCanvas.style.pointerEvents = 'auto';
-            delete mapCanvas.dataset.hsClusterPanelLock;
-        }
-
-        if (typeof map?.resize === 'function') {
-            requestAnimationFrame(() => map.resize());
-        }
-
-        if (shouldReloadMap) {
-            setTimeout(() => {
-                if (!isClusterPanelOpen()) {
-                    loadProperties({ fromMapMove: true });
-                }
-            }, 150);
-        }
     }
 
     function closeMapPropertySelection() {
@@ -9889,6 +9498,9 @@ function mapMovedEnoughToRefetch() {
             return;
         }
 
+        window.HsMapFetchCoordinator?.abortInFlight?.();
+        window.HsMapFetchCoordinator?.clearDebounce?.();
+
         const props = feature.properties;
         const status = mapListingStatus(props);
 
@@ -9917,7 +9529,7 @@ function mapMovedEnoughToRefetch() {
             props,
             status,
             onRendered: (popup, token) => {
-                if (token !== hsMapCenterPanelOpenToken) {
+                if (token && window.HsMapInteractionState?.getPanelToken?.() !== token) {
                     return;
                 }
                 const root = popup.getElement();
@@ -9932,13 +9544,10 @@ function mapMovedEnoughToRefetch() {
     window.showPropertyMapPopup = showPropertyMapPopup;
 
     function showClusterPopup(leaves, coordinates) {
-        const snapshot = cloneClusterFeatures(leaves);
+        const snapshot = snapshotClusterLeaves(leaves);
         window._hsLastClusterLeaves = snapshot;
         const markerCoords = coordinates.slice ? coordinates.slice() : [coordinates[0], coordinates[1]];
         window._hsLastClusterCoords = markerCoords;
-        suppressMapMoveFetch(600000);
-        pauseMapDataRefreshForCluster();
-        setMapClusterPanelLock(true);
 
         const cards = snapshot.map((feature, index) => buildClusterListCardHtml(feature, index)).join('');
         window._hsLastClusterListHtml = cards;
@@ -11012,6 +10621,7 @@ function loadResults(keyword, reset = false){
     });
 
     document.getElementById("listingResults").innerHTML = "";
+    document.getElementById("locationResults").innerHTML = "";
 
     if (searchAbortController) {
         searchAbortController.abort();

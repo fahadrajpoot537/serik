@@ -8,6 +8,7 @@ const dist = `public/themes/${directory}`
 mix
     .sass(`${source}/assets/sass/style.scss`, `${dist}/css`)
     .js(`${source}/assets/js/script.js`, `${dist}/js`)
+    .js(`${source}/assets/js/map/index.js`, `${dist}/js/map-architecture.js`)
 
 if (mix.inProduction()) {
     mix
