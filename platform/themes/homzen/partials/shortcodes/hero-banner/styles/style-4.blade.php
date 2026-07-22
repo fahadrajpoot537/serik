@@ -5659,12 +5659,103 @@ async function showCityBoundary(cityName) {
         return isClusterPanelOpen();
     }
 
+    function cloneClusterFeatures(leaves) {
+        return (leaves || []).map((feature) => {
+            const props = feature?.properties || {};
+            const geometry = feature?.geometry;
+            let coordinates = geometry?.coordinates;
+
+            if (Array.isArray(coordinates)) {
+                coordinates = coordinates.slice();
+            }
+
+            return {
+                type: 'Feature',
+                geometry: geometry
+                    ? {
+                        type: geometry.type || 'Point',
+                        coordinates,
+                    }
+                    : null,
+                properties: { ...props },
+            };
+        });
+    }
+
+    function pauseMapDataRefreshForCluster() {
+        clearTimeout(requestTimer);
+        requestTimer = null;
+
+        if (controller) {
+            try {
+                controller.abort();
+            } catch (e) {
+                /* ignore */
+            }
+            controller = null;
+        }
+
+        isLoading = false;
+    }
+
+    let hsClusterListWatchTimer = null;
+
+    function stopClusterListWatchdog() {
+        if (hsClusterListWatchTimer) {
+            clearInterval(hsClusterListWatchTimer);
+            hsClusterListWatchTimer = null;
+        }
+    }
+
+    function ensureClusterListVisible() {
+        if (!isClusterPanelOpen()) {
+            stopClusterListWatchdog();
+            return;
+        }
+
+        const list = document.querySelector('#hsMapCenterPanelBody .hs-cluster-popup-list');
+        const expected = window._hsLastClusterLeaves?.length || 0;
+        const renderedCount = list ? list.querySelectorAll('.hs-cluster-list-item').length : 0;
+
+        if (!list || !expected) {
+            return;
+        }
+
+        if (renderedCount >= expected) {
+            return;
+        }
+
+        if (window._hsLastClusterListHtml) {
+            list.innerHTML = window._hsLastClusterListHtml;
+            setupClusterPopupLayout(document.getElementById('hsMapCenterPanelBody'));
+            if (typeof hydrateMapThumbnailsForFeatures === 'function') {
+                hydrateMapThumbnailsForFeatures(
+                    window._hsLastClusterLeaves,
+                    '.hs-map-center-panel-body .hs-cluster-list-item'
+                );
+            }
+            return;
+        }
+
+        if (typeof refreshClusterListDom === 'function') {
+            refreshClusterListDom(window._hsLastClusterLeaves, window._hsLastClusterCoords);
+        }
+    }
+
+    function startClusterListWatchdog() {
+        stopClusterListWatchdog();
+        ensureClusterListVisible();
+        hsClusterListWatchTimer = setInterval(ensureClusterListVisible, 350);
+    }
+
     function setMapClusterPanelLock(locked) {
         if (!map) {
             return;
         }
 
         if (locked) {
+            pauseMapDataRefreshForCluster();
+            startClusterListWatchdog();
             if (map.__hsClusterLockActive) {
                 return;
             }
@@ -5680,6 +5771,8 @@ async function showCityBoundary(cityName) {
         if (!map.__hsClusterLockActive) {
             return;
         }
+
+        stopClusterListWatchdog();
 
         if (map.__hsClusterHadScrollZoom) {
             map.scrollZoom?.enable?.();
@@ -7711,7 +7804,12 @@ function mapMovedEnoughToRefetch() {
         }
     
         requestTimer = setTimeout(() => {
-    
+            if (isClusterPanelOpen()) {
+                hsDeferredMapReloadAfterCluster = true;
+                isLoading = false;
+                return;
+            }
+
             if (isLoading && controller) {
                 controller.abort();
             }
@@ -7775,10 +7873,15 @@ function mapMovedEnoughToRefetch() {
             })
             .then(data => {
                 if (!map.getSource('properties')) return;
+                if (isClusterPanelOpen()) {
+                    return;
+                }
 
                 if (!data || data.type !== 'FeatureCollection' || !Array.isArray(data.features)) {
                     console.error('Invalid map properties response', data);
-                    map.getSource('properties').setData({ type: 'FeatureCollection', features: [] });
+                    if (!isClusterPanelOpen()) {
+                        map.getSource('properties').setData({ type: 'FeatureCollection', features: [] });
+                    }
                     lastMapFetchKey = '';
                     return;
                 }
@@ -7839,7 +7942,7 @@ function mapMovedEnoughToRefetch() {
     }
 
     function refreshClusterListDom(leaves, coords) {
-        const snapshot = (leaves || []).slice();
+        const snapshot = cloneClusterFeatures(leaves);
         if (!snapshot.length) {
             return;
         }
@@ -7864,6 +7967,7 @@ function mapMovedEnoughToRefetch() {
         }
 
         list.innerHTML = snapshot.map((feature, index) => buildClusterListCardHtml(feature, index)).join('');
+        window._hsLastClusterListHtml = list.innerHTML;
         setupClusterPopupLayout(document.getElementById('hsMapCenterPanelBody'));
         if (typeof hydrateMapThumbnailsForFeatures === 'function') {
             hydrateMapThumbnailsForFeatures(snapshot, '.hs-map-center-panel-body .hs-cluster-list-item');
@@ -9313,6 +9417,11 @@ function mapMovedEnoughToRefetch() {
             list.style.opacity = '1';
 
             bindClusterListScrollGuard(list);
+
+            if (!list.dataset.hsClusterEnsureBound) {
+                list.dataset.hsClusterEnsureBound = '1';
+                list.addEventListener('scroll', () => ensureClusterListVisible(), { passive: true });
+            }
         };
 
         applyLayout();
@@ -9478,6 +9587,8 @@ function mapMovedEnoughToRefetch() {
         if (wasCluster) {
             window._hsLastClusterLeaves = [];
             window._hsLastClusterCoords = null;
+            window._hsLastClusterListHtml = '';
+            stopClusterListWatchdog();
             setMapClusterPanelLock(false);
             hsSuppressMapMoveFetchUntil = 0;
         }
@@ -9821,14 +9932,16 @@ function mapMovedEnoughToRefetch() {
     window.showPropertyMapPopup = showPropertyMapPopup;
 
     function showClusterPopup(leaves, coordinates) {
-        const snapshot = (leaves || []).slice();
+        const snapshot = cloneClusterFeatures(leaves);
         window._hsLastClusterLeaves = snapshot;
         const markerCoords = coordinates.slice ? coordinates.slice() : [coordinates[0], coordinates[1]];
         window._hsLastClusterCoords = markerCoords;
         suppressMapMoveFetch(600000);
+        pauseMapDataRefreshForCluster();
         setMapClusterPanelLock(true);
 
         const cards = snapshot.map((feature, index) => buildClusterListCardHtml(feature, index)).join('');
+        window._hsLastClusterListHtml = cards;
         const html = `
             <div class="clusterpopup">
                 <div class="hs-cluster-popup-header">
