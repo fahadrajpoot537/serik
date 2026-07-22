@@ -25,10 +25,37 @@ final class SerikMediaUrl
         $listingKey = strtoupper(trim((string) $listingKey));
         $imageVal = trim((string) $imageVal);
 
+        if ($listingKey !== '') {
+            $trebRelative = 'properties/treb/' . $listingKey . '/cover.webp';
+            if (self::resolveExistingRelativePath($trebRelative) !== null) {
+                return self::toPublic($trebRelative);
+            }
+        }
+
         if ($imageVal !== '' && ! self::isRemoteUrl($imageVal)) {
             $relative = ltrim(str_replace('\\', '/', $imageVal), '/');
-            if (str_starts_with($relative, 'properties/treb/') && self::resolveExistingRelativePath($relative) !== null) {
+            if (self::resolveExistingRelativePath($relative) !== null) {
                 return self::toPublic($relative);
+            }
+            if (preg_match('/^L3RycmVi/i', $relative) && $listingKey !== '') {
+                return self::trebCoverPublicUrl($listingKey);
+            }
+        }
+
+        if ($imageVal !== '' && self::isRemoteUrl($imageVal)) {
+            if (
+                $listingKey !== ''
+                && (
+                    str_contains($imageVal, 'trreb-image.ampre.ca')
+                    || str_contains($imageVal, '/rs:')
+                    || str_contains($imageVal, 'rs:fit')
+                )
+            ) {
+                return self::trebCoverPublicUrl($listingKey);
+            }
+
+            if (! str_contains($imageVal, 'trreb-image.ampre.ca') && ! str_contains($imageVal, '/rs:')) {
+                return self::normalizeExternalUrl($imageVal);
             }
         }
 

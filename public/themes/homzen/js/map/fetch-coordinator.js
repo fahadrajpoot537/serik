@@ -88,6 +88,7 @@
     function executeLoad(buildRequest, options) {
         const state = global.HsMapInteractionState;
         const map = global.hsMap;
+        options = options || {};
 
         if (!map || typeof buildRequest !== 'function') {
             return;

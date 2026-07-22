@@ -3531,7 +3531,10 @@ class PropertyController extends BaseController
             'lat' => $item->latitude ?? null,
             'lng' => $item->longitude ?? null,
             'URL' => $slug,
-            'MediaURL' => \App\Support\SerikMediaUrl::toPublic($item->image_val ?? null),
+            'MediaURL' => \App\Support\SerikMediaUrl::mapListingCover(
+                $listingKey,
+                (string) ($item->image_val ?? '')
+            ),
             'source' => 'local',
         ];
     }
@@ -4017,7 +4020,10 @@ class PropertyController extends BaseController
             $first = $images[0] ?? null;
 
             return response()->json([
-                'media' => $first,
+                'media' => \App\Support\SerikMediaUrl::mapListingCover(
+                    (string) $listingKey,
+                    (string) ($property?->image_val ?? ($first ?? ''))
+                ),
                 'images' => $images,
             ]);
         } catch (\Throwable $e) {

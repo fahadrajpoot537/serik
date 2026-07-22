@@ -1320,36 +1320,57 @@ function loadImages() {
 
         const listingKey = img.dataset.key;
 
-        // Skip if already loaded
-        if (img.dataset.loaded) return;
+        // Skip if already loaded successfully
+        if (img.dataset.loaded === 'true') return;
 
-        // Check if current image is NOT placeholder → skip API call
-        if (!img.src.includes('placeholder.png')) {
-            img.dataset.loaded = "true";
+        if (img.complete && img.naturalWidth > 0 && !img.src.includes('placeholder.png')) {
+            img.dataset.loaded = 'true';
             return;
         }
 
-        // Only fetch if it's placeholder
-        fetch(`/api/v1/property-image/${listingKey}`)
-            .then(res => res.json())
-            .then(data => {
-                const imgUrl = Array.isArray(data.media) ? (data.media[0] || '') : (data.media || '');
+        if (!listingKey) {
+            return;
+        }
 
-                if (imgUrl && !imgUrl.includes('placeholder.png')) {
-                    img.src = imgUrl;
+        const origin = window.location.origin.replace(/\/$/, '');
+        const webpUrl = origin + '/storage/properties/treb/' + encodeURIComponent(String(listingKey).toUpperCase()) + '/cover.webp';
 
-                    // Smooth fade-in
-                    img.style.opacity = "0";
-                    img.onload = () => {
-                        img.style.transition = "opacity 0.3s ease";
-                        img.style.opacity = "1";
-                    };
+        if (img.src !== webpUrl) {
+            img.src = webpUrl;
+        }
+
+        if (img.dataset.fetchBound !== '1') {
+            img.dataset.fetchBound = '1';
+            img.addEventListener('error', function onImgError() {
+                if (img.dataset.loaded === 'true') {
+                    return;
                 }
+                fetch(`/api/v1/property-image/${listingKey}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        const imgUrl = data.media || (Array.isArray(data.images) ? data.images[0] : '');
+                        if (imgUrl && !String(imgUrl).includes('trreb-image.ampre.ca')) {
+                            img.src = imgUrl;
+                            img.style.opacity = '0';
+                            img.onload = () => {
+                                img.style.transition = 'opacity 0.3s ease';
+                                img.style.opacity = '1';
+                            };
+                        } else if (!img.src.includes('placeholder.png')) {
+                            img.onerror = null;
+                            img.src = '{{ \App\Support\SerikMediaUrl::placeholder() }}';
+                        }
+                        img.dataset.loaded = 'true';
+                    })
+                    .catch(() => {
+                        img.dataset.loaded = 'true';
+                    });
+            }, { once: true });
+        }
 
-                img.dataset.loaded = "true";
-
-            })
-            .catch(() => {});
+        if (img.complete && img.naturalWidth > 0) {
+            img.dataset.loaded = 'true';
+        }
     });
 }
 
