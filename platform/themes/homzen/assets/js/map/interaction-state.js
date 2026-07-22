@@ -1,22 +1,20 @@
 /**
- * Map interaction state machine — coordinates popup lifecycle vs marker updates.
+ * Map interaction state — cluster panel open blocks marker GeoJSON updates.
  */
 (function (global) {
     'use strict';
 
     const STATE = {
         IDLE: 'idle',
-        PROPERTY_PANEL: 'property_panel',
         CLUSTER_PANEL: 'cluster_panel',
     };
 
     let currentState = STATE.IDLE;
     let fetchGeneration = 0;
     let panelToken = 0;
-    let activeAnchor = null;
 
     function isPanelOpen() {
-        return currentState === STATE.PROPERTY_PANEL || currentState === STATE.CLUSTER_PANEL;
+        return currentState === STATE.CLUSTER_PANEL;
     }
 
     function isClusterPanelOpen() {
@@ -24,11 +22,11 @@
     }
 
     function canFetchMarkers() {
-        return !isPanelOpen();
+        return !isClusterPanelOpen();
     }
 
     function canApplyMarkerData(generation) {
-        if (isPanelOpen()) {
+        if (isClusterPanelOpen()) {
             return false;
         }
         return generation === fetchGeneration;
@@ -39,38 +37,20 @@
         return fetchGeneration;
     }
 
-    function openPropertyPanel(anchor) {
-        currentState = STATE.PROPERTY_PANEL;
-        panelToken += 1;
-        fetchGeneration += 1;
-        activeAnchor = anchor ? { ...anchor } : null;
-        return panelToken;
-    }
-
-    function openClusterPanel(anchor) {
+    function openClusterPanel() {
         currentState = STATE.CLUSTER_PANEL;
         panelToken += 1;
         fetchGeneration += 1;
-        activeAnchor = anchor ? { ...anchor } : null;
         return panelToken;
     }
 
     function closePanel() {
         currentState = STATE.IDLE;
         panelToken += 1;
-        activeAnchor = null;
     }
 
     function getPanelToken() {
         return panelToken;
-    }
-
-    function getActiveAnchor() {
-        return activeAnchor;
-    }
-
-    function setActiveAnchor(anchor) {
-        activeAnchor = anchor ? { ...anchor } : null;
     }
 
     global.HsMapInteractionState = {
@@ -80,11 +60,8 @@
         canFetchMarkers,
         canApplyMarkerData,
         beginFetch,
-        openPropertyPanel,
         openClusterPanel,
         closePanel,
         getPanelToken,
-        getActiveAnchor,
-        setActiveAnchor,
     };
 })(typeof window !== 'undefined' ? window : this);

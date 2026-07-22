@@ -69,6 +69,14 @@
         max-height: min(72vh, 560px);
         height: min(72vh, 560px);
     }
+
+    .hs-map-center-panel.is-cluster.is-open {
+        left: 50%;
+        right: auto;
+        bottom: 16px;
+        top: auto;
+        transform: translateX(-50%);
+    }
 }
 
 .hs-map-center-panel-backdrop {
@@ -4327,28 +4335,28 @@ position: absolute;
                <div class="smart-search">
                         <div class="search-box">
                             <i class="icon">🔍</i>
-                            <input type="text" id="smartInput" placeholder="Address, Street Name or Listing#">
-                            <span class="clear-btn" id="clearBtn">✕</span>
+                            <input type="text" id="mapSmartInput" placeholder="Address, Street Name or Listing#">
+                            <span class="clear-btn" id="mapClearBtn">✕</span>
                         </div>
 
-                            <div class="search-dropdown" id="searchDropdown">
+                            <div class="search-dropdown" id="mapSearchDropdown">
                         
                                 <!-- Locations -->
                                 <div class="dropdown-section">
                                     <div class="section-title">Locations</div>
-                                    <div id="locationResults"></div>
+                                    <div id="mapLocationResults"></div>
                                 </div>
                         
                                 <!-- Listings -->
                                 <div class="dropdown-section">
                                     <div class="section-title">Listings</div>
-                                    <div id="listingResults"></div>
+                                    <div id="mapListingResults"></div>
                                 </div>
-                                <div id="dropdownLoader" class="dropdown-loader" style="display:none;">
+                                <div id="mapDropdownLoader" class="dropdown-loader" style="display:none;">
                                     <div class="loader-spinner"></div>
                                     <span>Searching properties...</span>
                                 </div>
-                            <center> <button id="loadMoreBtn" class="show-more-btn tf-btn primary" style="width: 60%; padding: 5px 10px; display: block;margin-bottom:5px;">Load More</button></center>  
+                            <center> <button id="mapLoadMoreBtn" class="show-more-btn tf-btn primary" style="width: 60%; padding: 5px 10px; display: block;margin-bottom:5px;">Load More</button></center>  
                             </div>
                         </div>
             </div>
@@ -5112,7 +5120,6 @@ position: absolute;
 <script src="{{ Theme::asset()->url('js/map/interaction-state.js') }}?v={{ get_cms_version() }}"></script>
 <script src="{{ Theme::asset()->url('js/map/marker-manager.js') }}?v={{ get_cms_version() }}"></script>
 <script src="{{ Theme::asset()->url('js/map/fetch-coordinator.js') }}?v={{ get_cms_version() }}"></script>
-<script src="{{ Theme::asset()->url('js/map/anchored-popup.js') }}?v={{ get_cms_version() }}"></script>
 @endif
 
 
@@ -5593,7 +5600,7 @@ async function showCityBoundary(cityName) {
     }
 
     function isMapPanelOpen() {
-        return window.HsMapInteractionState?.isPanelOpen?.() || false;
+        return isClusterPanelOpen();
     }
 
     window.isClusterPanelOpen = isClusterPanelOpen;
@@ -7222,8 +7229,7 @@ function getTransactionFromUrl() {
 
     map.on('moveend', function () {
         if (!mapLayersReady) return;
-        if (isMapPanelOpen()) {
-            window.HsMapAnchoredPopup?.reposition?.();
+        if (isClusterPanelOpen()) {
             return;
         }
         if (autoCenteringMap) return;
@@ -8058,6 +8064,7 @@ function mapMovedEnoughToRefetch() {
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;');
     }
+    window.escapeMapHtml = escapeMapHtml;
 
     // Human-friendly relative listed label (mirrors TrebPropertyHelper::relativeListedLabel).
     // e.g. "Listed today", "Listed this week", "Listed this month", "Listed this year", "Listed in 2023".
@@ -8097,13 +8104,14 @@ function mapMovedEnoughToRefetch() {
 
     function buildMapImageAlt(props) {
         const parts = [
-            props?.name || props?.display_address,
-            props?.external_id,
-            props?.property_type || props?.property_subtype || props?.type,
+            props?.name || props?.display_address || props?.UnparsedAddress,
+            props?.external_id || props?.ListingKey,
+            props?.property_type || props?.property_subtype || props?.type || props?.PropertySubType,
         ].filter(Boolean);
 
         return parts.join(' - ') || 'Property listing photo';
     }
+    window.buildMapImageAlt = buildMapImageAlt;
 
     function buildMapPopupGalleryHtml(images, statusLabel, props) {
         const imageAlt = buildMapImageAlt(props || {});
@@ -9053,8 +9061,12 @@ function mapMovedEnoughToRefetch() {
     }
 
     function ensureHsMapCenterPanelInWrapper() {
-        window.HsMapAnchoredPopup?.mountPanelInStage?.();
-        return document.getElementById('hsMapCenterPanel');
+        const panel = document.getElementById('hsMapCenterPanel');
+        const stage = document.querySelector('.hs-map-stage');
+        if (panel && stage && panel.parentElement !== stage) {
+            stage.appendChild(panel);
+        }
+        return panel;
     }
 
     ensureHsMapCenterPanelInWrapper();
@@ -9150,73 +9162,49 @@ function mapMovedEnoughToRefetch() {
 
     function openHsMapCenterPanel(options) {
         options = options || {};
+        if (!options.isCluster) {
+            return null;
+        }
+
         const ui = ensureHsMapCenterPanel();
         if (!ui || !options.html) {
             return null;
         }
 
+        ensureHsMapCenterPanelInWrapper();
+
         window.HsMapFetchCoordinator?.abortInFlight?.();
         window.HsMapFetchCoordinator?.clearDebounce?.();
 
+        const { panel, body } = ui;
         const coordinates = options.coordinates
             ? options.coordinates.slice()
             : options.feature?.geometry?.coordinates?.slice();
 
-        const anchored = window.HsMapAnchoredPopup?.open?.({
-            html: options.html,
-            isCluster: !!options.isCluster,
-            coordinates,
-            feature: options.feature,
-            props: options.props,
-        });
+        hsMapCenterPanelOpenToken += 1;
+        const token = window.HsMapInteractionState?.openClusterPanel?.({ coordinates }) || hsMapCenterPanelOpenToken;
 
-        const token = anchored?.token || 0;
-        hsMapCenterPanelOpenToken = token;
-        const { body } = ui;
+        panel.classList.add('is-cluster', 'is-open');
+        panel.setAttribute('aria-hidden', 'false');
+        body.innerHTML = options.html;
 
         markHsMapSelectionOpened();
 
-        if (options.feature) {
-            setHsMapSelectedMarker(options.feature);
-        } else if (coordinates) {
+        if (coordinates) {
             setHsMapSelectedMarker(coordinates);
         }
 
         const adapter = createMapPanelAdapter(body);
-        window._hsActiveMapPopup = adapter;
-        window._hsActiveMapPopupProps = options.props || null;
-        window._hsActiveMapPopupStatus = options.status || null;
-
-        setupMapPopupScrollAreas(body);
+        setupClusterPopupLayout(body);
         bindMapPopupScrollIsolation(adapter);
-        if (options.isCluster) {
-            setupClusterPopupLayout(body);
-        }
 
-        if (options.isCluster && options.leaves) {
+        if (options.leaves) {
             hydrateMapThumbnailsForFeatures(options.leaves, '.hs-map-center-panel-body .hs-cluster-list-item');
-            prefetchMapBundlesForFeatures(options.leaves);
-        } else if (options.feature) {
-            prefetchMapBundlesForFeatures([options.feature], 1);
         }
 
-        const finalize = () => {
-            if (token && window.HsMapInteractionState?.getPanelToken?.() !== token) {
-                return;
-            }
-            setupMapPopupScrollAreas(body);
-            if (options.isCluster) {
-                setupClusterPopupLayout(body);
-            }
-            if (typeof options.onRendered === 'function') {
-                options.onRendered(adapter, token);
-            }
-        };
-
-        requestAnimationFrame(() => {
-            finalize();
-            requestAnimationFrame(finalize);
-        });
+        if (typeof options.onRendered === 'function') {
+            requestAnimationFrame(() => options.onRendered(adapter, token));
+        }
 
         return adapter;
     }
@@ -9228,11 +9216,22 @@ function mapMovedEnoughToRefetch() {
         }
 
         hsMapCenterPanelOpenToken += 1;
-        window.HsMapAnchoredPopup?.close?.();
+        window.HsMapInteractionState?.closePanel?.();
 
-        window._hsActiveMapPopup = null;
-        window._hsActiveMapPopupProps = null;
-        window._hsActiveMapPopupStatus = null;
+        panel.classList.remove('is-open', 'is-cluster');
+        panel.setAttribute('aria-hidden', 'true');
+        panel.style.left = '';
+        panel.style.top = '';
+        panel.style.transform = '';
+
+        const body = document.getElementById('hsMapCenterPanelBody');
+        if (body) {
+            body.innerHTML = '';
+        }
+
+        window._hsLastClusterLeaves = [];
+        window._hsLastClusterCoords = null;
+        window._hsLastClusterListHtml = '';
 
         clearHsMapSelectedMarker();
     }
@@ -9390,7 +9389,7 @@ function mapMovedEnoughToRefetch() {
 
     function openPropertyFromFeature(feature) {
         if (!feature?.properties) return;
-        showPropertyMapPopup(feature);
+        openPropertyDetailModal(feature.properties);
     }
 
     window.openPropertyFromFeature = openPropertyFromFeature;
@@ -9403,7 +9402,7 @@ function mapMovedEnoughToRefetch() {
     window.openPropertyFromList = openPropertyFromList;
 
     function showPropertyPopup(feature) {
-        showPropertyMapPopup(feature);
+        openPropertyDetailModal(feature?.properties);
     }
 
     window.showPropertyPopup = showPropertyPopup;
@@ -9494,51 +9493,12 @@ function mapMovedEnoughToRefetch() {
     }
 
     function showPropertyMapPopup(feature) {
-        if (!feature?.properties || !feature?.geometry?.coordinates) {
+        if (!feature?.properties) {
             return;
         }
 
-        window.HsMapFetchCoordinator?.abortInFlight?.();
-        window.HsMapFetchCoordinator?.clearDebounce?.();
-
-        const props = feature.properties;
-        const status = mapListingStatus(props);
-
-        if (!isMapUserLoggedIn && isMapSoldListing(status, props)) {
-            if (typeof openAuthModal === 'function') {
-                openAuthModal('login');
-            }
-            return;
-        }
-
-        const slug = props.url || '';
-        if (!slug || slug === 'undefined') {
-            if (typeof openAuthModal === 'function') {
-                openAuthModal('login');
-            }
-            return;
-        }
-
-        const coordinates = feature.geometry.coordinates.slice();
-        const html = buildPropertyPopupHtml(props, status, null);
-
-        openHsMapCenterPanel({
-            coordinates,
-            html,
-            feature,
-            props,
-            status,
-            onRendered: (popup, token) => {
-                if (token && window.HsMapInteractionState?.getPanelToken?.() !== token) {
-                    return;
-                }
-                const root = popup.getElement();
-                if (root) {
-                    bindMapPopupGallery(root);
-                }
-                enrichMapPopup(popup, props, status);
-            },
-        });
+        setHsMapSelectedMarker(feature);
+        openPropertyDetailModal(feature.properties);
     }
 
     window.showPropertyMapPopup = showPropertyMapPopup;
@@ -9568,7 +9528,6 @@ function mapMovedEnoughToRefetch() {
             leaves: snapshot,
             onRendered: () => {
                 hydrateMapThumbnailsForFeatures(snapshot, '.hs-map-center-panel-body .hs-cluster-list-item');
-                prefetchMapBundlesForFeatures(snapshot);
             },
         });
     }
@@ -9676,7 +9635,7 @@ document.addEventListener('click', function (e) {
         activeMarker = null;
     }
 
-    document.getElementById('smartInput').value = cityName;
+    document.getElementById('mapSmartInput').value = cityName;
 
     setTimeout(() => {
         loadProperties();
@@ -10501,20 +10460,84 @@ iframe.addEventListener('load', function() {
     }
 });
 
-const input = document.getElementById("smartInput");
-const dropdown = document.getElementById("searchDropdown");
-const loadMoreBtn = document.getElementById("loadMoreBtn");
-const loader = document.getElementById("dropdownLoader");
-const clearBtn = document.getElementById("clearBtn");
+const mapEscapeHtml = (value) => (typeof window.escapeMapHtml === 'function'
+    ? window.escapeMapHtml(value)
+    : String(value ?? ''));
+const mapBuildImageAlt = (props) => (typeof window.buildMapImageAlt === 'function'
+    ? window.buildMapImageAlt(props)
+    : (props?.UnparsedAddress || props?.name || 'Property listing photo'));
+const input = document.getElementById("mapSmartInput");
+const dropdown = document.getElementById("mapSearchDropdown");
+const loadMoreBtn = document.getElementById("mapLoadMoreBtn");
+const loader = document.getElementById("mapDropdownLoader");
+const clearBtn = document.getElementById("mapClearBtn");
 let skip = 0;
 let currentKeyword = "";
 let searchAbortController = null;
-loadMoreBtn.style.display = "block";
-let typingTimer;        // REQUIRED
-const typingDelay = 200;
+if (loadMoreBtn) {
+    loadMoreBtn.style.display = "block";
+}
+let typingTimer;
+let searchRequestId = 0;
+const typingDelay = 80;
 
 function isMlsSearchKeyword(keyword) {
     return /^[a-z]{1,2}\d{5,}$/i.test(String(keyword || '').trim());
+}
+
+function looksLikeMlsPrefix(keyword) {
+    return /^[a-z]{1,2}\d{2,}$/i.test(String(keyword || '').trim());
+}
+
+function renderInstantSearchShell(keyword) {
+    const cityHTML = buildCitySuggestionsHtml(keyword);
+    const locationEl = document.getElementById('mapLocationResults');
+    const listingEl = document.getElementById('mapListingResults');
+
+    if (locationEl) {
+        locationEl.innerHTML = cityHTML;
+    }
+    if (listingEl) {
+        listingEl.innerHTML = '<div class="hs-search-pending" style="padding:10px 12px;color:#6b7280;">Searching...</div>';
+    }
+    if (loader) {
+        loader.style.display = 'flex';
+    }
+    if (dropdown) {
+        dropdown.style.display = 'block';
+    }
+}
+
+function handleSmartSearchInput(keyword) {
+    currentKeyword = keyword;
+    skip = 0;
+    clearTimeout(typingTimer);
+
+    const trimmed = String(keyword || '').trim();
+
+    if (trimmed.length < 2) {
+        if (dropdown) {
+            dropdown.style.display = 'none';
+        }
+        if (loader) {
+            loader.style.display = 'none';
+        }
+        document.getElementById('mapLocationResults').innerHTML = '';
+        document.getElementById('mapListingResults').innerHTML = '';
+        return;
+    }
+
+    renderInstantSearchShell(trimmed);
+
+    const searchUrl = buildSmartSearchUrl(trimmed);
+    if (smartSearchCache.has(searchUrl) || isMlsSearchKeyword(trimmed) || looksLikeMlsPrefix(trimmed)) {
+        loadResults(trimmed, true);
+        return;
+    }
+
+    const noDebounce = isMlsSearchKeyword(trimmed) || looksLikeMlsPrefix(trimmed) || /\d/.test(trimmed) || trimmed.length >= 3;
+    const delay = noDebounce ? 0 : 60;
+    typingTimer = setTimeout(() => loadResults(trimmed, true), delay);
 }
 
 function buildCitySuggestionsHtml(keyword) {
@@ -10546,7 +10569,9 @@ function buildCitySuggestionsHtml(keyword) {
 
 function buildSmartSearchUrl(keyword) {
     let url = `/api/v1/smart-search?keyword=${encodeURIComponent(keyword)}&skip=${skip}`;
-    if (!isMlsSearchKeyword(keyword) && selectedTransaction && selectedTransaction !== 'all') {
+    const trimmed = String(keyword || '').trim();
+    const skipTxFilter = isMlsSearchKeyword(trimmed) || looksLikeMlsPrefix(trimmed) || /\d/.test(trimmed);
+    if (!skipTxFilter && selectedTransaction && selectedTransaction !== 'all') {
         url += `&transaction=${encodeURIComponent(selectedTransaction)}`;
     }
     return url;
@@ -10577,64 +10602,58 @@ function smartSearchFetch(url, signal) {
         });
 }
 
-input.addEventListener("keyup", function () {
-
-    let keyword = this.value;
-    currentKeyword = keyword;
-    skip = 0;
-
-    clearTimeout(typingTimer);
-
-    if(keyword.length < 2){
-        dropdown.style.display = "none";
-        document.getElementById("locationResults").innerHTML = "";
-        document.getElementById("listingResults").innerHTML = "";
-        return;
-    }
-
-    const cityHTML = buildCitySuggestionsHtml(keyword);
-    document.getElementById("locationResults").innerHTML = cityHTML;
-    document.getElementById("listingResults").innerHTML = "";
-
-    loader.style.display = "flex";
-    dropdown.style.display = "block";
-
-    if (isMlsSearchKeyword(keyword)) {
-        loadResults(keyword, true);
-        return;
-    }
-
-    typingTimer = setTimeout(() => {
-        loadResults(keyword, true);
-    }, typingDelay);
-    
-    
-    
+if (input) {
+input.addEventListener('input', function () {
+    handleSmartSearchInput(this.value);
 });
+
+input.addEventListener('focus', function () {
+    if (String(this.value || '').trim().length >= 2) {
+        handleSmartSearchInput(this.value);
+    }
+});
+
+input.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+        clearTimeout(typingTimer);
+        if (searchAbortController) {
+            searchAbortController.abort();
+        }
+        if (dropdown) {
+            dropdown.style.display = 'none';
+        }
+        if (loader) {
+            loader.style.display = 'none';
+        }
+    }
+});
+}
 
 
 function getMatchingCities(keyword) {
     if (!keyword) return [];
 
-    keyword = keyword.trim().toLowerCase(); // trim keyword
+    keyword = keyword.trim().toLowerCase();
+    if (!keyword) return [];
 
     const unique = new Map();
 
     Object.keys(cityCoordinates).forEach(city => {
-        const cleanedCity = city.trim(); // trim city name
+        const cleanedCity = city.trim();
         const lower = cleanedCity.toLowerCase();
 
-        if (lower.includes(keyword)) {
+        if (lower.includes(keyword) || lower.startsWith(keyword)) {
             if (!unique.has(lower)) {
-                unique.set(lower, cleanedCity); // store cleaned city
+                unique.set(lower, cleanedCity);
             }
         }
     });
 
-    return Array.from(unique.values()).slice(0, 5);
+    return Array.from(unique.values()).slice(0, 6);
 }
 
 function loadResults(keyword, reset = false){
+    const requestId = ++searchRequestId;
 
     let addressHTML = "";
     let listingsHTML = "";
@@ -10648,8 +10667,11 @@ function loadResults(keyword, reset = false){
     const cityHTML = buildCitySuggestionsHtml(keyword);
 
     if (reset) {
-        document.getElementById("locationResults").innerHTML = cityHTML;
-        document.getElementById("listingResults").innerHTML = "";
+        document.getElementById("mapLocationResults").innerHTML = cityHTML;
+        if (!document.getElementById("mapListingResults").innerHTML) {
+            document.getElementById("mapListingResults").innerHTML =
+                '<div class="hs-search-pending" style="padding:10px 12px;color:#6b7280;">Searching...</div>';
+        }
     }
 
     if (searchAbortController) {
@@ -10660,122 +10682,167 @@ function loadResults(keyword, reset = false){
     const searchTimeoutId = setTimeout(() => searchAbortController.abort(), isMlsKey ? 45000 : 12000);
 
     const searchUrl = buildSmartSearchUrl(keyword);
-    smartSearchFetch(searchUrl, searchAbortController.signal)
-    .then(data => {
 
-        loader.style.display = "none";
-        dropdown.style.display = "block";
-
-        if(!Array.isArray(data) || data.length === 0){
-            if (reset) {
-                document.getElementById("locationResults").innerHTML = cityHTML;
-                document.getElementById("listingResults").innerHTML = isMlsKey
-                    ? '<div style="padding:12px;color:#666;">MLS listing not found. Try again or search by address.</div>'
-                    : (cityHTML ? '' : '<div style="padding:12px;color:#666;">No listings found. Try another address.</div>');
-            }
+    if (smartSearchCache.has(searchUrl)) {
+        const cached = smartSearchCache.get(searchUrl);
+        if (requestId !== searchRequestId) {
             return;
         }
-
-        data.forEach(item => {
-
-            const listingStatus = item.MlsStatus === 'New'
-                ? (item.TransactionType === 'For Sale' ? 'For Sale' : 'For Lease')
-                : (item.MlsStatus ?? '');
-
-            if (isChineseText(item.UnparsedAddress ?? '') || isChineseText(item.PropertySubType ?? '')) {
-                return;
-            }
-
-            const garageCount = item.CoveredSpaces ?? item.covered_spaces ?? 0;
-            const parkingCount = item.ParkingSpaces ?? 0;
-
-            // 🔹 Addresses (suggestions)
-            addressHTML += `
-                <div class="location-item address-item" 
-                    data-lat="${item.lat}"
-                    data-lng="${item.lng}">
-                    📍 ${item.UnparsedAddress}
-                </div>
-            `;
-
-       listingsHTML += `
-                 ${mapLoginGateHtml(listingStatus)}
-                    <div class="listing-item ${mapBlurClass(listingStatus)}" style="width: 100%"
-                      data-lat="${item.lat}"
-                    data-lng="${item.lng}"
-                     data-external_id="${item.ListingKey}"
-                     data-price="$${Number(item.ListPrice).toLocaleString()}"
-                     data-name="${item.UnparsedAddress}"
-                     data-bedrooms="${item.BedroomsTotal ?? 0}"
-                     data-bathrooms="${item.BathroomsTotalInteger ?? 0}"
-                     data-parking="${garageCount}"
-                     data-image="${item.MediaURL}"
-                     data-square="${item.LivingAreaRange}"
-                     data-agency="${item.ListOfficeName}"
-                     data-transaction="${listingStatus}"
-                     data-slug="${item.URL}"
-                    >
-                        <img src="${item.MediaURL}"   loading="lazy"
-                        data-key="${item.ListingKey}"
-                                class="property-image"
-                                alt="${escapeMapHtml(buildMapImageAlt(item))}"
-                                style="width:100px;height:80px;object-fit:cover;border-radius:6px;"
-                            />
-                        <div style="width: 100%">
-                            <div class="price">
-                                $${Number(item.ListPrice).toLocaleString()}
-                                <p style="float:right">${
-                                    item.MlsStatus === 'New'
-                                      ? (item.TransactionType === 'For Sale' ? 'For Sale' : 'For Lease')
-                                      : (item.MlsStatus ?? '')
-                                  }</p>
-                            </div>
-                            <div>${item.UnparsedAddress}</div>
-                            <p style="float:left">${item.PropertySubType}</p>
-                            <small style="float:right">
-                                🛏 ${item.BedroomsTotal ?? 0}
-                                🛁 ${item.BathroomsTotalInteger ?? 0}
-                                🚘 ${garageCount}
-                            </small>
-                        </div>
-                    </div>
-                
-            `;
-        });
-        // Import only when user picks a listing (not on every keystroke — avoids TREB API storm)
-        const finalSuggestions = cityHTML + addressHTML;
-
-        if(reset){
-            document.getElementById("locationResults").innerHTML = finalSuggestions || cityHTML;
-            document.getElementById("listingResults").innerHTML = listingsHTML;
-        } else {
-            document.getElementById("listingResults")
-                .insertAdjacentHTML("beforeend", listingsHTML);
+        renderSmartSearchResults(keyword, reset, cityHTML, cached, isMlsKey);
+        clearTimeout(searchTimeoutId);
+        if (loader) {
+            loader.style.display = 'none';
         }
+        return;
+    }
 
-        setTimeout(loadImages, 0);
-
+    smartSearchFetch(searchUrl, searchAbortController.signal)
+    .then(data => {
+        if (requestId !== searchRequestId) {
+            return;
+        }
+        try {
+            renderSmartSearchResults(keyword, reset, cityHTML, data, isMlsKey);
+        } catch (renderErr) {
+            console.error('Search render failed:', renderErr);
+            if (reset) {
+                document.getElementById("mapLocationResults").innerHTML = cityHTML;
+                document.getElementById("mapListingResults").innerHTML =
+                    '<div style="padding:12px;color:#666;">Could not display search results. Please refresh and try again.</div>';
+            }
+        }
     })
     .catch(err => {
-        if (err.name !== 'AbortError') {
-            console.log(err);
-            if (reset) {
-                document.getElementById("locationResults").innerHTML = cityHTML;
-                document.getElementById("listingResults").innerHTML =
-                    '<div style="padding:12px;color:#666;">Search timed out. Try MLS# or a shorter address.</div>';
-            }
+        if (requestId !== searchRequestId) {
+            return;
+        }
+        if (err.name === 'AbortError') {
+            return;
+        }
+        console.error('Smart search failed:', err);
+        if (reset) {
+            document.getElementById("mapLocationResults").innerHTML = cityHTML;
+            document.getElementById("mapListingResults").innerHTML =
+                '<div style="padding:12px;color:#666;">Search failed. Check your connection and try again.</div>';
         }
     })
     .finally(() => {
+        if (requestId !== searchRequestId) {
+            return;
+        }
         clearTimeout(searchTimeoutId);
-        loader.style.display = "none";
-        if (!document.getElementById("listingResults").innerHTML && !document.getElementById("locationResults").innerHTML) {
-            dropdown.style.display = cityHTML ? "block" : "none";
-            if (cityHTML && reset) {
-                document.getElementById("locationResults").innerHTML = cityHTML;
-            }
+        if (loader) {
+            loader.style.display = "none";
+        }
+        if (dropdown) {
+            dropdown.style.display = "block";
         }
     });
+}
+
+function renderSmartSearchResults(keyword, reset, cityHTML, data, isMlsKey) {
+    if (loader) {
+        loader.style.display = "none";
+    }
+    if (dropdown) {
+        dropdown.style.display = "block";
+    }
+
+    const isChineseText = (text) => {
+        const t = String(text ?? '').trim().toLowerCase();
+        if (!t) return false;
+        return t === 'chinese' || t.includes('chinese') || t.includes('中文') || t.includes('香港') || t.includes('台灣');
+    };
+
+    let addressHTML = "";
+    let listingsHTML = "";
+
+    if(!Array.isArray(data) || data.length === 0){
+        if (reset) {
+            document.getElementById("mapLocationResults").innerHTML = cityHTML;
+            document.getElementById("mapListingResults").innerHTML = isMlsKey
+                ? '<div style="padding:12px;color:#666;">MLS listing not found. Try again or search by address.</div>'
+                : (cityHTML ? '' : '<div style="padding:12px;color:#666;">No listings found. Try another address.</div>');
+        }
+        return;
+    }
+
+    data.forEach(item => {
+
+        const listingStatus = item.MlsStatus === 'New'
+            ? (item.TransactionType === 'For Sale' ? 'For Sale' : 'For Lease')
+            : (item.MlsStatus ?? '');
+
+        if (isChineseText(item.UnparsedAddress ?? '') || isChineseText(item.PropertySubType ?? '')) {
+            return;
+        }
+
+        const garageCount = item.CoveredSpaces ?? item.covered_spaces ?? 0;
+
+        addressHTML += `
+            <div class="location-item address-item" 
+                data-lat="${item.lat}"
+                data-lng="${item.lng}">
+                📍 ${item.UnparsedAddress}
+            </div>
+        `;
+
+   listingsHTML += `
+             ${mapLoginGateHtml(listingStatus)}
+                <div class="listing-item ${mapBlurClass(listingStatus)}" style="width: 100%"
+                  data-lat="${item.lat}"
+                data-lng="${item.lng}"
+                 data-external_id="${item.ListingKey}"
+                 data-price="$${Number(item.ListPrice).toLocaleString()}"
+                 data-name="${item.UnparsedAddress}"
+                 data-bedrooms="${item.BedroomsTotal ?? 0}"
+                 data-bathrooms="${item.BathroomsTotalInteger ?? 0}"
+                 data-parking="${garageCount}"
+                 data-image="${item.MediaURL}"
+                 data-square="${item.LivingAreaRange}"
+                 data-agency="${item.ListOfficeName}"
+                 data-transaction="${listingStatus}"
+                 data-slug="${item.URL}"
+                >
+                    <img src="${item.MediaURL}"   loading="lazy"
+                    data-key="${item.ListingKey}"
+                            class="property-image"
+                            alt="${mapEscapeHtml(mapBuildImageAlt(item))}"
+                            style="width:100px;height:80px;object-fit:cover;border-radius:6px;"
+                        />
+                    <div style="width: 100%">
+                        <div class="price">
+                            $${Number(item.ListPrice).toLocaleString()}
+                            <p style="float:right">${
+                                item.MlsStatus === 'New'
+                                  ? (item.TransactionType === 'For Sale' ? 'For Sale' : 'For Lease')
+                                  : (item.MlsStatus ?? '')
+                              }</p>
+                        </div>
+                        <div>${item.UnparsedAddress}</div>
+                        <p style="float:left">${item.PropertySubType}</p>
+                        <small style="float:right">
+                            🛏 ${item.BedroomsTotal ?? 0}
+                            🛁 ${item.BathroomsTotalInteger ?? 0}
+                            🚘 ${garageCount}
+                        </small>
+                    </div>
+                </div>
+            
+        `;
+    });
+
+    const finalSuggestions = cityHTML + addressHTML;
+
+    if (reset) {
+        document.getElementById("mapLocationResults").innerHTML = finalSuggestions || cityHTML;
+        document.getElementById("mapListingResults").innerHTML = listingsHTML;
+    } else {
+        document.getElementById("mapListingResults")
+            .insertAdjacentHTML("beforeend", listingsHTML);
+    }
+
+    requestAnimationFrame(() => loadImages());
 }
 
 function loadImages() {
@@ -10825,19 +10892,23 @@ function loadImages() {
 
 
 // LOAD MORE CLICK
+if (loadMoreBtn) {
 loadMoreBtn.addEventListener("click", function(){
     loader.style.display = "flex";
     skip += 5;  //NEXT PAGE
     loadResults(currentKeyword, false);
 
 });
+}
 
+if (clearBtn) {
 clearBtn.addEventListener("click", function(){
 loader.style.display = "none";
         dropdown.style.display = "none";
-        document.getElementById("smartInput").value='';
+        document.getElementById("mapSmartInput").value='';
 
 });
+}
 
 
 
@@ -10921,8 +10992,9 @@ document.addEventListener("DOMContentLoaded", function () {
     
     
     document.addEventListener("click", function (e) {
-    const dropdown = document.getElementById("searchDropdown");
-    //const input = document.getElementById("smartInput");
+    if (!dropdown || !input) {
+        return;
+    }
 
     // If click is NOT inside dropdown AND NOT on input
     if (
@@ -11080,8 +11152,9 @@ overlay?.addEventListener('click', () => {
 });
 document.addEventListener("DOMContentLoaded", function () {
 
-    const dropdown = document.getElementById("searchDropdown");
-   // const input = document.getElementById("smartInput");
+    if (!dropdown || !input) {
+        return;
+    }
 
     // Close dropdown function
     function closeDropdown() {
@@ -11120,8 +11193,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
 
 function closeSearchDropdown() {
-    const dropdown = document.getElementById("searchDropdown");
-    const loader = document.getElementById("dropdownLoader");
+    const dropdown = document.getElementById("mapSearchDropdown");
+    const loader = document.getElementById("mapDropdownLoader");
 
     if (dropdown) dropdown.style.display = "none";
     if (loader) loader.style.display = "none";

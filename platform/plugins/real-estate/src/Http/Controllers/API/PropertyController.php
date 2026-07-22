@@ -3042,6 +3042,44 @@ class PropertyController extends BaseController
         // Match AMP ListingKeys: C9250979, W4929276, CW12345678, etc.
         $isListingKey = (bool) preg_match('/^[a-z]{1,2}\d{5,}$/i', $keyword);
 
+        if ($isListingKey) {
+            $mlsCacheKey = 'smart_search_mls:' . strtoupper($keyword);
+            $cachedMls = Cache::get($mlsCacheKey);
+            if (is_array($cachedMls)) {
+                return response()->json($cachedMls);
+            }
+        }
+
+        $searchCacheKey = 'smart_search_v1:' . md5(
+            strtolower($keyword) . '|' . $skip . '|' . ($request->input('transaction', '')) . '|' . ($request->input('status', ''))
+        );
+        if (! $isListingKey && mb_strlen($keyword) >= 3 && preg_match('/\d/', $keyword)) {
+            $cachedSearch = Cache::get($searchCacheKey);
+            if (is_array($cachedSearch)) {
+                return response()->json($cachedSearch);
+            }
+        } elseif (! $isListingKey && mb_strlen($keyword) >= 4) {
+            $cachedSearch = Cache::get($searchCacheKey);
+            if (is_array($cachedSearch)) {
+                return response()->json($cachedSearch);
+            }
+        }
+
+        $rememberSearch = function (array $payload) use ($isListingKey, $keyword, $searchCacheKey): array {
+            if ($payload === []) {
+                return $payload;
+            }
+            if ($isListingKey) {
+                Cache::put('smart_search_mls:' . strtoupper($keyword), $payload, 600);
+            } elseif (mb_strlen($keyword) >= 3 && preg_match('/\d/', $keyword)) {
+                Cache::put($searchCacheKey, $payload, 180);
+            } elseif (mb_strlen($keyword) >= 4) {
+                Cache::put($searchCacheKey, $payload, 180);
+            }
+
+            return $payload;
+        };
+
         // Short alphabetic keywords are handled by client-side city suggestions.
         if (mb_strlen($keyword) < 5 && ! $isListingKey && ! preg_match('/\d/', $keyword)) {
             return response()->json([]);
@@ -3106,7 +3144,7 @@ class PropertyController extends BaseController
 
                         if ($ordered !== [] || ! $parsed) {
                             return response()->json(
-                                TrebPropertyHelper::groupListingsByBuilding(array_slice($ordered, 0, $top))
+                                $rememberSearch(TrebPropertyHelper::groupListingsByBuilding(array_slice($ordered, 0, $top)))
                             );
                         }
                     }
@@ -3219,11 +3257,11 @@ class PropertyController extends BaseController
 
         // Exact MLS hit from local DB — return immediately (incl. sold/commercial).
         if ($isListingKey && $mappedLocal !== []) {
-            return response()->json(TrebPropertyHelper::groupListingsByBuilding(array_slice($mappedLocal, 0, $top)));
+            return response()->json($rememberSearch(TrebPropertyHelper::groupListingsByBuilding(array_slice($mappedLocal, 0, $top))));
         }
 
         if (count($mappedLocal) > 0 && ! $isListingKey) {
-            return response()->json(TrebPropertyHelper::groupListingsByBuilding(array_slice($mappedLocal, 0, $top)));
+            return response()->json($rememberSearch(TrebPropertyHelper::groupListingsByBuilding(array_slice($mappedLocal, 0, $top))));
         }
 
         // Address miss in local/Meili — pull exact street from AMP (AUTH/AUTH1),
@@ -3235,7 +3273,7 @@ class PropertyController extends BaseController
             if ($ingestedIds !== []) {
                 $ordered = $this->hydrateSmartSearchRows($ingestedIds, $top, true);
 
-                return response()->json(TrebPropertyHelper::groupListingsByBuilding($ordered));
+                return response()->json($rememberSearch(TrebPropertyHelper::groupListingsByBuilding($ordered)));
             }
         }
 
@@ -3252,7 +3290,7 @@ class PropertyController extends BaseController
                 // Allow commercial on exact MLS hit — subtype filter must not hide it.
                 $ordered = $this->hydrateSmartSearchRows([(int) $ingested->id], $top, true);
                 if ($ordered !== []) {
-                    return response()->json(TrebPropertyHelper::groupListingsByBuilding($ordered));
+                    return response()->json($rememberSearch(TrebPropertyHelper::groupListingsByBuilding($ordered)));
                 }
             }
         }
@@ -3264,14 +3302,14 @@ class PropertyController extends BaseController
             if ($ingested !== null) {
                 $ordered = $this->hydrateSmartSearchRows([(int) $ingested->id], $top, true);
                 if ($ordered !== []) {
-                    return response()->json(TrebPropertyHelper::groupListingsByBuilding($ordered));
+                    return response()->json($rememberSearch(TrebPropertyHelper::groupListingsByBuilding($ordered)));
                 }
             }
         }
 
         // Free-text / address: never fan out to live AMP (slow + commercial bleed).
         // Listing-key miss already handled above.
-            return response()->json(TrebPropertyHelper::groupListingsByBuilding(array_slice($mappedLocal, 0, $top)));
+            return response()->json($rememberSearch(TrebPropertyHelper::groupListingsByBuilding(array_slice($mappedLocal, 0, $top))));
         }
 
     /**

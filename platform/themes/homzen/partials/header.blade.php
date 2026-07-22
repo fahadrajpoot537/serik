@@ -912,7 +912,7 @@ let skip = 0;
 let currentKeyword = "";
 loadMoreBtn.style.display = "block";
 let typingTimer;
-const typingDelay = 250;
+const typingDelay = 80;
 let searchController = null;
 
 function isSoldListing(item) {
@@ -923,30 +923,52 @@ function guestBlurClass(item) {
     return (!isLoggedIn && isSoldListing(item)) ? 'blurred-content' : '';
 }
 
-input.addEventListener("keyup", function () {
+function isHeaderMlsKeyword(keyword) {
+    return /^[a-z]{1,2}\d{5,}$/i.test(String(keyword || '').trim());
+}
 
-    let keyword = this.value;
+function looksLikeHeaderMlsPrefix(keyword) {
+    return /^[a-z]{1,2}\d{2,}$/i.test(String(keyword || '').trim());
+}
+
+function showHeaderSearchPending() {
+    loader.style.display = 'flex';
+    dropdown.style.display = 'block';
+    const listingEl = document.getElementById('listingResults');
+    if (listingEl && !listingEl.innerHTML) {
+        listingEl.innerHTML = '<div class="hs-search-pending" style="padding:10px 12px;color:#6b7280;">Searching...</div>';
+    }
+}
+
+function handleHeaderSearchInput(keyword) {
     currentKeyword = keyword;
     skip = 0;
-
     clearTimeout(typingTimer);
 
-    if(keyword.length < 2){
-        dropdown.style.display = "none";
-        document.getElementById("locationResults").innerHTML = "";
-        document.getElementById("listingResults").innerHTML = "";
+    const trimmed = String(keyword || '').trim();
+    if (trimmed.length < 2) {
+        dropdown.style.display = 'none';
+        loader.style.display = 'none';
+        document.getElementById('locationResults').innerHTML = '';
+        document.getElementById('listingResults').innerHTML = '';
         return;
     }
 
-    loader.style.display = "flex";
-    dropdown.style.display = "block";
+    showHeaderSearchPending();
 
-    typingTimer = setTimeout(() => {
-        loadResults(keyword, true);
-    }, typingDelay);
-    
-    
-    
+    const noDelay = isHeaderMlsKeyword(trimmed) || looksLikeHeaderMlsPrefix(trimmed);
+    const delay = noDelay ? 0 : (/\d/.test(trimmed) || trimmed.length >= 4 ? typingDelay : 120);
+    typingTimer = setTimeout(() => loadResults(trimmed, true), delay);
+}
+
+input.addEventListener('input', function () {
+    handleHeaderSearchInput(this.value);
+});
+
+input.addEventListener('focus', function () {
+    if (String(this.value || '').trim().length >= 2) {
+        handleHeaderSearchInput(this.value);
+    }
 });
 
 

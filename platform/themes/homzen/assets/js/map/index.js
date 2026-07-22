@@ -4,4 +4,3 @@
 require('./interaction-state');
 require('./marker-manager');
 require('./fetch-coordinator');
-require('./anchored-popup');
