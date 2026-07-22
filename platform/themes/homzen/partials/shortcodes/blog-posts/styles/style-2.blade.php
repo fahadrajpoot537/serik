@@ -1044,7 +1044,7 @@ expenses using the Serik Realty Mortgage Payment Calculator.
                 <button class="btn btn-toggle">Condo</button>
               </div-->
               
-                <label class="block-label"> <img src="https://serik.ca/storage/mortgage-banner-1.webp" style="width:90%"/></label>
+                <label class="block-label"> <img src="https://serik.ca/storage/mortgage-banner-1.webp" style="width:90%" alt="{{ __('Ontario mortgage calculator illustration') }}"/></label>
                 <div class="btn-group">
                   <button id="cashbackYes" class="btn btn-toggle active">With Serik</button>
                   <button id="cashbackNo" class="btn btn-toggle ">Without Serik </button>

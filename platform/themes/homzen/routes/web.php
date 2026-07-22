@@ -2,6 +2,8 @@
 
 use App\Support\PropertyUrl;
 use Botble\Base\Http\Middleware\RequiresJsonRequestMiddleware;
+use Botble\Page\Models\Page;
+use Botble\Slug\Facades\SlugHelper;
 use Botble\Theme\Facades\Theme;
 use Botble\Theme\Http\Controllers\PublicController;
 use Illuminate\Support\Facades\Route;
@@ -24,6 +26,7 @@ Route::middleware(['web', 'core'])
                 Route::get('projects/map', 'ajaxGetProjectsForMap')->name('projects.map');
                 Route::get('projects/search', 'ajaxSearchProjects')->name('projects.search');
                 Route::get('cities', 'ajaxGetCities')->name('cities');
+                Route::get('blog-posts', 'ajaxGetBlogPosts')->name('blog-posts');
             });
         });
     });
@@ -34,6 +37,22 @@ Route::middleware(['web', 'core'])->group(function (): void {
     Route::redirect('/frequently-asked-questions', '/faqs', 301);
     Route::redirect('/blog', '/blogs', 301);
     Route::redirect('/agents/sadaqat', '/agents', 301);
+
+    Route::get('/blogs', function () {
+        $blogPageId = (int) theme_option('blog_page_id', setting('blog_page_id'));
+
+        if (! $blogPageId) {
+            abort(404);
+        }
+
+        $slug = SlugHelper::getSlug(null, '', Page::class, $blogPageId);
+
+        if (! $slug) {
+            abort(404);
+        }
+
+        return app(PublicController::class)->getView($slug->key, $slug->prefix ?? '');
+    });
 
     Route::get(
         '/on/{filters}/map/{slug}',

@@ -1,5 +1,13 @@
 
 <style>
+.header-property-detail {
+    margin-bottom: 8px;
+    padding-bottom: 0;
+}
+.single-property-overview .info-box1 {
+    margin-top: 0;
+    padding-top: 8px;
+}
 
 /* Style the tab */
 .tab {

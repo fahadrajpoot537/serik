@@ -2,6 +2,7 @@
     use App\Support\SerikMediaUrl;
 
     $ctaImage = static fn (string $file): string => SerikMediaUrl::toPublic($file);
+    $ctaAltContext = trim(strip_tags((string) ($shortcode->title ?: $shortcode->subtitle ?: __('Free Home Evaluation'))));
 @endphp
 
 <style>
@@ -133,40 +134,40 @@
                         <!-- LEFT COLUMN (UP) -->
                         <div class="scroll-container">
                             <div class="scroll-track scroll-up">
-                                <img src="{{ $ctaImage('images-1.jfif') }}">
-                                <img src="{{ $ctaImage('images-2.jfif') }}">
-                                <img src="{{ $ctaImage('images-3.jfif') }}">
+                                <img src="{{ $ctaImage('images-1.jfif') }}" alt="{{ img_alt(null, 'images-1.jfif', $ctaAltContext) }}">
+                                <img src="{{ $ctaImage('images-2.jfif') }}" alt="{{ img_alt(null, 'images-2.jfif', $ctaAltContext) }}">
+                                <img src="{{ $ctaImage('images-3.jfif') }}" alt="{{ img_alt(null, 'images-3.jfif', $ctaAltContext) }}">
                     
                                 <!-- Duplicate for seamless loop -->
-                                <img src="{{ $ctaImage('images-1.jfif') }}">
-                                <img src="{{ $ctaImage('images-2.jfif') }}">
-                                <img src="{{ $ctaImage('images-3.jfif') }}">
+                                <img src="{{ $ctaImage('images-1.jfif') }}" alt="{{ img_alt(null, 'images-1.jfif', $ctaAltContext) }}">
+                                <img src="{{ $ctaImage('images-2.jfif') }}" alt="{{ img_alt(null, 'images-2.jfif', $ctaAltContext) }}">
+                                <img src="{{ $ctaImage('images-3.jfif') }}" alt="{{ img_alt(null, 'images-3.jfif', $ctaAltContext) }}">
                             </div>
                         </div>
                     
                         <!-- RIGHT COLUMN (DOWN) -->
                         <div class="scroll-container">
                             <div class="scroll-track scroll-down">
-                                <img src="{{ $ctaImage('images.jfif') }}">
-                                <img src="{{ $ctaImage('images-4.jfif') }}">
-                                <img src="{{ $ctaImage('images-5.jfif') }}">
+                                <img src="{{ $ctaImage('images.jfif') }}" alt="{{ img_alt(null, 'images.jfif', $ctaAltContext) }}">
+                                <img src="{{ $ctaImage('images-4.jfif') }}" alt="{{ img_alt(null, 'images-4.jfif', $ctaAltContext) }}">
+                                <img src="{{ $ctaImage('images-5.jfif') }}" alt="{{ img_alt(null, 'images-5.jfif', $ctaAltContext) }}">
                     
                                 <!-- Duplicate for seamless loop -->
-                                <img src="{{ $ctaImage('images.jfif') }}">
-                                <img src="{{ $ctaImage('images-4.jfif') }}">
-                                <img src="{{ $ctaImage('images-5.jfif') }}">
+                                <img src="{{ $ctaImage('images.jfif') }}" alt="{{ img_alt(null, 'images.jfif', $ctaAltContext) }}">
+                                <img src="{{ $ctaImage('images-4.jfif') }}" alt="{{ img_alt(null, 'images-4.jfif', $ctaAltContext) }}">
+                                <img src="{{ $ctaImage('images-5.jfif') }}" alt="{{ img_alt(null, 'images-5.jfif', $ctaAltContext) }}">
                             </div>
                         </div>
                          <div class="scroll-container">
                             <div class="scroll-track scroll-up">
-                                <img src="{{ $ctaImage('images-1.jfif') }}">
-                                <img src="{{ $ctaImage('images-2.jfif') }}">
-                                <img src="{{ $ctaImage('images-3.jfif') }}">
+                                <img src="{{ $ctaImage('images-1.jfif') }}" alt="{{ img_alt(null, 'images-1.jfif', $ctaAltContext) }}">
+                                <img src="{{ $ctaImage('images-2.jfif') }}" alt="{{ img_alt(null, 'images-2.jfif', $ctaAltContext) }}">
+                                <img src="{{ $ctaImage('images-3.jfif') }}" alt="{{ img_alt(null, 'images-3.jfif', $ctaAltContext) }}">
                     
                                 <!-- Duplicate for seamless loop -->
-                                <img src="{{ $ctaImage('images-1.jfif') }}">
-                                <img src="{{ $ctaImage('images-2.jfif') }}">
-                                <img src="{{ $ctaImage('images-3.jfif') }}">
+                                <img src="{{ $ctaImage('images-1.jfif') }}" alt="{{ img_alt(null, 'images-1.jfif', $ctaAltContext) }}">
+                                <img src="{{ $ctaImage('images-2.jfif') }}" alt="{{ img_alt(null, 'images-2.jfif', $ctaAltContext) }}">
+                                <img src="{{ $ctaImage('images-3.jfif') }}" alt="{{ img_alt(null, 'images-3.jfif', $ctaAltContext) }}">
                             </div>
                         </div>
                     
@@ -181,7 +182,7 @@
                 <div class="box-title">
                    
                     <div>
-                    <img style="height: 50px;" src="{{ $ctaImage('backgroundbordershadow.png') }}">
+                    <img style="height: 50px;" src="{{ $ctaImage('backgroundbordershadow.png') }}" alt="">
                 </div><br>
                     @if($shortcode->subtitle)
                         <div class="text-subtitle text-primary" style="font-size:30px;color:linear-gradient(#000000, #2C638B);">{!! BaseHelper::clean($shortcode->subtitle) !!}</div>
@@ -191,7 +192,7 @@
                     @endif
                 </div>
                 <div>
-                    <img src="{{ $ctaImage('container.png') }}">
+                    <img src="{{ $ctaImage('container.png') }}" alt="{{ img_alt(null, 'container.png', $ctaAltContext) }}">
                 </div>
                 <br>
                 @if($shortcode->button_label)

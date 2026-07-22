@@ -3,16 +3,17 @@
 /* ===== BASE ===== */
 .mega-menu {
     display: flex;
-    max-width: 1200px;
-    margin: auto;
-    gap: 20px;
+    max-width: 100%;
+    margin: 0 auto;
+    gap: 16px;
 }
 
 .mega-column {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
+    min-width: 0;
 }
 
 .menu-item {
@@ -30,73 +31,142 @@
 
 /* ===== MEGA DROPDOWN ===== */
 .mega-dropdown {
-    zoom: 0.7;
     position: absolute;
     top: 100%;
-    left: 55%;
-    transform: translateX(-50%);
-    width: 95vw;
+    left: 50%;
+    transform: translateX(-50%) translateY(8px);
+    width: min(920px, calc(100vw - 48px));
+    max-width: 920px;
     background: #fff;
-    border-radius: 16px;
-    box-shadow: 0 25px 50px rgba(0,0,0,.12);
-    padding: 24px;
-    display: none;
+    border-radius: 14px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    box-shadow: 0 20px 48px rgba(15, 23, 42, 0.14);
+    padding: 20px;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
     z-index: 1000;
+    transition: opacity 0.22s ease, transform 0.22s ease, visibility 0.22s ease;
 }
 
 /* Layout */
 .mega-wrapper {
     display: flex;
-    gap: 30px;
+    gap: 20px;
 }
 
 .mega-left {
-    width: 25%;
+    width: 28%;
+    flex-shrink: 0;
     background: #f6f8fc;
-    padding: 24px;
-    border-radius: 14px;
+    padding: 16px;
+    border-radius: 12px;
 }
 
 .mega-right {
-    width: 75%;
+    flex: 1;
+    min-width: 0;
 }
 
 .mega-right a {
     display: block;
     text-decoration: none;
+    color: #334155;
+    font-size: 14px;
+    line-height: 1.45;
+    padding: 5px 8px;
+    border-radius: 6px;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.mega-right a:hover {
+    background: #eef4ff;
+    color: #0255a1;
+}
+
+.mega-right h4 {
+    font-size: 15px;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0 0 10px;
 }
 
 /* Feature box */
 .feature-box {
     display: flex;
-    gap: 6px;
-    padding: 14px;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 14px;
     background: #fff;
     border-radius: 10px;
     margin-bottom: 12px;
     text-decoration: none;
+    color: #0255a1;
+    font-weight: 600;
+    font-size: 14px;
+    border: 1px solid #dbeafe;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.feature-box:hover {
+    background: #eff6ff;
+    border-color: #93c5fd;
 }
 
 /* Images */
 .mega-left img {
     width: 100%;
+    border-radius: 8px;
 }
 
 /* Titles inside columns */
 .main-city {
-    font-weight: 600;
-    padding: 5px 0;
-    font-size: 20px;
+    font-weight: 700;
+    padding: 10px 8px 4px;
+    font-size: 14px;
+    color: #0255a1 !important;
+    margin-top: 4px;
+}
+
+.main-city:first-child {
+    margin-top: 0;
+    padding-top: 4px;
+}
+
+.mega-column a:not(.main-city) {
+    padding-left: 14px;
+    font-size: 13px;
+    color: #475569;
 }
 
 /* ===== DESKTOP ===== */
 @media (min-width: 992px) {
-    .has-dropdown:hover .mega-dropdown {
-        display: block;
+    .has-dropdown::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 100%;
+        height: 14px;
+        z-index: 1001;
+    }
+
+    /* Only one dropdown open at a time — JS controls .is-active (no :hover) */
+    .has-dropdown.is-active .mega-dropdown {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+        transform: translateX(-50%) translateY(0);
     }
 
     .menu-arrow {
         display: none;
+    }
+}
+
+@media (min-width: 992px) {
+    .mega-overlay {
+        display: none !important;
     }
 }
 
@@ -250,7 +320,7 @@
                                 <span>🏠</span>
                                 <span>Find Home →</span>
                             </a>
-                            <img src="https://serik.ca/storage/269369802-11088650.png" style="width:100%;"/>
+                            <img src="https://serik.ca/storage/269369802-11088650.png" style="width:100%;" alt="{{ __('Serik Realty Ontario property search guide') }}"/>
 
                             
                         </div>
@@ -473,7 +543,7 @@
                                 <span>Find Home →</span>
                             </a>
 
-                            <img src="https://serik.ca/storage/269369790-11088646.png" style="width:100%;"/>
+                            <img src="https://serik.ca/storage/269369790-11088646.png" style="width:100%;" alt="{{ __('Serik Realty services and resources') }}"/>
                         </div>
 
                         {{-- RIGHT --}}
@@ -500,7 +570,7 @@
                                 <span>Find Home →</span>
                             </a>
 
-                            <img src="https://serik.ca/storage/269369790-11088646.png" style="width:100%;"/>
+                            <img src="https://serik.ca/storage/269369790-11088646.png" style="width:100%;" alt="{{ __('Serik Realty services and resources') }}"/>
                         </div>
 
                         {{-- RIGHT --}}
@@ -524,40 +594,117 @@
 <div class="mega-overlay"></div>
 
 <script>
-document.querySelectorAll('.has-dropdown > .menu-link').forEach(link => {
-    link.addEventListener('click', function (e) {
-        if (window.innerWidth <= 991) {
+(function () {
+    const DESKTOP_BP = 992;
+    let closeTimer = null;
+
+    function isDesktop() {
+        return window.innerWidth >= DESKTOP_BP;
+    }
+
+    function closeMegaMenu() {
+        document.querySelectorAll('.mega-dropdown').forEach(menu => {
+            menu.classList.remove('show');
+        });
+        document.querySelectorAll('.has-dropdown').forEach(item => {
+            item.classList.remove('is-open', 'is-active');
+        });
+        const overlay = document.querySelector('.mega-overlay');
+        if (overlay) {
+            overlay.classList.remove('show');
+        }
+    }
+
+    window.closeMegaMenu = closeMegaMenu;
+
+    function setActiveMegaItem(item) {
+        document.querySelectorAll('.has-dropdown.is-active').forEach(el => {
+            if (el !== item) {
+                el.classList.remove('is-active');
+            }
+        });
+        if (item) {
+            item.classList.add('is-active');
+        }
+    }
+
+    document.querySelectorAll('.has-dropdown > .menu-link').forEach(link => {
+        link.addEventListener('click', function (e) {
+            if (isDesktop()) {
+                e.preventDefault();
+                return;
+            }
             e.preventDefault();
 
             const dropdown = this.nextElementSibling;
             const overlay = document.querySelector('.mega-overlay');
+            const parent = this.closest('.has-dropdown');
 
-            // Close all first
-            document.querySelectorAll('.mega-dropdown').forEach(menu => {
-                menu.classList.remove('show');
-            });
+            closeMegaMenu();
 
-            // Open current
-            dropdown.classList.add('show');
-            overlay.classList.add('show');
+            if (dropdown) {
+                dropdown.classList.add('show');
+            }
+            if (parent) {
+                parent.classList.add('is-open');
+            }
+            if (overlay) {
+                overlay.classList.add('show');
+            }
+        });
+    });
+
+    document.querySelectorAll('.has-dropdown').forEach(item => {
+        item.addEventListener('mouseenter', () => {
+            if (!isDesktop()) {
+                return;
+            }
+            clearTimeout(closeTimer);
+            setActiveMegaItem(item);
+        });
+
+        item.addEventListener('mouseleave', () => {
+            if (!isDesktop()) {
+                return;
+            }
+            closeTimer = setTimeout(() => {
+                item.classList.remove('is-active');
+            }, 220);
+        });
+    });
+
+    document.querySelectorAll('.mega-dropdown').forEach(dropdown => {
+        dropdown.addEventListener('mouseenter', () => {
+            if (!isDesktop()) {
+                return;
+            }
+            clearTimeout(closeTimer);
+        });
+
+        dropdown.addEventListener('mouseleave', () => {
+            if (!isDesktop()) {
+                return;
+            }
+            const parent = dropdown.closest('.has-dropdown');
+            closeTimer = setTimeout(() => {
+                parent?.classList.remove('is-active');
+            }, 220);
+        });
+    });
+
+    const overlay = document.querySelector('.mega-overlay');
+    if (overlay) {
+        overlay.addEventListener('click', closeMegaMenu);
+    }
+
+    document.querySelectorAll('.mega-close').forEach(btn => {
+        btn.addEventListener('click', closeMegaMenu);
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeMegaMenu();
         }
     });
-});
-
-// Close on overlay click
-document.querySelector('.mega-overlay').addEventListener('click', () => {
-    closeMegaMenu();
-});
-
-// Close button
-document.querySelectorAll('.mega-close').forEach(btn => {
-    btn.addEventListener('click', closeMegaMenu);
-});
-
-function closeMegaMenu() {
-    document.querySelectorAll('.mega-dropdown').forEach(menu => {
-        menu.classList.remove('show');
-    });
-    document.querySelector('.mega-overlay').classList.remove('show');
-}
+})();
 </script>

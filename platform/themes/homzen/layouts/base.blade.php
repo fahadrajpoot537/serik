@@ -27,7 +27,7 @@
     fbq('init', '1789817231630101');
     fbq('track', 'PageView');
     </script>
-    <noscript><img height="1" width="1" style="display:none"
+    <noscript><img height="1" width="1" style="display:none" alt=""
     src="https://www.facebook.com/tr?id=1789817231630101&ev=PageView&noscript=1"
 /></noscript>
 <!-- End Meta Pixel Code -->

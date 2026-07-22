@@ -152,7 +152,7 @@
       <!-- Step 1 -->
       <div class="col-12 col-md-6 col-lg-3">
         <div class="sr3-card">
-          <img src="https://serik.ca/storage/step1.jpg" class="sr3-img" alt="Step 1">
+          <img src="https://serik.ca/storage/step1.jpg" class="sr3-img" alt="{{ img_alt(null, 'step1.jpg', __('Upsizing guide: Talk to Our Experts')) }}">
           <div class="sr3-content">
             <div class="sr3-step">Step 1</div>
             <div class="sr3-heading">Talk to Our Experts</div>
@@ -166,7 +166,7 @@
       <!-- Step 2 -->
       <div class="col-12 col-md-6 col-lg-3">
         <div class="sr3-card">
-          <img src="https://serik.ca/storage/step2.jpg" class="sr3-img" alt="Step 2">
+          <img src="https://serik.ca/storage/step2.jpg" class="sr3-img" alt="{{ img_alt(null, 'step2.jpg', __('Upsizing guide: Prepare and List Your Home')) }}">
           <div class="sr3-content">
             <div class="sr3-step">Step 2</div>
             <div class="sr3-heading">Prepare & List Your Home</div>
@@ -180,7 +180,7 @@
       <!-- Step 3 -->
       <div class="col-12 col-md-6 col-lg-3">
         <div class="sr3-card">
-          <img src="https://serik.ca/storage/step3.jpg" class="sr3-img" alt="Step 3">
+          <img src="https://serik.ca/storage/step3.jpg" class="sr3-img" alt="{{ img_alt(null, 'step3.jpg', __('Upsizing guide: Secure Your Upgrade')) }}">
           <div class="sr3-content">
             <div class="sr3-step">Step 3</div>
             <div class="sr3-heading">Secure Your Upgrade</div>
@@ -194,7 +194,7 @@
       <!-- Step 4 -->
       <div class="col-12 col-md-6 col-lg-3">
         <div class="sr3-card">
-          <img src="https://serik.ca/storage/step4.jpg" class="sr3-img" alt="Step 4">
+          <img src="https://serik.ca/storage/step4.jpg" class="sr3-img" alt="{{ img_alt(null, 'step4.jpg', __('Upsizing guide: Smooth Transition and Closing')) }}">
           <div class="sr3-content">
             <div class="sr3-step">Step 4</div>
             <div class="sr3-heading">Smooth Transition & Closing</div>

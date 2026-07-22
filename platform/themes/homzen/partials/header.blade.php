@@ -1051,6 +1051,7 @@ function loadResults(keyword, reset = false){
                         data-key="${item.ListingKey}"
                                 class="property-image"
                                 loading="lazy"
+                                alt="${[item.UnparsedAddress, item.PropertySubType, item.ListingKey].filter(Boolean).join(' - ') || 'Property listing'}"
                                 style="width:100px;height:80px;object-fit:cover;border-radius:6px;"
                                 onerror="this.onerror=null;this.src='{{ \App\Support\SerikMediaUrl::placeholder() }}'"
                             />
@@ -1233,12 +1234,16 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
 
 document.querySelectorAll('.navigation li').forEach(li => {
 
-    const submenu = li.querySelector('ul');
+    const submenu = li.querySelector(':scope > ul');
 
-    if(submenu){
+    if (submenu && !li.querySelector(':scope > .mega-dropdown')){
         li.classList.add('has-dropdown');
 
         li.querySelector('a').addEventListener('click', function(e){
+
+            if (window.innerWidth > 991) {
+                return;
+            }
 
             // prevent link jump
             e.preventDefault();

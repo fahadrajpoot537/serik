@@ -3,7 +3,7 @@
         <div class="inner-box">
             <div class="image-box">
                 <a data-href="__url__" href="#">
-                    <img data-src="__image__" data-alt="__name__" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="">
+                    <img data-src="__image__" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="__name__">
                 </a>
                 __status__
             </div>

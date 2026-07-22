@@ -976,7 +976,7 @@ class PropertyController extends BaseController
                             $property->image_val = $image;
                             $property->saveQuietly();
                         }
-                    } catch (\Throwable $e) {
+                } catch (\Throwable $e) {
                         // Non-fatal — listing is already imported.
                     }
                 }
@@ -1551,7 +1551,7 @@ class PropertyController extends BaseController
             ], 404);
         }
 
-        return response()->json([
+            return response()->json([
             'status' => 'imported',
             'property_id' => $property->id,
             'listing_key' => $normalizedKey,
@@ -1990,11 +1990,11 @@ class PropertyController extends BaseController
         }
 
         try {
-            $result = $this->geocodePropertyBatch(
+        $result = $this->geocodePropertyBatch(
                 $batchLimit,
                 $propertyIds,
                 $opts
-            );
+        );
         } finally {
             optional($lock)->release();
         }
@@ -2050,16 +2050,16 @@ class PropertyController extends BaseController
         if ($propertyIds !== null && $propertyIds !== []) {
             $properties = Property::query()
                 ->whereIn('id', $propertyIds)
-                ->where(function ($q) {
+            ->where(function ($q) {
                     $q->whereNull('latitude')->orWhere('latitude', 0)
                         ->orWhereNull('longitude')->orWhere('longitude', 0);
                 })
-                ->where(function ($q) {
-                    $q->where(function ($q2) {
-                        $q2->whereNotNull('location')->where('location', '!=', '');
-                    })->orWhere(function ($q2) {
-                        $q2->whereNotNull('name')->where('name', '!=', '');
-                    });
+            ->where(function ($q) {
+                $q->where(function ($q2) {
+                    $q2->whereNotNull('location')->where('location', '!=', '');
+                })->orWhere(function ($q2) {
+                    $q2->whereNotNull('name')->where('name', '!=', '');
+                });
                 })
                 ->limit($limit)
                 ->get($selectCols);
@@ -2181,29 +2181,29 @@ class PropertyController extends BaseController
             }
 
             if ($coords === null) {
-                $candidates = $this->buildGeocodeCandidates($base, (string) ($property->zip_code ?? ''));
-                $usedAddress = '';
+            $candidates = $this->buildGeocodeCandidates($base, (string) ($property->zip_code ?? ''));
+            $usedAddress = '';
 
-                foreach ($candidates as $ci => $address) {
-                    $usedAddress = $address;
-                    \Log::info("[geocode] ({$property->external_id}) requesting: {$address}");
+            foreach ($candidates as $ci => $address) {
+                $usedAddress = $address;
+                \Log::info("[geocode] ({$property->external_id}) requesting: {$address}");
 
-                    $coords = $this->nominatimGeocode($address);
+                $coords = $this->nominatimGeocode($address);
                     $nominatimCalls++;
 
-                    if ($coords !== null) {
-                        break;
-                    }
-
-                    if ($ci < count($candidates) - 1 && $rateLimitMs > 0) {
-                        usleep($rateLimitMs * 1000);
-                    }
+                if ($coords !== null) {
+                    break;
                 }
 
-                if ($coords === null) {
-                    $failed++;
+                if ($ci < count($candidates) - 1 && $rateLimitMs > 0) {
+                    usleep($rateLimitMs * 1000);
+                }
+            }
+
+            if ($coords === null) {
+                $failed++;
                     $this->recordGeocodeFailure($property, $usedAddress, 'no match from geocoder');
-                    \Log::warning("[geocode] No coordinates for {$property->external_id} ({$usedAddress}).");
+                \Log::warning("[geocode] No coordinates for {$property->external_id} ({$usedAddress}).");
 
                     if ($i < $count - 1 && $rateLimitMs > 0) {
                         usleep($rateLimitMs * 1000);
@@ -2214,8 +2214,8 @@ class PropertyController extends BaseController
             }
 
             $update = [
-                'latitude' => $coords['lat'],
-                'longitude' => $coords['lng'],
+                    'latitude' => $coords['lat'],
+                    'longitude' => $coords['lng'],
             ];
             if (is_array($providerMeta)) {
                 $ok = \App\Support\GeocodePersistence::apply($property, array_merge($providerMeta, [
@@ -2249,7 +2249,7 @@ class PropertyController extends BaseController
             }
             // Ensure Meili gets _geo even when scout.queue was true / worker lagged.
             $this->syncPropertyToSearchIndex($property);
-            $geocoded++;
+                $geocoded++;
             if ($fromBorrow) {
                 $borrowed++;
             }
@@ -2948,7 +2948,7 @@ class PropertyController extends BaseController
             $streetName = $streetTokens[0];
         }
 
-        return [
+            return [
             'street_number' => $streetNumber,
             'street_part' => $streetPart,
             'street_name' => $streetName,
@@ -3085,7 +3085,7 @@ class PropertyController extends BaseController
 
                 if ($ids === null) {
                     $meiliUnavailable = true;
-                } else {
+        } else {
                     // Meili answered — never fall through to AMP for free-text.
                     if ($ids === []) {
                         if (! $parsed) {
@@ -3133,15 +3133,15 @@ class PropertyController extends BaseController
             if ($request->filled('transaction')) {
                 $query->where('TransactionType', $request->transaction);
             }
-            if ($request->filled('status')) {
-                if ($request->status === 'Sold') {
+        if ($request->filled('status')) {
+            if ($request->status === 'Sold') {
                     $query->whereIn('MlsStatus', [
-                        'Sold',
-                        'Leased',
-                        'Sold Conditional',
-                        'Sold Conditional Escape',
-                    ]);
-                } else {
+                    'Sold',
+                    'Leased',
+                    'Sold Conditional',
+                    'Sold Conditional Escape',
+                ]);
+            } else {
                     $query->where('MlsStatus', $request->status);
                 }
             }
@@ -3157,11 +3157,11 @@ class PropertyController extends BaseController
                 $q->where('external_id', strtoupper($keyword))
                     ->orWhere('external_id', strtolower($keyword));
             });
-            $localResults = $localQuery
-                ->orderByDesc('updated_at')
-                ->limit($top)
+        $localResults = $localQuery
+            ->orderByDesc('updated_at')
+            ->limit($top)
                 ->offset(max(0, $skip))
-                ->get();
+            ->get();
         } elseif ($parsed) {
             // Meili already tried above. If empty/unavailable: FULLTEXT only —
             // never leading-% LIKE (scanned ~179k rows / ~4s).
@@ -3271,8 +3271,8 @@ class PropertyController extends BaseController
 
         // Free-text / address: never fan out to live AMP (slow + commercial bleed).
         // Listing-key miss already handled above.
-        return response()->json(TrebPropertyHelper::groupListingsByBuilding(array_slice($mappedLocal, 0, $top)));
-    }
+            return response()->json(TrebPropertyHelper::groupListingsByBuilding(array_slice($mappedLocal, 0, $top)));
+        }
 
     /**
      * Attach real slugs.key then map to smart-search JSON rows.
@@ -3326,7 +3326,7 @@ class PropertyController extends BaseController
             . 'BedroomsTotal,BathroomsTotalInteger,PropertySubType,MlsStatus,TransactionType,ListingContractDate,'
             . 'ModificationTimestamp,StandardStatus,PostalCode,City';
 
-        $url = 'https://query.ampre.ca/odata/Property?'
+            $url = 'https://query.ampre.ca/odata/Property?'
             . '$filter=' . rawurlencode($filter)
             . '&$orderby=' . rawurlencode('ListingContractDate desc')
             . '&$top=' . max(5, min(25, $limit * 2))
@@ -3671,11 +3671,11 @@ class PropertyController extends BaseController
         $search = app(\Botble\RealEstate\Services\PropertySearchService::class);
         $cityNames = [];
 
-        if (strtolower($city) === 'kwc' && isset($cityMap['KWC'])) {
+            if (strtolower($city) === 'kwc' && isset($cityMap['KWC'])) {
             $cityNames = (array) $cityMap['KWC'];
-        } elseif (isset($cityMap[$city])) {
+            } elseif (isset($cityMap[$city])) {
             $cityNames = [(string) $cityMap[$city]];
-        } else {
+            } else {
             $cityNames = [trim($city)];
         }
 
@@ -4337,9 +4337,9 @@ class PropertyController extends BaseController
             $prevHistory = \Botble\RealEstate\Supports\PropertyHistoryRecorder::$enabled;
             \Botble\RealEstate\Supports\PropertyHistoryRecorder::$enabled = false;
             try {
-            foreach ($payload['value'] as $item) {
-                $listingKey = strtoupper((string) ($item['ListingKey'] ?? ''));
-                $existing = $listingKey !== '' ? $existingByExternalId->get($listingKey) : null;
+        foreach ($payload['value'] as $item) {
+            $listingKey = strtoupper((string) ($item['ListingKey'] ?? ''));
+            $existing = $listingKey !== '' ? $existingByExternalId->get($listingKey) : null;
 
                 if ($dryRun) {
                     if ($existing) {
@@ -4370,18 +4370,18 @@ class PropertyController extends BaseController
                     continue;
                 }
 
-                if ($result['is_new']) {
-                    $imported++;
-                } elseif ($result['updated']) {
-                    $updated++;
+            if ($result['is_new']) {
+                $imported++;
+            } elseif ($result['updated']) {
+                $updated++;
                 } else {
                     $skipped++;
-                }
-
-                if ($result['needs_geocode'] && $result['property_id']) {
-                    $needsGeocodeIds[] = (int) $result['property_id'];
-                }
             }
+
+            if ($result['needs_geocode'] && $result['property_id']) {
+                $needsGeocodeIds[] = (int) $result['property_id'];
+            }
+        }
             } finally {
                 \Botble\RealEstate\Supports\PropertyHistoryRecorder::$enabled = $prevHistory;
             }
@@ -4501,7 +4501,7 @@ class PropertyController extends BaseController
         $saveStart = microtime(true);
 
         try {
-            $property->save();
+        $property->save();
         } catch (\Illuminate\Database\QueryException $e) {
             // Only treat DUPLICATE KEY (1062) as concurrent-insert race.
             // Other 23000 errors (e.g. NOT NULL 1048) must surface / be fixed above.

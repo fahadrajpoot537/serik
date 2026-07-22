@@ -567,7 +567,7 @@ $faqs = collect([
             <!-- ================= HERO ================= -->
 <section class="srk-hero py-5 text-center">
   <div class="container-fluid" style="padding:0px !important;">
-   <img src="https://serik.ca/storage/house-worth.webp" style="width:100%;padding:0px !important;"/>
+   <img src="https://serik.ca/storage/house-worth.webp" style="width:100%;padding:0px !important;" alt="{{ img_alt(null, 'house-worth.webp', __('Free Home Evaluation')) }}"/>
   </div>
 </section>
 

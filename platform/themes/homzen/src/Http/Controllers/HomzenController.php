@@ -3,6 +3,8 @@
 namespace Theme\homzen\Http\Controllers;
 
 use Botble\Base\Http\Responses\BaseHttpResponse;
+use Botble\Blog\Models\Category;
+use Botble\Blog\Repositories\Interfaces\PostInterface;
 use Botble\Location\Models\City;
 use Botble\Location\Repositories\Interfaces\CityInterface;
 use Botble\RealEstate\Enums\PropertyTypeEnum;
@@ -271,5 +273,39 @@ class homzenController extends PublicController
         Theme::breadcrumb()->add(__('Wishlist'));
 
         return Theme::scope('real-estate.wishlist', compact('properties', 'projects'))->render();
+    }
+
+    public function ajaxGetBlogPosts(Request $request): BaseHttpResponse
+    {
+        $request->validate([
+            'category_id' => ['nullable', 'integer'],
+            'page' => ['nullable', 'integer', 'min:1'],
+        ]);
+
+        $perPage = (int) theme_option('number_of_posts_in_a_category', 12);
+        $with = ['slugable', 'categories', 'categories.slugable', 'author'];
+
+        if ($request->filled('category_id')) {
+            $category = Category::query()
+                ->with('activeChildren')
+                ->findOrFail($request->integer('category_id'));
+
+            $categoryIds = array_merge(
+                [$category->getKey()],
+                $category->activeChildren->pluck('id')->all()
+            );
+
+            $posts = app(PostInterface::class)->getByCategory($categoryIds, $perPage);
+            $posts->loadMissing($with);
+        } else {
+            $posts = get_all_posts(true, $perPage, $with);
+        }
+
+        return $this
+            ->httpResponse()
+            ->setData(view(
+                Theme::getThemeNamespace('views.blog.partials.posts-grid'),
+                compact('posts')
+            )->render());
     }
 }

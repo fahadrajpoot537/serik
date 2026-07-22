@@ -4,231 +4,232 @@
     .breadcrumb-wrap, .flat-breadcrumb {
         display: none !important;
     }
+
     html {
-        height: 100%;
-        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        overflow-y: scroll !important;
         -webkit-overflow-scrolling: touch;
-        overscroll-behavior-y: contain;
+        height: auto !important;
+        min-height: 100%;
     }
+
     body {
         margin: 0 !important;
         padding: 0 !important;
         background: #fff;
-        min-height: 100%;
-        height: auto !important;
         overflow-x: hidden !important;
-        overflow-y: auto !important;
-        -webkit-overflow-scrolling: touch;
-        touch-action: pan-y;
-        overscroll-behavior-y: contain;
-        position: relative !important;
-    }
-    #wrapper {
-        overflow: visible !important;
+        overflow-y: visible !important;
+        height: auto !important;
         min-height: 100%;
+        position: relative !important;
+        touch-action: pan-y;
     }
 
-    @media (max-width: 991px) {
-        .flat-property-detail .row > .col-lg-4 {
-            position: static !important;
-            top: auto !important;
-        }
-
-        html {
-            height: 100% !important;
-            overflow: hidden !important;
-        }
-
-        body {
-            height: 100% !important;
-            min-height: 100% !important;
-            overflow-x: hidden !important;
-            overflow-y: auto !important;
-            -webkit-overflow-scrolling: touch !important;
-            touch-action: pan-y;
-            overscroll-behavior-y: contain;
-            position: relative !important;
-        }
+    #wrapper,
+    #wrapper > .clearfix {
+        overflow: visible !important;
+        min-height: 0;
     }
 
-    /* Keep the action bar (wishlist / share / fullscreen) visible & pinned in popup */
+    #galleryContainer {
+        display: block !important;
+    }
+
     .property-page-nav {
         display: block !important;
         position: sticky !important;
         top: 0 !important;
         z-index: 50;
-        padding: 2px 10px !important;
+        background: #fff;
         box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
     }
-    .property-page-nav .property-nav-wrapper {
-        align-items: center !important;
-    }
-    .property-page-nav .property-nav-list {
-        margin: 0 !important;
-        gap: 18px !important;
-        padding: 8px 0 !important;
-    }
-    .property-page-nav .property-nav-list li a {
-        font-size: 13px !important;
-    }
-    .property-page-nav .property-actions {
-        margin-right: 0 !important;
-        gap: 8px !important;
-    }
-    .property-page-nav .property-actions button,
-    .property-page-nav .property-actions .item {
-        padding: 6px 10px !important;
-        font-size: 13px !important;
-        border-radius: 8px !important;
-    }
 
-    @media (min-width: 992px) {
-        html {
-            height: auto;
-            min-height: 100%;
-            overflow-y: scroll !important;
-            overflow-x: hidden !important;
-        }
-        body {
-            min-height: 100%;
-            height: auto !important;
-            overflow-x: hidden !important;
-            overflow-y: visible !important;
-            -webkit-overflow-scrolling: touch;
-            touch-action: pan-y;
-        }
-        #wrapper {
+    @media (min-width: 768px) {
+        section.flat-property-detail,
+        section.flat-property-detail > .container {
             overflow: visible !important;
-            min-height: 100%;
+        }
+
+        .flat-property-detail .row {
+            align-items: flex-start !important;
+        }
+
+        .flat-property-detail .row > .col-lg-4 {
+            align-self: flex-start !important;
+            position: relative !important;
+            z-index: 4;
+        }
+
+        .flat-property-detail .row > .col-lg-4 .widget-sidebar {
+            max-height: none !important;
+            overflow: visible !important;
         }
     }
 
-    /* Pin the contact / schedule-viewing form while details scroll */
-    .flat-property-detail .row > .col-lg-4 {
-        align-self: flex-start;
-        position: sticky;
-        top: 52px;
+    @media (max-width: 767px) {
+        .flat-property-detail .row > .col-lg-4 {
+            position: static !important;
+            top: auto !important;
+        }
     }
-    .flat-section, .flat-section-v2, .flat-section-v3, .flat-section-v5 {
-        padding-top: 6px !important;
-        padding-bottom: 6px !important;
-    }
-    .container, .container-fluid {
-        padding-left: 10px;
-        padding-right: 10px;
-    }
-    .header-property-detail {
-        padding: 10px 12px !important;
-        margin: 0 0 6px !important;
-        border-radius: 10px !important;
-    }
-    .header-property-detail .content-top {
-        padding-bottom: 8px !important;
-        margin-bottom: 8px !important;
-        gap: 8px !important;
-    }
-    .header-property-detail .title {
-        margin-top: 0 !important;
-        margin-bottom: 0 !important;
-        font-size: 1.05rem !important;
-        line-height: 1.3 !important;
-    }
-    .header-property-detail #cityRegion,
-    .header-property-detail #propertyType {
-        line-height: 1.25 !important;
-    }
-    .header-property-detail #propertyType {
-        font-size: 14px !important;
-    }
-    .header-property-detail .box-price h4 {
-        font-size: 15px !important;
-        line-height: 1.35 !important;
-        margin: 0 !important;
-    }
-    .single-property-overview,
-    .single-property-desc,
-    .single-property-contact,
-    .widget-box {
-        padding: 6px 8px !important;
-        margin-bottom: 6px !important;
-    }
-    .single-property-contact .title,
-    .single-property-contact .h7,
-    .single-property-desc .title,
-    .single-property-overview .h7.title {
-        margin-bottom: 4px !important;
-        font-size: 14px !important;
-    }
-    .single-property-contact .contact-form {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-        margin-top: 8px !important;
-    }
-    .single-property-contact .contact-form .ip-group {
-        margin-bottom: 0 !important;
-        flex: 1 1 100%;
-    }
-    .single-property-contact .contact-form .ip-group:has([name="name"]),
-    .single-property-contact .contact-form .ip-group:has([name="phone"]) {
-        flex: 1 1 calc(50% - 3px);
-        max-width: calc(50% - 3px);
-    }
-    .single-property-contact .contact-form label {
-        margin-bottom: 2px !important;
-        font-size: 11px !important;
-    }
-    .single-property-contact .contact-form .form-control,
-    .single-property-contact .contact-form textarea {
-        padding: 6px 8px !important;
-        font-size: 12px !important;
-        min-height: auto !important;
-        line-height: 1.35 !important;
-    }
-    .single-property-contact .contact-form textarea {
-        min-height: 52px !important;
-    }
-    .single-property-contact .tf-btn {
-        padding: 8px 12px !important;
-        font-size: 13px !important;
-        margin-top: 4px !important;
-        width: 100%;
-    }
-    .info-box1 {
-        padding: 4px 0 !important;
-        margin: 0 !important;
-    }
-    .info-box .col.item {
-        padding-top: 2px !important;
-        padding-bottom: 2px !important;
-    }
-    .info-box1 .content .label,
-    .info-box1 .content span {
-        font-size: 12px !important;
-        line-height: 1.25 !important;
-    }
-    .flat-latest-property {
-        padding-top: 6px !important;
-        margin-top: 0 !important;
-    }
-    .flat-latest-property .section-title,
-    .flat-latest-property .box-title {
-        font-size: 1rem !important;
-        margin-top: 4px !important;
-        margin-bottom: 6px !important;
-    }
-    .row.g-3, .row.g-2, .row.g-lg-4 {
-        --bs-gutter-y: 0.25rem;
-        --bs-gutter-x: 0.25rem;
-    }
-    .tab button {
-        padding: 8px 10px !important;
-        font-size: 14px !important;
-    }
-    .tabcontent {
-        padding: 4px 0 !important;
+
+    section.flat-property-detail ~ .flat-latest-property {
+        display: none !important;
     }
 </style>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const gallery = document.getElementById('galleryContainer');
+    if (gallery) {
+        gallery.style.display = 'block';
+    }
+
+    try {
+        if (window.parent && window.parent !== window) {
+            window.parent.postMessage({ type: 'hs-property-iframe-ready' }, '*');
+        }
+    } catch (e) {}
+
+    (function initIframeFormPin() {
+        const mq = window.matchMedia('(min-width: 768px)');
+        const formCol = document.querySelector('.flat-property-detail .row > .col-lg-4');
+        const formSidebar = formCol?.querySelector('.widget-sidebar');
+        const formRow = formCol?.closest('.flat-property-detail .row');
+
+        if (!formCol || !formSidebar || !formRow) {
+            return;
+        }
+
+        let pinLeft = null;
+        let pinWidth = null;
+
+        function navTop() {
+            const nav = document.querySelector('.property-page-nav');
+            return (nav ? nav.offsetHeight : 0) + 4;
+        }
+
+        function resetFormPin() {
+            pinLeft = null;
+            pinWidth = null;
+            formSidebar.style.position = '';
+            formSidebar.style.top = '';
+            formSidebar.style.left = '';
+            formSidebar.style.right = '';
+            formSidebar.style.bottom = '';
+            formSidebar.style.width = '';
+            formSidebar.style.zIndex = '';
+        }
+
+        function capturePinMetrics() {
+            if (pinLeft !== null) {
+                return;
+            }
+
+            const rect = formSidebar.getBoundingClientRect();
+            pinLeft = rect.left;
+            pinWidth = rect.width;
+        }
+
+        function updateFormPin() {
+            if (!mq.matches) {
+                resetFormPin();
+                return;
+            }
+
+            const top = navTop();
+            const rowRect = formRow.getBoundingClientRect();
+            const sidebarHeight = formSidebar.offsetHeight;
+
+            if (rowRect.top >= top) {
+                resetFormPin();
+                return;
+            }
+
+            capturePinMetrics();
+
+            if (rowRect.bottom <= top + sidebarHeight) {
+                formSidebar.style.position = 'absolute';
+                formSidebar.style.top = 'auto';
+                formSidebar.style.bottom = '0';
+                formSidebar.style.left = '0';
+                formSidebar.style.right = 'auto';
+                formSidebar.style.width = '100%';
+                formSidebar.style.zIndex = '4';
+                return;
+            }
+
+            formSidebar.style.position = 'fixed';
+            formSidebar.style.top = top + 'px';
+            formSidebar.style.left = pinLeft + 'px';
+            formSidebar.style.width = pinWidth + 'px';
+            formSidebar.style.bottom = 'auto';
+            formSidebar.style.right = 'auto';
+            formSidebar.style.zIndex = '4';
+        }
+
+        window.addEventListener('scroll', updateFormPin, { passive: true });
+        window.addEventListener('resize', function () {
+            resetFormPin();
+            updateFormPin();
+        });
+        mq.addEventListener('change', function () {
+            resetFormPin();
+            updateFormPin();
+        });
+
+        updateFormPin();
+
+        window.addEventListener('load', function () {
+            resetFormPin();
+            setTimeout(updateFormPin, 100);
+            setTimeout(updateFormPin, 500);
+        });
+    })();
+
+    function refreshDetailMap() {
+        const mapEl = document.getElementById('map');
+        if (!mapEl || typeof L === 'undefined') {
+            return;
+        }
+
+        if (!mapEl._leaflet_id && mapEl.dataset.center) {
+            let center = mapEl.dataset.center;
+            try {
+                center = JSON.parse(center);
+            } catch (e) {}
+
+            const map = L.map(mapEl, {
+                attributionControl: false,
+                scrollWheelZoom: true,
+                dragging: !L.Browser.mobile,
+                touchZoom: true,
+            }).setView(center, 14);
+
+            L.tileLayer(mapEl.dataset.tileLayer || '', {
+                maxZoom: mapEl.dataset.maxZoom || 22,
+            }).addTo(map);
+
+            L.marker(center, {
+                icon: L.divIcon({
+                    iconSize: L.point(50, 50),
+                    className: 'map-marker-home',
+                }),
+            }).addTo(map);
+
+            return;
+        }
+
+        if (mapEl._leaflet_id) {
+            window.dispatchEvent(new Event('resize'));
+        }
+    }
+
+    window.addEventListener('load', function () {
+        setTimeout(refreshDetailMap, 300);
+        setTimeout(refreshDetailMap, 1000);
+    });
+});
+</script>
 @endif
 <style>
     .hs-desc-truncated .hs-desc-full {

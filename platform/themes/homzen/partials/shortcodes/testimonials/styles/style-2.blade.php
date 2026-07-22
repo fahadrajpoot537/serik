@@ -22,22 +22,22 @@
         <div class="swiper-wrapper">
             <div class="swiper-slide">
                 <div class="slider-home2 img-animation wow">
-                    <img src="https://serik.ca/storage/p1055739jpg-1.jpeg" alt="Slider Image 1">
+                    <img src="https://serik.ca/storage/p1055739jpg-1.jpeg" alt="{{ img_alt(null, 'p1055739jpg-1.jpeg', __('Customer testimonial')) }}">
                 </div>
             </div>
             <div class="swiper-slide">
                 <div class="slider-home2 img-animation wow">
-                    <img src="https://serik.ca/storage/p1055353jpg.jpeg" alt="Slider Image 2">
+                    <img src="https://serik.ca/storage/p1055353jpg.jpeg" alt="{{ img_alt(null, 'p1055353jpg.jpeg', __('Customer testimonial')) }}">
                 </div>
             </div>
             <div class="swiper-slide">
                 <div class="slider-home2 img-animation wow">
-                    <img src="https://serik.ca/storage/cashbackdushyantjpg.jpeg" alt="Slider Image 3">
+                    <img src="https://serik.ca/storage/cashbackdushyantjpg.jpeg" alt="{{ img_alt(null, 'cashbackdushyantjpg.jpeg', __('Customer testimonial')) }}">
                 </div>
             </div>
             <div class="swiper-slide">
                 <div class="slider-home2 img-animation wow">
-                    <img src="https://serik.ca/storage/p1055865-1jpg.jpeg" alt="Slider Image 4">
+                    <img src="https://serik.ca/storage/p1055865-1jpg.jpeg" alt="{{ img_alt(null, 'p1055865-1jpg.jpeg', __('Customer testimonial')) }}">
                 </div>
             </div>
         </div>

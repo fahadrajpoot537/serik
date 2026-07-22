@@ -1,14 +1,11 @@
 @php
+    use App\Support\ImageAlt;
+
     $coverImage = $property->cover_image ?? RvMedia::getDefaultImage();
     $isExternal = is_string($coverImage) && str_starts_with($coverImage, 'http');
     $size = $size ?? 'medium-rectangle';
     $lazy = $lazy ?? true;
-    $altParts = array_filter([
-        $property->name,
-        $property->external_id ?? $property->unique_id ?? null,
-        ($property->type && method_exists($property->type, 'label')) ? $property->type->label() : ($property->PropertySubType ?? null),
-    ]);
-    $imageAlt = $altParts ? implode(' - ', array_unique($altParts)) : __('Property listing');
+    $imageAlt = ImageAlt::forProperty($property);
 @endphp
 
 @if ($isExternal)

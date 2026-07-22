@@ -145,9 +145,9 @@
   }
 }
 
-/* Desktop: keep the contact / schedule-viewing form pinned while the
+/* Desktop + tablet: keep the contact / schedule-viewing form pinned while the
    left column (details) scrolls. */
-@media (min-width: 992px) {
+@media (min-width: 768px) {
   .flat-property-detail .row > .col-lg-4 {
     align-self: flex-start;
     position: sticky;
@@ -156,9 +156,6 @@
   .flat-property-detail .row > .col-lg-4 .widget-sidebar {
     max-height: calc(100vh - 120px);
     overflow-y: auto;
-  }
-  /* Hide the inner scrollbar for a clean look */
-  .flat-property-detail .row > .col-lg-4 .widget-sidebar {
     scrollbar-width: thin;
   }
 }

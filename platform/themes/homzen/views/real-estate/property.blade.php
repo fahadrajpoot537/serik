@@ -8,8 +8,11 @@
     Theme::layout('full-width');
     Theme::set('breadcrumbEnabled', 'no');
 
-    Theme::asset()->usePath()->add('fancybox', 'plugins/fancybox/jquery.fancybox.min.css');
-    Theme::asset()->container('footer')->usePath()->add('fancybox', 'plugins/fancybox/jquery.fancybox.min.js');
+    if (! request()->boolean('iframe')) {
+        Theme::asset()->usePath()->add('fancybox', 'plugins/fancybox/jquery.fancybox.min.css');
+        Theme::asset()->container('footer')->usePath()->add('fancybox', 'plugins/fancybox/jquery.fancybox.min.js');
+    }
+
     Theme::asset()->usePath()->add('leaflet', 'plugins/leaflet/leaflet.css');
     Theme::asset()->container('footer')->usePath()->add('leaflet', 'plugins/leaflet/leaflet.js');
 

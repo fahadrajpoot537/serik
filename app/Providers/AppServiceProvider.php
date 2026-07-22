@@ -3,7 +3,10 @@
 namespace App\Providers;
 
 use App\Support\CanonicalUrl;
+use App\Support\ImageAlt;
+use Illuminate\Support\HtmlString;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Str;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -12,6 +15,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        require_once __DIR__ . '/../helpers/image_alt.php';
+
         $this->app->singleton(\Botble\Theme\Supports\SiteMapManager::class, \App\Support\SerikSiteMapManager::class);
 
         $this->app->singleton(\App\Services\Geocoding\GeocodingManager::class);
@@ -76,6 +81,37 @@ class AppServiceProvider extends ServiceProvider
 
             return \App\Support\MenuUrl::resolve($url);
         }, 1200);
+
+        add_filter('core_media_image', static function ($html, $url, $alt, $attributes, $secure) {
+            if (! is_string($url) || trim($url) === '') {
+                return $html;
+            }
+
+            if (ImageAlt::clean((string) $alt) !== '') {
+                return $html;
+            }
+
+            $resolved = ImageAlt::fromMediaPath($url);
+
+            if ($resolved === '') {
+                return $html;
+            }
+
+            $markup = $html instanceof HtmlString ? $html->toHtml() : (string) $html;
+
+            if (preg_match('/\salt=(["\'])(.*?)\1/i', $markup)) {
+                $markup = preg_replace(
+                    '/\salt=(["\'])(.*?)\1/i',
+                    ' alt="' . e($resolved) . '"',
+                    $markup,
+                    1
+                ) ?? $markup;
+            } else {
+                $markup = Str::replaceFirst('<img ', '<img alt="' . e($resolved) . '" ', $markup);
+            }
+
+            return new HtmlString($markup);
+        }, 20, 5);
     }
 
     protected static function ensureWritableLoggingOrFallback(): void

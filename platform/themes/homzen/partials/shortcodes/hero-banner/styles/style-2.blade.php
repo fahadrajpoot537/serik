@@ -195,6 +195,14 @@
     $descriptionColor = $shortcode->description_color ?: '#000000';
 @endphp
 
+@php
+    $heroAltContext = trim(strip_tags((string) ($shortcode->title ?: $shortcode->subtitle ?: __('Ontario homes for sale'))));
+@endphp
+
+@php
+    $heroAltContext = trim(strip_tags((string) ($shortcode->title ?: $shortcode->subtitle ?: __('Ontario homes for sale'))));
+@endphp
+
 <section class="flat-slider home-2">
     <div class="container relative">
         <div class="row">
@@ -228,7 +236,7 @@
 
     @if ($shortcode->background_image)
         <div class="img-banner-left">
-            {{ RvMedia::image($shortcode->background_image, $shortcode->title) }}
+            {{ RvMedia::image($shortcode->background_image, img_alt($shortcode->title, $shortcode->background_image, $heroAltContext)) }}
         </div>
     @endif
 
@@ -240,7 +248,7 @@
 
                     <div class="swiper-slide">
                         <div class="slider-home2 img-animation wow">
-                            {{ RvMedia::image($shortcode->{"slider_image_$i"}, $shortcode->title) }}
+                            {{ RvMedia::image($shortcode->{"slider_image_$i"}, img_alt($shortcode->title, $shortcode->{"slider_image_$i"}, $heroAltContext)) }}
                         </div>
                     </div>
                 @endforeach
@@ -292,7 +300,7 @@
                                     <button type="submit" style="border: none; background: none;"
                                         
                                         onclick="calculatePercentage()">
-                                       <img src="https://serik.ca/storage/button-calculate-cashback-1.png"/>
+                                       <img src="https://serik.ca/storage/button-calculate-cashback-1.png" alt="{{ __('Calculate cash back') }}"/>
                                     </button>
                                 
                                     <a href="{{ url('/mortgage-calculator') }}">
