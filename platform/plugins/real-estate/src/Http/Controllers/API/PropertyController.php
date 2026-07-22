@@ -1538,9 +1538,17 @@ class PropertyController extends BaseController
 
         $normalizedKey = strtoupper(trim((string) $listingKey));
         $service = app(\Botble\RealEstate\Services\LiveTrebPropertyFallbackService::class);
+        $existing = Property::query()->where('external_id', $normalizedKey)->first();
 
-        if (Property::query()->where('external_id', $normalizedKey)->exists()) {
-            return response()->json(['status' => 'exists', 'skipped' => true]);
+        if ($existing) {
+            $this->ensurePropertySlug((int) $existing->id, (string) $existing->name, $normalizedKey);
+
+            return response()->json([
+                'status' => 'exists',
+                'skipped' => true,
+                'property_id' => $existing->id,
+                'listing_key' => $normalizedKey,
+            ]);
         }
 
         $property = $service->ingestByListingKey($normalizedKey, true, false);
@@ -3046,7 +3054,7 @@ class PropertyController extends BaseController
             $mlsCacheKey = 'smart_search_mls:' . strtoupper($keyword);
             $cachedMls = Cache::get($mlsCacheKey);
             if (is_array($cachedMls)) {
-                return response()->json($cachedMls);
+                return response()->json($this->ensureSearchResultSlugs($cachedMls));
             }
         }
 
@@ -3056,16 +3064,17 @@ class PropertyController extends BaseController
         if (! $isListingKey && mb_strlen($keyword) >= 3 && preg_match('/\d/', $keyword)) {
             $cachedSearch = Cache::get($searchCacheKey);
             if (is_array($cachedSearch)) {
-                return response()->json($cachedSearch);
+                return response()->json($this->ensureSearchResultSlugs($cachedSearch));
             }
         } elseif (! $isListingKey && mb_strlen($keyword) >= 4) {
             $cachedSearch = Cache::get($searchCacheKey);
             if (is_array($cachedSearch)) {
-                return response()->json($cachedSearch);
+                return response()->json($this->ensureSearchResultSlugs($cachedSearch));
             }
         }
 
         $rememberSearch = function (array $payload) use ($isListingKey, $keyword, $searchCacheKey): array {
+            $payload = $this->ensureSearchResultSlugs($payload);
             if ($payload === []) {
                 return $payload;
             }
@@ -3470,6 +3479,13 @@ class PropertyController extends BaseController
         // Prefer the real slugs.key — inventing Str::slug(name) caused 404s when
         // the DB slug was missing or differed slightly.
         $slug = trim((string) ($item->slug_key ?? ''));
+        if ($slug === '' && ! empty($item->id)) {
+            $slug = $this->ensurePropertySlug(
+                (int) $item->id,
+                (string) ($item->name ?? ''),
+                (string) ($item->external_id ?? '')
+            );
+        }
         if ($slug === '') {
             $slug = Str::slug((string) ($item->name ?? 'property')) . '-' . strtolower($listingKey);
         }
@@ -3492,6 +3508,85 @@ class PropertyController extends BaseController
             'MediaURL' => \App\Support\SerikMediaUrl::toPublic($item->image_val ?? null),
             'source' => 'local',
         ];
+    }
+
+    /**
+     * Guarantee a property has a slugs row so /properties/{slug} does not 404.
+     */
+    private function ensurePropertySlug(int $propertyId, ?string $name = null, ?string $externalId = null): string
+    {
+        if ($propertyId <= 0) {
+            return '';
+        }
+
+        $existing = DB::table('slugs')
+            ->where('reference_type', Property::class)
+            ->where('reference_id', $propertyId)
+            ->value('key');
+
+        if (is_string($existing) && $existing !== '') {
+            return $existing;
+        }
+
+        $property = Property::query()->find($propertyId);
+        if (! $property) {
+            return '';
+        }
+
+        $listingKey = strtolower((string) ($externalId ?: $property->external_id ?: $property->id));
+        $slugKey = Str::slug((string) ($name ?: $property->name ?: 'property')) . '-' . $listingKey;
+
+        SlugHelper::createSlug($property, $slugKey);
+
+        return $slugKey;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function ensureSearchResultSlugs(array $rows): array
+    {
+        foreach ($rows as &$row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $listingKey = strtoupper(trim((string) ($row['ListingKey'] ?? '')));
+            if ($listingKey === '') {
+                continue;
+            }
+
+            $propertyId = (int) DB::table('re_properties')
+                ->where('external_id', $listingKey)
+                ->value('id');
+
+            if ($propertyId <= 0) {
+                continue;
+            }
+
+            $slug = $this->ensurePropertySlug(
+                $propertyId,
+                (string) ($row['UnparsedAddress'] ?? $row['building_address'] ?? ''),
+                $listingKey
+            );
+
+            if ($slug !== '') {
+                $row['URL'] = $slug;
+            }
+
+            if (! empty($row['units']) && is_array($row['units'])) {
+                foreach ($row['units'] as &$unit) {
+                    if (is_array($unit) && $slug !== '') {
+                        $unit['URL'] = $slug;
+                    }
+                }
+                unset($unit);
+            }
+        }
+        unset($row);
+
+        return $rows;
     }
 
     private function mergeSearchResults(array $local, array $remote): array
@@ -4579,12 +4674,13 @@ class PropertyController extends BaseController
             'property_id' => $property->id,
         ]);
 
-        if ($isNew) {
-            $slugStart = microtime(true);
-            $slug = Str::slug($item['UnparsedAddress'] ?? 'property') . '-' . strtolower($listingKey);
-            SlugHelper::createSlug($property, $slug);
-            $this->logPersistQueryTiming('createSlug', $listingKey, microtime(true) - $slugStart);
-        }
+        $slugStart = microtime(true);
+        $this->ensurePropertySlug(
+            (int) $property->id,
+            (string) ($item['UnparsedAddress'] ?? $property->name),
+            $listingKey
+        );
+        $this->logPersistQueryTiming('createSlug', $listingKey, microtime(true) - $slugStart);
 
         return [
             'is_new' => $isNew,

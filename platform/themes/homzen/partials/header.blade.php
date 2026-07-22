@@ -900,6 +900,110 @@ closeSearch.addEventListener('click', function(){
     mobilePanel.classList.remove('active');
 });
 
+const headerCityCoordinates = {
+    Brampton: { lat: 43.6886, lng: -79.7561 },
+    Mississauga: { lat: 43.5878, lng: -79.6565 },
+    Toronto: { lat: 43.6575, lng: -79.3987 },
+    Vaughan: { lat: 43.7866, lng: -79.5146 },
+    Milton: { lat: 43.5180, lng: -79.8793 },
+    Oakville: { lat: 43.4522, lng: -79.7209 },
+    Hamilton: { lat: 43.2533, lng: -79.8755 },
+    Ottawa: { lat: 45.4215, lng: -75.7001 },
+    Kitchener: { lat: 43.4511, lng: -80.4904 },
+    Waterloo: { lat: 43.4832, lng: -80.5254 },
+    Cambridge: { lat: 43.3616, lng: -80.3110 },
+    London: { lat: 42.9849, lng: -81.2453 },
+    Markham: { lat: 43.8561, lng: -79.3370 },
+    RichmondHill: { lat: 43.8828, lng: -79.4403 },
+    Burlington: { lat: 43.3255, lng: -79.7990 },
+    Oshawa: { lat: 43.8971, lng: -78.8658 },
+    Barrie: { lat: 44.3894, lng: -79.6903 },
+    Guelph: { lat: 43.5448, lng: -80.2482 },
+    Whitby: { lat: 43.8975, lng: -78.9429 },
+    Ajax: { lat: 43.8509, lng: -79.0204 },
+    Pickering: { lat: 43.8354, lng: -79.0890 },
+    Newmarket: { lat: 44.0592, lng: -79.4613 },
+    Aurora: { lat: 44.0065, lng: -79.4504 },
+    Bradford: { lat: 44.1148, lng: -79.5629 },
+    Brantford: { lat: 43.1394, lng: -80.2644 },
+    StCatharines: { lat: 43.1594, lng: -79.2469 },
+    NiagaraFalls: { lat: 43.0889, lng: -79.0819 },
+    Windsor: { lat: 42.3149, lng: -83.0364 },
+    Peterborough: { lat: 44.3091, lng: -78.3197 },
+};
+
+const headerCityAliases = { brandford: 'bradford' };
+
+function normalizeHeaderCity(city) {
+    return String(city || '').trim().toLowerCase().replace(/\s+/g, '');
+}
+
+function formatHeaderCityLabel(cityKey) {
+    return String(cityKey || '')
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+const headerCitySearchIndex = (() => {
+    const index = new Map();
+    Object.keys(headerCityCoordinates).forEach((key) => {
+        const norm = normalizeHeaderCity(key);
+        if (!index.has(norm)) {
+            index.set(norm, {
+                label: formatHeaderCityLabel(key),
+                coords: headerCityCoordinates[key],
+            });
+        }
+    });
+    return index;
+})();
+
+function getHeaderMatchingCities(keyword) {
+    const raw = String(keyword || '').trim().toLowerCase();
+    if (!raw) return [];
+
+    const aliasedRaw = headerCityAliases[raw] || raw;
+    const tokens = aliasedRaw.split(/[\s,]+/).filter((t) => t.length >= 2 && !/^\d+[a-z]?$/i.test(t));
+    const needles = Array.from(new Set([
+        normalizeHeaderCity(aliasedRaw),
+        ...tokens.map((t) => normalizeHeaderCity(headerCityAliases[t] || t)),
+    ])).filter((n) => n.length >= 2);
+
+    const matches = [];
+    headerCitySearchIndex.forEach((city, norm) => {
+        for (const needle of needles) {
+            if (norm.startsWith(needle) || norm.includes(needle) || needle.startsWith(norm)) {
+                matches.push({ label: city.label, coords: city.coords, score: norm.startsWith(needle) ? 0 : 1 });
+                break;
+            }
+        }
+    });
+
+    return matches.sort((a, b) => a.score - b.score || a.label.localeCompare(b.label)).slice(0, 6);
+}
+
+function buildHeaderCitySuggestionsHtml(keyword) {
+    return getHeaderMatchingCities(keyword).map((city) => `
+        <div class="location-item city-item" data-city="${city.label}">
+            🌆 ${city.label}
+        </div>
+    `).join('');
+}
+
+function renderHeaderSearchShell(keyword) {
+    const cityHTML = buildHeaderCitySuggestionsHtml(keyword);
+    const locationEl = document.getElementById('locationResults');
+    const listingEl = document.getElementById('listingResults');
+    if (locationEl) {
+        locationEl.innerHTML = cityHTML;
+    }
+    if (listingEl) {
+        listingEl.innerHTML = '<div class="hs-search-pending" style="padding:10px 12px;color:#6b7280;">Searching...</div>';
+    }
+    loader.style.display = 'flex';
+    dropdown.style.display = 'block';
+}
+
 const input = document.getElementById("smartInput");
 const dropdown = document.getElementById("searchDropdown");
 const loadMoreBtn = document.getElementById("loadMoreBtn");
@@ -914,6 +1018,51 @@ loadMoreBtn.style.display = "block";
 let typingTimer;
 const typingDelay = 80;
 let searchController = null;
+let headerSearchRequestId = 0;
+const headerSearchCache = new Map();
+const HEADER_SEARCH_CACHE_MAX = 60;
+
+function headerSmartSearchFetch(url, signal) {
+    if (headerSearchCache.has(url)) {
+        return Promise.resolve(headerSearchCache.get(url));
+    }
+    return fetch(url, { signal, credentials: 'same-origin', headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } })
+        .then((res) => {
+            if (!res.ok) {
+                throw new Error('Search request failed');
+            }
+            return res.json();
+        })
+        .then((data) => {
+            if (headerSearchCache.size >= HEADER_SEARCH_CACHE_MAX) {
+                headerSearchCache.delete(headerSearchCache.keys().next().value);
+            }
+            headerSearchCache.set(url, data);
+            return data;
+        });
+}
+
+function buildHeaderSearchUrl(keyword) {
+    const trimmed = String(keyword || '').trim();
+    let url = `/api/v1/smart-search?keyword=${encodeURIComponent(trimmed)}&skip=${skip}`;
+    const skipTxFilter = isHeaderMlsKeyword(trimmed) || looksLikeHeaderMlsPrefix(trimmed) || /\d/.test(trimmed);
+    if (!skipTxFilter && selectedFilters.transaction) {
+        url += `&transaction=${encodeURIComponent(selectedFilters.transaction)}`;
+    }
+    if (!skipTxFilter && selectedFilters.status) {
+        url += `&status=${encodeURIComponent(selectedFilters.status)}`;
+    }
+    return url;
+}
+
+function shouldKeepHeaderSearchRequest(newKeyword) {
+    const prev = String(loadResults._activeKeyword || '').trim().toLowerCase();
+    const next = String(newKeyword || '').trim().toLowerCase();
+    if (!prev || !next) {
+        return false;
+    }
+    return next.startsWith(prev) && next.length > prev.length;
+}
 
 function isSoldListing(item) {
     return SOLD_STATUSES.includes(item.MlsStatus);
@@ -934,10 +1083,6 @@ function looksLikeHeaderMlsPrefix(keyword) {
 function showHeaderSearchPending() {
     loader.style.display = 'flex';
     dropdown.style.display = 'block';
-    const listingEl = document.getElementById('listingResults');
-    if (listingEl && !listingEl.innerHTML) {
-        listingEl.innerHTML = '<div class="hs-search-pending" style="padding:10px 12px;color:#6b7280;">Searching...</div>';
-    }
 }
 
 function handleHeaderSearchInput(keyword) {
@@ -954,10 +1099,21 @@ function handleHeaderSearchInput(keyword) {
         return;
     }
 
-    showHeaderSearchPending();
+    renderHeaderSearchShell(trimmed);
 
-    const noDelay = isHeaderMlsKeyword(trimmed) || looksLikeHeaderMlsPrefix(trimmed);
-    const delay = noDelay ? 0 : (/\d/.test(trimmed) || trimmed.length >= 4 ? typingDelay : 120);
+    const searchUrl = buildHeaderSearchUrl(trimmed);
+    const hasDigit = /\d/.test(trimmed);
+    if (headerSearchCache.has(searchUrl) || isHeaderMlsKeyword(trimmed) || looksLikeHeaderMlsPrefix(trimmed)) {
+        loadResults(trimmed, true);
+        return;
+    }
+
+    if (hasDigit) {
+        loadResults(trimmed, true);
+        return;
+    }
+
+    const delay = trimmed.length >= 3 ? 50 : 80;
     typingTimer = setTimeout(() => loadResults(trimmed, true), delay);
 }
 
@@ -986,153 +1142,173 @@ function buildPropertyUrl(item) {
 
 
 function loadResults(keyword, reset = false){
+    const requestId = ++headerSearchRequestId;
+    const cityHTML = buildHeaderCitySuggestionsHtml(keyword);
 
-    if (searchController) {
+    if (reset) {
+        document.getElementById('locationResults').innerHTML = cityHTML;
+        if (!document.getElementById('listingResults').innerHTML) {
+            document.getElementById('listingResults').innerHTML =
+                '<div class="hs-search-pending" style="padding:10px 12px;color:#6b7280;">Searching...</div>';
+        }
+    }
+
+    if (searchController && !shouldKeepHeaderSearchRequest(keyword)) {
         searchController.abort();
     }
     searchController = new AbortController();
+    loadResults._activeKeyword = keyword;
 
-    const isMlsKey = /^[a-z]{1,2}\d{5,}$/i.test(String(keyword || '').trim());
-    // Exact MLS ingest can take longer than address Meili searches.
+    const isMlsKey = isHeaderMlsKeyword(keyword);
     const searchTimeoutMs = isMlsKey ? 45000 : 15000;
     const searchTimeoutId = setTimeout(() => searchController.abort(), searchTimeoutMs);
+    const searchUrl = buildHeaderSearchUrl(keyword);
 
-    let url = `/api/v1/smart-search?keyword=${encodeURIComponent(keyword)}&skip=${skip}`;
-
-    // Map buy/sell filters must not hide an exact MLS# lookup.
-    if (! isMlsKey && selectedFilters.transaction) {
-        url += `&transaction=${encodeURIComponent(selectedFilters.transaction)}`;
-    }
-
-    if (! isMlsKey && selectedFilters.status) {
-        url += `&status=${encodeURIComponent(selectedFilters.status)}`;
-    }
-
-    fetch(url, { signal: searchController.signal, credentials: 'same-origin', headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } })
-    .then(res => res.json())
-    .then(data => {
-
+    if (headerSearchCache.has(searchUrl)) {
+        renderHeaderSearchResults(keyword, reset, cityHTML, headerSearchCache.get(searchUrl), isMlsKey);
         clearTimeout(searchTimeoutId);
-        loader.style.display = "none";
-        dropdown.style.display = "block";
+        loader.style.display = 'none';
+        return;
+    }
 
-        if(!Array.isArray(data)){
+    headerSmartSearchFetch(searchUrl, searchController.signal)
+    .then((data) => {
+        if (requestId !== headerSearchRequestId) {
             return;
         }
-
-        if(data.length === 0 && reset){
-            document.getElementById("locationResults").innerHTML = isMlsKey
-                ? '<div style="padding:12px;color:#666;">MLS listing not found in TREB feed. Try again later or search by address.</div>'
-                : '<div style="padding:12px;color:#666;">No listings found. Try another address or filter.</div>';
-            document.getElementById("listingResults").innerHTML = '';
-            return;
-        }
-
-        if(data.length === 0){
-            return;
-        }
-
-        let locationsHTML = "";
-        let listingsHTML = "";
-
-        data.forEach(item => {
-            const displayAddress = item.UnparsedAddress || item.building_address || '';
-            const blurClass = guestBlurClass(item);
-            const unitBadge = item.grouped && item.unit_count > 1
-                ? `<span style="background:var(--primary-color,#db1d23);color:#fff;padding:2px 8px;border-radius:12px;font-size:11px;margin-left:6px;">${item.unit_count} units</span>`
-                : '';
-            const statusLabel = (item.MlsStatus === 'New')
-                ? (item.TransactionType === 'For Sale' ? 'For Sale' : (item.TransactionType === 'For Lease' ? 'For Lease' : 'For Sale'))
-                : (SOLD_STATUSES.includes(item.MlsStatus)
-                    ? item.MlsStatus
-                    : (item.MlsStatus ?? ''));
-
-            locationsHTML += `
-                   <div class="location-item address-item">
-                       <a href="${buildPropertyUrl(item)}" style="width: 100%" class="${blurClass}">📍 ${displayAddress}${unitBadge}</a>
-                    </div>
-            `;
-
-            const loginOverlay = (!isLoggedIn && isSoldListing(item))
-                ? `<div class="property-login-overlay" style="position:relative;inset:auto;background:rgba(0,0,0,0.55);margin:8px 0;padding:16px;border-radius:8px;">
-                        <div class="property-login-overlay-content text-center">
-                            <p class="property-login-overlay-caption" style="color:#fff;font-size:13px;line-height:1.5;margin-bottom:12px;">
-                                Local real estate board's rules require you to validate login to see this property.
-                                <a href="#modalLogin" data-bs-toggle="modal" style="color:#fff;font-weight:600;text-decoration:underline;">(Full Details Here)</a>
-                            </p>
-                            <a href="#modalLogin" data-bs-toggle="modal" class="btn btn-light fw-bold">Confirm Login</a>
-                        </div>
-                   </div>`
-                : '';
-
-            listingsHTML += `
-                ${loginOverlay}
-                <a href="${buildPropertyUrl(item)}" style="width: 100%" class="${blurClass}">
-                    <div class="listing-item" style="width: 100%">
-                        <img src="${item.MediaURL}"
-                        data-key="${item.ListingKey}"
-                                class="property-image"
-                                loading="lazy"
-                                alt="${[item.UnparsedAddress, item.PropertySubType, item.ListingKey].filter(Boolean).join(' - ') || 'Property listing'}"
-                                style="width:100px;height:80px;object-fit:cover;border-radius:6px;"
-                                onerror="this.onerror=null;this.src='{{ \App\Support\SerikMediaUrl::placeholder() }}'"
-                            />
-                        <div style="width: 100%">
-                            <div class="price">
-                                $${Number(item.ListPrice || 0).toLocaleString()}
-                                <p style="float:right">${statusLabel}</p>
-                            </div>
-                            <div>${displayAddress}${unitBadge}</div>
-                            <p style="float:left">${item.PropertySubType || ''}</p>
-                            <small style="float:right">
-                                🛏 ${item.BedroomsTotal ?? 0}
-                                🛁 ${item.BathroomsTotalInteger ?? 0}
-                                🚘 ${(item.ParkingTotal ?? 0) - (item.ParkingSpaces ?? 0)}
-                            </small>
-                        </div>
-                    </div>
-                </a>
-            `;
-
-            if (item.grouped && Array.isArray(item.units) && item.units.length > 1) {
-                item.units.slice(1, 6).forEach(unit => {
-                    const unitBlur = guestBlurClass(unit);
-                    listingsHTML += `
-                        <a href="${buildPropertyUrl(unit)}" style="width:100%;padding-left:20px;display:block;" class="${unitBlur}">
-                            <div class="listing-item" style="width:100%;opacity:0.9;font-size:13px;">
-                                <div>↳ ${unit.UnparsedAddress || unit.address || ''}</div>
-                                <small>$${Number(unit.ListPrice || 0).toLocaleString()} · ${unit.MlsStatus || ''}</small>
-                            </div>
-                        </a>
-                    `;
-                });
-                if (item.units.length > 6) {
-                    listingsHTML += `<div style="padding-left:20px;font-size:12px;color:#666;">+ ${item.units.length - 6} more units</div>`;
-                }
-            }
-        });
-
-        if(reset){
-            document.getElementById("locationResults").innerHTML = locationsHTML;
-            document.getElementById("listingResults").innerHTML = listingsHTML;
-        }else{
-            document.getElementById("listingResults")
-                .insertAdjacentHTML("beforeend", listingsHTML);
-        }
-
-       setTimeout(loadImages, 0);
-
+        renderHeaderSearchResults(keyword, reset, cityHTML, data, isMlsKey);
     })
-    .catch(err => {
-        clearTimeout(searchTimeoutId);
-        if (err.name === 'AbortError') {
+    .catch((err) => {
+        if (requestId !== headerSearchRequestId || err.name === 'AbortError') {
             return;
         }
-        console.log(err);
-        loader.style.display = "none";
-        dropdown.style.display = "none";
+        console.error('Header search failed:', err);
+        if (reset) {
+            document.getElementById('locationResults').innerHTML = cityHTML;
+            document.getElementById('listingResults').innerHTML =
+                '<div style="padding:12px;color:#666;">Search failed. Please try again.</div>';
+        }
+    })
+    .finally(() => {
+        if (requestId !== headerSearchRequestId) {
+            return;
+        }
+        clearTimeout(searchTimeoutId);
+        loader.style.display = 'none';
+        dropdown.style.display = 'block';
+    });
+}
+
+function renderHeaderSearchResults(keyword, reset, cityHTML, data, isMlsKey) {
+    loader.style.display = 'none';
+    dropdown.style.display = 'block';
+
+    if (!Array.isArray(data)) {
+        return;
+    }
+
+    if (data.length === 0 && reset) {
+        document.getElementById('locationResults').innerHTML = cityHTML;
+        document.getElementById('listingResults').innerHTML = isMlsKey
+            ? '<div style="padding:12px;color:#666;">MLS listing not found in TREB feed. Try again later or search by address.</div>'
+            : (cityHTML ? '' : '<div style="padding:12px;color:#666;">No listings found. Try another address or filter.</div>');
+        return;
+    }
+
+    if (data.length === 0) {
+        return;
+    }
+
+    let addressHTML = '';
+    let listingsHTML = '';
+
+    data.forEach(item => {
+        const displayAddress = item.UnparsedAddress || item.building_address || '';
+        const blurClass = guestBlurClass(item);
+        const unitBadge = item.grouped && item.unit_count > 1
+            ? `<span style="background:var(--primary-color,#db1d23);color:#fff;padding:2px 8px;border-radius:12px;font-size:11px;margin-left:6px;">${item.unit_count} units</span>`
+            : '';
+        const statusLabel = (item.MlsStatus === 'New')
+            ? (item.TransactionType === 'For Sale' ? 'For Sale' : (item.TransactionType === 'For Lease' ? 'For Lease' : 'For Sale'))
+            : (SOLD_STATUSES.includes(item.MlsStatus)
+                ? item.MlsStatus
+                : (item.MlsStatus ?? ''));
+
+        addressHTML += `
+            <div class="location-item address-item">
+                <a href="${buildPropertyUrl(item)}" style="width: 100%" class="${blurClass}">📍 ${displayAddress}${unitBadge}</a>
+            </div>
+        `;
+
+        const loginOverlay = (!isLoggedIn && isSoldListing(item))
+            ? `<div class="property-login-overlay" style="position:relative;inset:auto;background:rgba(0,0,0,0.55);margin:8px 0;padding:16px;border-radius:8px;">
+                    <div class="property-login-overlay-content text-center">
+                        <p class="property-login-overlay-caption" style="color:#fff;font-size:13px;line-height:1.5;margin-bottom:12px;">
+                            Local real estate board's rules require you to validate login to see this property.
+                            <a href="#modalLogin" data-bs-toggle="modal" style="color:#fff;font-weight:600;text-decoration:underline;">(Full Details Here)</a>
+                        </p>
+                        <a href="#modalLogin" data-bs-toggle="modal" class="btn btn-light fw-bold">Confirm Login</a>
+                    </div>
+               </div>`
+            : '';
+
+        listingsHTML += `
+            ${loginOverlay}
+            <a href="${buildPropertyUrl(item)}" style="width: 100%" class="${blurClass}">
+                <div class="listing-item" style="width: 100%">
+                    <img src="${item.MediaURL}"
+                    data-key="${item.ListingKey}"
+                            class="property-image"
+                            loading="lazy"
+                            alt="${[item.UnparsedAddress, item.PropertySubType, item.ListingKey].filter(Boolean).join(' - ') || 'Property listing'}"
+                            style="width:100px;height:80px;object-fit:cover;border-radius:6px;"
+                            onerror="this.onerror=null;this.src='{{ \App\Support\SerikMediaUrl::placeholder() }}'"
+                        />
+                    <div style="width: 100%">
+                        <div class="price">
+                            $${Number(item.ListPrice || 0).toLocaleString()}
+                            <p style="float:right">${statusLabel}</p>
+                        </div>
+                        <div>${displayAddress}${unitBadge}</div>
+                        <p style="float:left">${item.PropertySubType || ''}</p>
+                        <small style="float:right">
+                            🛏 ${item.BedroomsTotal ?? 0}
+                            🛁 ${item.BathroomsTotalInteger ?? 0}
+                            🚘 ${(item.ParkingTotal ?? 0) - (item.ParkingSpaces ?? 0)}
+                        </small>
+                    </div>
+                </div>
+            </a>
+        `;
+
+        if (item.grouped && Array.isArray(item.units) && item.units.length > 1) {
+            item.units.slice(1, 6).forEach(unit => {
+                const unitBlur = guestBlurClass(unit);
+                listingsHTML += `
+                    <a href="${buildPropertyUrl(unit)}" style="width:100%;padding-left:20px;display:block;" class="${unitBlur}">
+                        <div class="listing-item" style="width:100%;opacity:0.9;font-size:13px;">
+                            <div>↳ ${unit.UnparsedAddress || unit.address || ''}</div>
+                            <small>$${Number(unit.ListPrice || 0).toLocaleString()} · ${unit.MlsStatus || ''}</small>
+                        </div>
+                    </a>
+                `;
+            });
+            if (item.units.length > 6) {
+                listingsHTML += `<div style="padding-left:20px;font-size:12px;color:#666;">+ ${item.units.length - 6} more units</div>`;
+            }
+        }
     });
 
+    const finalSuggestions = cityHTML + addressHTML;
+
+    if (reset) {
+        document.getElementById('locationResults').innerHTML = finalSuggestions || cityHTML;
+        document.getElementById('listingResults').innerHTML = listingsHTML;
+    } else {
+        document.getElementById('listingResults').insertAdjacentHTML('beforeend', listingsHTML);
+    }
+
+    setTimeout(loadImages, 0);
 }
 
 

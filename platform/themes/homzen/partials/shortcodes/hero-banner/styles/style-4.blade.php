@@ -5262,8 +5262,33 @@ const cityCoordinates = {
     Leamington:      { lat: 42.0534, lng: -82.5991 },
     Chatham:         { lat: 42.4048, lng: -82.1910 },
     Belleville:      { lat: 44.1628, lng: -77.3832 },
-    Pembroke:        { lat: 45.8267, lng: -77.1103 }
+    Pembroke:        { lat: 45.8267, lng: -77.1103 },
+    Bradford:        { lat: 44.1148, lng: -79.5629 },
 };
+
+const citySearchAliases = {
+    brandford: 'bradford',
+};
+
+function formatCityLabel(cityKey) {
+    return String(cityKey || '')
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+const citySearchIndex = (() => {
+    const index = new Map();
+    Object.keys(cityCoordinates).forEach((key) => {
+        const norm = normalizeCity(key);
+        if (!index.has(norm)) {
+            index.set(norm, {
+                label: formatCityLabel(key),
+                coords: cityCoordinates[key],
+            });
+        }
+    });
+    return index;
+})();
 
  function normalizeCity(city) {
     if (!city) return '';
@@ -10530,13 +10555,18 @@ function handleSmartSearchInput(keyword) {
     renderInstantSearchShell(trimmed);
 
     const searchUrl = buildSmartSearchUrl(trimmed);
+    const hasDigit = /\d/.test(trimmed);
     if (smartSearchCache.has(searchUrl) || isMlsSearchKeyword(trimmed) || looksLikeMlsPrefix(trimmed)) {
         loadResults(trimmed, true);
         return;
     }
 
-    const noDebounce = isMlsSearchKeyword(trimmed) || looksLikeMlsPrefix(trimmed) || /\d/.test(trimmed) || trimmed.length >= 3;
-    const delay = noDebounce ? 0 : 60;
+    if (hasDigit && trimmed.length >= 2) {
+        loadResults(trimmed, true);
+        return;
+    }
+
+    const delay = trimmed.length >= 3 ? 50 : 80;
     typingTimer = setTimeout(() => loadResults(trimmed, true), delay);
 }
 
@@ -10549,17 +10579,17 @@ function buildCitySuggestionsHtml(keyword) {
     };
 
     getMatchingCities(keyword).forEach((city) => {
-        const coords = cityCoordinates[city];
-        if (isChineseText(city) || !coords) {
+        const coords = city.coords;
+        if (isChineseText(city.label) || !coords) {
             return;
         }
 
         cityHTML += `
             <div class="location-item city-item"
-                data-city="${city}"
+                data-city="${city.label}"
                 data-lat="${coords.lat}"
                 data-lng="${coords.lng}">
-                🌆 ${city}
+                🌆 ${city.label}
             </div>
         `;
     });
@@ -10633,23 +10663,39 @@ input.addEventListener('keydown', function (e) {
 function getMatchingCities(keyword) {
     if (!keyword) return [];
 
-    keyword = keyword.trim().toLowerCase();
-    if (!keyword) return [];
+    const raw = String(keyword).trim().toLowerCase();
+    if (!raw) return [];
 
-    const unique = new Map();
+    const aliasedRaw = citySearchAliases[raw] || raw;
+    const tokens = aliasedRaw.split(/[\s,]+/).filter((t) => t.length >= 2 && !/^\d+[a-z]?$/i.test(t));
+    const needles = Array.from(new Set([
+        normalizeCity(aliasedRaw),
+        ...tokens.map((t) => normalizeCity(citySearchAliases[t] || t)),
+    ])).filter((n) => n.length >= 2);
 
-    Object.keys(cityCoordinates).forEach(city => {
-        const cleanedCity = city.trim();
-        const lower = cleanedCity.toLowerCase();
+    const matches = [];
 
-        if (lower.includes(keyword) || lower.startsWith(keyword)) {
-            if (!unique.has(lower)) {
-                unique.set(lower, cleanedCity);
+    citySearchIndex.forEach((city, norm) => {
+        for (const needle of needles) {
+            if (norm.startsWith(needle) || norm.includes(needle) || needle.startsWith(norm)) {
+                matches.push({ norm, label: city.label, coords: city.coords, score: norm.startsWith(needle) ? 0 : 1 });
+                break;
             }
         }
     });
 
-    return Array.from(unique.values()).slice(0, 6);
+    return matches
+        .sort((a, b) => a.score - b.score || a.label.localeCompare(b.label))
+        .slice(0, 6);
+}
+
+function shouldKeepSearchRequest(newKeyword) {
+    const prev = String(loadResults._activeKeyword || '').trim().toLowerCase();
+    const next = String(newKeyword || '').trim().toLowerCase();
+    if (!prev || !next) {
+        return false;
+    }
+    return next.startsWith(prev) && next.length > prev.length;
 }
 
 function loadResults(keyword, reset = false){
@@ -10674,10 +10720,11 @@ function loadResults(keyword, reset = false){
         }
     }
 
-    if (searchAbortController) {
+    if (searchAbortController && !shouldKeepSearchRequest(keyword)) {
         searchAbortController.abort();
     }
     searchAbortController = new AbortController();
+    loadResults._activeKeyword = keyword;
     const isMlsKey = isMlsSearchKeyword(keyword);
     const searchTimeoutId = setTimeout(() => searchAbortController.abort(), isMlsKey ? 45000 : 12000);
 
