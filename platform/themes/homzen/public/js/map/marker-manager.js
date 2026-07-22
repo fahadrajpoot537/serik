@@ -49,7 +49,7 @@
             countEl.innerText = 'Available Properties : ' + safeFeatures.length;
         }
 
-        if (typeof global.renderMapListCards === 'function') {
+        if (typeof global.renderMapListCards === 'function' && !state?.isClusterPanelOpen?.()) {
             global.renderMapListCards(safeFeatures);
         }
 

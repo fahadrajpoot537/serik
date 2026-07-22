@@ -16,6 +16,74 @@ final class SerikMediaUrl
         return CanonicalUrl::normalize(asset('storage/general/placeholder.png'));
     }
 
+    /**
+     * Browser-safe cover image for map cluster/list cards.
+     * Never returns trreb-image.ampre.ca (403 in browser) — uses local WebP route.
+     */
+    public static function mapListingCover(?string $listingKey, ?string $imageVal = null): string
+    {
+        $listingKey = strtoupper(trim((string) $listingKey));
+        $imageVal = trim((string) $imageVal);
+
+        if ($imageVal !== '' && ! self::isRemoteUrl($imageVal)) {
+            $relative = ltrim(str_replace('\\', '/', $imageVal), '/');
+            if (str_starts_with($relative, 'properties/treb/') && self::resolveExistingRelativePath($relative) !== null) {
+                return self::toPublic($relative);
+            }
+        }
+
+        if ($listingKey !== '') {
+            return self::trebCoverPublicUrl($listingKey);
+        }
+
+        return self::placeholder();
+    }
+
+    public static function trebCoverPublicUrl(string $listingKey): string
+    {
+        $listingKey = strtoupper(preg_replace('/[^A-Z0-9]/', '', $listingKey));
+
+        return CanonicalUrl::normalize(asset('storage/properties/treb/' . $listingKey . '/cover.webp'));
+    }
+
+    /**
+     * Resolve a remote fetch URL for server-side image download (not for <img> src).
+     */
+    public static function resolveTrebRemoteUrl(?string $path): ?string
+    {
+        $path = trim((string) $path);
+        if ($path === '') {
+            return null;
+        }
+
+        if (str_contains($path, 'trreb-image.ampre.ca')) {
+            return CanonicalUrl::normalize($path);
+        }
+
+        return self::resolveTrebCdnFromImgproxy($path);
+    }
+
+    /**
+     * @deprecated Use mapListingCover() for map UI.
+     */
+    public static function mapPropertyImage(?string $path, ?string $fallback = null): string
+    {
+        $path = trim((string) $path);
+
+        if ($path !== '' && ! self::isRemoteUrl($path)) {
+            return self::toPublic($path, $fallback);
+        }
+
+        return $fallback ?? self::placeholder();
+    }
+
+    private static function isRemoteUrl(string $value): bool
+    {
+        return str_starts_with($value, 'http://')
+            || str_starts_with($value, 'https://')
+            || str_starts_with($value, '//');
+    }
+
     public static function toPublic(?string $path, ?string $fallback = null): string
     {
         $path = trim((string) $path);
@@ -61,6 +129,60 @@ final class SerikMediaUrl
         }
 
         return CanonicalUrl::normalize($url);
+    }
+
+    private static function resolveTrebCdnFromImgproxy(string $value): ?string
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return null;
+        }
+
+        // Bare base64-encoded TREB path stored in image_val (no imgproxy host).
+        if (preg_match('/^L3RycmVi/i', $value)) {
+            return self::decodeImgproxyEncodedTrebPath($value);
+        }
+
+        if (! str_contains($value, '/rs:') && ! str_contains($value, 'rs:fit')) {
+            return null;
+        }
+
+        $path = $value;
+        if (preg_match('#^https?://#i', $value)) {
+            $path = (string) (parse_url($value, PHP_URL_PATH) ?? '');
+        }
+
+        $path = '/' . ltrim(str_replace('\\', '/', $path), '/');
+        $segments = array_values(array_filter(explode('/', $path)));
+        $encoded = $segments !== [] ? (string) end($segments) : '';
+        if ($encoded === '' || strlen($encoded) < 16) {
+            return null;
+        }
+
+        return self::decodeImgproxyEncodedTrebPath($encoded);
+    }
+
+    private static function decodeImgproxyEncodedTrebPath(string $encoded): ?string
+    {
+        $encoded = trim($encoded);
+        if ($encoded === '') {
+            return null;
+        }
+
+        // imgproxy appends a file extension after the base64 payload.
+        $encoded = preg_replace('/\.(jpe?g|png|webp|gif|bmp|avif)$/i', '', $encoded) ?? $encoded;
+
+        $decoded = base64_decode(strtr($encoded, '-_', '+/'), true);
+        if ($decoded === false || $decoded === '') {
+            return null;
+        }
+
+        $decoded = '/' . ltrim(str_replace('\\', '/', $decoded), '/');
+        if (! str_starts_with($decoded, '/trreb/')) {
+            return null;
+        }
+
+        return 'https://trreb-image.ampre.ca' . $decoded;
     }
 
     /**

@@ -5125,6 +5125,9 @@ position: absolute;
 <script src="{{ Theme::asset()->url('js/map/interaction-state.js') }}?v={{ get_cms_version() }}"></script>
 <script src="{{ Theme::asset()->url('js/map/marker-manager.js') }}?v={{ get_cms_version() }}"></script>
 <script src="{{ Theme::asset()->url('js/map/fetch-coordinator.js') }}?v={{ get_cms_version() }}"></script>
+@if (request()->boolean('hs_map_trace') || request()->cookie('hs_map_trace'))
+<script src="{{ Theme::asset()->url('js/map/map-trace.js') }}?v={{ get_cms_version() }}"></script>
+@endif
 @endif
 
 
@@ -5571,22 +5574,30 @@ async function showCityBoundary(cityName) {
             }
 
             const bounds = geojsonBounds(feature.geometry);
-            map.fitBounds(bounds, { padding: 50, duration: 1000, maxZoom: 12 });
+            if (typeof window.runProgrammaticMapMove === 'function') {
+                window.runProgrammaticMapMove(() => {
+                    map.fitBounds(bounds, { padding: 50, duration: 1000, maxZoom: 12 });
+                });
+            } else {
+                map.fitBounds(bounds, { padding: 50, duration: 1000, maxZoom: 12 });
+            }
             map.once('moveend', () => {
+                clearTimeout(moveTimer);
+                moveTimer = null;
                 if (typeof loadProperties === 'function') {
-                    loadProperties();
+                    loadProperties({ fromInit: true });
                 }
             });
         } else {
             activeCityPolygon = null;
             activeCityGeometryType = null;
-            loadProperties();
+            loadProperties({ fromInit: true });
         }
     } catch (e) {
         console.warn('City boundary fit failed', e);
         activeCityPolygon = null;
         activeCityGeometryType = null;
-        loadProperties();
+        loadProperties({ fromInit: true });
     }
 }
     
@@ -5607,6 +5618,7 @@ async function showCityBoundary(cityName) {
     let mapLayersReady = false;
     let autoCenteringMap = false;
     let userHasMovedMap = false;
+    let moveTimer = null;
 
     let selectedTransaction = '';
     let selectedMinPrice = 0;
@@ -5634,6 +5646,19 @@ async function showCityBoundary(cityName) {
     }
 
     window.isClusterPanelOpen = isClusterPanelOpen;
+
+    function runProgrammaticMapMove(moveFn) {
+        if (!map || typeof moveFn !== 'function') {
+            return;
+        }
+        autoCenteringMap = true;
+        map.once('moveend', () => {
+            autoCenteringMap = false;
+        });
+        moveFn();
+    }
+
+    window.runProgrammaticMapMove = runProgrammaticMapMove;
 
     const HS_MOBILE_PROPERTY_TYPES = [
         { label: 'All property types', value: '' },
@@ -5932,7 +5957,7 @@ window.addEventListener('popstate', function (event) {
         restoreMapStateFromHistory(event.state);
         skipSeoUrlOnNextLoad = true;
         bustMapFetchCache();
-        loadProperties();
+        loadProperties({ fromFilters: true });
         mapHistoryNavigating = false;
     }
 });
@@ -6268,16 +6293,22 @@ if (urlLocation) {
                 const sw = [Math.min(...lngs), Math.min(...lats)];
                 const ne = [Math.max(...lngs), Math.max(...lats)];
 
-                map.fitBounds([sw, ne], { padding: 50 });
-                map.once('moveend', () => loadProperties());
+                runProgrammaticMapMove(() => {
+                    map.fitBounds([sw, ne], { padding: 50 });
+                });
+                map.once('moveend', () => {
+                    clearTimeout(moveTimer);
+                    moveTimer = null;
+                    loadProperties({ fromInit: true });
+                });
             } else {
                 showCityBoundary(resolvedCity);
             }
         } else {
-            loadProperties();
+            loadProperties({ fromInit: true });
         }
     } else {
-        loadProperties();
+        loadProperties({ fromInit: true });
     }
     
 
@@ -6399,7 +6430,7 @@ map.on('mouseleave', 'unclustered-point', () => {
         if (typeof updateSplitFilterLabels === 'function') {
             updateSplitFilterLabels();
         }
-        loadProperties();
+        loadProperties({ fromFilters: true });
     });
 });
 
@@ -6417,7 +6448,7 @@ document.querySelectorAll('input[name="date"], input[name="date-sold"], input[na
         if (typeof updateMobileFilterLabels === 'function') {
             updateMobileFilterLabels();
         }
-        loadProperties();
+        loadProperties({ fromFilters: true });
     });
 });
     
@@ -6433,7 +6464,7 @@ document.querySelectorAll('input[name="date"], input[name="date-sold"], input[na
             // Add active class to clicked item
             this.classList.add('active');
     
-            loadProperties();
+            loadProperties({ fromFilters: true });
         });
     });
     
@@ -6492,7 +6523,7 @@ if (saveBtn) {
             dropdown.classList.remove('active');
         }
 
-        loadProperties();
+        loadProperties({ fromFilters: true });
     });
 }
 
@@ -6510,7 +6541,7 @@ document.querySelectorAll('.btn-cancel').forEach(btn => {
         // reset ONLY this dropdown
         resetDropdown(dropdown);
 
-        loadProperties();
+        loadProperties({ fromFilters: true });
     });
 });
 
@@ -6817,7 +6848,7 @@ if (maxSlider) maxSlider.addEventListener('input', function () {
         selectedMaxPrice = parseInt(maxSlider?.value || selectedMaxPrice || 0, 10);
         dropdownMenu.style.display = 'none';
         bustMapFetchCache();
-        loadProperties();
+        loadProperties({ fromFilters: true });
     });
         
     
@@ -6958,7 +6989,7 @@ document.querySelector('.clear-btn-main').addEventListener('click', function () 
     //  Reload Map With Defaults
     // ==============================
     
-    loadProperties();
+    loadProperties({ fromFilters: true });
 });
 
 
@@ -7031,7 +7062,7 @@ function getZoomForDetectedLocation(detectedLocation) {
 
 function flyMapToDetectedLocation(detectedLocation) {
     if (!map || !detectedLocation || !Number.isFinite(detectedLocation.lat) || !Number.isFinite(detectedLocation.lng)) {
-        loadProperties();
+        loadProperties({ fromInit: true });
         return;
     }
 
@@ -7044,8 +7075,10 @@ function flyMapToDetectedLocation(detectedLocation) {
         }
         centeringFinished = true;
         autoCenteringMap = false;
+        clearTimeout(moveTimer);
+        moveTimer = null;
         if (!isMapPanelOpen()) {
-            loadProperties({ fromMapMove: true });
+            loadProperties({ fromInit: true });
         }
     };
 
@@ -7132,7 +7165,7 @@ function clearCityBoundaryLock() {
 
 async function setMapToUserLocation() {
     if (userHasMovedMap) {
-        loadProperties();
+        loadProperties({ fromMapMove: true });
         return;
     }
 
@@ -7197,7 +7230,6 @@ async function setMapToUserLocation() {
 
 
 
-  let moveTimer;
 function getSubtypesFromUrl() {
     const params = new URLSearchParams(window.location.search);
     let subtypes = params.get('subtypes') || '';
@@ -7378,7 +7410,13 @@ function fitMapToPolygon(polygonCoords) {
     if (!map || !polygonCoords?.[0]?.length) return;
     const bounds = polygonCoords[0].reduce((b, coord) => b.extend(coord),
         new maplibregl.LngLatBounds(polygonCoords[0][0], polygonCoords[0][0]));
-    map.fitBounds(bounds, { padding: 60, duration: 800 });
+    if (typeof window.runProgrammaticMapMove === 'function') {
+        window.runProgrammaticMapMove(() => {
+            map.fitBounds(bounds, { padding: 60, duration: 800 });
+        });
+    } else {
+        map.fitBounds(bounds, { padding: 60, duration: 800 });
+    }
 }
 
 function initMapDraw() {
@@ -7490,7 +7528,7 @@ function initMapDraw() {
                 closeWatchedDropdown();
                 renderWatchedAreas();
                 skipSeoUrlOnNextLoad = true;
-                loadProperties();
+                loadProperties({ fromFilters: true });
             });
 
             card.querySelector('.btn-outline')?.addEventListener('click', () => {
@@ -7557,7 +7595,7 @@ function initMapDraw() {
         currentPolygon = null;
         hideSavePopup();
         skipSeoUrlOnNextLoad = true;
-        loadProperties();
+        loadProperties({ fromFilters: true });
     });
 
     document.getElementById('cancelPolygon')?.addEventListener('click', () => {
@@ -7578,7 +7616,7 @@ function initMapDraw() {
         hideSavePopup();
         watchedContainer.querySelectorAll('.watched-card').forEach((card) => card.remove());
         lastMapFetchKey = '';
-        loadProperties();
+        loadProperties({ fromFilters: true });
     });
 
     renderWatchedAreas();
@@ -7670,13 +7708,14 @@ function mapMovedEnoughToRefetch() {
 
     function loadProperties(options = {}) {
         const fromMapMove = options.fromMapMove === true;
-        const fromFilters = options.fromFilters === true || (!fromMapMove && !options.fromInit);
+        const fromFilters = options.fromFilters === true;
+        const forDebounce = fromFilters || (!fromMapMove && !options.fromInit);
 
         if (fromFilters && isMapPanelOpen()) {
             closeHsMapCenterPanel();
         }
 
-        if (isMapPanelOpen() && !options.force) {
+        if (isClusterPanelOpen() && !options.force) {
             return;
         }
 
@@ -7698,10 +7737,12 @@ function mapMovedEnoughToRefetch() {
 
         window.HsMapFetchCoordinator?.scheduleLoad?.(
             buildMapPropertiesRequest,
-            Object.assign({}, options, { fromFilters }),
+            Object.assign({}, options, { fromFilters: forDebounce }),
             options.delayMs
         );
     }
+
+    window.loadProperties = loadProperties;
 
   
 
@@ -7791,7 +7832,6 @@ function mapMovedEnoughToRefetch() {
     }
 
     function handleClusterMarkerClick(e) {
-        window.HsMapFetchCoordinator?.abortInFlight?.();
         window.HsMapFetchCoordinator?.clearDebounce?.();
 
         const features = map.queryRenderedFeatures(e.point, {
@@ -7807,18 +7847,6 @@ function mapMovedEnoughToRefetch() {
 
         const source = map.getSource('properties');
 
-        if (pointCount >= 20) {
-            closeMapPropertySelection();
-            source.getClusterExpansionZoom(clusterId, function (err, zoom) {
-                if (err) return;
-                map.easeTo({
-                    center: clusterCoords,
-                    zoom: zoom
-                });
-            });
-            return;
-        }
-
         source.getClusterLeaves(clusterId, 50, 0, function (err, leaves) {
             if (err || !leaves?.length) return;
 
@@ -7828,8 +7856,22 @@ function mapMovedEnoughToRefetch() {
                 } else {
                     openPropertyFromFeature(leaves[0]);
                 }
-            } else {
-                showClusterPopup(leaves, clusterCoords);
+                return;
+            }
+
+            closeMapPropertySelection();
+            showClusterPopup(leaves, clusterCoords);
+
+            if (pointCount >= 20) {
+                source.getClusterExpansionZoom(clusterId, function (zoomErr, zoom) {
+                    if (zoomErr) return;
+                    runProgrammaticMapMove(() => {
+                        map.easeTo({
+                            center: clusterCoords,
+                            zoom: zoom,
+                        });
+                    });
+                });
             }
         });
     }
@@ -7869,6 +7911,10 @@ function mapMovedEnoughToRefetch() {
 
   map.on('click', function (e) {
     if (shouldIgnoreMapBackgroundClick()) {
+        return;
+    }
+
+    if (isClusterPanelOpen()) {
         return;
     }
 
@@ -9219,7 +9265,6 @@ function mapMovedEnoughToRefetch() {
 
         ensureHsMapCenterPanelInWrapper();
 
-        window.HsMapFetchCoordinator?.abortInFlight?.();
         window.HsMapFetchCoordinator?.clearDebounce?.();
 
         const { panel, body } = ui;
@@ -9294,6 +9339,7 @@ function mapMovedEnoughToRefetch() {
             ?.querySelectorAll('.hs-map-details-col, .hs-cluster-popup-list')
             .forEach((scrollEl) => {
                 scrollEl.addEventListener('wheel', (e) => e.stopPropagation(), { passive: true });
+                scrollEl.addEventListener('touchmove', (e) => e.stopPropagation(), { passive: true });
             });
     }
 
@@ -9511,13 +9557,19 @@ function mapMovedEnoughToRefetch() {
         const areaText = props.area
             ? String(props.area).split('-').map((n) => Number(n).toLocaleString()).join('-') + ' ft²'
             : '—';
+        const cardImage = (() => {
+            if (isUsableMapImageUrl(props.image)) {
+                return props.image;
+            }
+            return mapListingCoverUrl(props);
+        })();
 
         return `
             ${mapLoginGateHtml(itemStatus, props)}
             <article class="hs-cluster-list-item${soldLocked}" data-cluster-idx="${index}" role="button" tabindex="0">
-                <div class="hs-cluster-card-img">
-                    ${props.image
-                        ? `<img src="${escapeMapHtml(props.image)}" alt="${escapeMapHtml(buildMapImageAlt(props))}" loading="lazy" onerror="this.style.display='none';this.parentNode.classList.add('hs-img-empty');">`
+                <div class="hs-cluster-card-img${cardImage ? '' : ' hs-img-empty'}">
+                    ${cardImage
+                        ? `<img src="${escapeMapHtml(cardImage)}" alt="${escapeMapHtml(buildMapImageAlt(props))}" loading="lazy" onerror="this.style.display='none';this.parentNode.classList.add('hs-img-empty');">`
                         : '<div class="hs-img-empty-fill"></div>'}
                     <span class="hs-cluster-card-badge">${escapeMapHtml(props.transaction || itemStatus || '')}</span>
                 </div>
@@ -9591,7 +9643,10 @@ function mapMovedEnoughToRefetch() {
                 const data = payload?.data || {};
                 list.forEach((feature, index) => {
                     const props = feature.properties || {};
-                    const img = data[String(props.id)] || data[String(props.external_id || '').toUpperCase()] || '';
+                    let img = data[String(props.id)] || data[String(props.external_id || '').toUpperCase()] || '';
+                    if (!isUsableMapImageUrl(img)) {
+                        img = mapListingCoverUrl(props);
+                    }
                     if (!img) return;
                     props.image = img;
 
@@ -9600,7 +9655,21 @@ function mapMovedEnoughToRefetch() {
                     if (!card) return;
                     const wrap = card.querySelector('.hs-cluster-card-img, .hs-list-card-img');
                     if (!wrap) return;
-                    if (wrap.querySelector('img')) return;
+                    const existing = wrap.querySelector('img');
+                    if (existing) {
+                        if (!isUsableMapImageUrl(img)) {
+                            return;
+                        }
+                        existing.src = img;
+                        existing.style.display = '';
+                        wrap.classList.remove('hs-img-empty');
+                        const empty = wrap.querySelector('.hs-img-empty-fill');
+                        if (empty) empty.remove();
+                        return;
+                    }
+                    if (!isUsableMapImageUrl(img)) {
+                        return;
+                    }
                     wrap.classList.remove('hs-img-empty');
                     const empty = wrap.querySelector('.hs-img-empty-fill');
                     if (empty) empty.remove();
@@ -9642,9 +9711,11 @@ document.addEventListener('click', function (e) {
     // ==============================
 
     window.zoomToProperty = function(lat, lng) {
-        map.easeTo({
-            center: [lng, lat],
-            zoom: 12
+        runProgrammaticMapMove(() => {
+            map.easeTo({
+                center: [lng, lat],
+                zoom: 12,
+            });
         });
     }
 
@@ -9682,10 +9753,6 @@ document.addEventListener('click', function (e) {
     }
 
     document.getElementById('mapSmartInput').value = cityName;
-
-    setTimeout(() => {
-        loadProperties();
-    }, 1200);
 
     return;
 
@@ -9748,6 +9815,38 @@ function showPopupFromSearchItem(item) {
 
 // ===== Mobile filters (HouseSigma style) =====
 
+function isUsableMapImageUrl(url) {
+    if (!url || typeof url !== 'string') {
+        return false;
+    }
+    if (url.includes('trreb-image.ampre.ca') || url.includes('ampre.ca/trreb')) {
+        return false;
+    }
+    if (url.includes('/rs:fit') || url.includes('rs:fit:')) {
+        return false;
+    }
+    try {
+        const parsed = new URL(url, window.location.origin);
+        if (parsed.hostname.replace(/^www\./, '') === window.location.hostname.replace(/^www\./, '')) {
+            if (!parsed.pathname.startsWith('/storage/') && /^\/[A-Za-z0-9_-]+\//.test(parsed.pathname)) {
+                return false;
+            }
+        }
+    } catch (e) {
+        return false;
+    }
+    return true;
+}
+
+function mapListingCoverUrl(props) {
+    const key = String(props?.external_id || '').trim().toUpperCase();
+    if (!key) {
+        return '';
+    }
+    const origin = typeof serikCanonicalOrigin === 'function' ? serikCanonicalOrigin() : window.location.origin;
+    return origin + '/storage/properties/treb/' + encodeURIComponent(key) + '/cover.webp';
+}
+
 function buildHsListCardHtml(props, geometry) {
     const status = mapListingStatus(props);
     const locked = mapBlurClass(status, props);
@@ -9767,7 +9866,7 @@ function buildHsListCardHtml(props, geometry) {
             Number(props.price || 0).toLocaleString() + '</span>';
     }
 
-    const img = (!locked && props.image) ? props.image : '';
+    const img = (!locked && (isUsableMapImageUrl(props.image) ? props.image : mapListingCoverUrl(props))) || '';
     const imageAlt = escapeMapHtml(buildMapImageAlt(props));
     const meta = [
         (props.bedrooms ?? '-') + ' bed',
@@ -10101,7 +10200,7 @@ function initMobileFilters() {
         }
         updateMobileFilterLabels();
         closeMobileSheets();
-        loadProperties();
+        loadProperties({ fromFilters: true });
     });
 
     document.getElementById('hsDateColumns')?.addEventListener('click', (e) => {
@@ -10119,7 +10218,7 @@ function initMobileFilters() {
         updateMobileFilterLabels();
         closeMobileSheets();
         bustMapFetchCache();
-        loadProperties();
+        loadProperties({ fromFilters: true });
     });
 
     document.querySelectorAll('.hs-m-status').forEach((btn) => {
@@ -10138,7 +10237,7 @@ function initMobileFilters() {
             if (typeof updateSplitFilterLabels === 'function') {
                 updateSplitFilterLabels();
             }
-            loadProperties();
+            loadProperties({ fromFilters: true });
         });
     });
 
@@ -10170,7 +10269,7 @@ function initMobileFilters() {
         selectedBasement1 = (!basementVal || basementVal === 'All') ? null : basementVal;
         closeMobileSheets();
         bustMapFetchCache();
-        loadProperties();
+        loadProperties({ fromFilters: true });
     });
 
     document.getElementById('hsSheetFilters')?.addEventListener('input', (e) => {
@@ -10215,7 +10314,7 @@ function initMobileFilters() {
             ul.querySelectorAll('li').forEach((li, i) => li.classList.toggle('selected', i === 0));
         });
         closeMobileSheets();
-        loadProperties();
+        loadProperties({ fromFilters: true });
     });
     document.querySelectorAll('[data-close-sheet]').forEach((btn) => {
         btn.addEventListener('click', closeMobileSheets);

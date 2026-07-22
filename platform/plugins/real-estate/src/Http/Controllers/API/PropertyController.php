@@ -3584,7 +3584,10 @@ class PropertyController extends BaseController
         if ($remote === '' && $store->isRemoteUrl($property->image_val)) {
             $remote = (string) $property->image_val;
         }
-        if ($remote === '') {
+        if ($remote !== '' && (str_contains($remote, '/rs:') || str_contains($remote, 'rs:fit') || preg_match('/^L3RycmVi/i', $remote))) {
+            $remote = \App\Support\SerikMediaUrl::resolveTrebRemoteUrl($remote) ?? '';
+        }
+        if ($remote === '' || (str_contains($remote, 'serik.ca') && str_contains($remote, 'rs:'))) {
             $remote = (string) ($this->getMediaUrl($listingKey) ?: '');
         }
         if ($remote === '') {
@@ -5998,7 +6001,10 @@ class PropertyController extends BaseController
                                 ? ($property->TransactionType === 'For Lease' ? 'For Lease' : 'For Sale')
                                 : $property->MlsStatus,
                             'mls_status' => $property->MlsStatus,
-                            'image' => $property->image_val ?: 'https://serik.ca/storage/avatars/1.jpg',
+                            'image' => \App\Support\SerikMediaUrl::mapListingCover(
+                                (string) $property->external_id,
+                                (string) ($property->image_val ?: '')
+                            ),
                             'price' => $property->price,
                             'ClosePrice' => $property->ClosePrice,
                             'bedrooms' => $property->number_bedroom,
@@ -6192,7 +6198,7 @@ class PropertyController extends BaseController
                         ? (($h['transaction_type'] ?? '') === 'For Lease' ? 'For Lease' : 'For Sale')
                         : $mls,
                     'mls_status' => $mls,
-                    'image' => '',
+                    'image' => \App\Support\SerikMediaUrl::mapListingCover((string) ($h['external_id'] ?? '')),
                     'price' => $h['price'] ?? 0,
                     'ClosePrice' => $h['close_price'] ?? null,
                     'bedrooms' => $h['number_bedroom'] ?? null,
@@ -6421,10 +6427,12 @@ class PropertyController extends BaseController
 
         $data = [];
         foreach ($query->get() as $row) {
-            $img = \App\Support\SerikMediaUrl::toPublic((string) $row->image_val);
-            if ($img === '') {
+            $listingKey = strtoupper(trim((string) $row->external_id));
+            if ($listingKey === '') {
                 continue;
             }
+
+            $img = \App\Support\SerikMediaUrl::mapListingCover($listingKey, (string) $row->image_val);
             $data[(string) $row->id] = $img;
             $data[strtoupper((string) $row->external_id)] = $img;
         }
