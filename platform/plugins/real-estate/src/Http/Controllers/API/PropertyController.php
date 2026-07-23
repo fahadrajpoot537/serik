@@ -31,6 +31,9 @@ use Botble\RealEstate\Supports\PropertyFulltextSearch;
 
 class PropertyController extends BaseController
 {
+    /** Sentinel stored in cache when no borrowable sibling exists (Cache::remember cannot store null). */
+    private const BORROW_COORDS_CACHE_MISS = '__borrow_coords_miss__';
+
     /**
      * List properties
      *
@@ -2279,41 +2282,50 @@ class PropertyController extends BaseController
             return null;
         }
 
-        $patterns = array_values(array_unique([
-            $streetNumber . ' ' . $streetName . '%',
-            $streetNumber . ' ' . strtoupper($streetName) . '%',
-            $streetNumber . ' ' . ucwords(strtolower($streetName)) . '%',
-        ]));
+        $cacheKey = 'borrowcoords:' . $streetNumber . ':' . strtoupper($streetName);
 
-        $sibling = DB::table('re_properties')
-            ->where('id', '!=', (int) $property->id)
-            ->where('latitude', '!=', 0)
-            ->where('longitude', '!=', 0)
-            ->where(function ($q) use ($patterns) {
-                foreach ($patterns as $i => $pattern) {
-                    $method = $i === 0 ? 'where' : 'orWhere';
-                    $q->{$method}(function ($inner) use ($pattern) {
-                        $inner->where('name', 'like', $pattern)
-                            ->orWhere('location', 'like', $pattern);
-                    });
-                }
-            })
-            ->orderByDesc('updated_at')
-            ->limit(1)
-            ->first(['latitude', 'longitude']);
+        $cached = Cache::remember($cacheKey, 86400, function () use ($property, $streetNumber, $streetName) {
+            $patterns = array_values(array_unique([
+                $streetNumber . ' ' . $streetName . '%',
+                $streetNumber . ' ' . strtoupper($streetName) . '%',
+                $streetNumber . ' ' . ucwords(strtolower($streetName)) . '%',
+            ]));
 
-        if (! $sibling) {
+            $sibling = DB::table('re_properties')
+                ->where('id', '!=', (int) $property->id)
+                ->where('latitude', '!=', 0)
+                ->where('longitude', '!=', 0)
+                ->where(function ($q) use ($patterns) {
+                    foreach ($patterns as $i => $pattern) {
+                        $method = $i === 0 ? 'where' : 'orWhere';
+                        $q->{$method}(function ($inner) use ($pattern) {
+                            $inner->where('name', 'like', $pattern)
+                                ->orWhere('location', 'like', $pattern);
+                        });
+                    }
+                })
+                ->limit(1)
+                ->first(['latitude', 'longitude']);
+
+            if (! $sibling) {
+                return self::BORROW_COORDS_CACHE_MISS;
+            }
+
+            $lat = (float) $sibling->latitude;
+            $lng = (float) $sibling->longitude;
+
+            if (! $this->isWithinOntario($lat, $lng)) {
+                return self::BORROW_COORDS_CACHE_MISS;
+            }
+
+            return ['lat' => $lat, 'lng' => $lng];
+        });
+
+        if ($cached === self::BORROW_COORDS_CACHE_MISS) {
             return null;
         }
 
-        $lat = (float) $sibling->latitude;
-        $lng = (float) $sibling->longitude;
-
-        if (! $this->isWithinOntario($lat, $lng)) {
-            return null;
-        }
-
-        return ['lat' => $lat, 'lng' => $lng];
+        return $cached;
     }
 
     /**
