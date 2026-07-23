@@ -101,7 +101,9 @@ class HandleFrontPages
                     ->setDescription(Str::words($description, 120));
 
                 $meta = new SeoOpenGraph();
-                if ($property->image) {
+                if ($property->cover_image) {
+                    $meta->setImage($property->cover_image);
+                } elseif ($property->image) {
                     $meta->setImage(RvMedia::getImageUrl($property->image));
                 }
                 $meta->setDescription($description);

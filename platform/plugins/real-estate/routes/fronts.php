@@ -71,7 +71,7 @@ if (defined('THEME_MODULE_SCREEN_NAME')) {
                     Route::post('register', [RegisterController::class, 'register'])->name('register.post');
                     Route::get('verify', [RegisterController::class, 'getVerify'])->name('verify');
                     Route::get(RealEstateHelper::getPageSlug('reset_password'), [ForgotPasswordController::class, 'showLinkRequestForm'])->name('password.request');
-                    Route::post('password/email', [ForgotPasswordController::class, 'sendResetLinkEmail'])->name('password.email');
+                    Route::post('password/email', [ForgotPasswordController::class, 'sendResetLinkEmail'])->middleware('throttle:5,1')->name('password.email');
                     Route::get('password/reset/{token}', [ResetPasswordController::class, 'showResetForm'])->name('password.reset');
                     Route::post('password/reset', [ResetPasswordController::class, 'reset'])->name('password.update');
                 });
@@ -93,7 +93,7 @@ if (defined('THEME_MODULE_SCREEN_NAME')) {
                 ->name('public.ajax.review.index');
         });
 
-        Route::group(['middleware' => ['web', 'core', 'account', EnsureAccountIsApproved::class, 'account.not_blocked', LocaleMiddleware::class]], function (): void {
+        Route::group(['middleware' => ['web', 'core', 'account', 'account.registration_valid', EnsureAccountIsApproved::class, 'account.not_blocked', LocaleMiddleware::class]], function (): void {
             Route::prefix('account')->name('public.account.')->group(function (): void {
                 Route::get('pending-approval', [PublicAccountController::class, 'getPendingApproval'])->name('pending-approval');
                 Route::get('dashboard', [PublicAccountController::class, 'getDashboard'])->name('dashboard');

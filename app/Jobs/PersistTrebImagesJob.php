@@ -67,6 +67,16 @@ class PersistTrebImagesJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
             return;
         }
 
+        if ($this->withGallery) {
+            $images = is_array($property->images) ? $property->images : [];
+            $galleryComplete = $images !== []
+                && collect($images)->every(fn ($path) => $store->storedWebpExists(is_string($path) ? $path : null));
+
+            if ($store->storedWebpExists($property->image_val) && $galleryComplete) {
+                return;
+            }
+        }
+
         try {
             $controller->persistTrebImagesForProperty($property, $this->withGallery);
         } catch (Throwable $e) {

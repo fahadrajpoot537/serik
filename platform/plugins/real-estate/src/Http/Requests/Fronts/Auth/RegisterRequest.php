@@ -14,18 +14,16 @@ class RegisterRequest extends Request
 {
     protected function prepareForValidation(): void
     {
-        foreach (['email', 'phone', 'username'] as $field) {
-            $value = $this->input($field);
+        $email = $this->input('email');
 
-            if (! $value) {
-                continue;
-            }
+        if (! $email) {
+            return;
+        }
 
-            $account = Account::query()->where($field, $value)->first();
+        $account = Account::query()->where('email', $email)->first();
 
-            if ($account) {
-                AccountRegistrationExpiry::deleteIfExpired($account);
-            }
+        if ($account) {
+            AccountRegistrationExpiry::deleteIfExpired($account);
         }
     }
 

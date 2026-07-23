@@ -36,9 +36,8 @@ class MailConfigServiceProvider extends ServiceProvider
 
                 $setting = $this->app->make(SettingStore::class);
 
-                $defaultMailDriver = function_exists('proc_open') ? 'sendmail' : 'smtp';
-
-                $mailDriver = $setting->get('email_driver', BaseHelper::hasDemoModeEnabled() ? $config->get('mail.default') : $defaultMailDriver);
+                $configuredDriver = $setting->get('email_driver');
+                $mailDriver = $configuredDriver ?: $config->get('mail.default');
 
                 $config->set([
                     'mail' => array_merge($config->get('mail'), [

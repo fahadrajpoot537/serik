@@ -535,15 +535,50 @@ Artisan::command('serik:test-mail {email? : Destination address} {--resend : For
 
     $driver = setting('email_driver', config('mail.default'));
     $fromNow = (string) setting('email_from_address');
+    $envDriver = (string) config('mail.default');
+    $adminDriverSet = (bool) setting()->get('email_driver');
 
     $this->table(['Key', 'Value'], [
         ['driver', $driver],
+        ['admin_driver_set', $adminDriverSet ? 'yes' : 'no (using .env MAIL_MAILER)'],
+        ['env MAIL_MAILER', $envDriver],
         ['from', $fromNow],
         ['to', $to],
-        ['resend_key', substr((string) setting('email_resend_key'), 0, 10) . '…'],
+        ['resend_key', substr((string) (setting('email_resend_key') ?: env('RESEND_API_KEY')), 0, 10) . '…'],
         ['config mail.default', config('mail.default')],
         ['config mail.from', config('mail.from.address')],
+        ['template account-registered', get_setting_email_status('plugins', 'real-estate', 'account-registered') ? 'enabled' : 'DISABLED'],
     ]);
+
+    if ($driver === 'resend') {
+        $resendKey = setting('email_resend_key') ?: env('RESEND_API_KEY');
+        if ($resendKey) {
+            try {
+                $domainsResponse = \Illuminate\Support\Facades\Http::withToken($resendKey)
+                    ->timeout(15)
+                    ->get('https://api.resend.com/domains');
+
+                if ($domainsResponse->successful()) {
+                    $domains = collect($domainsResponse->json('data') ?? []);
+                    $verified = $domains->filter(fn ($d) => ($d['status'] ?? '') === 'verified')->pluck('name')->all();
+                    $this->line('Resend verified domains: ' . ($verified !== [] ? implode(', ', $verified) : 'NONE'));
+                    $fromDomain = str_contains($fromNow, '@') ? substr(strrchr($fromNow, '@'), 1) : '';
+                    if ($fromDomain !== '' && ! in_array($fromDomain, $verified, true)) {
+                        $this->warn("From domain {$fromDomain} is NOT verified in Resend — delivery to Gmail will fail.");
+                    }
+                } else {
+                    $this->warn('Resend domains API: HTTP ' . $domainsResponse->status() . ' — ' . $domainsResponse->body());
+                }
+            } catch (\Throwable $e) {
+                $this->warn('Resend domains check failed: ' . $e->getMessage());
+            }
+        }
+    }
+
+    $highPending = \Illuminate\Support\Facades\DB::table('jobs')->where('queue', \App\Support\SerikQueue::high())->count();
+    $defaultPending = \Illuminate\Support\Facades\DB::table('jobs')->where('queue', 'default')->count();
+    $failed = \Illuminate\Support\Facades\DB::table('failed_jobs')->count();
+    $this->line("Queue: high={$highPending} default={$defaultPending} failed_jobs={$failed}");
 
     if ($driver === 'resend' && str_ends_with(strtolower($fromNow), '@resend.dev')) {
         $this->error('BLOCKED: from is still @resend.dev');
@@ -595,7 +630,34 @@ Artisan::command('serik:test-mail {email? : Destination address} {--resend : For
 
         if ($ok) {
             $this->info("Send accepted for {$to} from {$fromNow}.");
-            $this->warn('Open https://resend.com/emails — if status is Failed/403, domain is not verified or From domain mismatch.');
+            $this->warn('"Send accepted" means Resend API accepted the request — NOT guaranteed inbox delivery.');
+            $this->line('Check https://resend.com/emails for delivery/bounce/spam status.');
+
+            if ($driver === 'resend') {
+                $resendKey = setting('email_resend_key') ?: env('RESEND_API_KEY');
+                if ($resendKey) {
+                    try {
+                        $recent = \Illuminate\Support\Facades\Http::withToken($resendKey)
+                            ->timeout(15)
+                            ->get('https://api.resend.com/emails', ['limit' => 3]);
+
+                        if ($recent->successful()) {
+                            $rows = collect($recent->json('data') ?? [])->map(fn ($row) => [
+                                $row['id'] ?? '-',
+                                $row['to'][0] ?? '-',
+                                $row['from'] ?? '-',
+                                $row['last_event'] ?? ($row['status'] ?? '-'),
+                                $row['created_at'] ?? '-',
+                            ])->all();
+
+                            if ($rows !== []) {
+                                $this->table(['id', 'to', 'from', 'status', 'created_at'], $rows);
+                            }
+                        }
+                    } catch (\Throwable) {
+                    }
+                }
+            }
 
             return 0;
         }
@@ -3574,6 +3636,7 @@ Artisan::command('serik:repair-listing-history
 Artisan::command('serik:treb-images-webp
     {--chunk=100 : Properties per batch}
     {--gallery : Also download and convert full gallery}
+    {--listing= : Process a single MLS listing key only}
     {--fresh : Clear checkpoint and start from the beginning}
     {--max-runtime=0 : Stop after N seconds (0 = run until complete)}
     {--delay=50 : Milliseconds between AMP image fetches}
@@ -3581,12 +3644,33 @@ Artisan::command('serik:treb-images-webp
     @set_time_limit(0);
     @ini_set('memory_limit', '512M');
 
+    $singleListing = strtoupper(trim((string) $this->option('listing')));
     $chunkSize = max(10, min(500, (int) $this->option('chunk')));
     $withGallery = (bool) $this->option('gallery');
     $maxRuntime = max(0, (int) $this->option('max-runtime'));
     $delayMs = max(0, min(2000, (int) $this->option('delay')));
     $deadline = $maxRuntime > 0 ? microtime(true) + $maxRuntime : null;
     $stateKey = 'serik_treb_images_webp_state';
+
+    $controller = app(PropertyController::class);
+    $store = app(\App\Support\TrebImageStore::class);
+
+    if ($singleListing !== '') {
+        $property = \Botble\RealEstate\Models\Property::query()
+            ->where('external_id', $singleListing)
+            ->first();
+
+        if (! $property) {
+            $this->error("Listing {$singleListing} not found.");
+
+            return 1;
+        }
+
+        $ok = $controller->persistTrebImagesForProperty($property, true);
+        $this->info($ok ? "Converted {$singleListing}" : "No changes for {$singleListing}");
+
+        return 0;
+    }
 
     if ((bool) $this->option('fresh')) {
         Cache::forget($stateKey);
@@ -3602,9 +3686,6 @@ Artisan::command('serik:treb-images-webp
         'failed' => is_array($saved) ? (int) ($saved['failed'] ?? 0) : 0,
     ];
     $startedAt = is_array($saved) ? (float) ($saved['started_at'] ?? microtime(true)) : microtime(true);
-
-    $controller = app(PropertyController::class);
-    $store = app(\App\Support\TrebImageStore::class);
 
     $needsWork = function (\Botble\RealEstate\Models\Property $property) use ($store, $withGallery): bool {
         if (! $store->storedWebpExists($property->image_val)) {

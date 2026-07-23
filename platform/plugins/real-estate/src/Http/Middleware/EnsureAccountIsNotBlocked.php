@@ -12,7 +12,7 @@ class EnsureAccountIsNotBlocked
     {
         $user = $request->user('account');
 
-        if (! auth('account')->check()) {
+        if (! $user) {
             return redirect()->route('public.account.login');
         }
 

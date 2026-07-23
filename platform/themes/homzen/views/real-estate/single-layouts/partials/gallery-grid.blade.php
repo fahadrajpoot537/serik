@@ -1,14 +1,15 @@
 @php
+    use App\Support\SerikMediaUrl;
+
     $model = $model ?? $property ?? null;
     $galleryImages = [];
 
-    if ($model && $model->images) {
-        foreach ((array) $model->images as $image) {
-            $url = RvMedia::getImageUrl($image);
-            if ($url) {
-                $galleryImages[] = $url;
-            }
-        }
+    if ($model) {
+        $galleryImages = SerikMediaUrl::mapListingGalleryUrls(
+            $model->external_id ?? null,
+            $model->image_val ?? null,
+            is_array($model->images) ? $model->images : []
+        );
     }
 @endphp
 
@@ -19,7 +20,7 @@
         @foreach($galleryImages as $image)
             @if($loop->first)
                 <div class="item1 box-img">
-                    {{ RvMedia::image($image, $model->name) }}
+                    <img src="{{ $image }}" alt="{{ $model->name }}" class="img-fluid w-100" loading="eager" onerror="this.src='{{ RvMedia::getDefaultImage() }}'">
                     <div class="box-btn">
                         <button type="button" class="tf-btn primary js-property-gallery-open-all">
                             {{ __('View All Photos (:count)', ['count' => count($galleryImages)]) }}
@@ -31,7 +32,7 @@
                    class="item-{{ $loop->iteration }} box-img js-property-gallery-open"
                    data-gallery-index="{{ $loop->index }}"
                    @style(['display: none' => $loop->iteration > 5])>
-                    {{ RvMedia::image($image, $model->name, lazy: false) }}
+                    <img src="{{ $image }}" alt="{{ $model->name }}" class="img-fluid w-100" loading="lazy" onerror="this.style.display='none'">
                 </a>
             @endif
         @endforeach

@@ -5321,17 +5321,19 @@ document.addEventListener("DOMContentLoaded", function () {
     let isMapUserLoggedIn = @json(auth('account')->check() || auth()->check());
     const MAP_SOLD_STATUSES = ['Sold', 'Sold Conditional', 'Sold Conditional Escape', 'Leased', 'Leased Conditional'];
 
-    fetch('/api/v1/auth/session-status', {
-        credentials: 'same-origin',
-        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-    })
-        .then((response) => (response.ok ? response.json() : null))
-        .then((data) => {
-            if (data && data.logged_in) {
-                isMapUserLoggedIn = true;
-            }
+    if (!isMapUserLoggedIn) {
+        fetch('/api/v1/auth/session-status', {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
         })
-        .catch(() => {});
+            .then((response) => (response.ok ? response.json() : null))
+            .then((data) => {
+                if (data && data.logged_in) {
+                    isMapUserLoggedIn = true;
+                }
+            })
+            .catch(() => {});
+    }
 
     window.isMapSoldListing = function (status, props) {
         if (props && props.requires_login) {

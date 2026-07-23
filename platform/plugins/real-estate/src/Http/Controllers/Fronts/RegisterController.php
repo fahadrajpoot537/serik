@@ -109,11 +109,6 @@ class RegisterController extends BaseController
     {
         abort_unless(RealEstateHelper::isRegisterEnabled(), 404);
 
-        $existing = Account::query()->where('email', $request->input('email'))->first();
-        if ($existing && AccountRegistrationExpiry::deleteIfExpired($existing)) {
-            $existing = null;
-        }
-
         if (!$request->has('username')) {
             $request->merge([
                 'username' => Account::generateUsername(
@@ -169,12 +164,6 @@ class RegisterController extends BaseController
         //         ->setMessage($message);
         // }
 
-        $account->confirmed_at = Carbon::now();
-
-        $account->is_public_profile = false;
-
-        $account->save();
-
         // Do not auto-login. The user must login with their generated PIN.
         // $this->guard()->login($account);
 
@@ -194,6 +183,8 @@ class RegisterController extends BaseController
             'phone' => $data['phone'],
             'password' => Hash::make($data['password']),
             'password_expire' => Carbon::now(),
+            'confirmed_at' => Carbon::now(),
+            'is_public_profile' => false,
         ]);
     }
 

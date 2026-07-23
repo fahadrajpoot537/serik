@@ -94,53 +94,57 @@ class LoginController extends BaseController
         return url()->previous();
     }
 
-  // use Carbon\Carbon;
-
 protected function attemptLogin(Request $request)
 {
-    if ($this->guard()->validate($this->credentials($request))) {
-        $account = $this->guard()->getLastAttempted();
+    $credentials = $this->credentials($request);
 
-        // EMAIL VERIFICATION CHECK
-        if (setting('verify_account_email', false) && empty($account->confirmed_at)) {
-            throw ValidationException::withMessages([
-                'confirmation' => [
-                    trans('plugins/real-estate::account.email_not_confirmed', [
-                        'resend_link' => route('public.account.resend_confirmation', ['email' => $account->email]),
-                    ]),
-                ],
-            ]);
-        }
-
-        // BLOCKED USER CHECK
-        if ($account->blocked_at) {
-            $message = trans('plugins/real-estate::account.blocked_account_message');
-
-            if ($account->blocked_reason) {
-                $message .= ' ' . trans('plugins/real-estate::account.blocked_reason_label', [
-                    'reason' => $account->blocked_reason
-                ]);
-            }
-
-            throw ValidationException::withMessages([
-                'email' => [$message],
-            ]);
-        }
-
-        // TREB: registration expires after 90 days — delete account so user can re-register
-        if (AccountRegistrationExpiry::isExpired($account)) {
-            $this->guard()->logout();
-            $account->delete();
-
-            throw ValidationException::withMessages([
-                'email' => [AccountRegistrationExpiry::expiredMessage()],
-            ]);
-        }
-
-        return $this->baseAttemptLogin($request);
+    if (! $this->guard()->validate($credentials)) {
+        return false;
     }
 
-    return false;
+    $account = $this->guard()->getLastAttempted();
+
+    // EMAIL VERIFICATION CHECK
+    if (setting('verify_account_email', false) && empty($account->confirmed_at)) {
+        throw ValidationException::withMessages([
+            'confirmation' => [
+                trans('plugins/real-estate::account.email_not_confirmed', [
+                    'resend_link' => route('public.account.resend_confirmation', ['email' => $account->email]),
+                ]),
+            ],
+        ]);
+    }
+
+    // BLOCKED USER CHECK
+    if ($account->blocked_at) {
+        $message = trans('plugins/real-estate::account.blocked_account_message');
+
+        if ($account->blocked_reason) {
+            $message .= ' ' . trans('plugins/real-estate::account.blocked_reason_label', [
+                'reason' => $account->blocked_reason,
+            ]);
+        }
+
+        throw ValidationException::withMessages([
+            'email' => [$message],
+        ]);
+    }
+
+    // TREB: registration expires after 90 days — delete account so user can re-register
+    if (AccountRegistrationExpiry::isExpired($account)) {
+        $this->guard()->logout();
+        $account->delete();
+
+        throw ValidationException::withMessages([
+            'email' => [AccountRegistrationExpiry::expiredMessage()],
+        ]);
+    }
+
+    $this->guard()->login($account, $request->boolean('remember'));
+    $this->clearLoginAttempts($request);
+    $request->session()->regenerate();
+
+    return true;
 }
 
     public function username()

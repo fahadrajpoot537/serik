@@ -66,11 +66,89 @@ final class SerikMediaUrl
         return self::placeholder();
     }
 
+    /**
+     * Browser-safe gallery URLs for property detail pages.
+     * Never exposes TREB CDN URLs — uses local WebP paths when available.
+     *
+     * @param  array<int, string>  $dbImages
+     * @return array<int, string>
+     */
+    public static function mapListingGalleryUrls(?string $listingKey, ?string $imageVal = null, array $dbImages = []): array
+    {
+        $listingKey = strtoupper(trim((string) $listingKey));
+        $urls = [];
+
+        foreach ($dbImages as $path) {
+            if (! is_string($path) || trim($path) === '') {
+                continue;
+            }
+
+            if (self::isRemoteUrl($path)) {
+                continue;
+            }
+
+            $public = self::toPublic($path);
+            if (! str_contains($public, 'placeholder.png')) {
+                $urls[] = $public;
+            }
+        }
+
+        if ($urls !== []) {
+            return array_values(array_unique($urls));
+        }
+
+        if ($listingKey !== '') {
+            $diskUrls = self::discoverLocalTrebGalleryUrls($listingKey);
+            if ($diskUrls !== []) {
+                return $diskUrls;
+            }
+        }
+
+        $cover = self::mapListingCover($listingKey !== '' ? $listingKey : null, $imageVal);
+        if ($cover !== '' && ! str_contains($cover, 'placeholder.png')) {
+            return [$cover];
+        }
+
+        return [];
+    }
+
     public static function trebCoverPublicUrl(string $listingKey): string
     {
         $listingKey = strtoupper(preg_replace('/[^A-Z0-9]/', '', $listingKey));
 
         return CanonicalUrl::normalize(asset('storage/properties/treb/' . $listingKey . '/cover.webp'));
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private static function discoverLocalTrebGalleryUrls(string $listingKey): array
+    {
+        $listingKey = strtoupper(preg_replace('/[^A-Z0-9]/', '', $listingKey));
+        if ($listingKey === '') {
+            return [];
+        }
+
+        $urls = [];
+        $coverRelative = 'properties/treb/' . $listingKey . '/cover.webp';
+        if (self::resolveExistingRelativePath($coverRelative) !== null) {
+            $urls[] = self::toPublic($coverRelative);
+        }
+
+        for ($i = 1; $i <= 25; $i++) {
+            $relative = 'properties/treb/' . $listingKey . '/' . sprintf('%02d.webp', $i);
+            if (self::resolveExistingRelativePath($relative) === null) {
+                if ($i === 1 && $urls === []) {
+                    continue;
+                }
+
+                break;
+            }
+
+            $urls[] = self::toPublic($relative);
+        }
+
+        return array_values(array_unique($urls));
     }
 
     /**

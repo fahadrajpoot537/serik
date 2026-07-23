@@ -1,18 +1,20 @@
 @php
+    use App\Jobs\PersistTrebImagesJob;
+    use App\Support\SerikMediaUrl;
+    use Illuminate\Support\Facades\Cache;
     use Theme\homzen\Supports\TrebPropertyHelper;
 
-    $images = TrebPropertyHelper::getPropertyImages(
+    $images = SerikMediaUrl::mapListingGalleryUrls(
         $property->external_id ?? null,
         $property->image_val ?? null,
-        false
+        is_array($property->images) ? $property->images : []
     );
 
-    if (empty($images) && ! empty($property->images) && is_array($property->images)) {
-        foreach ($property->images as $img) {
-            $url = RvMedia::getImageUrl($img);
-            if ($url) {
-                $images[] = $url;
-            }
+    if (count($images) <= 1 && ! empty($property->external_id) && $property->id) {
+        $dispatchKey = 'serik_gallery_job_' . $property->id;
+        if (! Cache::has($dispatchKey)) {
+            Cache::put($dispatchKey, 1, 3600);
+            PersistTrebImagesJob::dispatch((int) $property->id, true);
         }
     }
 

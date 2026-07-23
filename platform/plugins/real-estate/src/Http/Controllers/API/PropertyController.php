@@ -6504,7 +6504,14 @@ class PropertyController extends BaseController
     {
         $property = Property::where('external_id', $listingKey)->first();
 
-        if ($property && $property->isSoldHistory() && !(auth('account')->check() || auth()->check())) {
+        if (! $property) {
+            return response()->json([
+                'images' => [],
+                'count' => 0,
+            ]);
+        }
+
+        if ($property->isSoldHistory() && !(auth('account')->check() || auth()->check())) {
             return response()->json([
                 'success' => false,
                 'message' => 'Unauthenticated access to sold property images',
@@ -6512,10 +6519,19 @@ class PropertyController extends BaseController
             ], 401);
         }
 
-        $images = TrebPropertyHelper::getPropertyImages(
+        $images = \App\Support\SerikMediaUrl::mapListingGalleryUrls(
             $listingKey,
-            $property->image_val ?? null
+            $property->image_val ?? null,
+            is_array($property->images ?? null) ? $property->images : []
         );
+
+        if (count($images) <= 1) {
+            $dispatchKey = 'serik_gallery_job_' . $property->id;
+            if (! \Illuminate\Support\Facades\Cache::has($dispatchKey)) {
+                \Illuminate\Support\Facades\Cache::put($dispatchKey, 1, 3600);
+                \App\Jobs\PersistTrebImagesJob::dispatch((int) $property->id, true);
+            }
+        }
 
         return response()->json([
             'images' => $images,

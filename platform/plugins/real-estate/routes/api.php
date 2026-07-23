@@ -178,7 +178,7 @@ Route::group([
 
     Route::get('addpropertiesimages', 'PropertyController@importAllPropertyImages');
     Route::get('mediaapi/{listingKey}', 'PropertyController@mediaapi');
-    Route::post('check-email', [RegisterController::class, 'checkEmail']);
+    Route::post('check-email', [RegisterController::class, 'checkEmail'])->middleware('throttle:30,1');
     Route::get('properties/search', 'PropertyController@getSearch');
     Route::get('properties/filters', 'PropertyController@getFilters');
     Route::get('properties/{slug}', 'PropertyController@findBySlug');

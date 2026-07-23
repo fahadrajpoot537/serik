@@ -192,7 +192,6 @@ class RealEstateServiceProvider extends ServiceProvider
         $router->aliasMiddleware('account.guest', RedirectIfAccount::class);
         $router->aliasMiddleware('account.not_blocked', EnsureAccountIsNotBlocked::class);
         $router->aliasMiddleware('account.registration_valid', EnsureAccountRegistrationNotExpired::class);
-        $router->pushMiddlewareToGroup('web', EnsureAccountRegistrationNotExpired::class);
 
         $loader = AliasLoader::getInstance();
         $loader->alias('RealEstateHelper', RealEstateHelper::class);

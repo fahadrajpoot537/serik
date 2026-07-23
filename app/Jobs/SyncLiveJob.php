@@ -156,7 +156,7 @@ class SyncLiveJob implements ShouldQueue, ShouldBeUnique
 
             foreach ($newIds as $propertyId) {
                 try {
-                    PersistTrebImagesJob::dispatch((int) $propertyId);
+                    PersistTrebImagesJob::dispatch((int) $propertyId, true);
 
                     GeocodeState::markQueued($propertyId);
 

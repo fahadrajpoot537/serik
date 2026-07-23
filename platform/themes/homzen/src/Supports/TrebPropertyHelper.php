@@ -912,17 +912,26 @@ class TrebPropertyHelper
             $property = \Botble\RealEstate\Models\Property::query()
                 ->where('external_id', $normalizedKey)
                 ->orWhere('external_id', $listingKey)
-                ->first(['images', 'image_val']);
+                ->first(['images', 'image_val', 'external_id']);
 
-            if ($property && is_array($property->images) && count($property->images) > 0) {
-                return array_values(array_filter(array_map(
-                    static fn ($path) => \App\Support\SerikMediaUrl::toPublic(is_string($path) ? $path : ''),
-                    $property->images
-                )));
-            }
+            if ($property) {
+                $browserSafe = \App\Support\SerikMediaUrl::mapListingGalleryUrls(
+                    (string) ($property->external_id ?? $normalizedKey),
+                    $property->image_val ?? $imageVal,
+                    is_array($property->images) ? $property->images : []
+                );
 
-            if ($property && ! empty($property->image_val) && ! str_starts_with((string) $property->image_val, 'http')) {
-                return [\App\Support\SerikMediaUrl::toPublic((string) $property->image_val)];
+                if ($browserSafe !== []) {
+                    return $browserSafe;
+                }
+            } elseif (! $allowRemote) {
+                $browserSafe = \App\Support\SerikMediaUrl::mapListingGalleryUrls($normalizedKey, $imageVal, []);
+
+                if ($browserSafe !== []) {
+                    return $browserSafe;
+                }
+
+                return [];
             }
 
             $cacheKeys = [
@@ -934,16 +943,14 @@ class TrebPropertyHelper
             foreach ($cacheKeys as $cacheKey) {
                 $cached = Cache::get($cacheKey);
                 if (is_array($cached) && count($cached) > 0) {
-                    return $cached;
+                    return $allowRemote
+                        ? $cached
+                        : \App\Support\SerikMediaUrl::mapListingGalleryUrls($normalizedKey, $imageVal, []);
                 }
             }
 
             if (! $allowRemote || ! self::canFetchRemoteAmp()) {
-                if (! empty($imageVal) && str_starts_with($imageVal, 'http')) {
-                    return [$imageVal];
-                }
-
-                return [];
+                return \App\Support\SerikMediaUrl::mapListingGalleryUrls($normalizedKey, $imageVal, []);
             }
 
             // Single lightweight AMP Media call — always fetch when cache is cold.
@@ -962,7 +969,7 @@ class TrebPropertyHelper
         }
 
         if (! empty($imageVal) && str_starts_with($imageVal, 'http')) {
-            return [$imageVal];
+            return $allowRemote ? [$imageVal] : [];
         }
 
         return [];
@@ -2315,7 +2322,7 @@ class TrebPropertyHelper
 
     protected static function schedulePriceChangesWarm(string $listingKey, ?array $local, string $cacheKey): void
     {
-        app()->terminating(function () use ($listingKey, $local, $cacheKey): void {
+        dispatch(function () use ($listingKey, $local, $cacheKey): void {
             if (Cache::has($cacheKey)) {
                 return;
             }
@@ -2348,7 +2355,7 @@ class TrebPropertyHelper
                 } catch (\Throwable) {
                 }
             }
-        });
+        })->onQueue(\App\Support\SerikQueue::low())->afterResponse();
     }
 
     /**
@@ -2387,9 +2394,6 @@ class TrebPropertyHelper
 
         $imageVal = $local['image_val'] ?? $local['image'] ?? null;
         $images = self::getPropertyImages($listingKey, is_string($imageVal) ? $imageVal : null, false);
-        if ($images === [] && is_string($imageVal) && str_starts_with($imageVal, 'http')) {
-            $images = [$imageVal];
-        }
 
         $description = '';
         if (! empty($local['content'])) {
@@ -2646,7 +2650,7 @@ class TrebPropertyHelper
         ?array $ampRecord,
         string $cacheKey
     ): void {
-        app()->terminating(function () use ($listingKey, $local, $ampRecord, $cacheKey): void {
+        dispatch(function () use ($listingKey, $local, $ampRecord, $cacheKey): void {
             if (Cache::has($cacheKey)) {
                 return;
             }
@@ -2660,7 +2664,7 @@ class TrebPropertyHelper
                 } catch (\Throwable) {
                 }
             }
-        });
+        })->onQueue(\App\Support\SerikQueue::low())->afterResponse();
     }
 
     /**
