@@ -194,33 +194,22 @@ $app->booting(function () use ($app): void {
         \App\Support\SerikSiteMapManager::class
     );
 
-    try {
-        $logDir = storage_path('logs');
-        if (! is_dir($logDir)) {
-            @mkdir($logDir, 0775, true);
-        }
-        $probe = $logDir . DIRECTORY_SEPARATOR . '.write_probe';
-        $ok = @file_put_contents($probe, (string) time()) !== false;
-        if ($ok) {
-            @unlink($probe);
-
-            return;
-        }
-
-        config(['logging.default' => 'errorlog']);
-        $app->forgetInstance('log');
-        \Illuminate\Support\Facades\Log::clearResolvedInstances();
-    } catch (\Throwable) {
-        config(['logging.default' => 'errorlog']);
-        $app->forgetInstance('log');
-        \Illuminate\Support\Facades\Log::clearResolvedInstances();
-    }
+    \App\Support\SerikLogging::ensureWritableOrFallback($app);
 });
 
 $app->booted(function () use ($app): void {
     $app->make('view')->composer('packages/theme::partials.header', function (): void {
         \App\Support\SerikSeo::apply();
     });
+
+    add_filter('shortcode_should_skip_lazy_loading', static function (bool $skip, string $name, $compiled): bool {
+        return $skip || \App\Support\SerikHomepage::shouldServerRenderShortcode($name, $compiled);
+    }, 10, 3);
+
+    if (class_exists(\Botble\RealEstate\Models\Property::class) && ! defined('SERIK_PROPERTY_OBSERVER_REGISTERED')) {
+        \Botble\RealEstate\Models\Property::observe(\App\Observers\PropertyHomepageCacheObserver::class);
+        define('SERIK_PROPERTY_OBSERVER_REGISTERED', true);
+    }
 });
 
 return $app;

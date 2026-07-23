@@ -4,6 +4,7 @@ namespace App\Observers;
 
 use App\Support\HomepageFeaturedCache;
 use App\Support\RealEstateCountCache;
+use App\Support\ShortcodeRenderCache;
 use Botble\RealEstate\Models\Property;
 
 class PropertyHomepageCacheObserver
@@ -22,8 +23,6 @@ class PropertyHomepageCacheObserver
     {
         HomepageFeaturedCache::bump();
         RealEstateCountCache::bump();
-
-        \Illuminate\Support\Facades\Cache::forget('re_properties_min_square_v1');
-        \Illuminate\Support\Facades\Cache::forget('re_properties_max_square_v1');
+        ShortcodeRenderCache::bumpPropertyDependents();
     }
 }

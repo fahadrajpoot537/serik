@@ -32,7 +32,7 @@ class GeoBlockMiddleware
         if (! $country) {
             $country = Cache::remember('geoip_country_' . $ip, 86400, function () use ($ip) {
                 try {
-                    $response = Http::timeout(3)->get('http://ip-api.com/json/' . $ip);
+                    $response = Http::timeout(1)->get('http://ip-api.com/json/' . $ip);
                     if ($response->successful() && $response->json('status') === 'success') {
                         return strtoupper((string) $response->json('countryCode'));
                     }
@@ -41,7 +41,7 @@ class GeoBlockMiddleware
                 }
 
                 try {
-                    $response = Http::timeout(3)->get('https://ipapi.co/' . $ip . '/json/');
+                    $response = Http::timeout(1)->get('https://ipapi.co/' . $ip . '/json/');
                     if ($response->successful()) {
                         return strtoupper((string) $response->json('country_code'));
                     }

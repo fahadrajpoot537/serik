@@ -11,6 +11,19 @@ namespace App\Support;
  */
 final class BootstrapCacheGuard
 {
+    /**
+     * Markers that appear in a healthy Botble config cache file.
+     *
+     * @var list<string>
+     */
+    private const VALID_CONFIG_MARKERS = [
+        'plugins.real-estate',
+        'plugins/real-estate::',
+        "'real-estate' =>",
+        'core.base.general',
+        "'core' =>",
+    ];
+
     public static function healStaleCaches(): void
     {
         self::healConfigCache();
@@ -21,22 +34,34 @@ final class BootstrapCacheGuard
     {
         $path = self::bootstrapCachePath('config.php');
 
-        if (! is_file($path)) {
+        if (! is_file($path) || ! is_readable($path)) {
             return;
         }
 
-        $contents = @file_get_contents($path);
-
-        if ($contents === false) {
+        $handle = @fopen($path, 'rb');
+        if ($handle === false) {
             return;
         }
 
-        if (
-            ! str_contains($contents, 'plugins.real-estate')
-            && ! str_contains($contents, "'plugins'")
-        ) {
-            @unlink($path);
+        $sample = (string) @fread($handle, 65536);
+        @fclose($handle);
+
+        if ($sample === '' || self::isValidBotbleConfigCache($sample)) {
+            return;
         }
+
+        @unlink($path);
+    }
+
+    private static function isValidBotbleConfigCache(string $contents): bool
+    {
+        foreach (self::VALID_CONFIG_MARKERS as $marker) {
+            if (str_contains($contents, $marker)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static function healRoutesCache(): void

@@ -9,16 +9,29 @@ use Illuminate\Support\Facades\DB;
 
 final class RealEstateCountCache
 {
+    private const VERSION_KEY = 're_count_cache_version_v1';
+
     private const CATEGORY_KEY = 're_category_property_counts_v1';
 
     private const AGENT_KEY = 're_agent_property_counts_v1';
+
+    private const MIN_SQUARE_KEY = 're_properties_min_square_v1';
+
+    private const MAX_SQUARE_KEY = 're_properties_max_square_v1';
+
+    public static function version(): int
+    {
+        return (int) Cache::get(self::VERSION_KEY, 1);
+    }
 
     /**
      * @return Collection<int|string, int>
      */
     public static function categoryPropertyCounts(): Collection
     {
-        return Cache::remember(self::CATEGORY_KEY, 3600, function (): Collection {
+        $version = self::version();
+
+        return Cache::remember(self::CATEGORY_KEY.':'.$version, 3600, function (): Collection {
             return DB::table('re_property_categories')
                 ->select('category_id', DB::raw('COUNT(*) as aggregate'))
                 ->groupBy('category_id')
@@ -32,7 +45,9 @@ final class RealEstateCountCache
      */
     public static function agentPropertyCounts(): Collection
     {
-        return Cache::remember(self::AGENT_KEY, 3600, function (): Collection {
+        $version = self::version();
+
+        return Cache::remember(self::AGENT_KEY.':'.$version, 3600, function (): Collection {
             return DB::table('re_properties')
                 ->select('author_id', DB::raw('COUNT(*) as aggregate'))
                 ->where('moderation_status', ModerationStatusEnum::APPROVED)
@@ -43,9 +58,38 @@ final class RealEstateCountCache
         });
     }
 
+    public static function minSquare(): int
+    {
+        $version = self::version();
+
+        return (int) Cache::remember(self::MIN_SQUARE_KEY.':'.$version, 3600, function (): int {
+            $square = DB::table('re_properties')
+                ->where('moderation_status', ModerationStatusEnum::APPROVED)
+                ->whereNotNull('square')
+                ->where('square', '>', 0)
+                ->min('square');
+
+            return $square ? (int) ceil((float) $square) : 0;
+        });
+    }
+
+    public static function maxSquare(): int
+    {
+        $version = self::version();
+
+        return (int) Cache::remember(self::MAX_SQUARE_KEY.':'.$version, 3600, function (): int {
+            $square = DB::table('re_properties')
+                ->where('moderation_status', ModerationStatusEnum::APPROVED)
+                ->whereNotNull('square')
+                ->where('square', '>', 0)
+                ->max('square');
+
+            return $square ? (int) ceil((float) $square) : 0;
+        });
+    }
+
     public static function bump(): void
     {
-        Cache::forget(self::CATEGORY_KEY);
-        Cache::forget(self::AGENT_KEY);
+        Cache::forever(self::VERSION_KEY, self::version() + 1);
     }
 }

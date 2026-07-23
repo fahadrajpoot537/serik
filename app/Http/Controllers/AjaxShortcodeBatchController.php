@@ -125,7 +125,10 @@ class AjaxShortcodeBatchController extends BaseController
             $cacheEnabled = false;
         }
 
-        $cacheKey = 'shortcode_ajax_'.md5($name.serialize($attributes).$locale);
+        $renderVersion = class_exists(\App\Support\ShortcodeRenderCache::class)
+            ? \App\Support\ShortcodeRenderCache::version($name)
+            : 1;
+        $cacheKey = 'shortcode_ajax_v'.$renderVersion.'_'.md5($name.serialize($attributes).$locale);
 
         if ($cacheEnabled) {
             $cacheable = $this->isCacheable($name);

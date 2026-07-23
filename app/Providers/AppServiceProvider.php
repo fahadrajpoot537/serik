@@ -2,13 +2,12 @@
 
 namespace App\Providers;
 
-use App\Observers\PropertyHomepageCacheObserver;
 use App\Support\CanonicalUrl;
 use App\Support\ImageAlt;
-use App\Support\SerikHomepage;
 use App\Support\SerikSeo;
+use App\Support\SerikLogging;
 use App\Support\TrustBadgeImageAlt;
-use Botble\RealEstate\Models\Property;
+use Illuminate\Foundation\Application;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
@@ -51,13 +50,11 @@ class AppServiceProvider extends ServiceProvider
 
         CanonicalUrl::forceApplicationUrl();
 
-        add_filter('core_seo_canonical', function (string $url): string {
-            return CanonicalUrl::normalize($url);
-        }, 999);
-
-        add_action(BASE_ACTION_PUBLIC_RENDER_SINGLE, function (string $screen, object $data): void {
-            SerikSeo::applyForModel($screen, $data);
-        }, 9999, 2);
+        if (defined('BASE_ACTION_PUBLIC_RENDER_SINGLE')) {
+            add_action(BASE_ACTION_PUBLIC_RENDER_SINGLE, function (string $screen, object $data): void {
+                SerikSeo::applyForModel($screen, $data);
+            }, 9999, 2);
+        }
 
         Event::listen(JobFailed::class, function (JobFailed $event): void {
             $payload = $event->job->payload();
@@ -75,56 +72,11 @@ class AppServiceProvider extends ServiceProvider
             ]);
         });
 
-        $rewriteLegacyMediaUrls = static function (?string $html): string {
-            if (! is_string($html) || $html === '') {
-                return (string) $html;
-            }
-
-            $origin = CanonicalUrl::origin();
-
-            $html = preg_replace(
-                '#https?://[^"\']*mytemp\.website/storage/#i',
-                $origin . '/storage/',
-                $html
-            ) ?? $html;
-
-            return preg_replace(
-                '#(["\'])storage/([^"\']+)#i',
-                '$1' . $origin . '/storage/$2',
-                $html
-            ) ?? $html;
-        };
-
-        add_filter(THEME_FRONT_HEADER, $rewriteLegacyMediaUrls, 999);
-        add_filter(THEME_FRONT_FOOTER, $rewriteLegacyMediaUrls, 999);
-        add_filter(THEME_FRONT_BODY, $rewriteLegacyMediaUrls, 999);
-        add_filter('theme_logo_image', static function ($html) use ($rewriteLegacyMediaUrls) {
-            return $rewriteLegacyMediaUrls((string) $html);
+        add_filter('core_seo_canonical', function (string $url): string {
+            return CanonicalUrl::normalize($url);
         }, 999);
 
-        add_filter(PAGE_FILTER_FRONT_PAGE_CONTENT, static function (?string $html): ?string {
-            if (! is_string($html) || $html === '') {
-                return $html;
-            }
-
-            return TrustBadgeImageAlt::apply($html);
-        }, 1200);
-
-        add_filter(MENU_FILTER_NODE_URL, static function (?string $url): ?string {
-            if (! is_string($url) || $url === '') {
-                return $url;
-            }
-
-            return \App\Support\MenuUrl::resolve($url);
-        }, 1200);
-
-        add_filter('shortcode_should_skip_lazy_loading', static function (bool $skip, string $name, $compiled): bool {
-            return $skip || SerikHomepage::shouldServerRenderShortcode($name, $compiled);
-        }, 10, 3);
-
-        if (class_exists(Property::class)) {
-            Property::observe(PropertyHomepageCacheObserver::class);
-        }
+        $this->registerBotbleHooks();
 
         add_filter('core_media_image', static function ($html, $url, $alt, $attributes, $secure) {
             if (! is_string($url) || trim($url) === '') {
@@ -158,29 +110,80 @@ class AppServiceProvider extends ServiceProvider
         }, 20, 5);
     }
 
+    protected function registerBotbleHooks(): void
+    {
+        if (! defined('THEME_FRONT_HEADER')) {
+            $this->app->booted(function (): void {
+                $this->registerBotbleThemeHooks();
+            });
+
+            return;
+        }
+
+        $this->registerBotbleThemeHooks();
+    }
+
+    protected function registerBotbleThemeHooks(): void
+    {
+        if (! defined('THEME_FRONT_HEADER')) {
+            return;
+        }
+
+        $rewriteLegacyMediaUrls = static function (?string $html): string {
+            if (! is_string($html) || $html === '') {
+                return (string) $html;
+            }
+
+            $origin = CanonicalUrl::origin();
+
+            $html = preg_replace(
+                '#https?://[^"\']*mytemp\.website/storage/#i',
+                $origin . '/storage/',
+                $html
+            ) ?? $html;
+
+            return preg_replace(
+                '#(["\'])storage/([^"\']+)#i',
+                '$1' . $origin . '/storage/$2',
+                $html
+            ) ?? $html;
+        };
+
+        add_filter(THEME_FRONT_HEADER, $rewriteLegacyMediaUrls, 999);
+        add_filter(THEME_FRONT_FOOTER, $rewriteLegacyMediaUrls, 999);
+        add_filter(THEME_FRONT_BODY, $rewriteLegacyMediaUrls, 999);
+        add_filter('theme_logo_image', static function ($html) use ($rewriteLegacyMediaUrls) {
+            return $rewriteLegacyMediaUrls((string) $html);
+        }, 999);
+
+        if (defined('PAGE_FILTER_FRONT_PAGE_CONTENT')) {
+            add_filter(PAGE_FILTER_FRONT_PAGE_CONTENT, static function (?string $html): ?string {
+                if (! is_string($html) || $html === '') {
+                    return $html;
+                }
+
+                return TrustBadgeImageAlt::apply($html);
+            }, 1200);
+        }
+
+        if (defined('MENU_FILTER_NODE_URL')) {
+            add_filter(MENU_FILTER_NODE_URL, static function (?string $url): ?string {
+                if (! is_string($url) || $url === '') {
+                    return $url;
+                }
+
+                return \App\Support\MenuUrl::resolve($url);
+            }, 1200);
+        }
+    }
+
     protected static function ensureWritableLoggingOrFallback(): void
     {
-        try {
-            $logDir = storage_path('logs');
-            if (! is_dir($logDir)) {
-                @mkdir($logDir, 0775, true);
-            }
-            $probe = $logDir . DIRECTORY_SEPARATOR . '.write_probe';
-            $ok = @file_put_contents($probe, (string) time()) !== false;
-            if ($ok) {
-                @unlink($probe);
-
-                return;
-            }
-
-            config(['logging.default' => 'errorlog']);
-            app()->forgetInstance('log');
-            \Illuminate\Support\Facades\Log::clearResolvedInstances();
-        } catch (\Throwable) {
-            config(['logging.default' => 'errorlog']);
-            app()->forgetInstance('log');
-            \Illuminate\Support\Facades\Log::clearResolvedInstances();
+        if (! app()->bound(Application::class)) {
+            return;
         }
+
+        SerikLogging::ensureWritableOrFallback(app());
     }
 
     protected static function isEmailQueueJob(string $displayName): bool

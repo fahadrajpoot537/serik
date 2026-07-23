@@ -182,7 +182,10 @@ class ShortcodeCompiler
             $content = $compiled->getContent();
             $appUrl = url('/');
 
-            $cacheKey = 'shortcode_render_' . md5($name . $appUrl . serialize($attributes) . ($content ?? '') . $locale . $authorized);
+            $renderVersion = class_exists(\App\Support\ShortcodeRenderCache::class)
+                ? \App\Support\ShortcodeRenderCache::version($name)
+                : 1;
+            $cacheKey = 'shortcode_render_' . $renderVersion . '_' . md5($name . $appUrl . serialize($attributes) . ($content ?? '') . $locale . $authorized);
 
             $cacheTtl = (int) setting('shortcode_cache_ttl', 1800);
             $cacheDuration = Carbon::now()->addSeconds($cacheTtl);
