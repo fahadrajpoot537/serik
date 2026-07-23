@@ -78,7 +78,7 @@ class AppServiceProvider extends ServiceProvider
 
         $this->registerBotbleHooks();
 
-        add_filter('core_media_image', static function ($html, $url, $alt, $attributes, $secure) {
+        add_filter('core_media_image', static function ($html, $url, $alt = null, $attributes = [], $secure = false) {
             if (! is_string($url) || trim($url) === '') {
                 return $html;
             }
@@ -107,7 +107,7 @@ class AppServiceProvider extends ServiceProvider
             }
 
             return new HtmlString($markup);
-        }, 20, 5);
+        }, 20, 4);
     }
 
     protected function registerBotbleHooks(): void
@@ -153,7 +153,9 @@ class AppServiceProvider extends ServiceProvider
         add_filter(THEME_FRONT_FOOTER, $rewriteLegacyMediaUrls, 999);
         add_filter(THEME_FRONT_BODY, $rewriteLegacyMediaUrls, 999);
         add_filter('theme_logo_image', static function ($html) use ($rewriteLegacyMediaUrls) {
-            return $rewriteLegacyMediaUrls((string) $html);
+            $markup = $rewriteLegacyMediaUrls($html instanceof HtmlString ? $html->toHtml() : (string) $html);
+
+            return new HtmlString($markup);
         }, 999);
 
         if (defined('PAGE_FILTER_FRONT_PAGE_CONTENT')) {
@@ -193,6 +195,7 @@ class AppServiceProvider extends ServiceProvider
             'SendEmailNotificationAboutNewSubscriberListener',
             'ResetPasswordNotification',
             'ConfirmEmailNotification',
+            'SendAccountPinEmailJob',
             'SendMailListener',
             'EmailHandler',
             'MailchimpContactListListener',

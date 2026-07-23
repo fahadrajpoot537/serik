@@ -680,13 +680,33 @@
         fetch(form.action, {
             method: 'POST',
             body: new FormData(form),
+            credentials: 'same-origin',
             headers: {
                 'X-Requested-With': 'XMLHttpRequest',
                 'Accept': 'application/json'
             }
         })
             .then(async res => {
-                const result = await res.json();
+                if (res.status === 419) {
+                    errDiv.textContent = 'Session expired. Refreshing page...';
+                    errDiv.style.display = 'block';
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    setTimeout(() => location.reload(), 600);
+                    return;
+                }
+
+                let result;
+                try {
+                    result = await res.json();
+                } catch (parseErr) {
+                    errDiv.textContent = 'Server error (' + res.status + '). Please refresh the page and try again.';
+                    errDiv.style.display = 'block';
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    return;
+                }
+
                 if (!res.ok || result.error) {
                     let errText = result.message || 'Unable to send PIN. Please try again.';
                     if (result.errors) {

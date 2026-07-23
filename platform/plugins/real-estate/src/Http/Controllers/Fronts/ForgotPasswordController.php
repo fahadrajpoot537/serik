@@ -2,7 +2,6 @@
 
 namespace Botble\RealEstate\Http\Controllers\Fronts;
 
-use Botble\Base\Http\Controllers\BaseController;
 use Botble\RealEstate\Facades\RealEstateHelper;
 use Botble\RealEstate\Forms\Fronts\Auth\ForgotPasswordForm;
 use Botble\RealEstate\Http\Controllers\BaseController;
@@ -52,12 +51,31 @@ class ForgotPasswordController extends BaseController
             $account->password = $pin;
             $account->save();
 
-            \App\Jobs\SendAccountPinEmailJob::dispatch(
-                $account->email,
-                (string) $account->name,
-                $pin,
-                'forgot-password'
-            );
+            try {
+                // Auth PIN must send immediately — do not rely on queue worker.
+                \App\Jobs\SendAccountPinEmailJob::dispatchSync(
+                    $account->email,
+                    (string) $account->name,
+                    $pin,
+                    'forgot-password'
+                );
+            } catch (\Throwable $e) {
+                \Log::error('[forgot-password] PIN email failed', [
+                    'email' => $account->email,
+                    'error' => $e->getMessage(),
+                ]);
+
+                if ($request->ajax() || $request->wantsJson()) {
+                    return response()->json([
+                        'error' => true,
+                        'message' => 'We could not send the PIN email right now. Please try again in a few minutes.',
+                    ], 503);
+                }
+
+                return back()->withErrors([
+                    'email' => 'We could not send the PIN email right now. Please try again in a few minutes.',
+                ]);
+            }
         }
 
         $message = 'If this email is registered, we have sent a new 6-digit PIN. Use it as your password to sign in.';
