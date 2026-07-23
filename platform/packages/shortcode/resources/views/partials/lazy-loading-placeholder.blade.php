@@ -47,6 +47,7 @@
 
 <div
     class="shortcode-lazy-loading"
+    data-block-id="{{ md5($name . serialize($attributes)) }}"
     data-name="{{ $name }}"
     data-attributes="{{ json_encode($attributes) }}"
 >

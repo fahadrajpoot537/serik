@@ -311,8 +311,12 @@ app()->booted(function (): void {
                 ->wherePublished()
                 ->whereIn('id', $categoryIds)
                 ->with('slugable')
-                ->withCount('properties')
                 ->get();
+
+            $counts = \App\Support\RealEstateCountCache::categoryPropertyCounts();
+            $categories->each(function (Category $category) use ($counts): void {
+                $category->setAttribute('properties_count', (int) ($counts[$category->id] ?? 0));
+            });
 
             if ($categories->isEmpty()) {
                 return null;
@@ -416,10 +420,14 @@ app()->booted(function (): void {
 
             $accounts = Account::query()
                 ->whereIn('id', $accountIds)
-                ->withCount('properties')
                 ->orderByDesc('is_featured')
                 ->oldest('first_name')
                 ->get();
+
+            $counts = \App\Support\RealEstateCountCache::agentPropertyCounts();
+            $accounts->each(function (Account $account) use ($counts): void {
+                $account->setAttribute('properties_count', (int) ($counts[$account->id] ?? 0));
+            });
 
             if ($accounts->isEmpty()) {
                 return null;

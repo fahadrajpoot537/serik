@@ -8,12 +8,14 @@ use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Support\Facades\Route;
 
 Theme::registerRoutes(function (): void {
+    $shortcodeMiddleware = [
+        'throttle:60,1',
+        RequiresJsonRequestMiddleware::class,
+        ShortcodePerformanceMiddleware::class,
+    ];
+
     Route::post('ajax/render-ui-blocks', [ShortcodeController::class, 'ajaxRenderUiBlock'])
         ->name('public.ajax.render-ui-block')
-        ->middleware([
-            'throttle:60,1',
-            RequiresJsonRequestMiddleware::class,
-            ShortcodePerformanceMiddleware::class,
-        ])
+        ->middleware($shortcodeMiddleware)
         ->withoutMiddleware(VerifyCsrfToken::class);
 });

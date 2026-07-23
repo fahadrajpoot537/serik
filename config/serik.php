@@ -84,4 +84,11 @@ return [
         ))),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Request profiling (disabled by default)
+    |--------------------------------------------------------------------------
+    */
+    'profile_requests' => filter_var(env('SERIK_PROFILE_REQUESTS', false), FILTER_VALIDATE_BOOLEAN),
+
 ];

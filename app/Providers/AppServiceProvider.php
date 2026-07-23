@@ -2,10 +2,13 @@
 
 namespace App\Providers;
 
+use App\Observers\PropertyHomepageCacheObserver;
 use App\Support\CanonicalUrl;
 use App\Support\ImageAlt;
+use App\Support\SerikHomepage;
 use App\Support\SerikSeo;
 use App\Support\TrustBadgeImageAlt;
+use Botble\RealEstate\Models\Property;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
@@ -114,6 +117,14 @@ class AppServiceProvider extends ServiceProvider
 
             return \App\Support\MenuUrl::resolve($url);
         }, 1200);
+
+        add_filter('shortcode_should_skip_lazy_loading', static function (bool $skip, string $name, $compiled): bool {
+            return $skip || SerikHomepage::shouldServerRenderShortcode($name, $compiled);
+        }, 10, 3);
+
+        if (class_exists(Property::class)) {
+            Property::observe(PropertyHomepageCacheObserver::class);
+        }
 
         add_filter('core_media_image', static function ($html, $url, $alt, $attributes, $secure) {
             if (! is_string($url) || trim($url) === '') {

@@ -139,7 +139,14 @@ class ShortcodeCompiler
         $compiled = $this->compileShortcode($matches);
         $name = $compiled->getName();
 
-        if ($compiled->enable_lazy_loading === 'yes' && ! request()->expectsJson() && ! $this->shouldIgnoreLazyLoading($name)) {
+        $skipLazyLoading = apply_filters('shortcode_should_skip_lazy_loading', false, $name, $compiled);
+
+        if (
+            $compiled->enable_lazy_loading === 'yes'
+            && ! request()->expectsJson()
+            && ! $this->shouldIgnoreLazyLoading($name)
+            && ! $skipLazyLoading
+        ) {
             add_filter(THEME_FRONT_FOOTER, function (?string $html) {
                 return $html . view('packages/shortcode::partials.lazy-loading-script')->render();
             }, 120);
@@ -159,6 +166,34 @@ class ShortcodeCompiler
             ]);
         }
 
+        $cacheKey = null;
+        $cacheDuration = null;
+
+        if (
+            setting('shortcode_cache_enabled', false)
+            && ! request()->expectsJson()
+            && ! $this->shouldIgnoreCache($name)
+            && $compiled->enable_caching !== 'no'
+            && empty(request()->getQueryString())
+        ) {
+            $locale = app()->getLocale();
+            $authorized = auth()->check();
+            $attributes = $compiled->toArray();
+            $content = $compiled->getContent();
+            $appUrl = url('/');
+
+            $cacheKey = 'shortcode_render_' . md5($name . $appUrl . serialize($attributes) . ($content ?? '') . $locale . $authorized);
+
+            $cacheTtl = (int) setting('shortcode_cache_ttl', 1800);
+            $cacheDuration = Carbon::now()->addSeconds($cacheTtl);
+
+            $cached = Cache::get($cacheKey);
+
+            if ($cached !== null) {
+                return $cached;
+            }
+        }
+
         $callback = apply_filters('shortcode_get_callback', $this->getCallback($name), $name);
 
         $renderedContent = apply_filters(
@@ -176,26 +211,11 @@ class ShortcodeCompiler
 
         $containsForms = $this->containsFormElements($renderedContent);
 
-        if (
-            setting('shortcode_cache_enabled', false)
-            && ! request()->expectsJson()
-            && ! $this->shouldIgnoreCache($name)
-            && $compiled->enable_caching !== 'no'
-            && empty(request()->getQueryString())
-            && ! $containsForms
-        ) {
-            $locale = app()->getLocale();
-            $authorized = auth()->check();
-            $attributes = $compiled->toArray();
-            $content = $compiled->getContent();
-            $appUrl = url('/');
+        if ($cacheKey !== null && $cacheDuration !== null && ! $containsForms) {
+            $stored = $renderedContent instanceof View ? $renderedContent->render() : $renderedContent;
+            Cache::put($cacheKey, $stored, $cacheDuration);
 
-            $cacheKey = 'shortcode_render_' . md5($name . $appUrl . serialize($attributes) . ($content ?? '') . $locale . $authorized);
-
-            $cacheTtl = (int) setting('shortcode_cache_ttl', 1800);
-            $cacheDuration = Carbon::now()->addSeconds($cacheTtl);
-
-            Cache::put($cacheKey, $renderedContent, $cacheDuration);
+            return $stored;
         }
 
         return $renderedContent;

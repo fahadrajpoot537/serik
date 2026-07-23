@@ -1,16 +1,76 @@
 @once
     <script>
         var lazyLoadShortcodeBlocks = function() {
-            document.querySelectorAll('.shortcode-lazy-loading').forEach(function(element) {
-                var name = element.getAttribute('data-name');
-                var attributes = JSON.parse(element.getAttribute('data-attributes'));
+            const loaders = Array.from(document.querySelectorAll('.shortcode-lazy-loading'));
 
-                const url = '{{ route('public.ajax.render-ui-block') }}';
-                const csrfToken = '{{ csrf_token() }}';
+            if (loaders.length === 0) {
+                return;
+            }
 
-                document.body.classList.add('lazy-loading-active');
+            const csrfToken = '{{ csrf_token() }}';
+            const batchUrl = '{{ route('public.ajax.render-ui-blocks-batch') }}';
+            const singleUrl = '{{ route('public.ajax.render-ui-block') }}';
 
-                fetch(url, {
+            document.body.classList.add('lazy-loading-active');
+
+            const applyBlockHtml = function(element, data, name, attributes) {
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = data;
+                const firstChild = tempDiv.firstElementChild;
+
+                if (firstChild) {
+                    firstChild.classList.add('shortcode-lazy-loading-loaded');
+                    data = tempDiv.innerHTML;
+                }
+
+                const scripts = tempDiv.querySelectorAll('script');
+
+                element.outerHTML = data;
+
+                scripts.forEach(function(oldScript) {
+                    const newScript = document.createElement('script');
+                    if (oldScript.src) {
+                        newScript.src = oldScript.src;
+                    } else {
+                        newScript.textContent = oldScript.textContent;
+                    }
+                    Array.from(oldScript.attributes).forEach(function(attr) {
+                        newScript.setAttribute(attr.name, attr.value);
+                    });
+                    document.body.appendChild(newScript);
+                });
+
+                document.dispatchEvent(new CustomEvent('shortcode.loaded', {
+                    detail: {
+                        name,
+                        attributes,
+                        html: data,
+                        ok: true
+                    }
+                }));
+            };
+
+            const finishLoading = function() {
+                setTimeout(function() {
+                    const remainingLoaders = document.querySelectorAll('.shortcode-lazy-loading');
+                    if (remainingLoaders.length === 0) {
+                        document.body.classList.remove('lazy-loading-active');
+                    }
+                }, 100);
+            };
+
+            const handleFailure = function(element) {
+                try {
+                    element.outerHTML = '<div class="text-center py-3 text-muted">Content temporarily unavailable.</div>';
+                } catch (e) {}
+                finishLoading();
+            };
+
+            const loadSingleBlock = function(element) {
+                const name = element.getAttribute('data-name');
+                const attributes = JSON.parse(element.getAttribute('data-attributes') || '{}');
+
+                return fetch(singleUrl, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -19,23 +79,16 @@
                         },
                         body: JSON.stringify({
                             name,
-                            attributes: {
-                                ...attributes
-                            }
+                            attributes
                         })
                     })
-                    .then(response => {
-                        // Always consume JSON when possible — never leave loaders spinning.
-                        return response.json().then(payload => ({
-                            ok: response.ok,
-                            status: response.status,
-                            payload
-                        })).catch(() => ({
-                            ok: false,
-                            status: response.status,
-                            payload: null
-                        }));
-                    })
+                    .then(response => response.json().then(payload => ({
+                        ok: response.ok,
+                        payload
+                    })).catch(() => ({
+                        ok: false,
+                        payload: null
+                    })))
                     .then(({
                         ok,
                         payload
@@ -43,69 +96,115 @@
                         const error = payload && payload.error;
                         let data = payload && payload.data;
 
-                        if (error || data === null || data === undefined) {
-                            data = '<div class="text-center py-3 text-muted">Content temporarily unavailable.</div>';
+                        if (!ok || error || data === null || data === undefined) {
+                            handleFailure(element);
+                            return;
                         }
 
-                        const tempDiv = document.createElement('div');
-                        tempDiv.innerHTML = data;
-                        const firstChild = tempDiv.firstElementChild;
-                        if (firstChild) {
-                            firstChild.classList.add('shortcode-lazy-loading-loaded');
-                            data = tempDiv.innerHTML;
+                        applyBlockHtml(element, data, name, attributes);
+                    })
+                    .catch(function(error) {
+                        console.error('Fetch error:', error);
+                        handleFailure(element);
+                    });
+            };
+
+            const loadBlocksIndividually = function(elements) {
+                return Promise.all(elements.map(loadSingleBlock)).then(function() {
+                    if (typeof Theme !== 'undefined' && typeof Theme.lazyLoadInstance !== 'undefined') {
+                        Theme.lazyLoadInstance.update();
+                    }
+                    finishLoading();
+                });
+            };
+
+            if (loaders.length > 1) {
+                const blocks = loaders.map(function(element, index) {
+                    const blockId = element.getAttribute('data-block-id') || String(index);
+                    element.setAttribute('data-block-id', blockId);
+
+                    return {
+                        id: blockId,
+                        name: element.getAttribute('data-name'),
+                        attributes: JSON.parse(element.getAttribute('data-attributes') || '{}'),
+                        element: element
+                    };
+                });
+
+                fetch(batchUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken
+                        },
+                        body: JSON.stringify({
+                            blocks: blocks.map(function(block) {
+                                return {
+                                    id: block.id,
+                                    name: block.name,
+                                    attributes: block.attributes
+                                };
+                            })
+                        })
+                    })
+                    .then(response => response.json().then(payload => ({
+                        ok: response.ok,
+                        status: response.status,
+                        payload
+                    })).catch(() => ({
+                        ok: false,
+                        status: 0,
+                        payload: null
+                    })))
+                    .then(({
+                        ok,
+                        status,
+                        payload
+                    }) => {
+                        if (!ok || !payload || payload.error) {
+                            console.warn('Batch shortcode load failed (' + status + '), falling back to single requests.');
+                            return loadBlocksIndividually(loaders);
                         }
 
-                        const scripts = tempDiv.querySelectorAll('script');
+                        const data = payload.data || {};
+                        let missing = false;
 
-                        element.outerHTML = data;
-
-                        scripts.forEach(function(oldScript) {
-                            const newScript = document.createElement('script');
-                            if (oldScript.src) {
-                                newScript.src = oldScript.src;
-                            } else {
-                                newScript.textContent = oldScript.textContent;
+                        blocks.forEach(function(block) {
+                            const html = data[block.id];
+                            if (!html) {
+                                missing = true;
+                                handleFailure(block.element);
+                                return;
                             }
-                            Array.from(oldScript.attributes).forEach(function(attr) {
-                                newScript.setAttribute(attr.name, attr.value);
-                            });
-                            document.body.appendChild(newScript);
+                            applyBlockHtml(block.element, html, block.name, block.attributes);
                         });
 
-                        document.dispatchEvent(new CustomEvent('shortcode.loaded', {
-                            detail: {
-                                name,
-                                attributes,
-                                html: data,
-                                ok
-                            }
-                        }));
-
                         if (typeof Theme !== 'undefined' && typeof Theme.lazyLoadInstance !== 'undefined') {
-                            Theme.lazyLoadInstance.update()
+                            Theme.lazyLoadInstance.update();
                         }
 
-                        setTimeout(function() {
-                            const remainingLoaders = document.querySelectorAll(
-                                '.shortcode-lazy-loading');
-                            if (remainingLoaders.length === 0) {
-                                document.body.classList.remove('lazy-loading-active');
-                            }
-                        }, 100);
+                        finishLoading();
+
+                        if (missing) {
+                            console.warn('Some batch shortcode blocks were missing from the response.');
+                        }
                     })
-                    .catch(error => {
-                        console.error('Fetch error:', error);
-                        try {
-                            element.outerHTML = '<div class="text-center py-3 text-muted">Content temporarily unavailable.</div>';
-                        } catch (e) {}
-                        document.body.classList.remove('lazy-loading-active');
-                        setTimeout(function() {
-                            const remainingLoaders = document.querySelectorAll('.shortcode-lazy-loading');
-                            if (remainingLoaders.length === 0) {
-                                document.body.classList.remove('lazy-loading-active');
-                            }
-                        }, 100);
+                    .catch(function(error) {
+                        console.error('Batch fetch error:', error);
+                        loadBlocksIndividually(loaders).finally(function() {
+                            document.body.classList.remove('lazy-loading-active');
+                        });
                     });
+
+                return;
+            }
+
+            loadSingleBlock(loaders[0]).then(function() {
+                if (typeof Theme !== 'undefined' && typeof Theme.lazyLoadInstance !== 'undefined') {
+                    Theme.lazyLoadInstance.update();
+                }
+                finishLoading();
             });
         };
 

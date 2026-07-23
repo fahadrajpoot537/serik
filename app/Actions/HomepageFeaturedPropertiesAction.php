@@ -2,6 +2,7 @@
 
 namespace App\Actions;
 
+use App\Support\HomepageFeaturedCache;
 use Botble\RealEstate\Enums\ModerationStatusEnum;
 use Botble\RealEstate\Facades\RealEstateHelper;
 use Botble\RealEstate\Models\Property;
@@ -50,24 +51,25 @@ class HomepageFeaturedPropertiesAction
         }
 
         $cityKey = $visitorCity ? strtolower((string) $visitorCity) : 'ontario';
-        $cacheKey = "homepage_featured_props_v3:{$cityKey}:{$limit}";
+        $version = HomepageFeaturedCache::version();
+        $cacheKey = "homepage_featured_props_v4:{$version}:{$cityKey}:{$limit}";
 
         try {
-            $idPayload = Cache::remember($cacheKey, self::CACHE_SECONDS, function () use ($limit, $visitorCity) {
-                return $this->resolveIds($limit, $visitorCity);
+            return Cache::remember($cacheKey, self::CACHE_SECONDS, function () use ($limit, $visitorCity) {
+                $idPayload = $this->resolveIds($limit, $visitorCity);
+
+                return [
+                    'propertiesForSale' => $this->hydrate($idPayload['sale'] ?? [], $limit),
+                    'propertiesSold' => $this->hydrate($idPayload['sold'] ?? [], $limit),
+                    'visitorCity' => $visitorCity,
+                ];
             });
-
-            return [
-                'propertiesForSale' => $this->hydrate($idPayload['sale'] ?? [], $limit),
-                'propertiesSold' => $this->hydrate($idPayload['sold'] ?? [], $limit),
-                'visitorCity' => $visitorCity,
-            ];
         } catch (Throwable $e) {
-            $this->safeLog('error', '[homepage-featured] FAILED: ' . $e->getMessage());
+            $this->safeLog('error', '[homepage-featured] FAILED: '.$e->getMessage());
 
             return [
-                'propertiesForSale' => new Collection(),
-                'propertiesSold' => new Collection(),
+                'propertiesForSale' => new Collection,
+                'propertiesSold' => new Collection,
                 'visitorCity' => $visitorCity,
             ];
         }
@@ -120,7 +122,7 @@ class HomepageFeaturedPropertiesAction
                 }
             }
         } catch (Throwable $e) {
-            $this->safeLog('warning', '[homepage-featured] Meili resolve failed: ' . $e->getMessage());
+            $this->safeLog('warning', '[homepage-featured] Meili resolve failed: '.$e->getMessage());
         }
 
         return [
@@ -145,7 +147,7 @@ class HomepageFeaturedPropertiesAction
                 $w->whereNull('PropertySubType')
                     ->orWhereNotIn('PropertySubType', array_merge(
                         $excluded,
-                        array_map(static fn ($v) => $v . ' ', $excluded)
+                        array_map(static fn ($v) => $v.' ', $excluded)
                     ));
             });
         }
@@ -165,7 +167,7 @@ class HomepageFeaturedPropertiesAction
         if ($visitorCity && strcasecmp($visitorCity, 'ontario') !== 0 && strcasecmp($visitorCity, 'on') !== 0) {
             $city = str_replace(['%', '_'], '', $visitorCity);
             if ($city !== '') {
-                $q->where('location', 'like', '%' . $city . '%');
+                $q->where('location', 'like', '%'.$city.'%');
             }
         }
 
@@ -183,7 +185,7 @@ class HomepageFeaturedPropertiesAction
     {
         $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
         if ($ids === []) {
-            return new Collection();
+            return new Collection;
         }
 
         $ids = array_slice($ids, 0, $limit);

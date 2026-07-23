@@ -5,53 +5,31 @@
         <meta http-equiv="X-UA-Compatible" content="IE=edge">
         <meta content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=5, user-scalable=1" name="viewport"/>
 <meta name="google-site-verification" content="DnbR_f8W1AL0-M1AWElchvX8AZQQae51aLL_FNhq7rE" /><!--Google SIte Verification-->
-<script type="text/javascript">
-    (function(c,l,a,r,i,t,y){
-        c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-        t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-        y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-    })(window, document, "clarity", "script", "vo52awk0jq");
-</script><!-- Microsoft clearity code -->
-
-
-<!-- Meta Pixel Code -->
-<script>
-    !function(f,b,e,v,n,t,s)
-    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-    n.queue=[];t=b.createElement(e);t.async=!0;
-    t.src=v;s=b.getElementsByTagName(e)[0];
-    s.parentNode.insertBefore(t,s)}(window, document,'script',
-    'https://connect.facebook.net/en_US/fbevents.js');
-    fbq('init', '1789817231630101');
-    fbq('track', 'PageView');
-    </script>
-    <noscript><img height="1" width="1" style="display:none" alt=""
-    src="https://www.facebook.com/tr?id=1789817231630101&ev=PageView&noscript=1"
-/></noscript>
-<!-- End Meta Pixel Code -->
-
-<!-- Google tag (gtag.js) -->
-<!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-G0KFZYXM3D"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'G-G0KFZYXM3D');
-</script> 
+@php
+    $serikThemeOptions = [
+        'primary_color' => theme_option('primary_color', '#db1d23'),
+        'hover_color' => theme_option('hover_color', '#cd380f'),
+        'top_header_background_color' => theme_option('top_header_background_color', '#f7f7f7'),
+        'top_header_text_color' => theme_option('top_header_text_color', '#161e2d'),
+        'main_header_background_color' => theme_option('main_header_background_color', '#ffffff'),
+        'main_header_text_color' => theme_option('main_header_text_color', '#161e2d'),
+        'main_header_border_color' => theme_option('main_header_border_color', '#e4e4e4'),
+        'map_marker_image' => theme_option('map_marker_image'),
+    ];
+    $serikMapMarkerUrl = $serikThemeOptions['map_marker_image']
+        ? RvMedia::getImageUrl($serikThemeOptions['map_marker_image'])
+        : Theme::asset()->url('images/map-icon.png');
+@endphp
         <style>
             :root {
-                --primary-color: {{ theme_option('primary_color', '#db1d23') }};
-                --hover-color: {{ theme_option('hover_color', '#cd380f') }};
-                --top-header-background-color: {{ theme_option('top_header_background_color', '#f7f7f7') }};
-                --top-header-text-color: {{ theme_option('top_header_text_color', '#161e2d') }};
-                --main-header-background-color: {{ theme_option('main_header_background_color', '#ffffff') }};
-                --main-header-text-color: {{ theme_option('main_header_text_color', '#161e2d') }};
-                --main-header-border-color: {{ theme_option('main_header_border_color', '#e4e4e4') }};
-                --map-marker-icon-image: url({{ theme_option('map_marker_image') ? RvMedia::getImageUrl(theme_option('map_marker_image')) : Theme::asset()->url('images/map-icon.png') }});
+                --primary-color: {{ $serikThemeOptions['primary_color'] }};
+                --hover-color: {{ $serikThemeOptions['hover_color'] }};
+                --top-header-background-color: {{ $serikThemeOptions['top_header_background_color'] }};
+                --top-header-text-color: {{ $serikThemeOptions['top_header_text_color'] }};
+                --main-header-background-color: {{ $serikThemeOptions['main_header_background_color'] }};
+                --main-header-text-color: {{ $serikThemeOptions['main_header_text_color'] }};
+                --main-header-border-color: {{ $serikThemeOptions['main_header_border_color'] }};
+                --map-marker-icon-image: url({{ $serikMapMarkerUrl }});
             }
 
             .flag-tag.status-sold,
@@ -102,17 +80,9 @@
         </style>
 <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css">
-<script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
-<!-- Google Tag Manager -->
-<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-})(window,document,'script','dataLayer','GTM-M57VSQWW');</script>
-<!-- End Google Tag Manager -->
+<script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js" defer></script>
 
         {!! Theme::header() !!}
-        <script src="{{ Theme::asset()->url('js/visitor-location.js') }}?v={{ get_cms_version() }}"></script>
     </head>
 
     <body {!! Theme::bodyAttributes() !!}>
@@ -134,6 +104,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
      
 
         {!! Theme::footer() !!}
+
+        @include(Theme::getThemeNamespace('partials.deferred-analytics'))
 
         @if(!request()->boolean('iframe'))
             @include(Theme::getThemeNamespace('partials.visitor-city-detect'))

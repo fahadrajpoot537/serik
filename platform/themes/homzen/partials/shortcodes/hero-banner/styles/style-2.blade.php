@@ -379,19 +379,33 @@
 
     @if ($shortcode->background_image)
         <div class="img-banner-left">
-            {{ RvMedia::image($shortcode->background_image, ImageAlt::resolve($shortcode->title, $shortcode->background_image, $heroAltContext)) }}
+            {{ RvMedia::image(
+                $shortcode->background_image,
+                ImageAlt::resolve($shortcode->title, $shortcode->background_image, $heroAltContext),
+                lazy: false,
+                attributes: ['fetchpriority' => 'high', 'loading' => 'eager']
+            ) }}
         </div>
     @endif
 
     <div class="img-banner-right">
         <div class="swiper slider-sw-home2">
             <div class="swiper-wrapper">
+                @php $heroSlideIndex = 0; @endphp
                 @foreach (range(1, 4) as $i)
                     @continue(! $shortcode->{"slider_image_$i"})
+                    @php $heroSlideIndex++; @endphp
 
                     <div class="swiper-slide">
                         <div class="slider-home2 img-animation wow">
-                            {{ RvMedia::image($shortcode->{"slider_image_$i"}, ImageAlt::resolve($shortcode->title, $shortcode->{"slider_image_$i"}, $heroAltContext)) }}
+                            {{ RvMedia::image(
+                                $shortcode->{"slider_image_$i"},
+                                ImageAlt::resolve($shortcode->title, $shortcode->{"slider_image_$i"}, $heroAltContext),
+                                lazy: $heroSlideIndex > 1,
+                                attributes: $heroSlideIndex === 1
+                                    ? ['fetchpriority' => 'high', 'loading' => 'eager']
+                                    : ['loading' => 'lazy']
+                            ) }}
                         </div>
                     </div>
                 @endforeach

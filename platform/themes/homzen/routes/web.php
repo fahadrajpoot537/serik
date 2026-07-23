@@ -1,17 +1,17 @@
 <?php
 
+use App\Http\Controllers\AjaxShortcodeBatchController;
 use App\Support\PropertyUrl;
 use Botble\Base\Http\Middleware\RequiresJsonRequestMiddleware;
 use Botble\Page\Models\Page;
+use Botble\Shortcode\Http\Middleware\ShortcodePerformanceMiddleware;
 use Botble\Slug\Facades\SlugHelper;
 use Botble\Theme\Facades\Theme;
 use Botble\Theme\Http\Controllers\PublicController;
+use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Theme\homzen\Http\Controllers\homzenController;
-use Illuminate\Http\Request;
-
-
-
 
 Route::middleware(['web', 'core'])
     ->controller(homzenController::class)
@@ -30,8 +30,7 @@ Route::middleware(['web', 'core'])
             });
         });
     });
-    
-    
+
 Route::middleware(['web', 'core'])->group(function (): void {
     Route::redirect('/evaluation', '/free-home-evaluation', 301);
     Route::redirect('/frequently-asked-questions', '/faqs', 301);
@@ -83,5 +82,10 @@ Route::middleware(['web', 'core'])->group(function (): void {
 
     });
 });
+
+Route::middleware(['web', 'core', RequiresJsonRequestMiddleware::class, ShortcodePerformanceMiddleware::class])
+    ->withoutMiddleware(VerifyCsrfToken::class)
+    ->post('ajax/render-ui-blocks-batch', AjaxShortcodeBatchController::class)
+    ->name('public.ajax.render-ui-blocks-batch');
 
 Theme::routes();

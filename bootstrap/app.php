@@ -173,6 +173,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
         $middleware->prepend(\App\Http\Middleware\BlockSensitivePathsMiddleware::class);
         $middleware->prepend(\App\Http\Middleware\WagesMaintenanceMiddleware::class);
         $middleware->appendToGroup('web', \App\Http\Middleware\GeoBlockMiddleware::class);
+        $middleware->appendToGroup('web', \App\Http\Middleware\RequestProfilerMiddleware::class);
         $middleware->prependToGroup('web', \App\Http\Middleware\UseRequestRootUrlInLocal::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

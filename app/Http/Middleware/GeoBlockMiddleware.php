@@ -90,6 +90,7 @@ class GeoBlockMiddleware
             'up',
             'storage/properties/treb',
             'ajax/render-ui-blocks',
+            'ajax/render-ui-blocks-batch',
             'api/v1/map-properties',
             'api/v1/map-thumbnails',
             'api/v1/map-property-bundle',

@@ -70,6 +70,7 @@
             @include(Theme::getThemeNamespace('views.real-estate.partials.property-image'), [
                 'property' => $property,
                 'size' => 'medium-rectangle',
+                'lazy' => $lazyImage ?? true,
             ])
             <span @class(['serik-prop-card__badge', 'sold' => $isSold])>{{ $statusLabel }}</span>
             @if ($card['listed_active'])

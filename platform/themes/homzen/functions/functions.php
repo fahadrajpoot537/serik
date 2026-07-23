@@ -77,18 +77,22 @@ if (! function_exists('get_max_projects_price')) {
 if (! function_exists('get_min_square')) {
     function get_min_square(): int
     {
-        $square = Property::query()->min('square');
+        return (int) \Illuminate\Support\Facades\Cache::remember('re_properties_min_square_v1', 3600, function (): int {
+            $square = Property::query()->min('square');
 
-        return $square = $square ? (int) ceil((float) $square) : 0;
+            return $square ? (int) ceil((float) $square) : 0;
+        });
     }
 }
 
 if (! function_exists('get_max_square')) {
     function get_max_square(): int
     {
-        $square = Property::query()->max('square');
+        return (int) \Illuminate\Support\Facades\Cache::remember('re_properties_max_square_v1', 3600, function (): int {
+            $square = Property::query()->max('square');
 
-        return $square ? (int) $square : 0;
+            return $square ? (int) $square : 0;
+        });
     }
 }
 

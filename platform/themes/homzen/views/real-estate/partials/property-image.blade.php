@@ -13,9 +13,16 @@
         src="{{ $coverImage }}"
         alt="{{ $imageAlt }}"
         class="img-fluid w-100 h-100 object-fit-cover"
-        @if ($lazy) loading="lazy" @endif
+        @if ($lazy) loading="lazy" @else loading="eager" fetchpriority="high" @endif
         onerror="this.src='{{ RvMedia::getDefaultImage() }}'"
     />
 @else
-    {{ RvMedia::image($coverImage, $imageAlt, $size, attributes: ['class' => 'img-fluid w-100 h-100 object-fit-cover'], lazy: $lazy) }}
+    @php
+        $imageAttributes = ['class' => 'img-fluid w-100 h-100 object-fit-cover'];
+        if (! $lazy) {
+            $imageAttributes['loading'] = 'eager';
+            $imageAttributes['fetchpriority'] = 'high';
+        }
+    @endphp
+    {{ RvMedia::image($coverImage, $imageAlt, $size, attributes: $imageAttributes, lazy: $lazy) }}
 @endif

@@ -137,6 +137,7 @@
 
     $propertiesForSale = $propertiesForSale ?? collect();
     $propertiesSold = $propertiesSold ?? collect();
+    $eagerImageLimit = \App\Support\SerikHomepage::isHomepageRequest() ? 4 : 0;
 @endphp
 
 <section class="flat-section-v5 bg-surface flat-recommended flat-recommended-v2 property-top">
@@ -150,7 +151,9 @@
             <div class="row g-3 wow fadeInUpSmall mb-2 mb-md-3" data-wow-delay=".2s" data-wow-duration="2000ms">
                 @foreach($propertiesForSale as $property)
                     <div class="col-6 col-md-4 col-lg-3 col-xl-3 prop-box">
-                        @include(Theme::getThemeNamespace('views.real-estate.properties.item-grid'))
+                        @include(Theme::getThemeNamespace('views.real-estate.properties.item-grid'), [
+                            'lazyImage' => $loop->iteration > $eagerImageLimit,
+                        ])
                     </div>
                 @endforeach
             </div>
