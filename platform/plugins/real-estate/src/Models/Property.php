@@ -2,6 +2,7 @@
 
 namespace Botble\RealEstate\Models;
 
+use App\Casts\SafePropertyStatusEnum;
 use App\Support\SerikMediaUrl;
 use Botble\Base\Casts\SafeContent;
 use Botble\Base\Facades\Html;
@@ -107,7 +108,7 @@ class Property extends BaseModel
         'geocode_failed_at' => 'datetime',
         'geocode_attempts' => 'int',
         'geocoded_at' => 'datetime',
-        'status' => PropertyStatusEnum::class,
+        'status' => SafePropertyStatusEnum::class,
         'moderation_status' => ModerationStatusEnum::class,
         'period' => PropertyPeriodEnum::class,
         'name' => SafeContent::class,

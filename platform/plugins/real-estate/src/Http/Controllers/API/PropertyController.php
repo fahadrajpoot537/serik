@@ -4706,7 +4706,9 @@ class PropertyController extends BaseController
             'currency_id' => 1,
             'is_featured' => $property->is_featured ?? 0,
             'featured_priority' => $property->featured_priority ?? 0,
-            'status' => ($item['StandardStatus'] ?? '') === 'Active' ? 'selling' : ($property->status ?: 'draft'),
+            'status' => ($item['StandardStatus'] ?? '') === 'Active'
+                ? 'selling'
+                : (trim((string) $property->getRawOriginal('status')) ?: 'draft'),
             'moderation_status' => 'approved',
             'expire_date' => $item['ExpirationDate']
                 ?? $property->expire_date
