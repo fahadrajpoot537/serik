@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Audit deferred Meilisearch sync — run: php scripts/audit-search-sync.php
+ * Audit deferred Meilisearch batch sync — run: php scripts/audit-search-sync.php
  */
 require __DIR__ . '/../vendor/autoload.php';
 
@@ -39,11 +39,18 @@ function scanDirPhp(string $dir, array &$files): void
 
 $imageJob = $root . '/app/Jobs/PersistTrebImagesJob.php';
 $pipeline = $root . '/app/Support/ListingImagePipeline.php';
-$searchJob = $root . '/app/Jobs/SearchSyncJob.php';
+$batchJob = $root . '/app/Jobs/SearchBatchJob.php';
+$oldJob = $root . '/app/Jobs/SearchSyncJob.php';
 $searchSync = $root . '/app/Support/PropertySearchSync.php';
 
+if (is_file($oldJob)) {
+    $violations[] = 'SearchSyncJob.php must be removed (replaced by SearchBatchJob)';
+} else {
+    $passes[] = 'SearchSyncJob.php removed (no per-property jobs)';
+}
+
 $required = [
-    'SearchSyncJob' => $searchJob,
+    'SearchBatchJob' => $batchJob,
     'PropertySearchSync' => $searchSync,
 ];
 
@@ -75,59 +82,107 @@ if (is_file($pipeline)) {
     }
 }
 
-if (is_file($searchJob)) {
-    $content = file_get_contents($searchJob) ?: '';
-    if (! str_contains($content, 'ShouldBeUniqueUntilProcessing')) {
-        $violations[] = 'SearchSyncJob must implement ShouldBeUniqueUntilProcessing';
-    } else {
-        $passes[] = 'SearchSyncJob implements ShouldBeUniqueUntilProcessing';
-    }
-
-    if (! preg_match("/return\s+'search-sync:'\s*\.\s*\\\$this->propertyId/", $content)) {
-        $violations[] = 'SearchSyncJob must use uniqueId search-sync:{propertyId}';
-    } else {
-        $passes[] = 'SearchSyncJob uniqueId is per property (search-sync:{id})';
-    }
-
-    if (! str_contains($content, 'PropertySearchSync')) {
-        $violations[] = 'SearchSyncJob must delegate indexing to PropertySearchSync';
-    } else {
-        $passes[] = 'SearchSyncJob delegates to PropertySearchSync';
-    }
-}
-
 if (is_file($searchSync)) {
     $content = file_get_contents($searchSync) ?: '';
-    if (! str_contains($content, 'SearchSyncJob::dispatch')) {
-        $violations[] = 'PropertySearchSync must dispatch SearchSyncJob';
+
+    if (preg_match('/SearchSyncJob/', $content)) {
+        $violations[] = 'PropertySearchSync must not reference SearchSyncJob';
     } else {
-        $passes[] = 'PropertySearchSync dispatches SearchSyncJob';
+        $passes[] = 'PropertySearchSync has no SearchSyncJob references';
+    }
+
+    if (preg_match('/SearchSyncJob::dispatch\s*\(/', $content)) {
+        $violations[] = 'PropertySearchSync must not dispatch SearchSyncJob per property';
+    } else {
+        $passes[] = 'PropertySearchSync does not dispatch per-property SearchSyncJob';
+    }
+
+    if (! preg_match('/function\s+schedule\s*\(/', $content) || ! str_contains($content, 'markPending')) {
+        $violations[] = 'PropertySearchSync::schedule() must only mark pending';
+    } else {
+        $passes[] = 'PropertySearchSync::schedule() marks pending IDs';
+    }
+
+    if (! str_contains($content, 'SearchBatchJob::dispatch')) {
+        $violations[] = 'PropertySearchSync must dispatch the global SearchBatchJob worker';
+    } else {
+        $passes[] = 'PropertySearchSync dispatches global SearchBatchJob (not per property)';
+    }
+
+    if (! str_contains($content, 'claimNextBatch') || ! str_contains($content, 'Cache::lock')) {
+        $violations[] = 'PropertySearchSync must atomically claim pending IDs under lock';
+    } else {
+        $passes[] = 'PropertySearchSync atomically claims pending IDs under lock';
+    }
+
+    if (! str_contains($content, 'requeue')) {
+        $violations[] = 'PropertySearchSync must requeue failed IDs';
+    } else {
+        $passes[] = 'PropertySearchSync requeues failed IDs on index failure';
     }
 
     if (! str_contains($content, 'searchableSync')) {
-        $violations[] = 'PropertySearchSync must batch via searchableSync()';
+        $violations[] = 'PropertySearchSync must call searchableSync() once per batch';
     } else {
-        $passes[] = 'PropertySearchSync supports batched searchableSync()';
+        $passes[] = 'PropertySearchSync uses one searchableSync() call per batch';
     }
 
     if (! str_contains($content, 'DB::afterCommit')) {
-        $violations[] = 'PropertySearchSync should defer dispatch until DB commit';
+        $violations[] = 'PropertySearchSync should defer until DB commit';
     } else {
-        $passes[] = 'PropertySearchSync respects DB::afterCommit for eventual consistency';
+        $passes[] = 'PropertySearchSync respects DB::afterCommit';
+    }
+}
+
+if (is_file($batchJob)) {
+    $content = file_get_contents($batchJob) ?: '';
+
+    if (! str_contains($content, 'ShouldBeUniqueUntilProcessing')) {
+        $violations[] = 'SearchBatchJob must implement ShouldBeUniqueUntilProcessing';
+    } else {
+        $passes[] = 'SearchBatchJob implements ShouldBeUniqueUntilProcessing';
+    }
+
+    if (! preg_match("/return\s+'serik-search-batch-global'/", $content)) {
+        $violations[] = 'SearchBatchJob must use a single global uniqueId';
+    } else {
+        $passes[] = 'SearchBatchJob uses one global uniqueId';
+    }
+
+    if (! str_contains($content, 'WORKER_LOCK_KEY') || ! str_contains($content, 'Cache::lock')) {
+        $violations[] = 'SearchBatchJob must acquire a distributed worker lock';
+    } else {
+        $passes[] = 'SearchBatchJob acquires a distributed worker lock';
+    }
+
+    if (! str_contains($content, 'processNextBatch')) {
+        $violations[] = 'SearchBatchJob must delegate draining to PropertySearchSync::processNextBatch()';
+    } else {
+        $passes[] = 'SearchBatchJob drains pending via processNextBatch()';
+    }
+
+    if (! preg_match('/self::dispatch\s*\(/', $content)) {
+        $violations[] = 'SearchBatchJob must self-chain when pending IDs remain';
+    } else {
+        $passes[] = 'SearchBatchJob self-chains until pending set is empty';
+    }
+
+    if (preg_match('/propertyId/', $content)) {
+        $violations[] = 'SearchBatchJob must not accept a per-property constructor argument';
+    } else {
+        $passes[] = 'SearchBatchJob has no per-property constructor argument';
     }
 }
 
 $appFiles = [];
-scanDirPhp($root . '/app/Jobs', $appFiles);
+scanDirPhp($root . '/app', $appFiles);
 
 foreach ($appFiles as $file) {
+    $content = file_get_contents($file) ?: '';
     $relative = str_replace('\\', '/', $file);
-    if (! str_contains($relative, 'PersistTrebImagesJob.php')
-        && ! str_contains($relative, 'SearchSyncJob.php')
-        && preg_match('/PersistTrebImagesJob/', file_get_contents($file) ?: '')) {
-        if (preg_match('/->searchable\s*\(/', file_get_contents($file) ?: '')) {
-            $violations[] = "Image-related job calls searchable() directly: {$relative}";
-        }
+
+    if (str_contains($content, 'SearchSyncJob::dispatch')) {
+        $violations[] = "Forbidden SearchSyncJob::dispatch in {$relative}";
     }
 }
 
@@ -142,16 +197,14 @@ if ($violations !== []) {
     foreach ($violations as $line) {
         echo "  - {$line}\n";
     }
-    echo "\nDuplicate collapse guarantee:\n";
-    echo "  - ShouldBeUniqueUntilProcessing on SearchSyncJob collapses queue duplicates per property.\n";
-    echo "  - PropertySearchSync pending set + batch claim merges concurrent property syncs.\n";
     exit(1);
 }
 
 echo "\nAll checks passed.\n";
-echo "\nDuplicate index update elimination:\n";
-echo "  1. Multiple image persists for the same property enqueue one SearchSyncJob (unique per property).\n";
-echo "  2. SearchSyncJob claims a batch of pending property IDs in one Meilisearch request.\n";
-echo "  3. Image jobs never call searchable(); Meilisearch failures stay on the search queue.\n";
+echo "\nBatch pipeline guarantees:\n";
+echo "  1. schedule() only marks pending + dispatches one global SearchBatchJob.\n";
+echo "  2. SearchBatchJob claims up to SERIK_SEARCH_SYNC_BATCH IDs atomically.\n";
+echo "  3. One searchableSync() call per batch → one Meilisearch addDocuments per batch.\n";
+echo "  4. Self-chains until pending is empty; failed IDs are requeued.\n";
 
 exit(0);

@@ -2,7 +2,7 @@
 
 namespace App\Support;
 
-use App\Jobs\SearchSyncJob;
+use App\Jobs\SearchBatchJob;
 use Botble\RealEstate\Models\Property;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -12,17 +12,19 @@ use Throwable;
 
 /**
  * Single source of truth for deferred Meilisearch property indexing.
- * Image persistence and other writers schedule sync here — never call searchable() inline.
+ * Writers call schedule() only — never searchable() inline.
  */
 final class PropertySearchSync
 {
     public const PENDING_CACHE_KEY = 'serik:search_sync:pending';
 
-    private const PENDING_LOCK_KEY = 'serik:search_sync:pending:lock';
+    public const PENDING_LOCK_KEY = 'serik:search_sync:pending:lock';
+
+    public const WORKER_LOCK_KEY = 'serik:search_sync:worker:lock';
 
     /**
-     * Queue a deferred index update. Duplicate schedules for the same property collapse
-     * to one SearchSyncJob while it is waiting in the queue.
+     * Mark a property for deferred indexing and ensure the global batch worker runs.
+     * Does not dispatch one job per property.
      */
     public function schedule(int $propertyId): void
     {
@@ -32,7 +34,7 @@ final class PropertySearchSync
 
         $dispatch = function () use ($propertyId): void {
             $this->markPending($propertyId);
-            SearchSyncJob::dispatch($propertyId);
+            SearchBatchJob::dispatch();
         };
 
         if (DB::transactionLevel() > 0) {
@@ -43,14 +45,29 @@ final class PropertySearchSync
     }
 
     /**
-     * Index the trigger property plus any other pending properties (batched).
+     * Drain one batch from the pending set. Called only by SearchBatchJob.
+     *
+     * @return array{
+     *     batch_size: int,
+     *     property_count: int,
+     *     property_ids: list<int>,
+     *     meilisearch_duration_ms: float,
+     *     remaining_pending: int,
+     * }
      */
-    public function syncBatchFor(int $propertyId): void
+    public function processNextBatch(): array
     {
-        $propertyIds = $this->selectBatch($propertyId);
+        $batchSize = max(1, (int) config('serik.search_sync.batch_size', 25));
+        $propertyIds = $this->claimNextBatch($batchSize);
 
         if ($propertyIds === []) {
-            return;
+            return [
+                'batch_size' => $batchSize,
+                'property_count' => 0,
+                'property_ids' => [],
+                'meilisearch_duration_ms' => 0.0,
+                'remaining_pending' => $this->pendingCount(),
+            ];
         }
 
         $properties = Property::query()
@@ -58,102 +75,78 @@ final class PropertySearchSync
             ->get();
 
         $searchable = $properties->filter(static fn (Property $property): bool => $property->shouldBeSearchable());
+        $indexedIds = $searchable->pluck('id')->map(static fn ($id): int => (int) $id)->all();
 
         if ($searchable->isEmpty()) {
-            $this->releasePending($propertyIds);
+            $remaining = $this->pendingCount();
 
-            return;
+            Log::info('[PropertySearchSync] batch skipped (no searchable properties)', [
+                'batch_size' => $batchSize,
+                'property_count' => 0,
+                'claimed_property_ids' => $propertyIds,
+                'meilisearch_duration_ms' => 0.0,
+                'remaining_pending' => $remaining,
+            ]);
+
+            return [
+                'batch_size' => $batchSize,
+                'property_count' => 0,
+                'property_ids' => [],
+                'meilisearch_duration_ms' => 0.0,
+                'remaining_pending' => $remaining,
+            ];
         }
+
+        $started = microtime(true);
 
         try {
             $this->indexCollection($searchable);
-            $this->releasePending($propertyIds);
         } catch (Throwable $e) {
-            Log::warning('[PropertySearchSync] batch index failed — pending IDs retained for retry', [
-                'property_ids' => $propertyIds,
+            $this->requeue($propertyIds);
+
+            Log::warning('[PropertySearchSync] batch index failed — IDs requeued', [
+                'batch_size' => $batchSize,
+                'property_count' => count($indexedIds),
+                'property_ids' => $indexedIds,
+                'claimed_property_ids' => $propertyIds,
+                'remaining_pending' => $this->pendingCount(),
                 'error' => $e->getMessage(),
             ]);
 
             throw $e;
         }
 
-        Log::info('[PropertySearchSync] indexed batch', [
-            'trigger_property_id' => $propertyId,
-            'indexed_count' => $searchable->count(),
-            'property_ids' => $searchable->pluck('id')->all(),
+        $durationMs = round((microtime(true) - $started) * 1000, 2);
+        $remaining = $this->pendingCount();
+
+        Log::info('[PropertySearchSync] batch indexed', [
+            'batch_size' => $batchSize,
+            'property_count' => $searchable->count(),
+            'property_ids' => $indexedIds,
+            'meilisearch_duration_ms' => $durationMs,
+            'remaining_pending' => $remaining,
         ]);
+
+        return [
+            'batch_size' => $batchSize,
+            'property_count' => $searchable->count(),
+            'property_ids' => $indexedIds,
+            'meilisearch_duration_ms' => $durationMs,
+            'remaining_pending' => $remaining,
+        ];
     }
 
-    /**
-     * @return list<int>
-     */
-    private function selectBatch(int $mustIncludeId): array
+    public function pendingCount(): int
     {
-        $lock = Cache::lock(self::PENDING_LOCK_KEY, 30);
+        /** @var array<int, bool> $pending */
+        $pending = Cache::get(self::PENDING_CACHE_KEY, []);
 
-        if (! $lock->get()) {
-            return [$mustIncludeId];
-        }
-
-        try {
-            /** @var array<int, bool> $pending */
-            $pending = Cache::get(self::PENDING_CACHE_KEY, []);
-            if (! is_array($pending)) {
-                $pending = [];
-            }
-
-            $pending[$mustIncludeId] = true;
-            Cache::put(self::PENDING_CACHE_KEY, $pending, 86400);
-
-            $batchSize = max(1, (int) config('serik.search_sync.batch_size', 25));
-            $selected = [$mustIncludeId];
-
-            foreach (array_keys($pending) as $id) {
-                $id = (int) $id;
-                if ($id <= 0 || $id === $mustIncludeId) {
-                    continue;
-                }
-                if (count($selected) >= $batchSize) {
-                    break;
-                }
-                $selected[] = $id;
-            }
-
-            return array_values(array_unique($selected));
-        } finally {
-            $lock->release();
-        }
-    }
-
-    /**
-     * @param  list<int>  $propertyIds
-     */
-    private function releasePending(array $propertyIds): void
-    {
-        if ($propertyIds === []) {
-            return;
-        }
-
-        $lock = Cache::lock(self::PENDING_LOCK_KEY, 10);
-        $lock->block(5, function () use ($propertyIds): void {
-            /** @var array<int, bool> $pending */
-            $pending = Cache::get(self::PENDING_CACHE_KEY, []);
-            if (! is_array($pending)) {
-                $pending = [];
-            }
-
-            foreach ($propertyIds as $id) {
-                unset($pending[(int) $id]);
-            }
-
-            Cache::put(self::PENDING_CACHE_KEY, $pending, 86400);
-        });
+        return is_array($pending) ? count($pending) : 0;
     }
 
     private function markPending(int $propertyId): void
     {
-        $lock = Cache::lock(self::PENDING_LOCK_KEY, 10);
-        $lock->block(5, function () use ($propertyId): void {
+        Cache::lock(self::PENDING_LOCK_KEY, 10)->block(5, function () use ($propertyId): void {
             /** @var array<int, bool> $pending */
             $pending = Cache::get(self::PENDING_CACHE_KEY, []);
             if (! is_array($pending)) {
@@ -161,6 +154,66 @@ final class PropertySearchSync
             }
 
             $pending[$propertyId] = true;
+            Cache::put(self::PENDING_CACHE_KEY, $pending, 86400);
+        });
+    }
+
+    /**
+     * Atomically read and remove up to $batchSize pending property IDs.
+     *
+     * @return list<int>
+     */
+    private function claimNextBatch(int $batchSize): array
+    {
+        return Cache::lock(self::PENDING_LOCK_KEY, 30)->block(10, function () use ($batchSize): array {
+            /** @var array<int, bool> $pending */
+            $pending = Cache::get(self::PENDING_CACHE_KEY, []);
+            if (! is_array($pending) || $pending === []) {
+                return [];
+            }
+
+            $ids = [];
+            foreach (array_keys($pending) as $id) {
+                $id = (int) $id;
+                if ($id <= 0) {
+                    continue;
+                }
+                $ids[] = $id;
+                unset($pending[$id]);
+                if (count($ids) >= $batchSize) {
+                    break;
+                }
+            }
+
+            Cache::put(self::PENDING_CACHE_KEY, $pending, 86400);
+
+            return $ids;
+        });
+    }
+
+    /**
+     * @param  list<int>  $propertyIds
+     */
+    private function requeue(array $propertyIds): void
+    {
+        if ($propertyIds === []) {
+            return;
+        }
+
+        Cache::lock(self::PENDING_LOCK_KEY, 10)->block(5, function () use ($propertyIds): void {
+            /** @var array<int, bool> $pending */
+            $pending = Cache::get(self::PENDING_CACHE_KEY, []);
+            if (! is_array($pending)) {
+                $pending = [];
+            }
+
+            foreach ($propertyIds as $id) {
+                $id = (int) $id;
+                if ($id > 0) {
+                    $pending[$id] = true;
+                }
+            }
+
             Cache::put(self::PENDING_CACHE_KEY, $pending, 86400);
         });
     }
@@ -175,13 +228,6 @@ final class PropertySearchSync
 
         try {
             $properties->searchableSync();
-        } catch (Throwable $e) {
-            Log::warning('[PropertySearchSync] batch index failed', [
-                'property_ids' => $properties->pluck('id')->all(),
-                'error' => $e->getMessage(),
-            ]);
-
-            throw $e;
         } finally {
             config(['scout.queue' => $previous]);
         }

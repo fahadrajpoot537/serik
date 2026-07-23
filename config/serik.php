@@ -35,11 +35,11 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Deferred Meilisearch sync (SearchSyncJob on LOW/search queue)
+    | Deferred Meilisearch sync (SearchBatchJob on LOW/search queue)
     |--------------------------------------------------------------------------
     */
     'search_sync' => [
-        // Max properties indexed per SearchSyncJob Meilisearch request.
+        // Max properties indexed per Meilisearch addDocuments request.
         'batch_size' => (int) env('SERIK_SEARCH_SYNC_BATCH', 25),
     ],
 
