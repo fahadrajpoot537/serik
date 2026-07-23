@@ -35,12 +35,15 @@
         }
 
         const safeFeatures = Array.isArray(features) ? features : [];
+        const enrichedFeatures = (typeof global.enrichMapFeaturesWithPriceLabels === 'function')
+            ? global.enrichMapFeaturesWithPriceLabels(safeFeatures)
+            : safeFeatures;
         source.setData({
             type: 'FeatureCollection',
-            features: safeFeatures,
+            features: enrichedFeatures,
         });
 
-        lastFeatures = safeFeatures;
+        lastFeatures = enrichedFeatures;
         lastAppliedGeneration = generation;
         global.lastMapFeatures = safeFeatures;
 

@@ -5364,6 +5364,128 @@ document.addEventListener("DOMContentLoaded", function () {
         return (!isMapUserLoggedIn && isMapSoldListing(status, props)) ? 'blurred-content' : '';
     };
 
+    window.formatMapMarkerPriceShort = function (value) {
+        const num = parseInt(value, 10) || 0;
+        if (num >= 1_000_000) {
+            const millions = num / 1_000_000;
+            return (millions % 1 === 0 ? millions.toFixed(0) : millions.toFixed(1).replace(/\.0$/, '')) + 'M';
+        }
+        if (num >= 1_000) {
+            const thousands = num / 1_000;
+            return (thousands % 1 === 0 ? thousands.toFixed(0) : thousands.toFixed(1).replace(/\.0$/, '')) + 'K';
+        }
+        return num.toLocaleString('en-CA');
+    };
+
+    window.resolveMapMarkerPriceLabel = function (props) {
+        const status = window.mapListingStatus(props || {});
+        const sold = window.isMapSoldListing(status, props || {});
+        if (sold) {
+            const close = parseInt(props?.ClosePrice, 10) || 0;
+            if (close > 0) {
+                return '$' + window.formatMapMarkerPriceShort(close);
+            }
+            return 'Sold';
+        }
+
+        const price = parseInt(props?.price, 10) || 0;
+        if (price <= 0) {
+            return 'Ask';
+        }
+
+        let label = '$' + window.formatMapMarkerPriceShort(price);
+        if (String(props?.transaction || '').toLowerCase().includes('lease')) {
+            label += '/mo';
+        }
+        return label;
+    };
+
+    window.resolveMapMarkerVariant = function (props) {
+        const status = window.mapListingStatus(props || {});
+        if (window.isMapSoldListing(status, props || {})) {
+            return 'sold';
+        }
+        if (String(props?.transaction || '').toLowerCase().includes('lease')) {
+            return 'lease';
+        }
+        return 'sale';
+    };
+
+    window.enrichMapFeaturesWithPriceLabels = function (features) {
+        return (features || []).map((feature) => {
+            const props = { ...(feature.properties || {}) };
+            props.price_label = window.resolveMapMarkerPriceLabel(props);
+            props.marker_variant = window.resolveMapMarkerVariant(props);
+            return Object.assign({}, feature, { properties: props });
+        });
+    };
+
+    function buildHsPricePinImageData(fillColor) {
+        const scale = 2;
+        const bodyW = 72;
+        const bodyH = 24;
+        const pointerH = 8;
+        const totalW = bodyW;
+        const totalH = bodyH + pointerH;
+        const canvas = document.createElement('canvas');
+        canvas.width = totalW * scale;
+        canvas.height = totalH * scale;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            return null;
+        }
+
+        ctx.scale(scale, scale);
+        const x = 0;
+        const y = 0;
+        const r = 6;
+        const bw = bodyW;
+        const bh = bodyH;
+        const tipX = x + (bw / 2);
+
+        ctx.fillStyle = fillColor;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.lineJoin = 'round';
+
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + bw - r, y);
+        ctx.quadraticCurveTo(x + bw, y, x + bw, y + r);
+        ctx.lineTo(x + bw, y + bh - r);
+        ctx.quadraticCurveTo(x + bw, y + bh, x + bw - r, y + bh);
+        ctx.lineTo(tipX + 5, y + bh);
+        ctx.lineTo(tipX, y + bh + pointerH);
+        ctx.lineTo(tipX - 5, y + bh);
+        ctx.lineTo(x + r, y + bh);
+        ctx.quadraticCurveTo(x, y + bh, x, y + bh - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        return ctx.getImageData(0, 0, canvas.width, canvas.height);
+    }
+
+    function ensureHsPriceMarkerImages(mapInstance) {
+        const variants = {
+            'hs-price-pin-sale': '#0255a1',
+            'hs-price-pin-sold': '#e65100',
+            'hs-price-pin-lease': '#2e7d32',
+        };
+
+        Object.entries(variants).forEach(([id, color]) => {
+            if (mapInstance.hasImage(id)) {
+                return;
+            }
+            const image = buildHsPricePinImageData(color);
+            if (image) {
+                mapInstance.addImage(id, image, { pixelRatio: 2 });
+            }
+        });
+    }
+
     if (window.location.hash === '#modalLogin' || window.location.hash === '#modalRegister') {
         history.replaceState(null, '', window.location.pathname + window.location.search);
     }
@@ -6201,22 +6323,42 @@ if (urlLocation) {
     }
 });
 
-    // ======================
-    // SINGLE PROPERTY MARKERS
-    // ======================
-    
-    map.addLayer({
-        id: 'unclustered-point',
-        type: 'circle',
-        source: 'properties',
-        filter: ['!', ['has', 'point_count']],
-        paint: {
-            'circle-color': '#0255a1',
-            'circle-radius': 8,
-            'circle-stroke-width': 2,
-            'circle-stroke-color': '#fff'
-        }
-    });
+        // ======================
+        // SINGLE PROPERTY PRICE PINS
+        // ======================
+
+        ensureHsPriceMarkerImages(map);
+
+        map.addLayer({
+            id: 'unclustered-point',
+            type: 'symbol',
+            source: 'properties',
+            filter: ['!', ['has', 'point_count']],
+            layout: {
+                'icon-image': [
+                    'match',
+                    ['get', 'marker_variant'],
+                    'sold', 'hs-price-pin-sold',
+                    'lease', 'hs-price-pin-lease',
+                    'hs-price-pin-sale',
+                ],
+                'icon-text-fit': 'both',
+                'icon-text-fit-padding': [2, 8, 2, 8],
+                'text-field': ['coalesce', ['get', 'price_label'], ''],
+                'text-size': 11,
+                'text-font': ['Noto Sans Bold', 'Noto Sans Regular'],
+                'text-anchor': 'center',
+                'text-offset': [0, -0.55],
+                'icon-anchor': 'bottom',
+                'text-allow-overlap': true,
+                'icon-allow-overlap': true,
+                'text-ignore-placement': true,
+                'icon-ignore-placement': true,
+            },
+            paint: {
+                'text-color': '#ffffff',
+            },
+        });
 
     map.addSource('hs-selected-marker', {
         type: 'geojson',
@@ -7704,7 +7846,7 @@ function mapMovedEnoughToRefetch() {
                 if (!cityLocked) {
                     out = filterFeaturesByCityPolygon(out);
                 }
-                return out;
+                return window.enrichMapFeaturesWithPriceLabels(out);
             },
         };
     }

@@ -35,22 +35,25 @@
         }
 
         const safeFeatures = Array.isArray(features) ? features : [];
+        const enrichedFeatures = (typeof global.enrichMapFeaturesWithPriceLabels === 'function')
+            ? global.enrichMapFeaturesWithPriceLabels(safeFeatures)
+            : safeFeatures;
         source.setData({
             type: 'FeatureCollection',
-            features: safeFeatures,
+            features: enrichedFeatures,
         });
 
-        lastFeatures = safeFeatures;
+        lastFeatures = enrichedFeatures;
         lastAppliedGeneration = generation;
-        global.lastMapFeatures = safeFeatures;
+        global.lastMapFeatures = enrichedFeatures;
 
         const countEl = document.getElementById('map-property-count');
         if (countEl) {
-            countEl.innerText = 'Available Properties : ' + safeFeatures.length;
+            countEl.innerText = 'Available Properties : ' + enrichedFeatures.length;
         }
 
         if (typeof global.renderMapListCards === 'function' && !state?.isClusterPanelOpen?.()) {
-            global.renderMapListCards(safeFeatures);
+            global.renderMapListCards(enrichedFeatures);
         }
 
         return true;
