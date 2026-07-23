@@ -1,5 +1,4 @@
 @php
-    use App\Support\ListingImagePipeline;
     use App\Support\SerikMediaUrl;
     use Theme\homzen\Supports\TrebPropertyHelper;
 
@@ -8,10 +7,6 @@
         $property->image_val ?? null,
         is_array($property->images) ? $property->images : []
     );
-
-    if (count($images) <= 1 && ! empty($property->external_id) && $property->id) {
-        app(ListingImagePipeline::class)->queueForLazyRequest((int) $property->id);
-    }
 
     $statusLabel = $property->isSoldHistory()
         ? TrebPropertyHelper::soldStatusLabel($property->MlsStatus)

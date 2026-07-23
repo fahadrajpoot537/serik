@@ -9817,15 +9817,15 @@ function isUsableMapImageUrl(url) {
     if (!url || typeof url !== 'string') {
         return false;
     }
-    if (url.includes('trreb-image.ampre.ca') || url.includes('ampre.ca/trreb')) {
-        return false;
-    }
-    if (url.includes('/rs:fit') || url.includes('rs:fit:')) {
+    if (url.includes('trreb-image.ampre.ca') || url.includes('/rs:fit') || url.includes('rs:fit:')) {
         return false;
     }
     try {
         const parsed = new URL(url, window.location.origin);
         if (parsed.hostname.replace(/^www\./, '') === window.location.hostname.replace(/^www\./, '')) {
+            if (parsed.pathname.startsWith('/storage/properties/treb/')) {
+                return true;
+            }
             if (!parsed.pathname.startsWith('/storage/') && /^\/[A-Za-z0-9_-]+\//.test(parsed.pathname)) {
                 return false;
             }
@@ -11035,15 +11035,15 @@ function loadImages() {
         }
 
         const origin = typeof serikCanonicalOrigin === 'function' ? serikCanonicalOrigin() : window.location.origin.replace(/\/$/, '');
-        const webpUrl = origin + '/storage/properties/treb/' + encodeURIComponent(String(listingKey).toUpperCase()) + '/cover.webp';
+        const proxyUrl = origin + '/storage/properties/treb/' + encodeURIComponent(String(listingKey).toUpperCase()) + '/cover.webp';
 
-        if (img.complete && img.naturalWidth > 0 && img.src === webpUrl) {
+        if (img.complete && img.naturalWidth > 0 && img.src.includes('/storage/properties/treb/')) {
             img.dataset.loaded = 'true';
             return;
         }
 
-        if (img.src !== webpUrl) {
-            img.src = webpUrl;
+        if (!img.src.includes('/storage/properties/treb/') && img.src !== proxyUrl) {
+            img.src = proxyUrl;
         }
 
         if (img.dataset.fetchBound === '1') {
@@ -11059,7 +11059,7 @@ function loadImages() {
                 .then(res => res.json())
                 .then(data => {
                     const imageUrl = data.media || (Array.isArray(data.images) ? data.images[0] : null);
-                    if (imageUrl && !String(imageUrl).includes('trreb-image.ampre.ca')) {
+                    if (imageUrl) {
                         img.src = imageUrl;
                         const listingItem = img.closest('.listing-item');
                         if (listingItem) {

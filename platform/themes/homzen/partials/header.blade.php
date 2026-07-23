@@ -1333,10 +1333,10 @@ function loadImages() {
         }
 
         const origin = window.location.origin.replace(/\/$/, '');
-        const webpUrl = origin + '/storage/properties/treb/' + encodeURIComponent(String(listingKey).toUpperCase()) + '/cover.webp';
+        const proxyUrl = origin + '/storage/properties/treb/' + encodeURIComponent(String(listingKey).toUpperCase()) + '/cover.webp';
 
-        if (img.src !== webpUrl) {
-            img.src = webpUrl;
+        if (!img.src.includes('/storage/properties/treb/') && img.src !== proxyUrl) {
+            img.src = proxyUrl;
         }
 
         if (img.dataset.fetchBound !== '1') {
@@ -1349,7 +1349,7 @@ function loadImages() {
                     .then(res => res.json())
                     .then(data => {
                         const imgUrl = data.media || (Array.isArray(data.images) ? data.images[0] : '');
-                        if (imgUrl && !String(imgUrl).includes('trreb-image.ampre.ca')) {
+                        if (imgUrl) {
                             img.src = imgUrl;
                             img.style.opacity = '0';
                             img.onload = () => {

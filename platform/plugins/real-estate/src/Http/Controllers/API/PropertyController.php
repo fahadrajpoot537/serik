@@ -28,7 +28,6 @@ use Theme\homzen\Supports\TrebPropertyHelper;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Schema;
 use Botble\RealEstate\Supports\PropertyFulltextSearch;
-use App\Support\TrebImageStore;
 
 class PropertyController extends BaseController
 {
@@ -284,10 +283,6 @@ class PropertyController extends BaseController
                 SlugHelper::createSlug($property, $slug);
             }
 
-            if ($mediaUrl && ($property->wasRecentlyCreated || $this->trebImageStore()->isRemoteUrl($property->image_val))) {
-                $this->queueListingImagesAfterCommit((int) $property->id);
-            }
-
             //$this->importPropertyImages($item['ListingKey']);
 
 
@@ -441,10 +436,6 @@ class PropertyController extends BaseController
                     SlugHelper::createSlug($property, $slug);
                 }
 
-                if ($mediaUrl && ($property->wasRecentlyCreated || $this->trebImageStore()->isRemoteUrl($property->image_val))) {
-                    $this->queueListingImagesAfterCommit((int) $property->id);
-                }
-
                 //$this->importPropertyImages($item['ListingKey']);
 
 
@@ -596,10 +587,8 @@ class PropertyController extends BaseController
             $created = 0;
             $updated = 0;
             $newPropertyIds = [];
-            $imageWorkPropertyIds = [];
-
             foreach ($payload['value'] as $item) {
-                $result = $this->saveAmpPropertyItem($item, $newPropertyIds, $imageWorkPropertyIds);
+                $result = $this->saveAmpPropertyItem($item, $newPropertyIds);
 
                 if ($result === 'created') {
                     $created++;
@@ -679,7 +668,7 @@ class PropertyController extends BaseController
      * (addpropertiescron) and the hourly site-wide recent sweep
      * (importRecentModifiedAmpListings).
      */
-    private function saveAmpPropertyItem(array $item, array &$newPropertyIds, array &$imageWorkPropertyIds = []): string
+    private function saveAmpPropertyItem(array $item, array &$newPropertyIds): string
     {
         if (empty($item['ListingKey'])) {
             return 'skipped';
@@ -826,48 +815,22 @@ class PropertyController extends BaseController
 
             $newPropertyIds[] = $property->id;
 
-            $this->registerImageWorkIfNeeded($property, $imageWorkPropertyIds);
-
-            if (! app(\App\Support\ListingImagePipeline::class)->needsProcessing($property)) {
-                try {
-                    $property->searchable();
-                } catch (\Throwable) {
-                    //
-                }
+            try {
+                $property->searchable();
+            } catch (\Throwable) {
+                //
             }
 
             return 'created';
         }
 
-        $this->registerImageWorkIfNeeded($property, $imageWorkPropertyIds);
-
-        if (! app(\App\Support\ListingImagePipeline::class)->needsProcessing($property)) {
-            try {
-                $property->searchable();
-            } catch (\Throwable) {
-                // Non-fatal — Meili catch-up via recovery cron.
-            }
+        try {
+            $property->searchable();
+        } catch (\Throwable) {
+            // Non-fatal — Meili catch-up via recovery cron.
         }
 
         return 'updated';
-    }
-
-    /**
-     * @param  array<int, int>  $imageWorkPropertyIds
-     */
-    private function registerImageWorkIfNeeded(Property $property, array &$imageWorkPropertyIds): void
-    {
-        if (! app(\App\Support\ListingImagePipeline::class)->needsProcessing($property)) {
-            return;
-        }
-
-        $imageWorkPropertyIds[(int) $property->id] = (int) $property->id;
-        $this->queueListingImagesAfterCommit((int) $property->id);
-    }
-
-    private function queueListingImagesAfterCommit(int $propertyId): void
-    {
-        app(\App\Support\ListingImagePipeline::class)->queueAfterCommit($propertyId);
     }
 
     /**
@@ -927,10 +890,9 @@ class PropertyController extends BaseController
         $pages = 0;
         $stoppedEarly = false;
         $newPropertyIds = [];
-        $imageWorkPropertyIds = [];
 
         if (! cache()->add('amp_recent_lock', true, 200)) {
-            return response()->json(['status' => 'already running', 'new_id_list' => [], 'image_work_id_list' => []]);
+            return response()->json(['status' => 'already running', 'new_id_list' => []]);
         }
 
         try {
@@ -983,7 +945,7 @@ class PropertyController extends BaseController
                         continue;
                     }
 
-                    $result = $this->saveAmpPropertyItem($item, $newPropertyIds, $imageWorkPropertyIds);
+                    $result = $this->saveAmpPropertyItem($item, $newPropertyIds);
 
                     if ($result === 'created') {
                         $created++;
@@ -999,8 +961,6 @@ class PropertyController extends BaseController
                 $skip += $top;
             }
 
-            // Image persistence is queued per listing in saveAmpPropertyItem via ListingImagePipeline.
-
             // Geocoding + history are owned by serik:sync-live pipeline
             // (GeocodePropertyJob → SyncPropertyHistoryJob). Do not inline here —
             // a long Nominatim walk was killing the 5-min / 300s cron.
@@ -1013,8 +973,6 @@ class PropertyController extends BaseController
                 'unchanged' => $unchanged,
                 'new_ids' => count($newPropertyIds),
                 'new_id_list' => array_values(array_map('intval', $newPropertyIds)),
-                'image_work_ids' => count($imageWorkPropertyIds),
-                'image_work_id_list' => array_values(array_map('intval', $imageWorkPropertyIds)),
                 'stopped_early' => $stoppedEarly,
             ]);
         } catch (\Throwable $e) {
@@ -1026,7 +984,6 @@ class PropertyController extends BaseController
                 'created' => $created,
                 'updated' => $updated,
                 'new_id_list' => array_values(array_map('intval', $newPropertyIds)),
-                'image_work_id_list' => array_values(array_map('intval', $imageWorkPropertyIds)),
             ], 500);
         } finally {
             cache()->forget('amp_recent_lock');
@@ -1778,7 +1735,8 @@ class PropertyController extends BaseController
                             continue;
                         }
 
-                        $this->queueListingImagesAfterCommit((int) $property->id);
+                        $property->image_val = $firstImage;
+                        $property->saveQuietly();
 
                         cache()->put('property_image_last_id', $property->id);
 
@@ -3573,16 +3531,9 @@ class PropertyController extends BaseController
         return $slugKey;
     }
 
-    private function trebImageStore(): TrebImageStore
-    {
-        return app(TrebImageStore::class);
-    }
-
     public function persistTrebImagesForProperty(Property $property, bool $withGallery = false): bool
     {
-        return app(\App\Support\ListingImagePipeline::class)
-            ->persist($property, $withGallery)
-            ->changed;
+        return false;
     }
 
     /**
@@ -4913,9 +4864,6 @@ class PropertyController extends BaseController
                 return null;
             }
 
-            // Primary image persistence is handled exclusively by ListingImagePipeline.
-            $this->queueListingImagesAfterCommit((int) $property->id);
-
             // Coordinates. TREB lat/lng are not exposed by this feed, so a single
             // inline geocode (Nominatim, ~0.5-1s) runs on the FIRST fallback only.
             // Bulk gap-import sets $geocodeNow=false and lets serik:geocode-all
@@ -4929,8 +4877,7 @@ class PropertyController extends BaseController
                 }
             }
 
-            // Index into Meilisearch only when images are already complete locally.
-            if ($indexNow && ! app(\App\Support\ListingImagePipeline::class)->needsProcessing($property)) {
+            if ($indexNow) {
                 try {
                     $property->searchable();
                 } catch (\Throwable $e) {
@@ -5022,13 +4969,6 @@ class PropertyController extends BaseController
             $searchableChanged = $recon['updated'];
         } catch (\Throwable $e) {
             Log::warning('hydrate reconcile failed: ' . $e->getMessage(), ['key' => $listingKey]);
-        }
-
-        // --- images: queue ListingImagePipeline (single source of truth) ---
-        try {
-            app(\App\Support\ListingImagePipeline::class)->queueAfterCommit((int) $property->id);
-        } catch (\Throwable $e) {
-            Log::warning('hydrate image queue failed: ' . $e->getMessage(), ['key' => $listingKey]);
         }
 
         // --- coordinates (persisted) ---
@@ -6094,7 +6034,7 @@ class PropertyController extends BaseController
                         ? (($h['transaction_type'] ?? '') === 'For Lease' ? 'For Lease' : 'For Sale')
                         : $mls,
                     'mls_status' => $mls,
-                    'image' => \App\Support\SerikMediaUrl::mapListingCover((string) ($h['external_id'] ?? '')),
+                    'image' => '',
                     'price' => $h['price'] ?? 0,
                     'ClosePrice' => $h['close_price'] ?? null,
                     'bedrooms' => $h['number_bedroom'] ?? null,
@@ -6328,7 +6268,7 @@ class PropertyController extends BaseController
                 continue;
             }
 
-            $img = \App\Support\SerikMediaUrl::mapListingCover($listingKey, (string) $row->image_val);
+            $img = \App\Support\TrebImageProxy::coverPublicUrl($listingKey);
             $data[(string) $row->id] = $img;
             $data[strtoupper((string) $row->external_id)] = $img;
         }
@@ -6402,10 +6342,6 @@ class PropertyController extends BaseController
             $property->image_val ?? null,
             is_array($property->images ?? null) ? $property->images : []
         );
-
-        if (count($images) <= 1) {
-            app(\App\Support\ListingImagePipeline::class)->queueForLazyRequest((int) $property->id);
-        }
 
         return response()->json([
             'images' => $images,

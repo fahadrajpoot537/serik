@@ -1,6 +1,5 @@
 <?php
 
-use App\Jobs\DispatchTrebImagesWebpJob;
 use App\Jobs\RunArtisanOnLowQueueJob;
 use App\Support\SerikQueue;
 use App\Support\SerikScheduler;
@@ -161,31 +160,6 @@ $app = Application::configure(basePath: dirname(__DIR__))
             ->dailyAt('03:30')
             ->withoutOverlapping(10)
             ->appendOutputTo(storage_path('logs/treb-reconcile.log'));
-
-        // F) TREB image WebP backfill — dispatch lightweight job; workers process images lane.
-        $schedule->call(function () {
-            try {
-                if (! SerikScheduler::shouldDispatchImageBackfill()) {
-                    Log::debug('[schedule] skipped image backfill dispatch', [
-                        'images_depth' => SerikScheduler::imagesQueueDepth(),
-                    ]);
-
-                    return 0;
-                }
-
-                DispatchTrebImagesWebpJob::dispatch(
-                    chunk: (int) config('serik.scheduler.treb_images_chunk', 50),
-                );
-            } catch (\Throwable $e) {
-                Log::error('[schedule] image backfill dispatch failed: ' . $e->getMessage());
-            }
-
-            return 0;
-        })
-            ->name('serik-treb-images-webp-dispatch')
-            ->everyThirtyMinutes()
-            ->withoutOverlapping(30)
-            ->appendOutputTo(storage_path('logs/treb-images-webp.log'));
     })
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->prepend(\App\Http\Middleware\ForceCanonicalDomainMiddleware::class);

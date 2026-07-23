@@ -17,63 +17,20 @@ final class SerikMediaUrl
     }
 
     /**
-     * Browser-safe cover image for map cluster/list cards.
-     * Never returns trreb-image.ampre.ca (403 in browser) — uses local WebP route.
+     * Browser-safe cover image (same-origin proxy that streams TREB CDN).
      */
     public static function mapListingCover(?string $listingKey, ?string $imageVal = null): string
     {
         $listingKey = strtoupper(trim((string) $listingKey));
-        $imageVal = trim((string) $imageVal);
-
-        if ($listingKey !== '') {
-            $trebRelative = 'properties/treb/' . $listingKey . '/cover.webp';
-            if (self::resolveExistingRelativePath($trebRelative) !== null) {
-                return self::toPublic($trebRelative);
-            }
-
-            $firstGallery = 'properties/treb/' . $listingKey . '/01.webp';
-            if (self::resolveExistingRelativePath($firstGallery) !== null) {
-                return self::toPublic($firstGallery);
-            }
+        if ($listingKey === '' || ! TrebImageProxy::listingHasImage($listingKey, $imageVal)) {
+            return self::placeholder();
         }
 
-        if ($imageVal !== '' && ! self::isRemoteUrl($imageVal)) {
-            $relative = ltrim(str_replace('\\', '/', $imageVal), '/');
-            if (self::resolveExistingRelativePath($relative) !== null) {
-                return self::toPublic($relative);
-            }
-            if (preg_match('/^L3RycmVi/i', $relative) && $listingKey !== '') {
-                return self::trebCoverPublicUrl($listingKey);
-            }
-        }
-
-        if ($imageVal !== '' && self::isRemoteUrl($imageVal)) {
-            if (
-                $listingKey !== ''
-                && (
-                    str_contains($imageVal, 'trreb-image.ampre.ca')
-                    || str_contains($imageVal, '/rs:')
-                    || str_contains($imageVal, 'rs:fit')
-                )
-            ) {
-                return self::trebCoverPublicUrl($listingKey);
-            }
-
-            if (! str_contains($imageVal, 'trreb-image.ampre.ca') && ! str_contains($imageVal, '/rs:')) {
-                return self::normalizeExternalUrl($imageVal);
-            }
-        }
-
-        if ($listingKey !== '') {
-            return self::trebCoverPublicUrl($listingKey);
-        }
-
-        return self::placeholder();
+        return TrebImageProxy::coverPublicUrl($listingKey);
     }
 
     /**
-     * Browser-safe gallery URLs for property detail pages.
-     * Never exposes TREB CDN URLs — uses local WebP paths when available.
+     * Browser-safe gallery URLs (same-origin proxy paths).
      *
      * @param  array<int, string>  $dbImages
      * @return array<int, string>
@@ -81,90 +38,33 @@ final class SerikMediaUrl
     public static function mapListingGalleryUrls(?string $listingKey, ?string $imageVal = null, array $dbImages = []): array
     {
         $listingKey = strtoupper(trim((string) $listingKey));
-        $urls = [];
-
-        foreach ($dbImages as $path) {
-            if (! is_string($path) || trim($path) === '') {
-                continue;
-            }
-
-            if (self::isRemoteUrl($path)) {
-                continue;
-            }
-
-            if (self::resolveExistingRelativePath($path) === null) {
-                continue;
-            }
-
-            $public = self::toPublic($path);
-            if (! str_contains($public, 'placeholder.png')) {
-                $urls[] = $public;
-            }
-        }
-
-        $diskUrls = $listingKey !== '' ? self::discoverLocalTrebGalleryUrls($listingKey) : [];
-
-        if ($diskUrls !== [] && count($diskUrls) >= count($urls)) {
-            return $diskUrls;
-        }
-
-        if ($urls !== []) {
-            return array_values(array_unique($urls));
-        }
-
-        if ($diskUrls !== []) {
-            return $diskUrls;
-        }
-
-        $cover = self::mapListingCover($listingKey !== '' ? $listingKey : null, $imageVal);
-        if ($cover !== '' && ! str_contains($cover, 'placeholder.png')) {
-            return [$cover];
-        }
-
-        return [];
-    }
-
-    public static function trebCoverPublicUrl(string $listingKey): string
-    {
-        $listingKey = strtoupper(preg_replace('/[^A-Z0-9]/', '', $listingKey));
-
-        return CanonicalUrl::normalize(asset('storage/properties/treb/' . $listingKey . '/cover.webp'));
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    private static function discoverLocalTrebGalleryUrls(string $listingKey): array
-    {
-        $listingKey = strtoupper(preg_replace('/[^A-Z0-9]/', '', $listingKey));
         if ($listingKey === '') {
             return [];
         }
 
-        $urls = [];
-        $coverRelative = 'properties/treb/' . $listingKey . '/cover.webp';
-        if (self::resolveExistingRelativePath($coverRelative) !== null) {
-            $urls[] = self::toPublic($coverRelative);
+        $remoteUrls = TrebImageProxy::remoteUrlsForListing($listingKey, $imageVal);
+        if ($remoteUrls === []) {
+            return [];
         }
 
-        for ($i = 1; $i <= 25; $i++) {
-            $relative = 'properties/treb/' . $listingKey . '/' . sprintf('%02d.webp', $i);
-            if (self::resolveExistingRelativePath($relative) === null) {
-                if ($i === 1 && $urls === []) {
-                    continue;
-                }
-
-                break;
-            }
-
-            $urls[] = self::toPublic($relative);
+        $urls = [];
+        foreach (array_keys($remoteUrls) as $index) {
+            $urls[] = TrebImageProxy::publicUrl($listingKey, (int) $index);
         }
 
         return array_values(array_unique($urls));
     }
 
     /**
-     * Resolve a remote fetch URL for server-side image download (not for <img> src).
+     * @deprecated Use mapListingCover() instead.
+     */
+    public static function trebCoverPublicUrl(string $listingKey): string
+    {
+        return TrebImageProxy::coverPublicUrl($listingKey);
+    }
+
+    /**
+     * Resolve TREB CDN URL from image_val (server-side; browsers must use mapListingCover).
      */
     public static function resolveTrebRemoteUrl(?string $path): ?string
     {
@@ -192,6 +92,34 @@ final class SerikMediaUrl
         }
 
         return $fallback ?? self::placeholder();
+    }
+
+    public static function resolveCdnUrl(?string $value): ?string
+    {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return null;
+        }
+
+        if (self::isRemoteUrl($value)) {
+            if (TrebMediaFilter::isPhotoMediaUrl($value)) {
+                return self::normalizeExternalUrl($value);
+            }
+
+            $resolved = self::resolveTrebRemoteUrl($value);
+            if ($resolved !== null && TrebMediaFilter::isPhotoMediaUrl($resolved)) {
+                return self::normalizeExternalUrl($resolved);
+            }
+
+            return null;
+        }
+
+        $resolved = self::resolveTrebRemoteUrl($value);
+        if ($resolved !== null && TrebMediaFilter::isPhotoMediaUrl($resolved)) {
+            return self::normalizeExternalUrl($resolved);
+        }
+
+        return null;
     }
 
     private static function isRemoteUrl(string $value): bool

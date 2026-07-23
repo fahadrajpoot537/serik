@@ -73,21 +73,17 @@ class ImportLiveTrebPropertyJob implements ShouldQueue
 
         $property->refresh();
 
-        app(\App\Support\ListingImagePipeline::class)->queueAfterCommit((int) $property->id);
-
         if ((float) ($property->latitude ?? 0) !== 0.0) {
             SyncPropertyHistoryJob::dispatch((int) $property->id);
         }
 
-        if (! app(\App\Support\ListingImagePipeline::class)->needsProcessing($property)) {
-            try {
-                $property->searchable();
-            } catch (Throwable $e) {
-                Log::warning('[ImportLiveTrebPropertyJob] meilisearch index failed', [
-                    'listing_key' => $listingKey,
-                    'error' => $e->getMessage(),
-                ]);
-            }
+        try {
+            $property->searchable();
+        } catch (Throwable $e) {
+            Log::warning('[ImportLiveTrebPropertyJob] meilisearch index failed', [
+                'listing_key' => $listingKey,
+                'error' => $e->getMessage(),
+            ]);
         }
 
         Cache::forget(LiveTrebPropertyFallbackService::LIVE_PENDING_PREFIX . $listingKey);

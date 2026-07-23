@@ -161,7 +161,7 @@ class SyncLiveJob implements ShouldQueue, ShouldBeUnique
                 ->where('latitude', '!=', '0')
                 ->count();
 
-            // Images queued during import via ListingImagePipeline::queueAfterCommit in saveAmpPropertyItem.
+            // Property sync, geocode, and search indexing run independently of images.
 
             // Geocode + history chain for brand-new listings only.
             foreach ($newIds as $propertyId) {
