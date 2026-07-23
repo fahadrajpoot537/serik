@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Support\SerikMediaUrl;
+use App\Support\TrebImagePersistence;
 use App\Support\TrebImageStore;
-use Botble\RealEstate\Http\Controllers\API\PropertyController;
 use Botble\RealEstate\Models\Property;
 use Theme\homzen\Supports\TrebPropertyHelper;
 use Illuminate\Http\Request;
@@ -50,13 +50,13 @@ final class TrebWebpController extends Controller
             ->where('external_id', $listingKey)
             ->first();
 
-        $controller = app(PropertyController::class);
+        $persistence = app(TrebImagePersistence::class);
 
         if ($property !== null) {
             if (strcasecmp($filename, 'cover.webp') === 0) {
-                $controller->persistTrebImagesForProperty($property, false);
+                $persistence->persistForProperty($property, false);
             } else {
-                $controller->persistTrebImagesForProperty($property, true);
+                $persistence->persistForProperty($property, true);
             }
 
             if (Storage::disk('public')->exists($relative)) {
@@ -64,11 +64,8 @@ final class TrebWebpController extends Controller
             }
         }
 
-        $remote = (string) ($controller->getMediaUrl($listingKey) ?: '');
-        if ($remote === '') {
-            $images = TrebPropertyHelper::getPropertyImages($listingKey, null, true);
-            $remote = (string) ($images[0] ?? '');
-        }
+        $images = TrebPropertyHelper::getPropertyImages($listingKey, null, true);
+        $remote = (string) ($images[0] ?? '');
 
         if ($remote === '') {
             return;

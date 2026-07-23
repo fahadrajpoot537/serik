@@ -3,8 +3,8 @@
 namespace App\Jobs;
 
 use App\Support\SerikQueue;
+use App\Support\TrebImagePersistence;
 use App\Support\TrebImageStore;
-use Botble\RealEstate\Http\Controllers\API\PropertyController;
 use Botble\RealEstate\Models\Property;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
@@ -17,7 +17,7 @@ use Throwable;
 
 /**
  * Persist TREB cover (and optional gallery) WebP for one listing on the LOW queue.
- * Reuses PropertyController::persistTrebImagesForProperty — same path as serik:treb-images-webp.
+ * Reuses TrebImagePersistence — same path as serik:treb-images-webp.
  */
 class PersistTrebImagesJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
 {
@@ -47,7 +47,7 @@ class PersistTrebImagesJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
         return 'persist-treb-images:' . $this->propertyId . ($this->withGallery ? ':gallery' : '');
     }
 
-    public function handle(PropertyController $controller, TrebImageStore $store): void
+    public function handle(TrebImagePersistence $persistence, TrebImageStore $store): void
     {
         @set_time_limit(0);
 
@@ -78,7 +78,7 @@ class PersistTrebImagesJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
         }
 
         try {
-            $controller->persistTrebImagesForProperty($property, $this->withGallery);
+            $persistence->persistForProperty($property, $this->withGallery);
         } catch (Throwable $e) {
             Log::warning('[PersistTrebImagesJob] failed', [
                 'property_id' => $this->propertyId,

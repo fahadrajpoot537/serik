@@ -3659,21 +3659,11 @@ class PropertyController extends BaseController
 
     public function persistTrebImagesForProperty(Property $property, bool $withGallery = false): bool
     {
-        $listingKey = strtoupper(trim((string) $property->external_id));
-        if ($listingKey === '') {
-            return false;
-        }
-
-        $changed = $this->assignTrebCoverImage($property, $listingKey);
-        if ($withGallery) {
-            $changed = $this->assignTrebGallery($property, $listingKey) || $changed;
-        }
-
-        if ($changed) {
-            $property->saveQuietly();
-        }
-
-        return $changed;
+        return app(\App\Support\TrebImagePersistence::class)->persistForProperty(
+            $property,
+            $withGallery,
+            fn (string $listingKey) => $this->getMediaUrl($listingKey)
+        );
     }
 
     /**

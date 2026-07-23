@@ -3652,7 +3652,7 @@ Artisan::command('serik:treb-images-webp
     $deadline = $maxRuntime > 0 ? microtime(true) + $maxRuntime : null;
     $stateKey = 'serik_treb_images_webp_state';
 
-    $controller = app(PropertyController::class);
+    $persistence = app(\App\Support\TrebImagePersistence::class);
     $store = app(\App\Support\TrebImageStore::class);
 
     if ($singleListing !== '') {
@@ -3666,7 +3666,7 @@ Artisan::command('serik:treb-images-webp
             return 1;
         }
 
-        $ok = $controller->persistTrebImagesForProperty($property, true);
+        $ok = $persistence->persistForProperty($property, true);
         $this->info($ok ? "Converted {$singleListing}" : "No changes for {$singleListing}");
 
         return 0;
@@ -3763,7 +3763,7 @@ Artisan::command('serik:treb-images-webp
                 }
 
                 try {
-                    if ($controller->persistTrebImagesForProperty($property, $withGallery)) {
+                    if ($persistence->persistForProperty($property, $withGallery)) {
                         $stats['converted']++;
                         if ($delayMs > 0) {
                             usleep($delayMs * 1000);
