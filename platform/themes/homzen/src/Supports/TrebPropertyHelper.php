@@ -935,6 +935,7 @@ class TrebPropertyHelper
             }
 
             $cacheKeys = [
+                'treb_images_v5_' . $normalizedKey,
                 'treb_images_v4_' . $normalizedKey,
                 'treb_images_v3_' . $normalizedKey,
                 'treb_property_images_' . $normalizedKey,
@@ -969,7 +970,7 @@ class TrebPropertyHelper
             if ($images !== []) {
                 $photos = \App\Support\TrebMediaFilter::filterPhotoUrls($images);
                 if ($photos !== []) {
-                    Cache::put('treb_images_v4_' . $normalizedKey, $photos, 3600);
+                    Cache::put('treb_images_v5_' . $normalizedKey, $photos, 3600);
                     Cache::put('treb_property_images_' . $normalizedKey, $photos, 86400);
 
                     return $photos;
@@ -989,7 +990,7 @@ class TrebPropertyHelper
      *
      * @return array<int, string>
      */
-    public static function getPropertyImagesForPersistence(?string $listingKey, ?string $imageVal = null): array
+    public static function getPropertyImagesForPersistence(?string $listingKey, ?string $imageVal = null, bool $fresh = false): array
     {
         if (empty($listingKey)) {
             return [];
@@ -997,18 +998,24 @@ class TrebPropertyHelper
 
         $normalizedKey = strtoupper(trim($listingKey));
 
-        $cacheKeys = [
-            'treb_images_v4_' . $normalizedKey,
-            'treb_images_v3_' . $normalizedKey,
-            'treb_property_images_' . $normalizedKey,
-            'treb_property_images_' . $listingKey,
-        ];
+        if (! $fresh) {
+            $cacheKeys = [
+                'treb_images_v5_' . $normalizedKey,
+                'treb_images_v4_' . $normalizedKey,
+                'treb_images_v3_' . $normalizedKey,
+                'treb_property_images_' . $normalizedKey,
+                'treb_property_images_' . $listingKey,
+            ];
 
-        foreach ($cacheKeys as $cacheKey) {
-            $cached = Cache::get($cacheKey);
-            if (is_array($cached) && $cached !== []) {
+            foreach ($cacheKeys as $cacheKey) {
+                $cached = Cache::get($cacheKey);
+                if (! is_array($cached) || $cached === []) {
+                    continue;
+                }
+
                 $filtered = self::filterPersistenceImageUrls($cached);
-                if ($filtered !== []) {
+                // Stale caches often hold a single cover URL — always refetch AMP for gallery.
+                if (count($filtered) >= 2) {
                     return $filtered;
                 }
             }
@@ -1023,7 +1030,7 @@ class TrebPropertyHelper
             if ($images !== []) {
                 $photos = \App\Support\TrebMediaFilter::filterPhotoUrls($images);
                 if ($photos !== []) {
-                    Cache::put('treb_images_v4_' . $normalizedKey, $photos, 3600);
+                    Cache::put('treb_images_v5_' . $normalizedKey, $photos, 3600);
                     Cache::put('treb_property_images_' . $normalizedKey, $photos, 86400);
 
                     return $photos;

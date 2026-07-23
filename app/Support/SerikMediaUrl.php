@@ -30,6 +30,11 @@ final class SerikMediaUrl
             if (self::resolveExistingRelativePath($trebRelative) !== null) {
                 return self::toPublic($trebRelative);
             }
+
+            $firstGallery = 'properties/treb/' . $listingKey . '/01.webp';
+            if (self::resolveExistingRelativePath($firstGallery) !== null) {
+                return self::toPublic($firstGallery);
+            }
         }
 
         if ($imageVal !== '' && ! self::isRemoteUrl($imageVal)) {

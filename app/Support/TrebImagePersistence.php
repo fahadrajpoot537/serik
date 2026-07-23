@@ -111,24 +111,18 @@ final class TrebImagePersistence
 
     private function assignGallery(Property $property, string $listingKey): bool
     {
-        $existing = is_array($property->images) ? $property->images : [];
         $diskGallery = $this->store->discoverGalleryPathsOnDisk($listingKey);
 
         $remoteGallery = TrebPropertyHelper::getPropertyImagesForPersistence(
             $listingKey,
-            $property->image_val
+            $property->image_val,
+            fresh: true
         );
 
-        $existingValid = array_values(array_filter(
-            $existing,
-            fn ($path) => is_string($path) && $this->store->storedWebpExists($path)
-        ));
+        $remoteCount = count($remoteGallery);
+        $diskCount = count($diskGallery);
 
-        if ($remoteGallery !== [] && count($existingValid) >= count($remoteGallery)) {
-            return false;
-        }
-
-        if ($remoteGallery === [] && $diskGallery !== [] && count($existingValid) >= count($diskGallery)) {
+        if ($remoteCount >= 2 && $diskCount >= $remoteCount) {
             return false;
         }
 

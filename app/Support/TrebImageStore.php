@@ -306,10 +306,10 @@ final class TrebImageStore
     {
         $sources = \App\Support\TrebMediaFilter::filterPhotoUrls(array_values(array_filter($sources)));
         $stored = [];
-        $index = 0;
+        $photoIndex = 0;
 
-        foreach (array_values(array_filter($sources)) as $source) {
-            if ($index >= $max) {
+        foreach ($sources as $source) {
+            if ($photoIndex >= $max) {
                 break;
             }
 
@@ -318,11 +318,13 @@ final class TrebImageStore
                 continue;
             }
 
+            $filename = $photoIndex === 0 ? 'cover.webp' : sprintf('%02d.webp', $photoIndex);
+
             if ($this->isRemoteUrl($source) && $this->isInternalStorageUrl($source)) {
                 $local = $this->resolveLocalRelativePath($source);
                 if ($local !== null) {
                     $stored[] = $local;
-                    $index++;
+                    $photoIndex++;
                 }
 
                 continue;
@@ -330,20 +332,16 @@ final class TrebImageStore
 
             if ($this->isStoredWebp($source) && $this->storedWebpExists($source)) {
                 $stored[] = ltrim(str_replace('\\', '/', $this->normalizeRelativePath($source) ?? $source), '/');
-                $index++;
+                $photoIndex++;
 
                 continue;
             }
 
-            $path = $this->persistFromUrl(
-                $listingKey,
-                $source,
-                sprintf('%02d.webp', $index + 1)
-            );
+            $path = $this->persistFromUrl($listingKey, $source, $filename);
 
             if ($path) {
                 $stored[] = $path;
-                $index++;
+                $photoIndex++;
             }
         }
 

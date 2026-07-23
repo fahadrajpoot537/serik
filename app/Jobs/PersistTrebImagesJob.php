@@ -32,7 +32,7 @@ class PersistTrebImagesJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
     /** @var list<int> */
     public array $backoff = [30, 60, 120];
 
-    public int $timeout = 120;
+    public int $timeout = 600;
 
     public int $uniqueFor = 300;
 
@@ -78,23 +78,11 @@ class PersistTrebImagesJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
         }
 
         if ($this->withGallery) {
-            $images = is_array($property->images) ? $property->images : [];
-            $existingValid = collect($images)
-                ->filter(fn ($path) => $store->storedWebpExists(is_string($path) ? $path : null))
-                ->count();
+            $remotePhotos = TrebPropertyHelper::getPropertyImagesForPersistence($listingKey, $property->image_val, fresh: true);
+            $remoteCount = count($remotePhotos);
+            $diskCount = count($store->discoverGalleryPathsOnDisk($listingKey));
 
-            $remotePhotos = TrebPropertyHelper::getPropertyImagesForPersistence($listingKey, $property->image_val);
-            $targetCount = count($remotePhotos);
-
-            if ($targetCount === 0) {
-                $targetCount = count($store->discoverGalleryPathsOnDisk($listingKey));
-            }
-
-            if (
-                $targetCount > 0
-                && $existingValid >= $targetCount
-                && $store->storedWebpExists($property->image_val)
-            ) {
+            if ($remoteCount >= 2 && $diskCount >= $remoteCount && $store->storedWebpExists($property->image_val)) {
                 return;
             }
         }

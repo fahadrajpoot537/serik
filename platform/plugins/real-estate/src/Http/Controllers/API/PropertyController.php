@@ -3625,20 +3625,19 @@ class PropertyController extends BaseController
 
     private function assignTrebGallery(Property $property, string $listingKey): bool
     {
-        $existing = is_array($property->images) ? $property->images : [];
-        if (
-            $existing !== []
-            && collect($existing)->every(fn ($path) => $this->trebImageStore()->isStoredWebp(is_string($path) ? $path : null))
-        ) {
-            return false;
-        }
+        $diskGallery = $this->trebImageStore()->discoverGalleryPathsOnDisk($listingKey);
 
         $remoteGallery = TrebPropertyHelper::getPropertyImagesForPersistence(
             $listingKey,
-            $property->image_val
+            $property->image_val,
+            fresh: true
         );
 
         if ($remoteGallery === []) {
+            return false;
+        }
+
+        if (count($remoteGallery) >= 2 && count($diskGallery) >= count($remoteGallery)) {
             return false;
         }
 
@@ -3647,10 +3646,11 @@ class PropertyController extends BaseController
             return false;
         }
 
-        $property->images = $localGallery;
+        $merged = array_values(array_unique(array_merge($diskGallery, $localGallery)));
+        $property->images = $merged;
 
         if (empty($property->image_val) || $this->trebImageStore()->isRemoteUrl($property->image_val)) {
-            $property->image_val = $localGallery[0];
+            $property->image_val = $merged[0];
         }
 
         return true;

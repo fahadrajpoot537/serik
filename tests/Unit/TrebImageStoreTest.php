@@ -140,8 +140,8 @@ class TrebImageStoreTest extends TestCase
         $stored = $this->store->persistGallery('X13509986', [$pdfUrl, $jpegUrl]);
 
         $this->assertCount(1, $stored);
-        $this->assertSame('properties/treb/X13509986/01.webp', $stored[0]);
-        Storage::disk('public')->assertExists('properties/treb/X13509986/01.webp');
+        $this->assertSame('properties/treb/X13509986/cover.webp', $stored[0]);
+        Storage::disk('public')->assertExists('properties/treb/X13509986/cover.webp');
     }
 
     private function tinyJpegBinary(): string
