@@ -4,7 +4,10 @@ namespace App\Jobs;
 
 use App\Support\SerikQueue;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
+use App\Jobs\RunArtisanOnLowQueueJob;
+use App\Support\SerikQueue;
+use App\Support\SerikScheduler;
+use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
@@ -15,7 +18,7 @@ use Throwable;
 /**
  * Run a long Artisan command on the LOW queue so schedule:run stays &lt;2s.
  */
-class RunArtisanOnLowQueueJob implements ShouldQueue
+class RunArtisanOnLowQueueJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
 {
     use Dispatchable;
     use InteractsWithQueue;
@@ -26,6 +29,8 @@ class RunArtisanOnLowQueueJob implements ShouldQueue
 
     public int $timeout = 7200;
 
+    public int $uniqueFor = 7200;
+
     /**
      * @param  array<string, mixed>  $parameters
      */
@@ -34,6 +39,11 @@ class RunArtisanOnLowQueueJob implements ShouldQueue
         public array $parameters = [],
     ) {
         $this->onQueue(SerikQueue::low());
+    }
+
+    public function uniqueId(): string
+    {
+        return 'run-artisan-low:' . $this->artisanCommand;
     }
 
     public function handle(): void

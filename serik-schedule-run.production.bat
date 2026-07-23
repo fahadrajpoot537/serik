@@ -10,6 +10,6 @@ cd /d "%APP%"
 echo %DATE% %TIME% > "%MARK%"
 echo.>> "%LOG%"
 echo ===== %DATE% %TIME% START =====>> "%LOG%"
-"%PHP%" -d max_execution_time=0 -d memory_limit=1024M "%APP%\artisan" schedule:run >> "%LOG%" 2>&1
+"%PHP%" -d max_execution_time=120 -d memory_limit=256M "%APP%\artisan" schedule:run >> "%LOG%" 2>&1
 echo ===== %DATE% %TIME% END rc=%ERRORLEVEL% =====>> "%LOG%"
 exit /b 0

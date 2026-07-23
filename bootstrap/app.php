@@ -1,5 +1,8 @@
 <?php
 
+use App\Jobs\RunArtisanOnLowQueueJob;
+use App\Support\SerikQueue;
+use App\Support\SerikScheduler;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -36,6 +39,28 @@ $app = Application::configure(basePath: dirname(__DIR__))
             };
         };
 
+        $dispatchLow = function (string $command, array $arguments = [], bool $requireLightLoad = true) {
+            return function () use ($command, $arguments, $requireLightLoad) {
+                try {
+                    if ($requireLightLoad && ! SerikScheduler::shouldDispatchHeavyLow()) {
+                        Log::debug('[schedule] skipped heavy LOW dispatch', [
+                            'command' => $command,
+                            'low_depth' => SerikScheduler::lowQueueDepth(),
+                        ]);
+
+                        return 0;
+                    }
+
+                    RunArtisanOnLowQueueJob::dispatch($command, $arguments)
+                        ->onQueue(SerikQueue::low());
+                } catch (\Throwable $e) {
+                    Log::error('[schedule] LOW dispatch failed: ' . $command . ' — ' . $e->getMessage());
+                }
+
+                return 0;
+            };
+        };
+
         // A) HIGH — live AMP import / geocode / history (worker does the work)
         $schedule->call($safe('serik:sync-live:dispatch'))
             ->name('serik-sync-live-dispatch')
@@ -63,148 +88,84 @@ $app = Application::configure(basePath: dirname(__DIR__))
             ->withoutOverlapping(10)
             ->appendOutputTo(storage_path('logs/treb-geocode-backlog.log'));
 
-        // D) Meili catch-up for recent actives (bounded)
-        $schedule->call($safe('serik:search-index-recent', [
+        // D) Meili catch-up for recent actives — LOW queue only (never block schedule:run).
+        $schedule->call($dispatchLow('serik:search-index-recent', [
             '--days' => 3,
-            '--limit' => 2000,
+            '--limit' => (int) config('serik.scheduler.search_index_recent_limit', 300),
         ]))
-            ->name('serik-search-index-recent')
-            ->everyTenMinutes()
+            ->name('serik-search-index-recent-dispatch')
+            ->everyThirtyMinutes()
             ->withoutOverlapping(10)
             ->appendOutputTo(storage_path('logs/treb-search-index.log'));
 
-        // Historical TREB import (TRREB_AUTH1 archive) — resumable slices.
-        $schedule->call($safe('serik:import-historical', [
+        // Historical TREB import — LOW queue slices (was blocking schedule:run up to 4 min).
+        $schedule->call($dispatchLow('serik:import-historical', [
             '--resume' => true,
-            '--max-runtime' => 240,
+            '--max-runtime' => (int) config('serik.scheduler.import_historical_max_runtime', 180),
         ]))
-            ->name('serik-import-historical')
+            ->name('serik-import-historical-dispatch')
             ->hourly()
             ->withoutOverlapping(15)
             ->appendOutputTo(storage_path('logs/treb-historical.log'));
 
         // E) Heavy maintenance → LOW queue (scheduler only dispatches)
-        $schedule->call(function () {
-            try {
-                \App\Jobs\RunArtisanOnLowQueueJob::dispatch(
-                    'serik:catch-up',
-                    [
-                        '--from-year' => 2000,
-                        '--hours' => 2,
-                        '--resume' => true,
-                        '--skip-existing' => true,
-                        '--no-geocode' => true,
-                    ]
-                )->onQueue(\App\Support\SerikQueue::low());
-            } catch (\Throwable $e) {
-                Log::error('[schedule] catch-up dispatch failed: ' . $e->getMessage());
-            }
-
-            return 0;
-        })
+        $schedule->call($dispatchLow('serik:catch-up', [
+            '--from-year' => 2000,
+            '--hours' => 2,
+            '--resume' => true,
+            '--skip-existing' => true,
+            '--no-geocode' => true,
+        ]))
             ->name('serik-catch-up-dispatch')
             ->everyTwoHours()
             ->withoutOverlapping(10)
             ->appendOutputTo(storage_path('logs/treb-catch-up.log'));
 
-        $schedule->call(function () {
-            try {
-                \App\Jobs\RunArtisanOnLowQueueJob::dispatch(
-                    'serik:import-amp-gaps',
-                    [
-                        '--resume' => true,
-                        '--page' => 80,
-                        '--max-runtime' => 90,
-                    ]
-                )->onQueue(\App\Support\SerikQueue::low());
-            } catch (\Throwable $e) {
-                Log::error('[schedule] amp-gaps dispatch failed: ' . $e->getMessage());
-            }
-
-            return 0;
-        })
+        $schedule->call($dispatchLow('serik:import-amp-gaps', [
+            '--resume' => true,
+            '--page' => 80,
+            '--max-runtime' => 90,
+        ]))
             ->name('serik-amp-gaps-dispatch')
             ->hourly()
             ->withoutOverlapping(10)
             ->appendOutputTo(storage_path('logs/treb-amp-gaps.log'));
 
-        $schedule->call(function () {
-            try {
-                \App\Jobs\RunArtisanOnLowQueueJob::dispatch(
-                    'serik:fix-slugs',
-                    ['--limit' => 5000]
-                )->onQueue(\App\Support\SerikQueue::low());
-            } catch (\Throwable $e) {
-                Log::error('[schedule] fix-slugs dispatch failed: ' . $e->getMessage());
-            }
-
-            return 0;
-        })
+        $schedule->call($dispatchLow('serik:fix-slugs', [
+            '--limit' => 5000,
+        ]))
             ->name('serik-fix-slugs-dispatch')
             ->hourly()
             ->withoutOverlapping(10)
             ->appendOutputTo(storage_path('logs/treb-fix-slugs.log'));
 
-        $schedule->call(function () {
-            try {
-                \App\Jobs\RunArtisanOnLowQueueJob::dispatch(
-                    'serik:geocode-borrow',
-                    [
-                        '--limit' => 300,
-                        '--active-days' => 14,
-                    ]
-                )->onQueue(\App\Support\SerikQueue::low());
-            } catch (\Throwable $e) {
-                Log::error('[schedule] geocode-borrow dispatch failed: ' . $e->getMessage());
-            }
-
-            return 0;
-        })
+        $schedule->call($dispatchLow('serik:geocode-borrow', [
+            '--limit' => 300,
+            '--active-days' => 14,
+        ]))
             ->name('serik-geocode-borrow-dispatch')
             ->dailyAt('01:45')
             ->withoutOverlapping(10)
             ->appendOutputTo(storage_path('logs/treb-geocode.log'));
 
-        $schedule->call(function () {
-            try {
-                \App\Jobs\RunArtisanOnLowQueueJob::dispatch(
-                    'serik:reconcile',
-                    [
-                        '--days' => 7,
-                        '--fix-coords' => true,
-                    ]
-                )->onQueue(\App\Support\SerikQueue::low());
-            } catch (\Throwable $e) {
-                Log::error('[schedule] reconcile dispatch failed: ' . $e->getMessage());
-            }
-
-            return 0;
-        })
+        $schedule->call($dispatchLow('serik:reconcile', [
+            '--days' => 7,
+            '--fix-coords' => true,
+        ]))
             ->name('serik-reconcile-dispatch')
             ->dailyAt('03:30')
             ->withoutOverlapping(10)
             ->appendOutputTo(storage_path('logs/treb-reconcile.log'));
 
-        // F) TREB image WebP backfill — resumes checkpoint, runs on LOW queue worker.
-        $schedule->call(function () {
-            try {
-                \App\Jobs\RunArtisanOnLowQueueJob::dispatch(
-                    'serik:treb-images-webp',
-                    [
-                        '--chunk' => 100,
-                        '--gallery' => true,
-                        '--max-runtime' => 3300,
-                    ]
-                )->onQueue(\App\Support\SerikQueue::low());
-            } catch (\Throwable $e) {
-                Log::error('[schedule] treb-images-webp dispatch failed: ' . $e->getMessage());
-            }
-
-            return 0;
-        })
+        // F) TREB image WebP backfill — short LOW slices; never 55-minute scheduler blocks.
+        $schedule->call($dispatchLow('serik:treb-images-webp', [
+            '--chunk' => (int) config('serik.scheduler.treb_images_chunk', 50),
+            '--gallery' => true,
+            '--max-runtime' => (int) config('serik.scheduler.treb_images_max_runtime', 600),
+        ]))
             ->name('serik-treb-images-webp-dispatch')
-            ->everyTenMinutes()
-            ->withoutOverlapping(60)
+            ->everyThirtyMinutes()
+            ->withoutOverlapping(30)
             ->appendOutputTo(storage_path('logs/treb-images-webp.log'));
     })
     ->withMiddleware(function (Middleware $middleware): void {

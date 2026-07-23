@@ -51,6 +51,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Scheduler — keep schedule:run under ~2s on production IIS
+    |--------------------------------------------------------------------------
+    | Heavy commands must dispatch to LOW queue workers, never Artisan::call()
+    | inside schedule:run (blocks Task Scheduler + competes with web traffic).
+    */
+    'scheduler' => [
+        // Skip new LOW maintenance dispatches when queue depth is at/above this.
+        'max_low_queue_depth' => (int) env('SERIK_SCHEDULER_MAX_LOW_DEPTH', 3),
+        'search_index_recent_limit' => (int) env('SERIK_SEARCH_INDEX_RECENT_LIMIT', 300),
+        'import_historical_max_runtime' => (int) env('SERIK_IMPORT_HISTORICAL_MAX_RUNTIME', 180),
+        'treb_images_max_runtime' => (int) env('SERIK_TREB_IMAGES_MAX_RUNTIME', 600),
+        'treb_images_chunk' => (int) env('SERIK_TREB_IMAGES_CHUNK', 50),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Geo block (public site)
     |--------------------------------------------------------------------------
     | When enabled, only listed ISO country codes may view the public site.
