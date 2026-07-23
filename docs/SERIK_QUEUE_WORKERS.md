@@ -39,7 +39,43 @@ SERIK_IMAGES_SLOT_WAIT=15
 
 ---
 
-## 2. NSSM services (Administrator CMD)
+## 2. NSSM services (Administrator)
+
+### Automated install (required on every fresh Windows server)
+
+Run **as Administrator** from the project root after `git pull` and `php artisan migrate`:
+
+```bat
+rem Install or update ONLY the images worker (idempotent):
+scripts\windows\install-serik-queue-images.cmd
+
+rem Or install/update ALL queue workers (high + images + low):
+scripts\windows\deploy-all-queue-workers.cmd
+
+rem Post-deploy verification:
+scripts\windows\verify-serik-queue-workers.cmd
+```
+
+Equivalent Artisan entry point (launches the `.cmd` with UAC):
+
+```bat
+php artisan serik:queue:install-images-worker
+```
+
+**Expected after images worker starts:**
+
+```bat
+sc query SerikQueueImages
+php artisan serik:queue:status
+```
+
+- `SerikQueueImages` state: **RUNNING**
+- `Image workers: 1`
+- `images` row: **Reserved > 0** while backlog drains; **Pending** decreases over time
+
+Scripts live in `scripts/windows/` — see `scripts/windows/README.md` for env overrides (`SERIK_APP_ROOT`, `SERIK_PHP_EXE`, `SERIK_NSSM`).
+
+### Manual NSSM (reference only — prefer scripts above)
 
 Replace `C:\project\serik` and PHP path with production paths.
 
@@ -101,7 +137,10 @@ php artisan serik:queue:status
 php artisan serik:queue:status --json
 php artisan queue:failed
 php artisan queue:monitor high,images,low
+scripts\windows\verify-serik-queue-workers.cmd
 ```
+
+`serik:queue:status` reports Windows NSSM service states and **Image workers** (1 when `SerikQueueImages` is RUNNING). Exit code is non-zero if images are pending but the images worker is not running.
 
 ---
 

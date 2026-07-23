@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Log;
 $app = Application::configure(basePath: dirname(__DIR__))
     ->withCommands([
         \App\Console\Commands\SerikQueueStatusCommand::class,
+        \App\Console\Commands\SerikQueueInstallImagesWorkerCommand::class,
     ])
     ->withRouting(
         web: __DIR__ . '/../routes/web.php',

@@ -1,5 +1,7 @@
 # Dual-Priority Queue Workers (Windows / NSSM)
 
+> **Superseded for production:** use `docs/SERIK_QUEUE_WORKERS.md` — it documents **high**, **images**, and **low** lanes plus automated install scripts in `scripts/windows/`.
+
 SERIK uses two Laravel database queues on the **same** `jobs` table, processed by **separate** Windows services. Never point one worker at both queues.
 
 | Queue | Env | Jobs |

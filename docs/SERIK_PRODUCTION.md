@@ -118,11 +118,30 @@ Trigger: every 1 minute, indefinitely.
 | hourly | `serik:geocode:retry-failed` | Requeue soft geocode failures |
 | every 10 min | `serik:search-index-recent` | Meili warm for recent actives |
 
-**Workers (NSSM):** see `docs/SERIK_DUAL_QUEUE_WORKERS.md` — separate `high` and `low` queue services. Do **not** schedule `serik:geocode-all` or `queue:work`.
+**Workers (NSSM):** see `docs/SERIK_QUEUE_WORKERS.md` — **three** queue services (`SerikQueueHigh`, **`SerikQueueImages`**, `SerikQueueLow`) plus `SerikMeilisearch`. Do **not** schedule `serik:geocode-all` or `queue:work`.
+
+**Fresh Windows deploy checklist (do not skip):**
+
+```bat
+git pull
+php artisan migrate --force
+php artisan config:clear
+scripts\windows\deploy-all-queue-workers.cmd
+php artisan queue:restart
+scripts\windows\verify-serik-queue-workers.cmd
+```
+
+If only the images lane was added to an existing server:
+
+```bat
+scripts\windows\install-serik-queue-images.cmd
+php artisan queue:restart
+php artisan serik:queue:status
+```
 
 After migrate: `php artisan serik:geocode:backfill-status` (chunked; marks rows with coords as `done`).
 
-**First-time dual-queue cutover:** install NSSM `SerikQueueHigh` + `SerikQueueLow` before relying on the new schedule (scheduler no longer runs `queue:work`).
+**First-time queue cutover:** install NSSM `SerikQueueHigh` + `SerikQueueImages` + `SerikQueueLow` before relying on the scheduler (scheduler no longer runs `queue:work`).
 
 | every 4h | `serik:treb-cron --mode=standard` | Standard sync |
 
