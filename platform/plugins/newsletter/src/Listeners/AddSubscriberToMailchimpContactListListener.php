@@ -12,9 +12,9 @@ class AddSubscriberToMailchimpContactListListener implements ShouldQueue
 {
     use Queueable;
 
-    public function __construct()
+    public function viaQueue(): string
     {
-        $this->onQueue(SerikQueue::high());
+        return SerikQueue::high();
     }
 
     public function handle(SubscribeNewsletterEvent $event): void

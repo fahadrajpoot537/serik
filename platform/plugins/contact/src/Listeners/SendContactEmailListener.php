@@ -16,9 +16,13 @@ class SendContactEmailListener implements ShouldQueue
 {
     use Queueable;
 
-    public function __construct()
+  /**
+     * Laravel queues listeners via newInstanceWithoutConstructor(), so onQueue()
+     * in __construct() is never applied — viaQueue() is required.
+     */
+    public function viaQueue(): string
     {
-        $this->onQueue(SerikQueue::high());
+        return SerikQueue::high();
     }
 
     public function handle(SentContactEvent $event): void

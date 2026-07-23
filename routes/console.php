@@ -451,6 +451,45 @@ Artisan::command('serik:geocode-all
 
 /*
 |--------------------------------------------------------------------------
+| serik:requeue-stranded-email-jobs — move email listener jobs from default → high
+|--------------------------------------------------------------------------
+*/
+Artisan::command('serik:requeue-stranded-email-jobs', function () {
+    $patterns = [
+        'SendContactEmailListener',
+        'SendEmailNotificationAboutNewSubscriberListener',
+        'AddSubscriberToMailchimpContactListListener',
+        'AddSubscriberToSendGridContactListListener',
+        'RemoveSubscriberToMailchimpContactListListener',
+        'ResetPasswordNotification',
+        'ConfirmEmailNotification',
+    ];
+
+    $high = \App\Support\SerikQueue::high();
+    $query = \Illuminate\Support\Facades\DB::table('jobs')->where('queue', 'default');
+
+    $query->where(function ($q) use ($patterns) {
+        foreach ($patterns as $pattern) {
+            $q->orWhere('payload', 'like', '%' . $pattern . '%');
+        }
+    });
+
+    $count = (clone $query)->count();
+
+    if ($count === 0) {
+        $this->info('No stranded email jobs on default queue.');
+
+        return 0;
+    }
+
+    $updated = $query->update(['queue' => $high]);
+    $this->info("Requeued {$updated} email job(s) from default → {$high}.");
+
+    return 0;
+})->purpose('Move orphaned email jobs from default queue to SerikQueueHigh');
+
+/*
+|--------------------------------------------------------------------------
 | serik:test-mail — diagnose why registration PIN emails are not arriving
 |--------------------------------------------------------------------------
 */
@@ -1616,6 +1655,9 @@ Artisan::command('serik:import-historical
     {--skip-details : Skip full AMP detail resync phase}
     {--skip-history : Skip address history phase}
     {--dry-run : Iterate every year and report counts without writing}', function () {
+    @set_time_limit(0);
+    @ini_set('max_execution_time', '0');
+
     $stateKey = 'serik_historical_import_state';
     $controller = app(PropertyController::class);
     $dryRun = (bool) $this->option('dry-run');

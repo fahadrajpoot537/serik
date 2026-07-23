@@ -83,6 +83,8 @@ class ImportLiveTrebPropertyJob implements ShouldQueue
 
         $property->refresh();
 
+        PersistTrebImagesJob::dispatch((int) $property->id);
+
         if ((float) ($property->latitude ?? 0) !== 0.0) {
             SyncPropertyHistoryJob::dispatch((int) $property->id);
         }

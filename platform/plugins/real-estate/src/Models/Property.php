@@ -2,6 +2,7 @@
 
 namespace Botble\RealEstate\Models;
 
+use App\Support\SerikMediaUrl;
 use Botble\Base\Casts\SafeContent;
 use Botble\Base\Facades\Html;
 use Botble\Base\Models\BaseModel;
@@ -338,8 +339,15 @@ class Property extends BaseModel
     protected function coverImage(): Attribute
     {
         return Attribute::get(function () {
-            if (! empty($this->image_val) && str_starts_with($this->image_val, 'http')) {
-                return $this->image_val;
+            $listingKey = trim((string) ($this->external_id ?? ''));
+            $imageVal = $this->image_val ?? null;
+
+            if ($listingKey !== '') {
+                return SerikMediaUrl::mapListingCover($listingKey, $imageVal);
+            }
+
+            if (! empty($imageVal) && str_starts_with($imageVal, 'http')) {
+                return SerikMediaUrl::normalizeExternalUrl($imageVal, RvMedia::getDefaultImage());
             }
 
             if ($this->image) {
