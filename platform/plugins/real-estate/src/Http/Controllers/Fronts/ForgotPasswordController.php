@@ -51,31 +51,20 @@ class ForgotPasswordController extends BaseController
             $account->password = $pin;
             $account->save();
 
-            try {
-                // Auth PIN must send immediately — do not rely on queue worker.
-                \App\Jobs\SendAccountPinEmailJob::dispatchSync(
-                    $account->email,
-                    (string) $account->name,
-                    $pin,
-                    'forgot-password'
-                );
-            } catch (\Throwable $e) {
-                \Log::error('[forgot-password] PIN email failed', [
-                    'email' => $account->email,
-                    'error' => $e->getMessage(),
-                ]);
+            $email = $account->email;
+            $name = (string) $account->name;
 
-                if ($request->ajax() || $request->wantsJson()) {
-                    return response()->json([
-                        'error' => true,
-                        'message' => 'We could not send the PIN email right now. Please try again in a few minutes.',
-                    ], 503);
+            // Return JSON immediately; send Resend mail after the HTTP response (no queue worker).
+            dispatch(function () use ($email, $name, $pin): void {
+                try {
+                    \App\Support\AccountPinMailer::send($email, $name, $pin, 'forgot-password');
+                } catch (\Throwable $e) {
+                    \Log::error('[forgot-password] PIN email failed (after response)', [
+                        'email' => $email,
+                        'error' => $e->getMessage(),
+                    ]);
                 }
-
-                return back()->withErrors([
-                    'email' => 'We could not send the PIN email right now. Please try again in a few minutes.',
-                ]);
-            }
+            })->afterResponse();
         }
 
         $message = 'If this email is registered, we have sent a new 6-digit PIN. Use it as your password to sign in.';

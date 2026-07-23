@@ -2,18 +2,16 @@
 
 namespace App\Jobs;
 
+use App\Support\AccountPinMailer;
 use App\Support\SerikQueue;
-use Botble\Base\Facades\EmailHandler;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Log;
-use Throwable;
 
 /**
- * Queue PIN / registration email on HIGH so auth HTTP requests return quickly.
+ * Queue PIN email on HIGH when a worker is available (registration path).
  */
 class SendAccountPinEmailJob implements ShouldQueue
 {
@@ -40,29 +38,11 @@ class SendAccountPinEmailJob implements ShouldQueue
 
     public function handle(): void
     {
-        try {
-            $sent = EmailHandler::setModule(REAL_ESTATE_MODULE_SCREEN_NAME)
-                ->setVariableValues([
-                    'account_name' => $this->accountName,
-                    'account_email' => $this->email,
-                    'account_password' => $this->pin,
-                ])
-                ->sendUsingTemplate('account-registered', $this->email);
-
-            if (! $sent) {
-                Log::warning('[SendAccountPinEmailJob] template disabled or not sent', [
-                    'email' => $this->email,
-                    'context' => $this->context,
-                ]);
-            }
-        } catch (Throwable $e) {
-            Log::error('[SendAccountPinEmailJob] failed', [
-                'email' => $this->email,
-                'context' => $this->context,
-                'error' => $e->getMessage(),
-            ]);
-
-            throw $e;
-        }
+        AccountPinMailer::send(
+            $this->email,
+            $this->accountName,
+            $this->pin,
+            $this->context
+        );
     }
 }
