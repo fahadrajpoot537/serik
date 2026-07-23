@@ -8,7 +8,6 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Theme\homzen\Supports\TrebPropertyHelper;
-use Throwable;
 
 /**
  * Single source of truth for TREB listing image state, persistence, and queue dispatch.
@@ -24,6 +23,7 @@ final class ListingImagePipeline
 
     public function __construct(
         private readonly TrebImageStore $store,
+        private readonly PropertySearchSync $searchSync,
     ) {
     }
 
@@ -144,7 +144,7 @@ final class ListingImagePipeline
     }
 
     /**
-     * Download, convert, store, DB update, cleanup, cache invalidation, search sync.
+     * Download, convert, store, DB update, cleanup, cache invalidation, deferred search sync.
      */
     public function persist(Property $property, bool $withGallery = true): ListingImagePersistResult
     {
@@ -374,22 +374,7 @@ final class ListingImagePipeline
 
     private function syncSearchIndexIfNeeded(Property $property): void
     {
-        try {
-            $property->refresh();
-            $previous = config('scout.queue');
-            config(['scout.queue' => false]);
-
-            if ($property->shouldBeSearchable()) {
-                $property->searchable();
-            }
-
-            config(['scout.queue' => $previous]);
-        } catch (Throwable $e) {
-            Log::warning('[ListingImagePipeline] Meili sync failed', [
-                'property_id' => $property->id,
-                'error' => $e->getMessage(),
-            ]);
-        }
+        $this->searchSync->schedule((int) $property->id);
     }
 
     private function invalidateCaches(string $listingKey, int $propertyId): void

@@ -35,6 +35,13 @@ final class SerikQueue
         return (is_string($q) && $q !== '') ? $q : 'default';
     }
 
+    public static function search(): string
+    {
+        $q = config('serik.queues.search');
+
+        return (is_string($q) && $q !== '') ? $q : self::low();
+    }
+
     /**
      * @return list<string>
      */

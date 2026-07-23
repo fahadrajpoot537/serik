@@ -7,7 +7,7 @@ Four Laravel database queues on the **same** `jobs` table, each with a **dedicat
 | `high` | `SerikQueueHigh` | `SyncLiveJob`, `GeocodePropertyJob`, `SyncPropertyHistoryJob`, auth emails |
 | `default` | *(optional)* | Botble / misc default-queue jobs |
 | `images` | `SerikQueueImages` | `PersistTrebImagesJob` (TREB WebP + gallery) |
-| `low` | `SerikQueueLow` | `GeocodeBacklogPropertyJob`, `RunArtisanOnLowQueueJob`, `DispatchTrebImagesWebpJob` |
+| `low` | `SerikQueueLow` | `GeocodeBacklogPropertyJob`, `RunArtisanOnLowQueueJob`, `DispatchTrebImagesWebpJob`, **`SearchSyncJob`** (deferred Meilisearch) |
 
 The scheduler (`schedule:run` every minute) **only dispatches** work. It must **not** run `queue:work` or long `Artisan::call()` for images.
 
@@ -35,6 +35,7 @@ SERIK_IMAGES_MAX_CONCURRENT=2
 SERIK_IMAGES_MAX_PENDING=120
 SERIK_IMAGES_GALLERY_DELAY_MS=100
 SERIK_IMAGES_SLOT_WAIT=15
+SERIK_SEARCH_SYNC_BATCH=25
 ```
 
 ---
@@ -153,6 +154,8 @@ php -d max_execution_time=120 -d memory_limit=256M artisan schedule:run
 ```
 
 Image backfill is dispatched every 30 minutes as `DispatchTrebImagesWebpJob` (LOW), which queues `PersistTrebImagesJob` rows on **images**. This is **recovery only** — live imports dispatch images immediately via `PersistTrebImagesJob::dispatchForImport()` after each DB commit.
+
+**Meilisearch:** image persistence never calls `searchable()` inline. `PropertySearchSync` queues `SearchSyncJob` (LOW/search queue, unique per property, batched). Audit: `php scripts/audit-search-sync.php`.
 
 Manual backfill dispatch (does not block cron):
 

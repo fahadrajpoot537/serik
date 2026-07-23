@@ -12,6 +12,7 @@ return [
         'default' => env('SERIK_QUEUE_DEFAULT', 'default'),
         'images' => env('SERIK_QUEUE_IMAGES', 'images'),
         'low' => env('SERIK_QUEUE_LOW', 'low'),
+        'search' => env('SERIK_QUEUE_SEARCH', 'low'),
     ],
 
     /*
@@ -30,6 +31,16 @@ return [
         'dispatch_cooldown_seconds' => (int) env('SERIK_IMAGES_DISPATCH_COOLDOWN', 3600),
         // Throttle AMP/HTTP gallery fetches inside one job.
         'gallery_fetch_delay_ms' => (int) env('SERIK_IMAGES_GALLERY_DELAY_MS', 100),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Deferred Meilisearch sync (SearchSyncJob on LOW/search queue)
+    |--------------------------------------------------------------------------
+    */
+    'search_sync' => [
+        // Max properties indexed per SearchSyncJob Meilisearch request.
+        'batch_size' => (int) env('SERIK_SEARCH_SYNC_BATCH', 25),
     ],
 
     /*
