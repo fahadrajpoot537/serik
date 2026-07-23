@@ -935,6 +935,7 @@ class TrebPropertyHelper
             }
 
             $cacheKeys = [
+                'treb_images_v4_' . $normalizedKey,
                 'treb_images_v3_' . $normalizedKey,
                 'treb_property_images_' . $normalizedKey,
                 'treb_property_images_' . $listingKey,
@@ -943,8 +944,13 @@ class TrebPropertyHelper
             foreach ($cacheKeys as $cacheKey) {
                 $cached = Cache::get($cacheKey);
                 if (is_array($cached) && count($cached) > 0) {
+                    $photos = \App\Support\TrebMediaFilter::filterPhotoUrls($cached);
+                    if ($photos === []) {
+                        continue;
+                    }
+
                     return $allowRemote
-                        ? $cached
+                        ? $photos
                         : \App\Support\SerikMediaUrl::mapListingGalleryUrls($normalizedKey, $imageVal, []);
                 }
             }
@@ -961,15 +967,18 @@ class TrebPropertyHelper
             }
 
             if ($images !== []) {
-                Cache::put('treb_images_v3_' . $normalizedKey, $images, 3600);
-                Cache::put('treb_property_images_' . $normalizedKey, $images, 86400);
+                $photos = \App\Support\TrebMediaFilter::filterPhotoUrls($images);
+                if ($photos !== []) {
+                    Cache::put('treb_images_v4_' . $normalizedKey, $photos, 3600);
+                    Cache::put('treb_property_images_' . $normalizedKey, $photos, 86400);
 
-                return $images;
+                    return $photos;
+                }
             }
         }
 
         if (! empty($imageVal) && str_starts_with($imageVal, 'http')) {
-            return $allowRemote ? [$imageVal] : [];
+            return ($allowRemote && \App\Support\TrebMediaFilter::isPhotoMediaUrl($imageVal)) ? [$imageVal] : [];
         }
 
         return [];
@@ -989,6 +998,7 @@ class TrebPropertyHelper
         $normalizedKey = strtoupper(trim($listingKey));
 
         $cacheKeys = [
+            'treb_images_v4_' . $normalizedKey,
             'treb_images_v3_' . $normalizedKey,
             'treb_property_images_' . $normalizedKey,
             'treb_property_images_' . $listingKey,
@@ -1011,22 +1021,26 @@ class TrebPropertyHelper
             }
 
             if ($images !== []) {
-                Cache::put('treb_images_v3_' . $normalizedKey, $images, 3600);
-                Cache::put('treb_property_images_' . $normalizedKey, $images, 86400);
+                $photos = \App\Support\TrebMediaFilter::filterPhotoUrls($images);
+                if ($photos !== []) {
+                    Cache::put('treb_images_v4_' . $normalizedKey, $photos, 3600);
+                    Cache::put('treb_property_images_' . $normalizedKey, $photos, 86400);
 
-                return $images;
+                    return $photos;
+                }
             }
         }
 
         if (! empty($imageVal)) {
             $resolved = \App\Support\SerikMediaUrl::resolveTrebRemoteUrl((string) $imageVal);
-            if ($resolved !== null && $resolved !== '') {
+            if ($resolved !== null && $resolved !== '' && \App\Support\TrebMediaFilter::isPhotoMediaUrl($resolved)) {
                 return [$resolved];
             }
 
             if (
                 str_starts_with((string) $imageVal, 'http')
                 && (str_contains((string) $imageVal, 'ampre.ca') || str_contains((string) $imageVal, 'trreb'))
+                && \App\Support\TrebMediaFilter::isPhotoMediaUrl((string) $imageVal)
             ) {
                 return [(string) $imageVal];
             }
@@ -1041,7 +1055,7 @@ class TrebPropertyHelper
      */
     protected static function filterPersistenceImageUrls(array $urls): array
     {
-        return array_values(array_filter($urls, static function ($url): bool {
+        return \App\Support\TrebMediaFilter::filterPhotoUrls(array_values(array_filter($urls, static function ($url): bool {
             if (! is_string($url) || trim($url) === '') {
                 return false;
             }
@@ -1051,7 +1065,7 @@ class TrebPropertyHelper
             }
 
             return str_contains($url, 'ampre.ca') || str_contains($url, 'trreb');
-        }));
+        })));
     }
 
     /**
@@ -1062,7 +1076,7 @@ class TrebPropertyHelper
         $url = 'https://query.ampre.ca/odata/Media?'
             . '%24filter=ResourceRecordKey%20eq%20%27' . $listingKey . '%27'
             . '&%24top=50'
-            . '&%24select=MediaURL,ImageSizeDescription,Order'
+            . '&%24select=MediaURL,ImageSizeDescription,Order,MediaCategory,MediaType,ResourceName'
             . '&%24orderby=Order';
 
         $payload = self::ampGet($url);
@@ -1082,6 +1096,10 @@ class TrebPropertyHelper
         $byOrder = [];
 
         foreach ($items as $media) {
+            if (! is_array($media) || ! \App\Support\TrebMediaFilter::isPhotoAmpMedia($media)) {
+                continue;
+            }
+
             if (empty($media['MediaURL'])) {
                 continue;
             }

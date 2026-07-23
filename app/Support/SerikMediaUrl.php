@@ -87,21 +87,28 @@ final class SerikMediaUrl
                 continue;
             }
 
+            if (self::resolveExistingRelativePath($path) === null) {
+                continue;
+            }
+
             $public = self::toPublic($path);
             if (! str_contains($public, 'placeholder.png')) {
                 $urls[] = $public;
             }
         }
 
+        $diskUrls = $listingKey !== '' ? self::discoverLocalTrebGalleryUrls($listingKey) : [];
+
+        if ($diskUrls !== [] && count($diskUrls) >= count($urls)) {
+            return $diskUrls;
+        }
+
         if ($urls !== []) {
             return array_values(array_unique($urls));
         }
 
-        if ($listingKey !== '') {
-            $diskUrls = self::discoverLocalTrebGalleryUrls($listingKey);
-            if ($diskUrls !== []) {
-                return $diskUrls;
-            }
+        if ($diskUrls !== []) {
+            return $diskUrls;
         }
 
         $cover = self::mapListingCover($listingKey !== '' ? $listingKey : null, $imageVal);

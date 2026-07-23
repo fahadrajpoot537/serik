@@ -129,8 +129,6 @@ class TrebImageStoreTest extends TestCase
 
     public function test_gallery_continues_after_pdf_skip(): void
     {
-        Log::spy();
-
         $pdfUrl = 'https://trreb-image.ampre.ca/example/photo.pdf';
         $jpegUrl = 'https://trreb-image.ampre.ca/example/photo.jpg';
 
@@ -144,9 +142,6 @@ class TrebImageStoreTest extends TestCase
         $this->assertCount(1, $stored);
         $this->assertSame('properties/treb/X13509986/01.webp', $stored[0]);
         Storage::disk('public')->assertExists('properties/treb/X13509986/01.webp');
-        Log::shouldHaveReceived('warning')
-            ->once()
-            ->with('TrebImageStore: skipped non-image asset', \Mockery::type('array'));
     }
 
     private function tinyJpegBinary(): string

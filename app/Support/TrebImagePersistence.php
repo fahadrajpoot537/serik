@@ -112,19 +112,25 @@ final class TrebImagePersistence
     private function assignGallery(Property $property, string $listingKey): bool
     {
         $existing = is_array($property->images) ? $property->images : [];
-        if (
-            $existing !== []
-            && collect($existing)->every(fn ($path) => $this->store->storedWebpExists(is_string($path) ? $path : null))
-        ) {
-            return false;
-        }
-
         $diskGallery = $this->store->discoverGalleryPathsOnDisk($listingKey);
 
         $remoteGallery = TrebPropertyHelper::getPropertyImagesForPersistence(
             $listingKey,
             $property->image_val
         );
+
+        $existingValid = array_values(array_filter(
+            $existing,
+            fn ($path) => is_string($path) && $this->store->storedWebpExists($path)
+        ));
+
+        if ($remoteGallery !== [] && count($existingValid) >= count($remoteGallery)) {
+            return false;
+        }
+
+        if ($remoteGallery === [] && $diskGallery !== [] && count($existingValid) >= count($diskGallery)) {
+            return false;
+        }
 
         $persisted = $remoteGallery !== []
             ? $this->store->persistGallery($listingKey, $remoteGallery)
@@ -157,12 +163,14 @@ final class TrebImagePersistence
         }
 
         $images = TrebPropertyHelper::getPropertyImagesForPersistence($listingKey, null);
-        $first = $images[0] ?? '';
+        foreach ($images as $image) {
+            if (! is_string($image) || $image === '') {
+                continue;
+            }
 
-        if (! is_string($first) || $first === '') {
-            return '';
+            return SerikMediaUrl::resolveTrebRemoteUrl($image) ?? $image;
         }
 
-        return SerikMediaUrl::resolveTrebRemoteUrl($first) ?? $first;
+        return '';
     }
 }

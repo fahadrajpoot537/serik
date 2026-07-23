@@ -304,6 +304,7 @@ final class TrebImageStore
      */
     public function persistGallery(string $listingKey, array $sources, int $max = 25): array
     {
+        $sources = \App\Support\TrebMediaFilter::filterPhotoUrls(array_values(array_filter($sources)));
         $stored = [];
         $index = 0;
 
