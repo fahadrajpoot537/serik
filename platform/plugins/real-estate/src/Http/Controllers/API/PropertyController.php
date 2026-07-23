@@ -6252,8 +6252,8 @@ class PropertyController extends BaseController
 
         $query = Property::query()
             ->select(['id', 'external_id', 'image_val'])
-            ->whereNotNull('image_val')
-            ->where('image_val', '!=', '');
+            ->whereNotNull('external_id')
+            ->where('external_id', '!=', '');
 
         if ($ids !== []) {
             $query->whereIn('id', $ids);

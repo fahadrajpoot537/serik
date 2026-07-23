@@ -17,12 +17,12 @@ final class SerikMediaUrl
     }
 
     /**
-     * Browser-safe cover image (same-origin proxy that streams TREB CDN).
+     * Browser-safe cover image (same-origin proxy that streams TREB CDN on demand).
      */
     public static function mapListingCover(?string $listingKey, ?string $imageVal = null): string
     {
         $listingKey = strtoupper(trim((string) $listingKey));
-        if ($listingKey === '' || ! TrebImageProxy::listingHasImage($listingKey, $imageVal)) {
+        if ($listingKey === '') {
             return self::placeholder();
         }
 
@@ -44,7 +44,7 @@ final class SerikMediaUrl
 
         $remoteUrls = TrebImageProxy::remoteUrlsForListing($listingKey, $imageVal);
         if ($remoteUrls === []) {
-            return [];
+            return [TrebImageProxy::coverPublicUrl($listingKey)];
         }
 
         $urls = [];

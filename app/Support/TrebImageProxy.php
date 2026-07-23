@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use Botble\RealEstate\Models\Property;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Symfony\Component\HttpFoundation\Response;
@@ -130,6 +131,10 @@ final class TrebImageProxy
             abort(404);
         }
 
+        if ($index === 0) {
+            self::maybePersistCoverUrl($listingKey, $remoteUrl);
+        }
+
         $contentType = trim((string) ($response->header('Content-Type') ?? ''));
         if ($contentType === '' || $contentType === 'application/octet-stream') {
             $contentType = self::guessContentType($remoteUrl, $body);
@@ -140,6 +145,28 @@ final class TrebImageProxy
             'Cache-Control' => 'public, max-age=86400, stale-while-revalidate=604800',
             'X-Serik-Image-Source' => 'treb-cdn-proxy',
         ]);
+    }
+
+    /**
+     * After a successful proxy fetch, store the CDN URL so list cards do not
+     * depend on a detail-page visit to populate image_val.
+     */
+    private static function maybePersistCoverUrl(string $listingKey, string $cdnUrl): void
+    {
+        $listingKey = strtoupper(trim($listingKey));
+        $cdnUrl = trim($cdnUrl);
+        if ($listingKey === '' || $cdnUrl === '') {
+            return;
+        }
+
+        Property::query()
+            ->where('external_id', $listingKey)
+            ->where(function ($query): void {
+                $query->whereNull('image_val')
+                    ->orWhere('image_val', '=', '');
+            })
+            ->limit(1)
+            ->update(['image_val' => $cdnUrl]);
     }
 
     private static function guessContentType(string $url, string $body): string
