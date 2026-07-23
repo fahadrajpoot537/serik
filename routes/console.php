@@ -3734,7 +3734,7 @@ Artisan::command('serik:treb-images-webp
         ->where('id', '>', $lastId)
         ->orderBy('id')
         ->chunkById($chunkSize, function ($rows) use (
-            $controller,
+            $persistence,
             $withGallery,
             $delayMs,
             $deadline,
