@@ -8,32 +8,16 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$AppRoot = if ($env:SERIK_APP_ROOT) {
-    (Resolve-Path $env:SERIK_APP_ROOT).Path
-} else {
-    (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-}
+. (Join-Path $PSScriptRoot 'Serik-WindowsCommon.ps1')
 
-$PhpExe = if ($env:SERIK_PHP_EXE -and (Test-Path $env:SERIK_PHP_EXE)) {
-    (Resolve-Path $env:SERIK_PHP_EXE).Path
-} else {
-    (Get-Command php).Source
-}
+$AppRoot = Get-SerikAppRoot
+$PhpExe = Get-SerikPhpExe
+$Nssm = Find-SerikNssm
 
-function Find-Nssm {
-    $candidates = @(
-        $env:SERIK_NSSM,
-        'C:\nssm\nssm.exe',
-        'C:\nssm\win64\nssm.exe',
-        'C:\tools\nssm\nssm.exe'
-    ) | Where-Object { $_ -and (Test-Path $_) }
-    if ($candidates.Count -gt 0) { return (Resolve-Path $candidates[0]).Path }
-    return (Get-Command nssm).Source
-}
-
-$Nssm = Find-Nssm
 $logsDir = Join-Path $AppRoot 'storage\logs'
-if (-not (Test-Path $logsDir)) { New-Item -ItemType Directory -Path $logsDir -Force | Out-Null }
+if (-not (Test-Path -LiteralPath $logsDir)) {
+    New-Item -ItemType Directory -Path $logsDir -Force | Out-Null
+}
 
 $workers = @(
     @{
@@ -62,41 +46,46 @@ $workers = @(
     }
 )
 
-function Install-OrUpdateWorker($worker) {
-    $name = $worker.Name
-    $stdout = Join-Path $logsDir $worker.Stdout
-    $stderr = Join-Path $logsDir $worker.Stderr
+function Install-OrUpdateWorker {
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable]$Worker
+    )
+
+    $name = $Worker.Name
+    $stdout = Join-Path $logsDir $Worker.Stdout
+    $stderr = Join-Path $logsDir $Worker.Stderr
 
     $existing = Get-Service -Name $name -ErrorAction SilentlyContinue
     if (-not $existing) {
         Write-Host "Installing $name..." -ForegroundColor Yellow
-        & $Nssm install $name $PhpExe | Out-Null
+        Invoke-SerikNssm -Nssm $Nssm -Arguments @('install', $name, $PhpExe)
     } else {
         Write-Host "Updating $name..." -ForegroundColor Yellow
     }
 
-    & $Nssm set $name Application $PhpExe | Out-Null
-    & $Nssm set $name AppDirectory $AppRoot | Out-Null
-    & $Nssm set $name AppParameters $worker.Parameters | Out-Null
-    & $Nssm set $name DisplayName $worker.DisplayName | Out-Null
-    & $Nssm set $name Description $worker.Description | Out-Null
-    & $Nssm set $name AppStdout $stdout | Out-Null
-    & $Nssm set $name AppStderr $stderr | Out-Null
-    & $Nssm set $name AppStdoutCreationDisposition 4 | Out-Null
-    & $Nssm set $name AppStderrCreationDisposition 4 | Out-Null
-    & $Nssm set $name AppRotateFiles 1 | Out-Null
-    & $Nssm set $name AppRotateOnline 1 | Out-Null
-    & $Nssm set $name AppRotateSeconds 86400 | Out-Null
-    & $Nssm set $name AppRotateBytes 10485760 | Out-Null
-    & $Nssm set $name Start SERVICE_AUTO_START | Out-Null
-    & $Nssm set $name AppExit Default Restart | Out-Null
-    & $Nssm set $name AppRestartDelay 5000 | Out-Null
-    & $Nssm set $name AppThrottle 15000 | Out-Null
+    Set-SerikNssmService -Nssm $Nssm -ServiceName $name -Key 'Application' -Value $PhpExe
+    Set-SerikNssmService -Nssm $Nssm -ServiceName $name -Key 'AppDirectory' -Value $AppRoot
+    Set-SerikNssmService -Nssm $Nssm -ServiceName $name -Key 'AppParameters' -Value $Worker.Parameters
+    Set-SerikNssmService -Nssm $Nssm -ServiceName $name -Key 'DisplayName' -Value $Worker.DisplayName
+    Set-SerikNssmService -Nssm $Nssm -ServiceName $name -Key 'Description' -Value $Worker.Description
+    Set-SerikNssmService -Nssm $Nssm -ServiceName $name -Key 'AppStdout' -Value $stdout
+    Set-SerikNssmService -Nssm $Nssm -ServiceName $name -Key 'AppStderr' -Value $stderr
+    Set-SerikNssmService -Nssm $Nssm -ServiceName $name -Key 'AppStdoutCreationDisposition' -Value '4'
+    Set-SerikNssmService -Nssm $Nssm -ServiceName $name -Key 'AppStderrCreationDisposition' -Value '4'
+    Set-SerikNssmService -Nssm $Nssm -ServiceName $name -Key 'AppRotateFiles' -Value '1'
+    Set-SerikNssmService -Nssm $Nssm -ServiceName $name -Key 'AppRotateOnline' -Value '1'
+    Set-SerikNssmService -Nssm $Nssm -ServiceName $name -Key 'AppRotateSeconds' -Value '86400'
+    Set-SerikNssmService -Nssm $Nssm -ServiceName $name -Key 'AppRotateBytes' -Value '10485760'
+    Set-SerikNssmService -Nssm $Nssm -ServiceName $name -Key 'Start' -Value 'SERVICE_AUTO_START'
+    Set-SerikNssmServiceExit -Nssm $Nssm -ServiceName $name -Action 'AppExit' -ExitCode 'Default' -RestartAction 'Restart'
+    Set-SerikNssmService -Nssm $Nssm -ServiceName $name -Key 'AppRestartDelay' -Value '5000'
+    Set-SerikNssmService -Nssm $Nssm -ServiceName $name -Key 'AppThrottle' -Value '15000'
 
-    if ($existing -and $existing.Status -eq 'Running') {
-        & $Nssm restart $name | Out-Null
+    if ($null -ne $existing -and $existing.Status -eq 'Running') {
+        Invoke-SerikNssm -Nssm $Nssm -Arguments @('restart', $name)
     } else {
-        & $Nssm start $name | Out-Null
+        Invoke-SerikNssm -Nssm $Nssm -Arguments @('start', $name)
     }
 }
 
@@ -106,16 +95,22 @@ Write-Host "PHP: $PhpExe"
 Write-Host "NSSM: $Nssm"
 Write-Host ""
 
-foreach ($w in $workers) {
-    Install-OrUpdateWorker $w
+foreach ($worker in $workers) {
+    Install-OrUpdateWorker -Worker $worker
 }
 
 Start-Sleep -Seconds 3
 
 Push-Location $AppRoot
-& $PhpExe artisan queue:restart | Out-Null
-& $PhpExe artisan serik:queue:status
-Pop-Location
+try {
+    & $PhpExe artisan queue:restart | Out-Null
+    & $PhpExe artisan serik:queue:status
+    if ($LASTEXITCODE -ne 0) {
+        throw "serik:queue:status failed with exit code $LASTEXITCODE"
+    }
+} finally {
+    Pop-Location
+}
 
 Write-Host ""
 Write-Host "SUCCESS: All queue workers deployed." -ForegroundColor Green

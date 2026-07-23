@@ -75,5 +75,6 @@ Workers finish the current job, exit, and NSSM restarts them with the new code.
 ## Troubleshooting
 
 - **Image workers: 0** with pending images → run `install-serik-queue-images.cmd` as Administrator
+- **`The property 'Count' cannot be found`** — update to latest `scripts/windows/` (uses `Serik-WindowsCommon.ps1` with foreach-based path lookup, not pipeline `.Count`)
 - Check `storage/logs/queue-images-error.log`
 - `php artisan serik:queue:status --json` for machine-readable state
