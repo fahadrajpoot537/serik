@@ -21,7 +21,7 @@ final class TrebImageStore
 
     private const HTTP_TIMEOUT_SECONDS = 12;
 
-    private const HTTP_CONNECT_TIMEOUT_SECONDS = 5;
+    private const HTTP_CONNECT_TIMEOUT_SECONDS = 3;
 
     private const HTTP_RETRY_TIMES = 2;
 
@@ -74,6 +74,38 @@ final class TrebImageStore
     }
 
     /**
+     * @return array<int, string> Relative disk paths (cover.webp, 01.webp, …)
+     */
+    public function discoverGalleryPathsOnDisk(string $listingKey): array
+    {
+        $listingKey = strtoupper(trim($listingKey));
+        if ($listingKey === '') {
+            return [];
+        }
+
+        $paths = [];
+        $cover = self::relativePath($listingKey, 'cover.webp');
+        if (Storage::disk(self::DISK)->exists($cover)) {
+            $paths[] = $cover;
+        }
+
+        for ($i = 1; $i <= 25; $i++) {
+            $relative = self::relativePath($listingKey, sprintf('%02d.webp', $i));
+            if (! Storage::disk(self::DISK)->exists($relative)) {
+                if ($i === 1 && $paths === []) {
+                    continue;
+                }
+
+                break;
+            }
+
+            $paths[] = $relative;
+        }
+
+        return array_values(array_unique($paths));
+    }
+
+    /**
      * Persist from a URL or disk-relative path — never HTTP-fetches same-origin /storage URLs.
      */
     public function persistFromUrl(string $listingKey, string $source, string $filename = 'cover.webp'): ?string
@@ -102,7 +134,7 @@ final class TrebImageStore
         }
 
         if ($this->isRemoteUrl($source) && ! $this->isExternalTrebUrl($source)) {
-            Log::warning('TrebImageStore: skipped non-TREB remote URL (use local disk instead)', [
+            Log::debug('TrebImageStore: skipped same-origin URL (file not on disk)', [
                 'listing_key' => $listingKey,
                 'url' => $source,
             ]);
@@ -189,7 +221,7 @@ final class TrebImageStore
         }
 
         if (! $this->isExternalTrebUrl($remoteUrl)) {
-            Log::warning('TrebImageStore: refused HTTP fetch for same-origin storage URL', [
+            Log::debug('TrebImageStore: refused HTTP fetch for same-origin storage URL', [
                 'listing_key' => $listingKey,
                 'url' => $remoteUrl,
             ]);
@@ -264,6 +296,16 @@ final class TrebImageStore
                 continue;
             }
 
+            if ($this->isRemoteUrl($source) && $this->isInternalStorageUrl($source)) {
+                $local = $this->resolveLocalRelativePath($source);
+                if ($local !== null) {
+                    $stored[] = $local;
+                    $index++;
+                }
+
+                continue;
+            }
+
             if ($this->isStoredWebp($source) && $this->storedWebpExists($source)) {
                 $stored[] = ltrim(str_replace('\\', '/', $this->normalizeRelativePath($source) ?? $source), '/');
                 $index++;
@@ -322,7 +364,7 @@ final class TrebImageStore
         return null;
     }
 
-    private function isInternalStorageUrl(string $url): bool
+    public function isInternalStorageUrl(string $url): bool
     {
         if (! $this->isRemoteUrl($url)) {
             return false;

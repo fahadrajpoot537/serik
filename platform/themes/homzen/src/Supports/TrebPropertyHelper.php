@@ -976,6 +976,85 @@ class TrebPropertyHelper
     }
 
     /**
+     * TREB CDN URLs only — for queue WebP persistence. Never returns serik.ca /storage URLs.
+     *
+     * @return array<int, string>
+     */
+    public static function getPropertyImagesForPersistence(?string $listingKey, ?string $imageVal = null): array
+    {
+        if (empty($listingKey)) {
+            return [];
+        }
+
+        $normalizedKey = strtoupper(trim($listingKey));
+
+        $cacheKeys = [
+            'treb_images_v3_' . $normalizedKey,
+            'treb_property_images_' . $normalizedKey,
+            'treb_property_images_' . $listingKey,
+        ];
+
+        foreach ($cacheKeys as $cacheKey) {
+            $cached = Cache::get($cacheKey);
+            if (is_array($cached) && $cached !== []) {
+                $filtered = self::filterPersistenceImageUrls($cached);
+                if ($filtered !== []) {
+                    return $filtered;
+                }
+            }
+        }
+
+        if (self::canFetchRemoteAmp()) {
+            $images = self::fetchMediaImagesFromAmp($normalizedKey);
+            if ($images === [] && $normalizedKey !== $listingKey) {
+                $images = self::fetchMediaImagesFromAmp($listingKey);
+            }
+
+            if ($images !== []) {
+                Cache::put('treb_images_v3_' . $normalizedKey, $images, 3600);
+                Cache::put('treb_property_images_' . $normalizedKey, $images, 86400);
+
+                return $images;
+            }
+        }
+
+        if (! empty($imageVal)) {
+            $resolved = \App\Support\SerikMediaUrl::resolveTrebRemoteUrl((string) $imageVal);
+            if ($resolved !== null && $resolved !== '') {
+                return [$resolved];
+            }
+
+            if (
+                str_starts_with((string) $imageVal, 'http')
+                && (str_contains((string) $imageVal, 'ampre.ca') || str_contains((string) $imageVal, 'trreb'))
+            ) {
+                return [(string) $imageVal];
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * @param  array<int, string>  $urls
+     * @return array<int, string>
+     */
+    protected static function filterPersistenceImageUrls(array $urls): array
+    {
+        return array_values(array_filter($urls, static function ($url): bool {
+            if (! is_string($url) || trim($url) === '') {
+                return false;
+            }
+
+            if (str_contains($url, 'serik.ca') || str_contains($url, '/storage/properties/treb/')) {
+                return false;
+            }
+
+            return str_contains($url, 'ampre.ca') || str_contains($url, 'trreb');
+        }));
+    }
+
+    /**
      * @return array<int, string>
      */
     protected static function fetchMediaImagesFromAmp(string $listingKey): array

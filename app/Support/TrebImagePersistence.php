@@ -114,22 +114,24 @@ final class TrebImagePersistence
         $existing = is_array($property->images) ? $property->images : [];
         if (
             $existing !== []
-            && collect($existing)->every(fn ($path) => $this->store->isStoredWebp(is_string($path) ? $path : null))
+            && collect($existing)->every(fn ($path) => $this->store->storedWebpExists(is_string($path) ? $path : null))
         ) {
             return false;
         }
 
-        $remoteGallery = TrebPropertyHelper::getPropertyImages(
+        $diskGallery = $this->store->discoverGalleryPathsOnDisk($listingKey);
+
+        $remoteGallery = TrebPropertyHelper::getPropertyImagesForPersistence(
             $listingKey,
-            $property->image_val,
-            true
+            $property->image_val
         );
 
-        if ($remoteGallery === []) {
-            return false;
-        }
+        $persisted = $remoteGallery !== []
+            ? $this->store->persistGallery($listingKey, $remoteGallery)
+            : [];
 
-        $localGallery = $this->store->persistGallery($listingKey, $remoteGallery);
+        $localGallery = array_values(array_unique(array_merge($diskGallery, $persisted)));
+
         if ($localGallery === []) {
             return false;
         }
@@ -146,25 +148,21 @@ final class TrebImagePersistence
     private function resolveCoverMediaUrl(string $listingKey, ?callable $resolveMediaUrl): string
     {
         if ($resolveMediaUrl) {
-            return trim((string) ($resolveMediaUrl($listingKey) ?: ''));
+            $url = trim((string) ($resolveMediaUrl($listingKey) ?: ''));
+            if ($url !== '' && $this->store->isInternalStorageUrl($url)) {
+                return '';
+            }
+
+            return $url;
         }
 
-        $images = TrebPropertyHelper::getPropertyImages($listingKey, null, true);
+        $images = TrebPropertyHelper::getPropertyImagesForPersistence($listingKey, null);
         $first = $images[0] ?? '';
 
         if (! is_string($first) || $first === '') {
             return '';
         }
 
-        $local = $this->store->resolveLocalRelativePath($first);
-        if ($local !== null) {
-            return '';
-        }
-
-        if ($this->store->isRemoteUrl($first)) {
-            return SerikMediaUrl::resolveTrebRemoteUrl($first) ?? $first;
-        }
-
-        return '';
+        return SerikMediaUrl::resolveTrebRemoteUrl($first) ?? $first;
     }
 }

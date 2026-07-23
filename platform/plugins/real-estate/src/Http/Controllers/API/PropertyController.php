@@ -3613,7 +3613,7 @@ class PropertyController extends BaseController
             return false;
         }
 
-        $local = $store->persistFromRemoteUrl($listingKey, $remote, 'cover.webp');
+        $local = $store->persistFromUrl($listingKey, $remote, 'cover.webp');
         if ($local) {
             $property->image_val = $local;
 
@@ -3633,10 +3633,9 @@ class PropertyController extends BaseController
             return false;
         }
 
-        $remoteGallery = TrebPropertyHelper::getPropertyImages(
+        $remoteGallery = TrebPropertyHelper::getPropertyImagesForPersistence(
             $listingKey,
-            $property->image_val,
-            true
+            $property->image_val
         );
 
         if ($remoteGallery === []) {

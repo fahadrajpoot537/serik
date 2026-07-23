@@ -64,7 +64,7 @@ final class TrebWebpController extends Controller
             }
         }
 
-        $images = TrebPropertyHelper::getPropertyImages($listingKey, null, true);
+        $images = TrebPropertyHelper::getPropertyImagesForPersistence($listingKey, null);
         $remote = (string) ($images[0] ?? '');
 
         if ($remote === '') {
@@ -79,7 +79,7 @@ final class TrebWebpController extends Controller
             return;
         }
 
-        $path = $store->persistFromRemoteUrl($listingKey, $remote, $filename);
+        $path = $store->persistFromUrl($listingKey, $remote, $filename);
 
         if ($path && $property !== null && strcasecmp($filename, 'cover.webp') === 0 && ! $store->storedWebpExists($property->image_val)) {
             $property->image_val = $path;
