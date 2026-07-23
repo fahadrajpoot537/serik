@@ -46,9 +46,18 @@ class SearchBatchJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
 
     public function handle(PropertySearchSync $sync): void
     {
-        $lock = Cache::lock(PropertySearchSync::WORKER_LOCK_KEY, 600);
+        Log::info('[SearchBatchJob] handle start', [
+            'pending_count' => $sync->pendingCount(),
+        ]);
 
-        if (! $lock->get()) {
+        $lock = Cache::lock(PropertySearchSync::WORKER_LOCK_KEY, 600);
+        $workerLockAcquired = $lock->get();
+
+        Log::info('[SearchBatchJob] worker lock', [
+            'acquired' => $workerLockAcquired,
+        ]);
+
+        if (! $workerLockAcquired) {
             Log::debug('[SearchBatchJob] worker lock held — releasing job for retry');
             $this->release(5);
 

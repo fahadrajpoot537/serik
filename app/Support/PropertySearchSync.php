@@ -28,6 +28,10 @@ final class PropertySearchSync
      */
     public function schedule(int $propertyId): void
     {
+        Log::info('[PropertySearchSync] schedule', [
+            'property_id' => $propertyId,
+        ]);
+
         if ($propertyId <= 0) {
             return;
         }
@@ -153,12 +157,23 @@ final class PropertySearchSync
             }
 
             $wasEmpty = $pending === [];
+            $pendingCountBefore = count($pending);
             $pending[$propertyId] = true;
+            $pendingCountAfter = count($pending);
             Cache::put(self::PENDING_CACHE_KEY, $pending, 86400);
 
+            $searchBatchJobDispatched = false;
             if ($wasEmpty) {
                 SearchBatchJob::dispatch();
+                $searchBatchJobDispatched = true;
             }
+
+            Log::info('[PropertySearchSync] markPending', [
+                'property_id' => $propertyId,
+                'pending_count_before' => $pendingCountBefore,
+                'pending_count_after' => $pendingCountAfter,
+                'search_batch_job_dispatched' => $searchBatchJobDispatched,
+            ]);
         });
     }
 
@@ -173,6 +188,12 @@ final class PropertySearchSync
             /** @var array<int, bool> $pending */
             $pending = Cache::get(self::PENDING_CACHE_KEY, []);
             if (! is_array($pending) || $pending === []) {
+                Log::info('[PropertySearchSync] claimNextBatch', [
+                    'claimed_property_ids' => [],
+                    'claimed_count' => 0,
+                    'remaining_pending_count' => 0,
+                ]);
+
                 return [];
             }
 
@@ -190,6 +211,12 @@ final class PropertySearchSync
             }
 
             Cache::put(self::PENDING_CACHE_KEY, $pending, 86400);
+
+            Log::info('[PropertySearchSync] claimNextBatch', [
+                'claimed_property_ids' => $ids,
+                'claimed_count' => count($ids),
+                'remaining_pending_count' => count($pending),
+            ]);
 
             return $ids;
         });
@@ -227,6 +254,13 @@ final class PropertySearchSync
      */
     private function indexCollection(Collection $properties): void
     {
+        $propertyIds = $properties->pluck('id')->map(static fn ($id): int => (int) $id)->all();
+
+        Log::info('[PropertySearchSync] searchableSync start', [
+            'collection_size' => $properties->count(),
+            'property_ids' => $propertyIds,
+        ]);
+
         $previous = config('scout.queue');
         config(['scout.queue' => false]);
 
@@ -235,5 +269,10 @@ final class PropertySearchSync
         } finally {
             config(['scout.queue' => $previous]);
         }
+
+        Log::info('[PropertySearchSync] searchableSync complete', [
+            'indexed_count' => $properties->count(),
+            'remaining_pending' => $this->pendingCount(),
+        ]);
     }
 }
