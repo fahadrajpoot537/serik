@@ -1690,62 +1690,101 @@ class PropertyController extends BaseController
 
     public function importAllPropertyImages()
     {
-        // cache()->put('property_image_last_id', 0);
-        return Cache::lock('import-property-images-lock', 300)->block(5, function () {
+        $lock = Cache::lock('import-property-images-lock', 300);
 
-            $lastId = cache()->get('property_image_last_id', 0);
+        if (! $lock->get()) {
+            return response()->json([
+                'status' => 'busy',
+                'message' => 'Another image backfill run is in progress. Try again in a few minutes.',
+            ], 409);
+        }
 
-            Property::where(function ($q) {
-                $q->whereNull('image_val')
-                    ->orWhere('image_val', '')
-                    ->orWhere('image_val', 'like', 'http%');
-            })
+        try {
+            @set_time_limit(120);
+
+            $lastId = (int) cache()->get('property_image_last_id', 0);
+            $processed = 0;
+            $updated = 0;
+            $skipped = 0;
+            $batchLimit = 20;
+
+            $properties = Property::query()
+                ->select(['id', 'external_id', 'image_val'])
+                ->whereNotNull('external_id')
+                ->where('external_id', '!=', '')
+                ->where(function ($q) {
+                    $q->whereNull('image_val')
+                        ->orWhere('image_val', '')
+                        ->orWhere('image_val', 'like', 'properties/treb/%');
+                })
                 ->where('id', '>', $lastId)
                 ->orderBy('id')
-                ->chunkById(20, function ($properties) {
+                ->limit($batchLimit)
+                ->get();
 
-                    foreach ($properties as $property) {
+            if ($properties->isEmpty()) {
+                cache()->forget('property_image_last_id');
 
-                        $listingKey = $property->external_id;
-                        if (empty($listingKey)) {
-                            continue;
-                        }
+                return response()->json([
+                    'status' => 'complete',
+                    'message' => 'Image backfill finished — no more rows need CDN URLs.',
+                    'last_id' => $lastId,
+                ]);
+            }
 
-                        $url = "https://query.ampre.ca/odata/Media?"
-                            . "%24filter=ResourceRecordKey%20eq%20%27{$listingKey}%27"
-                            . "&%24top=5"
-                            . "&%24select=MediaURL,ImageSizeDescription";
+            foreach ($properties as $property) {
+                $processed++;
+                $listingKey = trim((string) $property->external_id);
 
-                        $response = $this->ampCurl($url);
+                if ($listingKey === '') {
+                    $skipped++;
+                    cache()->put('property_image_last_id', (int) $property->id);
 
-                        if (!isset($response['value']) || !is_array($response['value'])) {
-                            continue;
-                        }
+                    continue;
+                }
 
-                        $firstImage = null;
+                $urls = \Theme\homzen\Supports\TrebPropertyHelper::getPropertyImagesForPersistence(
+                    $listingKey,
+                    $property->image_val,
+                    fresh: false
+                );
+                $firstImage = is_string($urls[0] ?? null) ? trim((string) $urls[0]) : '';
 
-                        foreach ($response['value'] as $item) {
-                            if (!empty($item['MediaURL'])) {
-                                $firstImage = $item['MediaURL'];
-                                break;
-                            }
-                        }
+                if ($firstImage === '' || ! \App\Support\TrebMediaFilter::isPhotoMediaUrl($firstImage)) {
+                    $skipped++;
+                    cache()->put('property_image_last_id', (int) $property->id);
 
-                        if (!$firstImage) {
-                            continue;
-                        }
+                    continue;
+                }
 
-                        $property->image_val = $firstImage;
-                        $property->saveQuietly();
+                $property->image_val = $firstImage;
+                $property->saveQuietly();
+                $updated++;
+                cache()->put('property_image_last_id', (int) $property->id);
 
-                        cache()->put('property_image_last_id', $property->id);
+                usleep(100000);
+            }
 
-                        usleep(300000);
-                    }
-                });
+            return response()->json([
+                'status' => 'ok',
+                'processed' => $processed,
+                'updated' => $updated,
+                'skipped' => $skipped,
+                'last_id' => (int) $properties->last()->id,
+                'message' => 'Batch complete. Call again to process the next slice.',
+            ]);
+        } catch (\Throwable $e) {
+            \Log::error('importAllPropertyImages failed: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
 
-            return 'Images imported successfully';
-        });
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Image backfill failed: ' . $e->getMessage(),
+            ], 500);
+        } finally {
+            optional($lock)->release();
+        }
     }
 
 
