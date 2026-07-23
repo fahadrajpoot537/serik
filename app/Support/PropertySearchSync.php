@@ -34,7 +34,6 @@ final class PropertySearchSync
 
         $dispatch = function () use ($propertyId): void {
             $this->markPending($propertyId);
-            SearchBatchJob::dispatch();
         };
 
         if (DB::transactionLevel() > 0) {
@@ -153,8 +152,13 @@ final class PropertySearchSync
                 $pending = [];
             }
 
+            $wasEmpty = $pending === [];
             $pending[$propertyId] = true;
             Cache::put(self::PENDING_CACHE_KEY, $pending, 86400);
+
+            if ($wasEmpty) {
+                SearchBatchJob::dispatch();
+            }
         });
     }
 

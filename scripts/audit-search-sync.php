@@ -103,10 +103,22 @@ if (is_file($searchSync)) {
         $passes[] = 'PropertySearchSync::schedule() marks pending IDs';
     }
 
-    if (! str_contains($content, 'SearchBatchJob::dispatch')) {
-        $violations[] = 'PropertySearchSync must dispatch the global SearchBatchJob worker';
+    if (preg_match('/function\s+schedule[\s\S]*?\$dispatch\s*=\s*function[^{]*\{[^}]*SearchBatchJob::dispatch/s', $content)) {
+        $violations[] = 'PropertySearchSync::schedule() must not dispatch SearchBatchJob (dispatch only from markPending on empty→non-empty)';
     } else {
-        $passes[] = 'PropertySearchSync dispatches global SearchBatchJob (not per property)';
+        $passes[] = 'PropertySearchSync::schedule() does not dispatch SearchBatchJob directly';
+    }
+
+    if (! preg_match('/\$wasEmpty\s*=\s*\$pending\s*===\s*\[\]/', $content)) {
+        $violations[] = 'markPending() must detect empty→non-empty pending transition';
+    } else {
+        $passes[] = 'markPending() detects empty→non-empty pending transition';
+    }
+
+    if (! preg_match('/if\s*\(\s*\$wasEmpty\s*\)\s*\{[\s\S]*?SearchBatchJob::dispatch/', $content)) {
+        $violations[] = 'markPending() must dispatch SearchBatchJob only when pending was empty';
+    } else {
+        $passes[] = 'markPending() dispatches SearchBatchJob only on empty→non-empty transition';
     }
 
     if (! str_contains($content, 'claimNextBatch') || ! str_contains($content, 'Cache::lock')) {
@@ -161,10 +173,16 @@ if (is_file($batchJob)) {
         $passes[] = 'SearchBatchJob drains pending via processNextBatch()';
     }
 
-    if (! preg_match('/self::dispatch\s*\(/', $content)) {
-        $violations[] = 'SearchBatchJob must self-chain when pending IDs remain';
+    if (! preg_match('/while\s*\(\s*\$sync->pendingCount\(\)\s*>\s*0\s*\)/', $content)) {
+        $violations[] = 'SearchBatchJob must loop processNextBatch() until pending is empty';
     } else {
-        $passes[] = 'SearchBatchJob self-chains until pending set is empty';
+        $passes[] = 'SearchBatchJob drains all pending batches in one execution';
+    }
+
+    if (preg_match('/function\s+handle[\s\S]*?self::dispatch\s*\(/', $content)) {
+        $violations[] = 'SearchBatchJob::handle() must not self-dispatch after each batch';
+    } else {
+        $passes[] = 'SearchBatchJob::handle() does not self-dispatch per batch';
     }
 
     if (preg_match('/propertyId/', $content)) {
@@ -202,9 +220,9 @@ if ($violations !== []) {
 
 echo "\nAll checks passed.\n";
 echo "\nBatch pipeline guarantees:\n";
-echo "  1. schedule() only marks pending + dispatches one global SearchBatchJob.\n";
-echo "  2. SearchBatchJob claims up to SERIK_SEARCH_SYNC_BATCH IDs atomically.\n";
-echo "  3. One searchableSync() call per batch → one Meilisearch addDocuments per batch.\n";
-echo "  4. Self-chains until pending is empty; failed IDs are requeued.\n";
+echo "  1. schedule() only marks pending; SearchBatchJob dispatches on empty→non-empty only.\n";
+echo "  2. SearchBatchJob loops processNextBatch() until pending is empty (one worker lock).\n";
+echo "  3. One searchableSync() per batch → up to SERIK_SEARCH_SYNC_BATCH Meilisearch documents.\n";
+echo "  4. Failed IDs are requeued; failed() re-dispatches if pending remains.\n";
 
 exit(0);

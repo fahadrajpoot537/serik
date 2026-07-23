@@ -15,8 +15,8 @@ use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
- * Global Meilisearch batch drainer. One worker processes pending property IDs
- * in chunks until the pending set is empty, then self-chains when more arrive.
+ * Global Meilisearch batch drainer. One worker processes all pending property IDs
+ * in chunks within a single execution (under the worker lock).
  */
 class SearchBatchJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
 {
@@ -56,20 +56,19 @@ class SearchBatchJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
         }
 
         try {
-            $stats = $sync->processNextBatch();
+            while ($sync->pendingCount() > 0) {
+                $stats = $sync->processNextBatch();
 
-            if (($stats['remaining_pending'] ?? 0) > 0) {
-                self::dispatch();
+                if (($stats['property_count'] ?? 0) === 0 && ($stats['remaining_pending'] ?? 0) === 0) {
+                    break;
+                }
             }
         } catch (Throwable $e) {
             Log::warning('[SearchBatchJob] batch drain failed', [
                 'attempt' => $this->attempts(),
+                'remaining_pending' => $sync->pendingCount(),
                 'error' => $e->getMessage(),
             ]);
-
-            if ($sync->pendingCount() > 0) {
-                self::dispatch();
-            }
 
             throw $e;
         } finally {
@@ -84,7 +83,7 @@ class SearchBatchJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
         ]);
 
         if (app(PropertySearchSync::class)->pendingCount() > 0) {
-            self::dispatch();
+            SearchBatchJob::dispatch();
         }
     }
 }
