@@ -3,7 +3,6 @@
 namespace Botble\RealEstate\Http\Controllers\Fronts;
 
 use Botble\ACL\Traits\RegistersUsers;
-use Botble\Base\Facades\EmailHandler;
 use Botble\Base\Http\Controllers\BaseController;
 use Botble\RealEstate\Facades\RealEstateHelper;
 use Botble\RealEstate\Forms\Fronts\Auth\RegisterForm;
@@ -129,25 +128,12 @@ class RegisterController extends BaseController
 
         event(new Registered($account));
 
-        try {
-            $sent = EmailHandler::setModule(REAL_ESTATE_MODULE_SCREEN_NAME)
-                ->setVariableValues([
-                    'account_name' => $account->name,
-                    'account_email' => $account->email,
-                    'account_password' => $unhashedPin,
-                ])
-                ->sendUsingTemplate('account-registered', $account->email);
-
-            if (! $sent) {
-                \Log::warning('[register] PIN email template disabled or not sent', [
-                    'email' => $account->email,
-                ]);
-            }
-        } catch (\Throwable $e) {
-            \Log::error('[register] PIN email failed: ' . $e->getMessage(), [
-                'email' => $account->email,
-            ]);
-        }
+        \App\Jobs\SendAccountPinEmailJob::dispatch(
+            $account->email,
+            (string) $account->name,
+            $unhashedPin,
+            'register'
+        );
 
         // Verification email disabled – only PIN email is sent
         // if (setting('verify_account_email', false)) {

@@ -66,7 +66,7 @@ if (defined('THEME_MODULE_SCREEN_NAME')) {
             Route::name('public.account.')->group(function (): void {
                 Route::middleware('account.guest')->group(function (): void {
                     Route::get(RealEstateHelper::getPageSlug('login'), [LoginController::class, 'showLoginForm'])->name('login');
-                    Route::post('login', [LoginController::class, 'login'])->name('login.post');
+                    Route::post('login', [LoginController::class, 'login'])->middleware('throttle:10,1')->name('login.post');
                     Route::get(RealEstateHelper::getPageSlug('register'), [RegisterController::class, 'showRegistrationForm'])->name('register');
                     Route::post('register', [RegisterController::class, 'register'])->name('register.post');
                     Route::get('verify', [RegisterController::class, 'getVerify'])->name('verify');

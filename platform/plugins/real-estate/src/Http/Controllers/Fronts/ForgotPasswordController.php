@@ -2,7 +2,7 @@
 
 namespace Botble\RealEstate\Http\Controllers\Fronts;
 
-use Botble\Base\Facades\EmailHandler;
+use Botble\Base\Http\Controllers\BaseController;
 use Botble\RealEstate\Facades\RealEstateHelper;
 use Botble\RealEstate\Forms\Fronts\Auth\ForgotPasswordForm;
 use Botble\RealEstate\Http\Controllers\BaseController;
@@ -38,7 +38,9 @@ class ForgotPasswordController extends BaseController
     {
         abort_unless(RealEstateHelper::isLoginEnabled(), 404);
 
-        $account = Account::query()->where('email', $request->input('email'))->first();
+        $account = Account::query()
+            ->where('email', $request->input('email'))
+            ->first(['id', 'email', 'first_name', 'last_name', 'password', 'confirmed_at', 'created_at', 'password_expire']);
 
         if ($account && AccountRegistrationExpiry::deleteIfExpired($account)) {
             $account = null;
@@ -50,27 +52,12 @@ class ForgotPasswordController extends BaseController
             $account->password = $pin;
             $account->save();
 
-            try {
-                $sent = EmailHandler::setModule(REAL_ESTATE_MODULE_SCREEN_NAME)
-                    ->setVariableValues([
-                        'account_name' => $account->name,
-                        'account_email' => $account->email,
-                        'account_password' => $pin,
-                    ])
-                    ->sendUsingTemplate('account-registered', $account->email);
-
-                if (! $sent) {
-                    \Log::warning('[forgot-password] PIN email template disabled or not sent', [
-                        'email' => $account->email,
-                    ]);
-                }
-            } catch (\Throwable $e) {
-                \Log::error('[forgot-password] PIN email failed: ' . $e->getMessage(), [
-                    'email' => $account->email,
-                    'driver' => setting('email_driver'),
-                    'from' => setting('email_from_address'),
-                ]);
-            }
+            \App\Jobs\SendAccountPinEmailJob::dispatch(
+                $account->email,
+                (string) $account->name,
+                $pin,
+                'forgot-password'
+            );
         }
 
         $message = 'If this email is registered, we have sent a new 6-digit PIN. Use it as your password to sign in.';

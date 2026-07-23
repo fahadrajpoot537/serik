@@ -78,7 +78,15 @@ class PersistTrebImagesJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
         }
 
         try {
-            $persistence->persistForProperty($property, $this->withGallery);
+            $changed = $persistence->persistForProperty($property, $this->withGallery);
+
+            if ($changed) {
+                Log::info('[PersistTrebImagesJob] persisted', [
+                    'property_id' => $this->propertyId,
+                    'listing_key' => $listingKey,
+                    'gallery' => $this->withGallery,
+                ]);
+            }
         } catch (Throwable $e) {
             Log::warning('[PersistTrebImagesJob] failed', [
                 'property_id' => $this->propertyId,
