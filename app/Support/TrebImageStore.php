@@ -19,6 +19,14 @@ final class TrebImageStore
 
     private const BASE_DIR = 'properties/treb';
 
+    private const HTTP_TIMEOUT_SECONDS = 12;
+
+    private const HTTP_CONNECT_TIMEOUT_SECONDS = 5;
+
+    private const HTTP_RETRY_TIMES = 2;
+
+    private const HTTP_RETRY_SLEEP_MS = 500;
+
     public static function relativePath(string $listingKey, string $filename = 'cover.webp'): string
     {
         $listingKey = strtoupper(trim($listingKey));
@@ -55,6 +63,60 @@ final class TrebImageStore
         return $relative !== null && Storage::disk(self::DISK)->exists($relative);
     }
 
+    public function coverExistsOnDisk(string $listingKey): bool
+    {
+        $listingKey = strtoupper(trim($listingKey));
+        if ($listingKey === '') {
+            return false;
+        }
+
+        return Storage::disk(self::DISK)->exists(self::relativePath($listingKey, 'cover.webp'));
+    }
+
+    /**
+     * Persist from a URL or disk-relative path — never HTTP-fetches same-origin /storage URLs.
+     */
+    public function persistFromUrl(string $listingKey, string $source, string $filename = 'cover.webp'): ?string
+    {
+        $listingKey = strtoupper(trim($listingKey));
+        $source = trim($source);
+
+        if ($listingKey === '' || $source === '') {
+            return null;
+        }
+
+        $filename = $this->sanitizeFilename($filename);
+        $targetPath = self::relativePath($listingKey, $filename);
+
+        if (Storage::disk(self::DISK)->exists($targetPath)) {
+            return $targetPath;
+        }
+
+        $localRelative = $this->resolveLocalRelativePath($source);
+        if ($localRelative !== null) {
+            if ($localRelative === $targetPath) {
+                return $targetPath;
+            }
+
+            return $this->persistFromLocalRelativePath($listingKey, $localRelative, $filename);
+        }
+
+        if ($this->isRemoteUrl($source) && ! $this->isExternalTrebUrl($source)) {
+            Log::warning('TrebImageStore: skipped non-TREB remote URL (use local disk instead)', [
+                'listing_key' => $listingKey,
+                'url' => $source,
+            ]);
+
+            return null;
+        }
+
+        if ($this->isRemoteUrl($source)) {
+            return $this->persistFromRemoteUrl($listingKey, $source, $filename);
+        }
+
+        return null;
+    }
+
     public function persistFromLocalRelativePath(string $listingKey, string $sourcePath, string $filename = 'cover.webp'): ?string
     {
         $listingKey = strtoupper(trim($listingKey));
@@ -76,10 +138,21 @@ final class TrebImageStore
             return $targetPath;
         }
 
+        if ($relative === $targetPath) {
+            return $targetPath;
+        }
+
         try {
             $binary = $disk->get($relative);
             if ($binary === '') {
                 return null;
+            }
+
+            if (str_ends_with(strtolower($relative), '.webp') && $filename === basename($relative)) {
+                $disk->makeDirectory(dirname($targetPath));
+                $disk->put($targetPath, $binary, 'public');
+
+                return $targetPath;
             }
 
             $encoded = (string) $this->imageManager()
@@ -110,6 +183,20 @@ final class TrebImageStore
             return null;
         }
 
+        $localRelative = $this->resolveLocalRelativePath($remoteUrl);
+        if ($localRelative !== null) {
+            return $this->persistFromLocalRelativePath($listingKey, $localRelative, $filename);
+        }
+
+        if (! $this->isExternalTrebUrl($remoteUrl)) {
+            Log::warning('TrebImageStore: refused HTTP fetch for same-origin storage URL', [
+                'listing_key' => $listingKey,
+                'url' => $remoteUrl,
+            ]);
+
+            return null;
+        }
+
         $filename = $this->sanitizeFilename($filename);
         $relativePath = self::relativePath($listingKey, $filename);
 
@@ -118,12 +205,19 @@ final class TrebImageStore
         }
 
         try {
-            $response = Http::timeout(30)
-                ->connectTimeout(10)
+            $response = Http::timeout(self::HTTP_TIMEOUT_SECONDS)
+                ->connectTimeout(self::HTTP_CONNECT_TIMEOUT_SECONDS)
+                ->retry(self::HTTP_RETRY_TIMES, self::HTTP_RETRY_SLEEP_MS, throw: false)
                 ->withHeaders(['User-Agent' => 'SerikRealty/1.0'])
                 ->get($remoteUrl);
 
             if (! $response->successful()) {
+                Log::warning('TrebImageStore: remote image HTTP failed', [
+                    'listing_key' => $listingKey,
+                    'url' => $remoteUrl,
+                    'status' => $response->status(),
+                ]);
+
                 return null;
             }
 
@@ -152,33 +246,34 @@ final class TrebImageStore
     }
 
     /**
-     * @param  array<int, string>  $remoteUrls
+     * @param  array<int, string>  $sources  URLs or disk-relative paths
      * @return array<int, string>
      */
-    public function persistGallery(string $listingKey, array $remoteUrls, int $max = 25): array
+    public function persistGallery(string $listingKey, array $sources, int $max = 25): array
     {
         $stored = [];
         $index = 0;
 
-        foreach (array_values(array_filter($remoteUrls)) as $url) {
+        foreach (array_values(array_filter($sources)) as $source) {
             if ($index >= $max) {
                 break;
             }
 
-            if ($this->isStoredWebp($url)) {
-                $stored[] = ltrim(str_replace('\\', '/', $url), '/');
+            $source = trim((string) $source);
+            if ($source === '') {
+                continue;
+            }
+
+            if ($this->isStoredWebp($source) && $this->storedWebpExists($source)) {
+                $stored[] = ltrim(str_replace('\\', '/', $this->normalizeRelativePath($source) ?? $source), '/');
                 $index++;
 
                 continue;
             }
 
-            if (! $this->isRemoteUrl($url)) {
-                continue;
-            }
-
-            $path = $this->persistFromRemoteUrl(
+            $path = $this->persistFromUrl(
                 $listingKey,
-                $url,
+                $source,
                 sprintf('%02d.webp', $index + 1)
             );
 
@@ -188,7 +283,87 @@ final class TrebImageStore
             }
         }
 
-        return $stored;
+        return array_values(array_unique($stored));
+    }
+
+    /**
+     * Resolve a public /storage URL or relative path to an on-disk relative path.
+     */
+    public function resolveLocalRelativePath(string $value): ?string
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return null;
+        }
+
+        if ($this->isRemoteUrl($value)) {
+            if (! $this->isInternalStorageUrl($value)) {
+                return null;
+            }
+
+            $path = (string) (parse_url($value, PHP_URL_PATH) ?? '');
+            $value = $path !== '' ? $path : $value;
+        }
+
+        $relative = $this->normalizeRelativePath($value);
+        if ($relative === null) {
+            return null;
+        }
+
+        if (Storage::disk(self::DISK)->exists($relative)) {
+            return $relative;
+        }
+
+        $publicPath = public_path('storage/' . $relative);
+        if (is_file($publicPath) && is_readable($publicPath)) {
+            return $relative;
+        }
+
+        return null;
+    }
+
+    private function isInternalStorageUrl(string $url): bool
+    {
+        if (! $this->isRemoteUrl($url)) {
+            return false;
+        }
+
+        $path = (string) (parse_url($url, PHP_URL_PATH) ?? '');
+        if (! str_contains($path, '/storage/')) {
+            return false;
+        }
+
+        $host = strtolower((string) (parse_url($url, PHP_URL_HOST) ?? ''));
+        if ($host === '') {
+            return false;
+        }
+
+        $appHost = strtolower((string) (parse_url((string) config('app.url'), PHP_URL_HOST) ?? ''));
+
+        return in_array($host, array_filter([
+            $appHost,
+            'serik.ca',
+            'www.serik.ca',
+            'localhost',
+            '127.0.0.1',
+        ]), true);
+    }
+
+    private function isExternalTrebUrl(string $url): bool
+    {
+        if (! $this->isRemoteUrl($url)) {
+            return false;
+        }
+
+        if ($this->isInternalStorageUrl($url)) {
+            return false;
+        }
+
+        $host = strtolower((string) (parse_url($url, PHP_URL_HOST) ?? ''));
+
+        return str_contains($host, 'ampre.ca')
+            || str_contains($host, 'trreb')
+            || str_contains($url, 'trreb-image');
     }
 
     private function sanitizeFilename(string $filename): string
@@ -211,7 +386,11 @@ final class TrebImageStore
         }
 
         if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
-            return null;
+            if (preg_match('#/storage/(.+)$#i', $path, $matches)) {
+                $path = $matches[1];
+            } else {
+                return null;
+            }
         }
 
         $relative = ltrim($path, '/');

@@ -43,10 +43,29 @@ final class TrebImagePersistence
             return false;
         }
 
+        $coverRelative = TrebImageStore::relativePath($listingKey, 'cover.webp');
+        if ($this->store->coverExistsOnDisk($listingKey)) {
+            $property->image_val = $coverRelative;
+
+            return true;
+        }
+
         $remote = '';
 
         if ($imageVal !== '' && $this->store->isRemoteUrl($imageVal)) {
-            $remote = $imageVal;
+            $localFromUrl = $this->store->resolveLocalRelativePath($imageVal);
+            if ($localFromUrl !== null) {
+                $local = $this->store->persistFromLocalRelativePath($listingKey, $localFromUrl, 'cover.webp');
+                if ($local) {
+                    $property->image_val = $local;
+
+                    return true;
+                }
+            }
+
+            if ($this->store->isRemoteUrl($imageVal)) {
+                $remote = $imageVal;
+            }
         }
 
         if ($remote === '' && $imageVal !== '' && ! $this->store->isRemoteUrl($imageVal)) {
@@ -74,7 +93,13 @@ final class TrebImagePersistence
             return false;
         }
 
-        $local = $this->store->persistFromRemoteUrl($listingKey, $remote, 'cover.webp');
+        $localFromUrl = $this->store->resolveLocalRelativePath($remote);
+        if ($localFromUrl !== null) {
+            $local = $this->store->persistFromLocalRelativePath($listingKey, $localFromUrl, 'cover.webp');
+        } else {
+            $local = $this->store->persistFromUrl($listingKey, $remote, 'cover.webp');
+        }
+
         if ($local) {
             $property->image_val = $local;
 
@@ -128,6 +153,11 @@ final class TrebImagePersistence
         $first = $images[0] ?? '';
 
         if (! is_string($first) || $first === '') {
+            return '';
+        }
+
+        $local = $this->store->resolveLocalRelativePath($first);
+        if ($local !== null) {
             return '';
         }
 

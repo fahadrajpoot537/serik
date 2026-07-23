@@ -67,6 +67,15 @@ class PersistTrebImagesJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
             return;
         }
 
+        if ($store->coverExistsOnDisk($listingKey) && ! $this->withGallery) {
+            if (! $store->storedWebpExists($property->image_val)) {
+                $property->image_val = \App\Support\TrebImageStore::relativePath($listingKey, 'cover.webp');
+                $property->saveQuietly();
+            }
+
+            return;
+        }
+
         if ($this->withGallery) {
             $images = is_array($property->images) ? $property->images : [];
             $galleryComplete = $images !== []
