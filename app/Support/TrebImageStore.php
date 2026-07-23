@@ -27,6 +27,19 @@ final class TrebImageStore
 
     private const HTTP_RETRY_SLEEP_MS = 500;
 
+    /** @var list<string> */
+    private const ALLOWED_IMAGE_MIMES = [
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+    ];
+
+    /** @var list<string> */
+    private const BLOCKED_ASSET_MIMES = [
+        'application/pdf',
+        'text/html',
+    ];
+
     public static function relativePath(string $listingKey, string $filename = 'cover.webp'): string
     {
         $listingKey = strtoupper(trim($listingKey));
@@ -177,6 +190,8 @@ final class TrebImageStore
         try {
             $binary = $disk->get($relative);
             if ($binary === '') {
+                $this->logSkippedNonImageAsset($listingKey, $relative, 'empty');
+
                 return null;
             }
 
@@ -185,6 +200,10 @@ final class TrebImageStore
                 $disk->put($targetPath, $binary, 'public');
 
                 return $targetPath;
+            }
+
+            if (! $this->isProcessableImageBinary($binary, $listingKey, $relative)) {
+                return null;
             }
 
             $encoded = (string) $this->imageManager()
@@ -254,7 +273,9 @@ final class TrebImageStore
             }
 
             $binary = $response->body();
-            if ($binary === '') {
+            $contentType = $response->header('Content-Type');
+
+            if (! $this->isProcessableImageBinary($binary, $listingKey, $remoteUrl, $contentType)) {
                 return null;
             }
 
@@ -448,5 +469,135 @@ final class TrebImageStore
         $driver = extension_loaded('imagick') ? ImagickDriver::class : GdDriver::class;
 
         return new ImageManager(new $driver());
+    }
+
+    private function isProcessableImageBinary(
+        string $binary,
+        string $listingKey,
+        string $url,
+        ?string $contentTypeHeader = null,
+    ): bool {
+        if ($binary === '') {
+            $this->logSkippedNonImageAsset($listingKey, $url, 'empty');
+
+            return false;
+        }
+
+        $headerMime = $this->normalizeMimeType($this->parseContentTypeHeader($contentTypeHeader));
+        if ($headerMime !== null && $this->isBlockedAssetMime($headerMime)) {
+            $this->logSkippedNonImageAsset($listingKey, $url, $headerMime);
+
+            return false;
+        }
+
+        $detectedMime = $this->detectBinaryMimeType($binary);
+        if ($detectedMime !== null && $this->isBlockedAssetMime($detectedMime)) {
+            $this->logSkippedNonImageAsset($listingKey, $url, $detectedMime);
+
+            return false;
+        }
+
+        $imageMime = $this->resolveImageMimeFromBinary($binary);
+        if ($imageMime === null || ! $this->isAllowedImageMime($imageMime)) {
+            $this->logSkippedNonImageAsset(
+                $listingKey,
+                $url,
+                $imageMime ?? $headerMime ?? $detectedMime ?? 'unknown'
+            );
+
+            return false;
+        }
+
+        return true;
+    }
+
+    private function resolveImageMimeFromBinary(string $binary): ?string
+    {
+        $imageInfo = @getimagesizefromstring($binary);
+        if (is_array($imageInfo) && isset($imageInfo['mime']) && is_string($imageInfo['mime'])) {
+            return $this->normalizeMimeType($imageInfo['mime']);
+        }
+
+        return $this->detectBinaryMimeType($binary);
+    }
+
+    private function detectBinaryMimeType(string $binary): ?string
+    {
+        if ($binary === '') {
+            return null;
+        }
+
+        if (function_exists('finfo_buffer')) {
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            if ($finfo !== false) {
+                $mime = finfo_buffer($finfo, $binary);
+                finfo_close($finfo);
+
+                if (is_string($mime) && $mime !== '') {
+                    return $this->normalizeMimeType($mime);
+                }
+            }
+        }
+
+        if (str_starts_with($binary, '%PDF')) {
+            return 'application/pdf';
+        }
+
+        $trimmed = ltrim($binary);
+        if (
+            str_starts_with($trimmed, '<!DOCTYPE html')
+            || str_starts_with($trimmed, '<html')
+            || str_starts_with($trimmed, '<HTML')
+        ) {
+            return 'text/html';
+        }
+
+        return null;
+    }
+
+    private function parseContentTypeHeader(?string $contentType): ?string
+    {
+        $contentType = trim((string) $contentType);
+        if ($contentType === '') {
+            return null;
+        }
+
+        $parts = explode(';', $contentType, 2);
+
+        return trim($parts[0]);
+    }
+
+    private function normalizeMimeType(?string $mime): ?string
+    {
+        $mime = strtolower(trim((string) $mime));
+
+        if ($mime === 'image/jpg') {
+            return 'image/jpeg';
+        }
+
+        return $mime !== '' ? $mime : null;
+    }
+
+    private function isAllowedImageMime(?string $mime): bool
+    {
+        $mime = $this->normalizeMimeType($mime);
+
+        return $mime !== null && in_array($mime, self::ALLOWED_IMAGE_MIMES, true);
+    }
+
+    private function isBlockedAssetMime(?string $mime): bool
+    {
+        $mime = $this->normalizeMimeType($mime);
+
+        return $mime !== null && in_array($mime, self::BLOCKED_ASSET_MIMES, true);
+    }
+
+    private function logSkippedNonImageAsset(string $listingKey, string $url, string $contentType): void
+    {
+        Log::warning('TrebImageStore: skipped non-image asset', [
+            'listing_key' => $listingKey,
+            'url' => $url,
+            'content_type' => $contentType,
+        ]);
     }
 }
