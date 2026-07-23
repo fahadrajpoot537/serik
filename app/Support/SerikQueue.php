@@ -3,7 +3,7 @@
 namespace App\Support;
 
 /**
- * Explicit HIGH/LOW queue names. Never returns Laravel's "default".
+ * Explicit queue names. Never returns Laravel's "default" for HIGH/LOW lanes.
  */
 final class SerikQueue
 {
@@ -19,5 +19,32 @@ final class SerikQueue
         $q = config('serik.queues.low');
 
         return (is_string($q) && $q !== '' && $q !== 'default') ? $q : 'low';
+    }
+
+    public static function images(): string
+    {
+        $q = config('serik.queues.images');
+
+        return (is_string($q) && $q !== '') ? $q : 'images';
+    }
+
+    public static function default(): string
+    {
+        $q = config('serik.queues.default');
+
+        return (is_string($q) && $q !== '') ? $q : 'default';
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function all(): array
+    {
+        return array_values(array_unique([
+            self::high(),
+            self::default(),
+            self::images(),
+            self::low(),
+        ]));
     }
 }

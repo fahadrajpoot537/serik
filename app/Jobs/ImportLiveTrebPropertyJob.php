@@ -13,7 +13,6 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
-use Theme\homzen\Supports\TrebPropertyHelper;
 use Throwable;
 
 /**
@@ -72,30 +71,23 @@ class ImportLiveTrebPropertyJob implements ShouldQueue
 
         $hydration = app(PropertyController::class)->ensureListingHydrated($listingKey);
 
-        try {
-            TrebPropertyHelper::getPropertyImages($listingKey, $property->image_val ?? null, true);
-        } catch (Throwable $e) {
-            Log::warning('[ImportLiveTrebPropertyJob] image warm failed', [
-                'listing_key' => $listingKey,
-                'error' => $e->getMessage(),
-            ]);
-        }
-
         $property->refresh();
 
-        PersistTrebImagesJob::dispatch((int) $property->id, true);
+        app(\App\Support\ListingImagePipeline::class)->queueAfterCommit((int) $property->id);
 
         if ((float) ($property->latitude ?? 0) !== 0.0) {
             SyncPropertyHistoryJob::dispatch((int) $property->id);
         }
 
-        try {
-            $property->searchable();
-        } catch (Throwable $e) {
-            Log::warning('[ImportLiveTrebPropertyJob] meilisearch index failed', [
-                'listing_key' => $listingKey,
-                'error' => $e->getMessage(),
-            ]);
+        if (! app(\App\Support\ListingImagePipeline::class)->needsProcessing($property)) {
+            try {
+                $property->searchable();
+            } catch (Throwable $e) {
+                Log::warning('[ImportLiveTrebPropertyJob] meilisearch index failed', [
+                    'listing_key' => $listingKey,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
 
         Cache::forget(LiveTrebPropertyFallbackService::LIVE_PENDING_PREFIX . $listingKey);

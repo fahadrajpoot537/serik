@@ -285,9 +285,7 @@ class PropertyController extends BaseController
             }
 
             if ($mediaUrl && ($property->wasRecentlyCreated || $this->trebImageStore()->isRemoteUrl($property->image_val))) {
-                if ($this->assignTrebCoverImage($property, $listingkey, $mediaUrl)) {
-                    $property->saveQuietly();
-                }
+                $this->queueListingImagesAfterCommit((int) $property->id);
             }
 
             //$this->importPropertyImages($item['ListingKey']);
@@ -444,9 +442,7 @@ class PropertyController extends BaseController
                 }
 
                 if ($mediaUrl && ($property->wasRecentlyCreated || $this->trebImageStore()->isRemoteUrl($property->image_val))) {
-                    if ($this->assignTrebCoverImage($property, $item['ListingKey'], $mediaUrl)) {
-                        $property->saveQuietly();
-                    }
+                    $this->queueListingImagesAfterCommit((int) $property->id);
                 }
 
                 //$this->importPropertyImages($item['ListingKey']);
@@ -600,9 +596,10 @@ class PropertyController extends BaseController
             $created = 0;
             $updated = 0;
             $newPropertyIds = [];
+            $imageWorkPropertyIds = [];
 
             foreach ($payload['value'] as $item) {
-                $result = $this->saveAmpPropertyItem($item, $newPropertyIds);
+                $result = $this->saveAmpPropertyItem($item, $newPropertyIds, $imageWorkPropertyIds);
 
                 if ($result === 'created') {
                     $created++;
@@ -682,7 +679,7 @@ class PropertyController extends BaseController
      * (addpropertiescron) and the hourly site-wide recent sweep
      * (importRecentModifiedAmpListings).
      */
-    private function saveAmpPropertyItem(array $item, array &$newPropertyIds): string
+    private function saveAmpPropertyItem(array $item, array &$newPropertyIds, array &$imageWorkPropertyIds = []): string
     {
         if (empty($item['ListingKey'])) {
             return 'skipped';
@@ -814,12 +811,6 @@ class PropertyController extends BaseController
 
         $property->save();
 
-        if ($mediaUrl && ($isNew || $this->trebImageStore()->isRemoteUrl($property->image_val))) {
-            if ($this->assignTrebCoverImage($property, $listingkey, $mediaUrl)) {
-                $property->saveQuietly();
-            }
-        }
-
         if ($isNew) {
             $slug =
                 Str::slug(
@@ -835,10 +826,48 @@ class PropertyController extends BaseController
 
             $newPropertyIds[] = $property->id;
 
+            $this->registerImageWorkIfNeeded($property, $imageWorkPropertyIds);
+
+            if (! app(\App\Support\ListingImagePipeline::class)->needsProcessing($property)) {
+                try {
+                    $property->searchable();
+                } catch (\Throwable) {
+                    //
+                }
+            }
+
             return 'created';
         }
 
+        $this->registerImageWorkIfNeeded($property, $imageWorkPropertyIds);
+
+        if (! app(\App\Support\ListingImagePipeline::class)->needsProcessing($property)) {
+            try {
+                $property->searchable();
+            } catch (\Throwable) {
+                // Non-fatal — Meili catch-up via recovery cron.
+            }
+        }
+
         return 'updated';
+    }
+
+    /**
+     * @param  array<int, int>  $imageWorkPropertyIds
+     */
+    private function registerImageWorkIfNeeded(Property $property, array &$imageWorkPropertyIds): void
+    {
+        if (! app(\App\Support\ListingImagePipeline::class)->needsProcessing($property)) {
+            return;
+        }
+
+        $imageWorkPropertyIds[(int) $property->id] = (int) $property->id;
+        $this->queueListingImagesAfterCommit((int) $property->id);
+    }
+
+    private function queueListingImagesAfterCommit(int $propertyId): void
+    {
+        app(\App\Support\ListingImagePipeline::class)->queueAfterCommit($propertyId);
     }
 
     /**
@@ -898,9 +927,10 @@ class PropertyController extends BaseController
         $pages = 0;
         $stoppedEarly = false;
         $newPropertyIds = [];
+        $imageWorkPropertyIds = [];
 
         if (! cache()->add('amp_recent_lock', true, 200)) {
-            return response()->json(['status' => 'already running', 'new_id_list' => []]);
+            return response()->json(['status' => 'already running', 'new_id_list' => [], 'image_work_id_list' => []]);
         }
 
         try {
@@ -953,7 +983,7 @@ class PropertyController extends BaseController
                         continue;
                     }
 
-                    $result = $this->saveAmpPropertyItem($item, $newPropertyIds);
+                    $result = $this->saveAmpPropertyItem($item, $newPropertyIds, $imageWorkPropertyIds);
 
                     if ($result === 'created') {
                         $created++;
@@ -969,35 +999,7 @@ class PropertyController extends BaseController
                 $skip += $top;
             }
 
-            // Light cover-image fill for brand-new rows only (separate Media API —
-            // never via Property $expand). Bounded so SyncLiveJob stays fast.
-            if ($newPropertyIds !== [] && microtime(true) < $deadline) {
-                $hydrateIds = array_slice($newPropertyIds, 0, min(40, count($newPropertyIds)));
-                $props = Property::query()
-                    ->select(['id', 'external_id', 'image_val'])
-                    ->whereIn('id', $hydrateIds)
-                    ->where(function ($q) {
-                        $q->whereNull('image_val')->orWhere('image_val', '');
-                    })
-                    ->get();
-
-                foreach ($props as $property) {
-                    if (microtime(true) > $deadline) {
-                        break;
-                    }
-                    $key = (string) $property->external_id;
-                    if ($key === '') {
-                        continue;
-                    }
-                    try {
-                        if ($this->assignTrebCoverImage($property, $key)) {
-                            $property->saveQuietly();
-                        }
-                } catch (\Throwable $e) {
-                        // Non-fatal — listing is already imported.
-                    }
-                }
-            }
+            // Image persistence is queued per listing in saveAmpPropertyItem via ListingImagePipeline.
 
             // Geocoding + history are owned by serik:sync-live pipeline
             // (GeocodePropertyJob → SyncPropertyHistoryJob). Do not inline here —
@@ -1011,6 +1013,8 @@ class PropertyController extends BaseController
                 'unchanged' => $unchanged,
                 'new_ids' => count($newPropertyIds),
                 'new_id_list' => array_values(array_map('intval', $newPropertyIds)),
+                'image_work_ids' => count($imageWorkPropertyIds),
+                'image_work_id_list' => array_values(array_map('intval', $imageWorkPropertyIds)),
                 'stopped_early' => $stoppedEarly,
             ]);
         } catch (\Throwable $e) {
@@ -1022,6 +1026,7 @@ class PropertyController extends BaseController
                 'created' => $created,
                 'updated' => $updated,
                 'new_id_list' => array_values(array_map('intval', $newPropertyIds)),
+                'image_work_id_list' => array_values(array_map('intval', $imageWorkPropertyIds)),
             ], 500);
         } finally {
             cache()->forget('amp_recent_lock');
@@ -1773,9 +1778,7 @@ class PropertyController extends BaseController
                             continue;
                         }
 
-                        if ($this->assignTrebCoverImage($property, $listingKey, $firstImage)) {
-                            $property->save();
-                        }
+                        $this->queueListingImagesAfterCommit((int) $property->id);
 
                         cache()->put('property_image_last_id', $property->id);
 
@@ -3575,94 +3578,11 @@ class PropertyController extends BaseController
         return app(TrebImageStore::class);
     }
 
-    private function assignTrebCoverImage(Property $property, string $listingKey, ?string $remoteUrl = null): bool
-    {
-        $store = $this->trebImageStore();
-        $imageVal = trim((string) ($property->image_val ?? ''));
-
-        if ($store->storedWebpExists($imageVal)) {
-            return false;
-        }
-
-        $remote = trim((string) ($remoteUrl ?: ''));
-
-        if ($remote === '' && $store->isRemoteUrl($imageVal)) {
-            $remote = $imageVal;
-        }
-
-        if ($remote === '' && $imageVal !== '' && ! $store->isRemoteUrl($imageVal)) {
-            if (preg_match('/^L3RycmVi/i', $imageVal) || str_contains($imageVal, '/rs:') || str_contains($imageVal, 'rs:fit')) {
-                $remote = \App\Support\SerikMediaUrl::resolveTrebRemoteUrl($imageVal) ?? '';
-            } elseif (! str_ends_with(strtolower($imageVal), '.webp')) {
-                $local = $store->persistFromLocalRelativePath($listingKey, $imageVal, 'cover.webp');
-                if ($local) {
-                    $property->image_val = $local;
-
-                    return true;
-                }
-            }
-        }
-
-        if ($remote !== '' && (str_contains($remote, '/rs:') || str_contains($remote, 'rs:fit') || preg_match('/^L3RycmVi/i', $remote))) {
-            $remote = \App\Support\SerikMediaUrl::resolveTrebRemoteUrl($remote) ?? '';
-        }
-        if ($remote === '' || (str_contains($remote, 'serik.ca') && str_contains($remote, 'rs:'))) {
-            $remote = (string) ($this->getMediaUrl($listingKey) ?: '');
-        }
-        if ($remote === '') {
-            return false;
-        }
-
-        $local = $store->persistFromUrl($listingKey, $remote, 'cover.webp');
-        if ($local) {
-            $property->image_val = $local;
-
-            return true;
-        }
-
-        return false;
-    }
-
-    private function assignTrebGallery(Property $property, string $listingKey): bool
-    {
-        $diskGallery = $this->trebImageStore()->discoverGalleryPathsOnDisk($listingKey);
-
-        $remoteGallery = TrebPropertyHelper::getPropertyImagesForPersistence(
-            $listingKey,
-            $property->image_val,
-            fresh: true
-        );
-
-        if ($remoteGallery === []) {
-            return false;
-        }
-
-        if (count($remoteGallery) >= 2 && count($diskGallery) >= count($remoteGallery)) {
-            return false;
-        }
-
-        $localGallery = $this->trebImageStore()->persistGallery($listingKey, $remoteGallery);
-        if ($localGallery === []) {
-            return false;
-        }
-
-        $merged = array_values(array_unique(array_merge($diskGallery, $localGallery)));
-        $property->images = $merged;
-
-        if (empty($property->image_val) || $this->trebImageStore()->isRemoteUrl($property->image_val)) {
-            $property->image_val = $merged[0];
-        }
-
-        return true;
-    }
-
     public function persistTrebImagesForProperty(Property $property, bool $withGallery = false): bool
     {
-        return app(\App\Support\TrebImagePersistence::class)->persistForProperty(
-            $property,
-            $withGallery,
-            fn (string $listingKey) => $this->getMediaUrl($listingKey)
-        );
+        return app(\App\Support\ListingImagePipeline::class)
+            ->persist($property, $withGallery)
+            ->changed;
     }
 
     /**
@@ -4993,17 +4913,8 @@ class PropertyController extends BaseController
                 return null;
             }
 
-            // Primary image so the map marker / popup / search card render
-            // immediately. Failures are non-fatal (lazy endpoints still work).
-            if (empty($property->image_val) || $this->trebImageStore()->isRemoteUrl($property->image_val)) {
-                try {
-                    if ($this->assignTrebCoverImage($property, $listingKey)) {
-                        Property::withoutSyncingToSearch(fn () => $property->save());
-                    }
-                } catch (\Throwable $e) {
-                    Log::warning('ingestListingFromAmp image failed: ' . $e->getMessage(), ['key' => $listingKey]);
-                }
-            }
+            // Primary image persistence is handled exclusively by ListingImagePipeline.
+            $this->queueListingImagesAfterCommit((int) $property->id);
 
             // Coordinates. TREB lat/lng are not exposed by this feed, so a single
             // inline geocode (Nominatim, ~0.5-1s) runs on the FIRST fallback only.
@@ -5018,8 +4929,8 @@ class PropertyController extends BaseController
                 }
             }
 
-            // Index into Meilisearch so all future requests are 100% local.
-            if ($indexNow) {
+            // Index into Meilisearch only when images are already complete locally.
+            if ($indexNow && ! app(\App\Support\ListingImagePipeline::class)->needsProcessing($property)) {
                 try {
                     $property->searchable();
                 } catch (\Throwable $e) {
@@ -5113,33 +5024,11 @@ class PropertyController extends BaseController
             Log::warning('hydrate reconcile failed: ' . $e->getMessage(), ['key' => $listingKey]);
         }
 
-        // --- image_val (persisted as local WebP) ---
-        $imageChanged = false;
-        if (empty($property->image_val) || $this->trebImageStore()->isRemoteUrl($property->image_val)) {
-            try {
-                if ($this->assignTrebCoverImage($property, $listingKey)) {
-                    Property::withoutSyncingToSearch(fn () => $property->save());
-                    $out['image'] = true;
-                    $imageChanged = true;
-                }
-            } catch (\Throwable $e) {
-                Log::warning('hydrate image failed: ' . $e->getMessage(), ['key' => $listingKey]);
-            }
-        }
-
-        // --- full gallery (persisted to images JSON as WebP paths) ---
+        // --- images: queue ListingImagePipeline (single source of truth) ---
         try {
-            if ($this->assignTrebGallery($property, $listingKey)) {
-                Property::withoutSyncingToSearch(fn () => $property->save());
-                $out['gallery'] = is_array($property->images) ? count($property->images) : 0;
-                $imageChanged = true;
-            }
+            app(\App\Support\ListingImagePipeline::class)->queueAfterCommit((int) $property->id);
         } catch (\Throwable $e) {
-            Log::warning('hydrate gallery failed: ' . $e->getMessage(), ['key' => $listingKey]);
-        }
-
-        if ($imageChanged) {
-            $out['image'] = true;
+            Log::warning('hydrate image queue failed: ' . $e->getMessage(), ['key' => $listingKey]);
         }
 
         // --- coordinates (persisted) ---
@@ -5173,7 +5062,7 @@ class PropertyController extends BaseController
             // Meilisearch: reindex ONLY this document when a searchable field
             // moved (price/status/remarks from the AMP diff, a repaired image,
             // or fresh coordinates). Never rebuilds the whole index.
-            if ($searchableChanged || $out['coords'] || $out['image']) {
+            if ($searchableChanged || $out['coords']) {
                 try {
                     $property->searchable();
                 } catch (\Throwable $e) {
@@ -6515,11 +6404,7 @@ class PropertyController extends BaseController
         );
 
         if (count($images) <= 1) {
-            $dispatchKey = 'serik_gallery_job_' . $property->id;
-            if (! \Illuminate\Support\Facades\Cache::has($dispatchKey)) {
-                \Illuminate\Support\Facades\Cache::put($dispatchKey, 1, 3600);
-                \App\Jobs\PersistTrebImagesJob::dispatch((int) $property->id, true);
-            }
+            app(\App\Support\ListingImagePipeline::class)->queueForLazyRequest((int) $property->id);
         }
 
         return response()->json([

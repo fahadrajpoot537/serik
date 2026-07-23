@@ -196,10 +196,7 @@ final class TrebImageStore
             }
 
             if (str_ends_with(strtolower($relative), '.webp') && $filename === basename($relative)) {
-                $disk->makeDirectory(dirname($targetPath));
-                $disk->put($targetPath, $binary, 'public');
-
-                return $targetPath;
+                return $this->writeAtomic($targetPath, $binary) ? $targetPath : null;
             }
 
             if (! $this->isProcessableImageBinary($binary, $listingKey, $relative)) {
@@ -210,10 +207,7 @@ final class TrebImageStore
                 ->read($binary)
                 ->encode(new WebpEncoder(quality: 82));
 
-            $disk->makeDirectory(dirname($targetPath));
-            $disk->put($targetPath, $encoded, 'public');
-
-            return $targetPath;
+            return $this->writeAtomic($targetPath, $encoded) ? $targetPath : null;
         } catch (\Throwable $e) {
             Log::warning('TrebImageStore: failed to convert local image', [
                 'listing_key' => $listingKey,
@@ -283,10 +277,7 @@ final class TrebImageStore
                 ->read($binary)
                 ->encode(new WebpEncoder(quality: 82));
 
-            Storage::disk(self::DISK)->makeDirectory(dirname($relativePath));
-            Storage::disk(self::DISK)->put($relativePath, $encoded, 'public');
-
-            return $relativePath;
+            return $this->writeAtomic($relativePath, $encoded) ? $relativePath : null;
         } catch (\Throwable $e) {
             Log::warning('TrebImageStore: failed to persist image', [
                 'listing_key' => $listingKey,
@@ -342,10 +333,101 @@ final class TrebImageStore
             if ($path) {
                 $stored[] = $path;
                 $photoIndex++;
+
+                $delayMs = max(0, (int) config('serik.images.gallery_fetch_delay_ms', 100));
+                if ($delayMs > 0 && $this->isRemoteUrl($source)) {
+                    usleep($delayMs * 1000);
+                }
             }
         }
 
         return array_values(array_unique($stored));
+    }
+
+    /**
+     * Write via temp file then move — never expose partial WebP.
+     */
+    public function writeAtomic(string $relativePath, string $contents): bool
+    {
+        $relativePath = $this->normalizeRelativePath($relativePath) ?? '';
+        if ($relativePath === '') {
+            return false;
+        }
+
+        $disk = Storage::disk(self::DISK);
+        $dir = dirname($relativePath);
+        $disk->makeDirectory($dir);
+
+        $tempPath = $dir . '/.tmp_' . bin2hex(random_bytes(8)) . '.webp';
+
+        try {
+            if (! $disk->put($tempPath, $contents, 'public')) {
+                return false;
+            }
+
+            if ($disk->exists($relativePath)) {
+                $disk->delete($relativePath);
+            }
+
+            if (! $disk->move($tempPath, $relativePath)) {
+                if ($disk->exists($tempPath)) {
+                    $disk->copy($tempPath, $relativePath);
+                    $disk->delete($tempPath);
+                }
+            }
+
+            return $disk->exists($relativePath);
+        } catch (\Throwable $e) {
+            if ($disk->exists($tempPath)) {
+                $disk->delete($tempPath);
+            }
+
+            Log::warning('TrebImageStore: atomic write failed', [
+                'path' => $relativePath,
+                'error' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
+    }
+
+    /**
+     * @param  list<string>  $keepRelativePaths
+     */
+    public function deleteOrphans(string $listingKey, array $keepRelativePaths): void
+    {
+        $listingKey = strtoupper(trim($listingKey));
+        if ($listingKey === '') {
+            return;
+        }
+
+        $disk = Storage::disk(self::DISK);
+        $directory = self::BASE_DIR . '/' . $listingKey;
+
+        if (! $disk->exists($directory)) {
+            return;
+        }
+
+        $keep = [];
+        foreach ($keepRelativePaths as $path) {
+            $normalized = $this->normalizeRelativePath((string) $path);
+            if ($normalized !== null) {
+                $keep[basename($normalized)] = true;
+            }
+        }
+
+        foreach ($disk->allFiles($directory) as $file) {
+            $basename = basename($file);
+            if (str_starts_with($basename, '.tmp_')) {
+                $disk->delete($file);
+
+                continue;
+            }
+
+            if (! isset($keep[$basename])) {
+                $disk->delete($file);
+            }
+        }
     }
 
     /**

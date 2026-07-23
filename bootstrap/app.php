@@ -1,5 +1,6 @@
 <?php
 
+use App\Jobs\DispatchTrebImagesWebpJob;
 use App\Jobs\RunArtisanOnLowQueueJob;
 use App\Support\SerikQueue;
 use App\Support\SerikScheduler;
@@ -11,6 +12,9 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Log;
 
 $app = Application::configure(basePath: dirname(__DIR__))
+    ->withCommands([
+        \App\Console\Commands\SerikQueueStatusCommand::class,
+    ])
     ->withRouting(
         web: __DIR__ . '/../routes/web.php',
         commands: __DIR__ . '/../routes/console.php',
@@ -157,12 +161,26 @@ $app = Application::configure(basePath: dirname(__DIR__))
             ->withoutOverlapping(10)
             ->appendOutputTo(storage_path('logs/treb-reconcile.log'));
 
-        // F) TREB image WebP backfill — short LOW slices; never 55-minute scheduler blocks.
-        $schedule->call($dispatchLow('serik:treb-images-webp', [
-            '--chunk' => (int) config('serik.scheduler.treb_images_chunk', 50),
-            '--gallery' => true,
-            '--max-runtime' => (int) config('serik.scheduler.treb_images_max_runtime', 600),
-        ]))
+        // F) TREB image WebP backfill — dispatch lightweight job; workers process images lane.
+        $schedule->call(function () {
+            try {
+                if (! SerikScheduler::shouldDispatchImageBackfill()) {
+                    Log::debug('[schedule] skipped image backfill dispatch', [
+                        'images_depth' => SerikScheduler::imagesQueueDepth(),
+                    ]);
+
+                    return 0;
+                }
+
+                DispatchTrebImagesWebpJob::dispatch(
+                    chunk: (int) config('serik.scheduler.treb_images_chunk', 50),
+                );
+            } catch (\Throwable $e) {
+                Log::error('[schedule] image backfill dispatch failed: ' . $e->getMessage());
+            }
+
+            return 0;
+        })
             ->name('serik-treb-images-webp-dispatch')
             ->everyThirtyMinutes()
             ->withoutOverlapping(30)

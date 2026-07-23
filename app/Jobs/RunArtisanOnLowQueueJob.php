@@ -4,10 +4,8 @@ namespace App\Jobs;
 
 use App\Support\SerikQueue;
 use Illuminate\Bus\Queueable;
-use App\Jobs\RunArtisanOnLowQueueJob;
-use App\Support\SerikQueue;
-use App\Support\SerikScheduler;
 use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;

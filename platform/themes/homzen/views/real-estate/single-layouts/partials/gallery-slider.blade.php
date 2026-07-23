@@ -1,7 +1,6 @@
 @php
-    use App\Jobs\PersistTrebImagesJob;
+    use App\Support\ListingImagePipeline;
     use App\Support\SerikMediaUrl;
-    use Illuminate\Support\Facades\Cache;
     use Theme\homzen\Supports\TrebPropertyHelper;
 
     $images = SerikMediaUrl::mapListingGalleryUrls(
@@ -11,11 +10,7 @@
     );
 
     if (count($images) <= 1 && ! empty($property->external_id) && $property->id) {
-        $dispatchKey = 'serik_gallery_job_' . $property->id;
-        if (! Cache::has($dispatchKey)) {
-            Cache::put($dispatchKey, 1, 3600);
-            PersistTrebImagesJob::dispatch((int) $property->id, true);
-        }
+        app(ListingImagePipeline::class)->queueForLazyRequest((int) $property->id);
     }
 
     $statusLabel = $property->isSoldHistory()

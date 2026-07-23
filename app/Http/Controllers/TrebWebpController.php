@@ -2,11 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Support\SerikMediaUrl;
-use App\Support\TrebImagePersistence;
+use App\Support\ListingImagePipeline;
 use App\Support\TrebImageStore;
 use Botble\RealEstate\Models\Property;
-use Theme\homzen\Supports\TrebPropertyHelper;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -24,7 +22,7 @@ final class TrebWebpController extends Controller
         $disk = Storage::disk('public');
 
         if (! $disk->exists($relative)) {
-            $this->materializeOnDemand($listingKey, $filename);
+            $this->materializeOnDemand($listingKey);
         }
 
         if (! $disk->exists($relative)) {
@@ -37,53 +35,20 @@ final class TrebWebpController extends Controller
         ]);
     }
 
-    private function materializeOnDemand(string $listingKey, string $filename): void
+    private function materializeOnDemand(string $listingKey): void
     {
-        $store = app(TrebImageStore::class);
-        $relative = TrebImageStore::relativePath($listingKey, $filename);
-
-        if (Storage::disk('public')->exists($relative)) {
-            return;
-        }
-
         $property = Property::query()
             ->where('external_id', $listingKey)
             ->first();
 
-        $persistence = app(TrebImagePersistence::class);
-
-        if ($property !== null) {
-            if (strcasecmp($filename, 'cover.webp') === 0) {
-                $persistence->persistForProperty($property, false);
-            } else {
-                $persistence->persistForProperty($property, true);
-            }
-
-            if (Storage::disk('public')->exists($relative)) {
-                return;
-            }
-        }
-
-        $images = TrebPropertyHelper::getPropertyImagesForPersistence($listingKey, null);
-        $remote = (string) ($images[0] ?? '');
-
-        if ($remote === '') {
+        if ($property === null) {
             return;
         }
 
-        if (str_contains($remote, '/rs:') || str_contains($remote, 'rs:fit') || preg_match('/^L3RycmVi/i', $remote)) {
-            $remote = SerikMediaUrl::resolveTrebRemoteUrl($remote) ?? '';
-        }
+        $pipeline = app(ListingImagePipeline::class);
 
-        if ($remote === '') {
-            return;
-        }
-
-        $path = $store->persistFromUrl($listingKey, $remote, $filename);
-
-        if ($path && $property !== null && strcasecmp($filename, 'cover.webp') === 0 && ! $store->storedWebpExists($property->image_val)) {
-            $property->image_val = $path;
-            $property->saveQuietly();
+        if ($pipeline->needsProcessing($property)) {
+            $pipeline->persist($property, true);
         }
     }
 }

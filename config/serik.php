@@ -9,7 +9,27 @@ return [
     */
     'queues' => [
         'high' => env('SERIK_QUEUE_HIGH', 'high'),
+        'default' => env('SERIK_QUEUE_DEFAULT', 'default'),
+        'images' => env('SERIK_QUEUE_IMAGES', 'images'),
         'low' => env('SERIK_QUEUE_LOW', 'low'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Image persistence queue (TREB WebP / gallery)
+    |--------------------------------------------------------------------------
+    */
+    'images' => [
+        // Max PersistTrebImagesJob instances processing at once (all workers).
+        'max_concurrent' => (int) env('SERIK_IMAGES_MAX_CONCURRENT', 2),
+        // Pause backfill dispatch when pending images jobs reach this depth.
+        'max_pending' => (int) env('SERIK_IMAGES_MAX_PENDING', 120),
+        // Release job back to queue when no concurrency slot is free.
+        'slot_wait_seconds' => (int) env('SERIK_IMAGES_SLOT_WAIT', 15),
+        // Cooldown before the same property can be queued again (SSR/API dedupe).
+        'dispatch_cooldown_seconds' => (int) env('SERIK_IMAGES_DISPATCH_COOLDOWN', 3600),
+        // Throttle AMP/HTTP gallery fetches inside one job.
+        'gallery_fetch_delay_ms' => (int) env('SERIK_IMAGES_GALLERY_DELAY_MS', 100),
     ],
 
     /*

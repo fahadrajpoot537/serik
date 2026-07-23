@@ -3640,6 +3640,7 @@ Artisan::command('serik:treb-images-webp
     {--fresh : Clear checkpoint and start from the beginning}
     {--max-runtime=0 : Stop after N seconds (0 = run until complete)}
     {--delay=50 : Milliseconds between AMP image fetches}
+    {--dispatch : Queue PersistTrebImagesJob rows instead of processing inline}
 ', function () {
     @set_time_limit(0);
     @ini_set('memory_limit', '512M');
@@ -3647,12 +3648,26 @@ Artisan::command('serik:treb-images-webp
     $singleListing = strtoupper(trim((string) $this->option('listing')));
     $chunkSize = max(10, min(500, (int) $this->option('chunk')));
     $withGallery = (bool) $this->option('gallery');
+    $dispatchOnly = (bool) $this->option('dispatch');
+
+    if ($dispatchOnly && $singleListing === '') {
+        if ((bool) $this->option('fresh')) {
+            Cache::forget('serik_treb_images_webp_state');
+            $this->warn('Checkpoint cleared.');
+        }
+
+        \App\Jobs\DispatchTrebImagesWebpJob::dispatchSync($chunkSize);
+        $this->info('Dispatched image jobs via DispatchTrebImagesWebpJob (images queue).');
+
+        return 0;
+    }
+
     $maxRuntime = max(0, (int) $this->option('max-runtime'));
     $delayMs = max(0, min(2000, (int) $this->option('delay')));
     $deadline = $maxRuntime > 0 ? microtime(true) + $maxRuntime : null;
     $stateKey = 'serik_treb_images_webp_state';
 
-    $persistence = app(\App\Support\TrebImagePersistence::class);
+    $pipeline = app(\App\Support\ListingImagePipeline::class);
     $store = app(\App\Support\TrebImageStore::class);
 
     if ($singleListing !== '') {
@@ -3666,7 +3681,8 @@ Artisan::command('serik:treb-images-webp
             return 1;
         }
 
-        $ok = $persistence->persistForProperty($property, true);
+        $pipeline = app(\App\Support\ListingImagePipeline::class);
+        $ok = $pipeline->persist($property, true)->changed;
         $this->info($ok ? "Converted {$singleListing}" : "No changes for {$singleListing}");
 
         return 0;
@@ -3687,27 +3703,8 @@ Artisan::command('serik:treb-images-webp
     ];
     $startedAt = is_array($saved) ? (float) ($saved['started_at'] ?? microtime(true)) : microtime(true);
 
-    $needsWork = function (\Botble\RealEstate\Models\Property $property) use ($store, $withGallery): bool {
-        if (! $store->storedWebpExists($property->image_val)) {
-            return true;
-        }
-
-        if (! $withGallery) {
-            return false;
-        }
-
-        $images = is_array($property->images) ? $property->images : [];
-        if ($images === []) {
-            return true;
-        }
-
-        foreach ($images as $path) {
-            if (! $store->storedWebpExists(is_string($path) ? $path : null)) {
-                return true;
-            }
-        }
-
-        return false;
+    $needsWork = function (\Botble\RealEstate\Models\Property $property) use ($pipeline, $withGallery): bool {
+        return $pipeline->needsProcessing($property, $withGallery);
     };
 
     $remaining = \Botble\RealEstate\Models\Property::query()
@@ -3734,7 +3731,7 @@ Artisan::command('serik:treb-images-webp
         ->where('id', '>', $lastId)
         ->orderBy('id')
         ->chunkById($chunkSize, function ($rows) use (
-            $persistence,
+            $pipeline,
             $withGallery,
             $delayMs,
             $deadline,
@@ -3763,13 +3760,10 @@ Artisan::command('serik:treb-images-webp
                 }
 
                 try {
-                    if ($persistence->persistForProperty($property, $withGallery)) {
-                        $stats['converted']++;
-                        if ($delayMs > 0) {
-                            usleep($delayMs * 1000);
-                        }
-                    } else {
-                        $stats['failed']++;
+                    $pipeline->queueForRecovery((int) $property->id);
+                    $stats['converted']++;
+                    if ($delayMs > 0) {
+                        usleep($delayMs * 1000);
                     }
                 } catch (\Throwable $e) {
                     $stats['failed']++;
@@ -3832,3 +3826,27 @@ Artisan::command('serik:treb-images-webp
 
     return 0;
 })->purpose('Download missing TREB images and convert all to local WebP (resumable)');
+
+Artisan::command('serik:queue:move-stale-images
+    {--dry-run : Show count only, do not update}
+', function () {
+    $from = \App\Support\SerikQueue::low();
+    $to = \App\Support\SerikQueue::images();
+
+    $query = \Illuminate\Support\Facades\DB::table('jobs')
+        ->where('queue', $from)
+        ->where('payload', 'like', '%PersistTrebImagesJob%');
+
+    $count = (int) $query->count();
+
+    if ($this->option('dry-run')) {
+        $this->info("Would move {$count} PersistTrebImagesJob rows from {$from} → {$to}");
+
+        return 0;
+    }
+
+    $updated = (int) $query->update(['queue' => $to]);
+    $this->info("Moved {$updated} image jobs from {$from} → {$to}");
+
+    return 0;
+})->purpose('One-time: move PersistTrebImagesJob rows from low queue to images queue');

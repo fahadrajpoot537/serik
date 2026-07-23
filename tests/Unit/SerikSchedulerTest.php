@@ -48,4 +48,28 @@ class SerikSchedulerTest extends TestCase
 
         $this->assertFalse(SerikScheduler::shouldDispatchHeavyLow());
     }
+
+    public function test_should_dispatch_image_backfill_when_images_queue_is_light(): void
+    {
+        Config::set('serik.images.max_pending', 120);
+        $this->assertTrue(SerikScheduler::shouldDispatchImageBackfill());
+    }
+
+    public function test_should_not_dispatch_image_backfill_when_images_queue_is_deep(): void
+    {
+        Config::set('serik.images.max_pending', 10);
+
+        for ($i = 0; $i < 10; $i++) {
+            DB::table('jobs')->insert([
+                'queue' => 'images',
+                'payload' => '{}',
+                'attempts' => 0,
+                'reserved_at' => null,
+                'available_at' => now()->timestamp,
+                'created_at' => now()->timestamp,
+            ]);
+        }
+
+        $this->assertFalse(SerikScheduler::shouldDispatchImageBackfill());
+    }
 }

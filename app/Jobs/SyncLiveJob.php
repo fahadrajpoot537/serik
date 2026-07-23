@@ -18,8 +18,7 @@ use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
- * HIGH lane: AMP recent import → geocode all new IDs → chain history per property.
- * Reuses PropertyController import + geocode (no business-logic rewrite).
+ * HIGH lane: AMP recent import → parallel image + geocode/history per property.
  */
 class SyncLiveJob implements ShouldQueue, ShouldBeUnique
 {
@@ -70,7 +69,6 @@ class SyncLiveJob implements ShouldQueue, ShouldBeUnique
             } catch (Throwable) {
                 //
             }
-            // Re-acquire after force-release so finally can release cleanly.
             if (! $lock->get()) {
                 $lock = null;
             }
@@ -79,7 +77,9 @@ class SyncLiveJob implements ShouldQueue, ShouldBeUnique
         $started = microtime(true);
         $geocoded = 0;
         $historyQueued = 0;
+        $imagesQueued = 0;
         $newIds = [];
+        $imageWorkIds = [];
         $high = SerikQueue::high();
 
         try {
@@ -97,6 +97,13 @@ class SyncLiveJob implements ShouldQueue, ShouldBeUnique
                 $payload['new_id_list'] ?? []
             ))));
 
+            $imageWorkIds = array_values(array_unique(array_filter(array_map(
+                'intval',
+                $payload['image_work_id_list'] ?? $newIds
+            ))));
+
+            $imagesQueued = count($imageWorkIds);
+
             Log::info('[SyncLiveJob] import', [
                 'status' => $payload['status'] ?? null,
                 'pages' => $payload['pages'] ?? 0,
@@ -104,11 +111,11 @@ class SyncLiveJob implements ShouldQueue, ShouldBeUnique
                 'updated' => $payload['updated'] ?? 0,
                 'unchanged' => $payload['unchanged'] ?? 0,
                 'new_ids' => count($newIds),
+                'image_work_ids' => count($imageWorkIds),
                 'stopped_early' => $payload['stopped_early'] ?? false,
                 'error' => $payload['error'] ?? null,
             ]);
 
-            // Expose last import stats for artisan inline runs.
             Cache::put('serik_sync_live_last_result', [
                 'status' => $payload['status'] ?? null,
                 'pages' => $payload['pages'] ?? 0,
@@ -116,16 +123,16 @@ class SyncLiveJob implements ShouldQueue, ShouldBeUnique
                 'updated' => $payload['updated'] ?? 0,
                 'unchanged' => $payload['unchanged'] ?? 0,
                 'new_ids' => count($newIds),
+                'image_work_ids' => count($imageWorkIds),
                 'stopped_early' => $payload['stopped_early'] ?? false,
                 'error' => $payload['error'] ?? null,
                 'at' => now()->toDateTimeString(),
             ], 600);
 
-            if ($newIds === []) {
+            if ($newIds === [] && $imageWorkIds === []) {
                 return;
             }
 
-            // Claim new IDs immediately so LOW backlog cannot steal them mid-pipeline.
             $needGeo = DB::table('re_properties')
                 ->whereIn('id', $newIds)
                 ->where(function ($q) {
@@ -154,10 +161,11 @@ class SyncLiveJob implements ShouldQueue, ShouldBeUnique
                 ->where('latitude', '!=', '0')
                 ->count();
 
+            // Images queued during import via ListingImagePipeline::queueAfterCommit in saveAmpPropertyItem.
+
+            // Geocode + history chain for brand-new listings only.
             foreach ($newIds as $propertyId) {
                 try {
-                    PersistTrebImagesJob::dispatch((int) $propertyId, true);
-
                     GeocodeState::markQueued($propertyId);
 
                     $geoJob = (new GeocodePropertyJob($propertyId))->allOnQueue($high);
@@ -175,13 +183,14 @@ class SyncLiveJob implements ShouldQueue, ShouldBeUnique
 
                     $historyQueued++;
                 } catch (Throwable $e) {
-                    Log::warning('[SyncLiveJob] queue skip #' . $propertyId . ': ' . $e->getMessage());
+                    Log::warning('[SyncLiveJob] geocode chain skip #' . $propertyId . ': ' . $e->getMessage());
                 }
             }
 
             Log::info('[SyncLiveJob] complete', [
                 'seconds' => round(microtime(true) - $started, 1),
                 'imported' => count($newIds),
+                'images_queued' => $imagesQueued,
                 'geocoded' => $geocoded,
                 'history_queued' => $historyQueued,
             ]);

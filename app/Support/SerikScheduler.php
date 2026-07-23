@@ -11,12 +11,22 @@ final class SerikScheduler
 {
     public static function highQueueDepth(): int
     {
-        return (int) DB::table('jobs')->where('queue', SerikQueue::high())->count();
+        return self::queueDepth(SerikQueue::high());
     }
 
     public static function lowQueueDepth(): int
     {
-        return (int) DB::table('jobs')->where('queue', SerikQueue::low())->count();
+        return self::queueDepth(SerikQueue::low());
+    }
+
+    public static function imagesQueueDepth(): int
+    {
+        return self::queueDepth(SerikQueue::images());
+    }
+
+    public static function defaultQueueDepth(): int
+    {
+        return self::queueDepth(SerikQueue::default());
     }
 
     /**
@@ -27,5 +37,20 @@ final class SerikScheduler
         $maxDepth = max(1, (int) config('serik.scheduler.max_low_queue_depth', 3));
 
         return self::lowQueueDepth() < $maxDepth;
+    }
+
+    /**
+     * Pause image backfill dispatch when the images lane is already deep.
+     */
+    public static function shouldDispatchImageBackfill(): bool
+    {
+        $maxDepth = max(10, (int) config('serik.images.max_pending', 120));
+
+        return self::imagesQueueDepth() < $maxDepth;
+    }
+
+    private static function queueDepth(string $queue): int
+    {
+        return (int) DB::table('jobs')->where('queue', $queue)->count();
     }
 }
