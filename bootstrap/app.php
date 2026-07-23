@@ -152,6 +152,14 @@ $app = Application::configure(basePath: dirname(__DIR__))
             ->withoutOverlapping(10)
             ->appendOutputTo(storage_path('logs/treb-geocode.log'));
 
+        $schedule->call($dispatchLow('serik:backfill-property-images', [
+            '--limit' => 200,
+        ], requireLightLoad: true))
+            ->name('serik-backfill-property-images')
+            ->everyFiveMinutes()
+            ->withoutOverlapping(15)
+            ->appendOutputTo(storage_path('logs/treb-images.log'));
+
         $schedule->call($dispatchLow('serik:reconcile', [
             '--days' => 7,
             '--fix-coords' => true,

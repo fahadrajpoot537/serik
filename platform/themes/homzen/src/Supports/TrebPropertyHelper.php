@@ -25,6 +25,11 @@ class TrebPropertyHelper
             return false;
         }
 
+        // Image proxy must reach AMP/CDN server-side (browsers get 403 on direct CDN).
+        if ($request->is('storage/properties/treb/*')) {
+            return false;
+        }
+
         if ($request->boolean('warm_treb') || $request->boolean('refresh_treb')) {
             return false;
         }

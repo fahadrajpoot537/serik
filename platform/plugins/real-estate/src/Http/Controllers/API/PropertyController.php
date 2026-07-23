@@ -1690,9 +1690,9 @@ class PropertyController extends BaseController
 
     public function importAllPropertyImages()
     {
-        $lock = Cache::lock('import-property-images-lock', 300);
+        $lock = \App\Support\PropertyImageBackfill::acquireLock(300);
 
-        if (! $lock->get()) {
+        if ($lock === null) {
             return response()->json([
                 'status' => 'busy',
                 'message' => 'Another image backfill run is in progress. Try again in a few minutes.',
@@ -1700,79 +1700,14 @@ class PropertyController extends BaseController
         }
 
         try {
-            @set_time_limit(120);
+            @set_time_limit(180);
 
-            $lastId = (int) cache()->get('property_image_last_id', 0);
-            $processed = 0;
-            $updated = 0;
-            $skipped = 0;
-            $batchLimit = 20;
+            $result = \App\Support\PropertyImageBackfill::runBatch(100);
+            $result['message'] = $result['status'] === 'complete'
+                ? $result['message']
+                : 'Batch complete. Cron or `php artisan serik:backfill-property-images` will continue automatically.';
 
-            $properties = Property::query()
-                ->select(['id', 'external_id', 'image_val'])
-                ->whereNotNull('external_id')
-                ->where('external_id', '!=', '')
-                ->where(function ($q) {
-                    $q->whereNull('image_val')
-                        ->orWhere('image_val', '')
-                        ->orWhere('image_val', 'like', 'properties/treb/%');
-                })
-                ->where('id', '>', $lastId)
-                ->orderBy('id')
-                ->limit($batchLimit)
-                ->get();
-
-            if ($properties->isEmpty()) {
-                cache()->forget('property_image_last_id');
-
-                return response()->json([
-                    'status' => 'complete',
-                    'message' => 'Image backfill finished — no more rows need CDN URLs.',
-                    'last_id' => $lastId,
-                ]);
-            }
-
-            foreach ($properties as $property) {
-                $processed++;
-                $listingKey = trim((string) $property->external_id);
-
-                if ($listingKey === '') {
-                    $skipped++;
-                    cache()->put('property_image_last_id', (int) $property->id);
-
-                    continue;
-                }
-
-                $urls = \Theme\homzen\Supports\TrebPropertyHelper::getPropertyImagesForPersistence(
-                    $listingKey,
-                    $property->image_val,
-                    fresh: false
-                );
-                $firstImage = is_string($urls[0] ?? null) ? trim((string) $urls[0]) : '';
-
-                if ($firstImage === '' || ! \App\Support\TrebMediaFilter::isPhotoMediaUrl($firstImage)) {
-                    $skipped++;
-                    cache()->put('property_image_last_id', (int) $property->id);
-
-                    continue;
-                }
-
-                $property->image_val = $firstImage;
-                $property->saveQuietly();
-                $updated++;
-                cache()->put('property_image_last_id', (int) $property->id);
-
-                usleep(100000);
-            }
-
-            return response()->json([
-                'status' => 'ok',
-                'processed' => $processed,
-                'updated' => $updated,
-                'skipped' => $skipped,
-                'last_id' => (int) $properties->last()->id,
-                'message' => 'Batch complete. Call again to process the next slice.',
-            ]);
+            return response()->json($result);
         } catch (\Throwable $e) {
             \Log::error('importAllPropertyImages failed: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString(),

@@ -760,6 +760,40 @@ Artisan::command('serik:geocode-borrow
 
 /*
 |--------------------------------------------------------------------------
+| serik:backfill-property-images — optional image_val CDN URL fill (not required for display)
+|--------------------------------------------------------------------------
+*/
+Artisan::command('serik:backfill-property-images
+    {--limit=200 : Rows per batch}', function () {
+    @set_time_limit(0);
+    $limit = max(20, min(500, (int) $this->option('limit')));
+
+    $lock = \App\Support\PropertyImageBackfill::acquireLock(600);
+    if ($lock === null) {
+        $this->warn('Another image backfill run is in progress.');
+
+        return 1;
+    }
+
+    try {
+        $result = \App\Support\PropertyImageBackfill::runBatch($limit, sleepBetweenRows: true);
+        $this->info(sprintf(
+            '%s processed=%d updated=%d skipped=%d last_id=%d',
+            $result['status'],
+            $result['processed'],
+            $result['updated'],
+            $result['skipped'],
+            $result['last_id']
+        ));
+
+        return $result['status'] === 'error' ? 1 : 0;
+    } finally {
+        optional($lock)->release();
+    }
+})->purpose('Optional AMP backfill of re_properties.image_val (display works without this)');
+
+/*
+|--------------------------------------------------------------------------
 | serik:search-index-recent — keep Meili warm for map date filters
 |--------------------------------------------------------------------------
 */

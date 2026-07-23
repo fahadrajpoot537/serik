@@ -18,6 +18,9 @@ final class TrebWebpController extends Controller
             abort(404);
         }
 
+        // Same-origin proxy is allowed to call AMP (see shouldSkipRemoteAmpFetch).
+        app()->instance('serik.live_treb_fallback', true);
+
         $listingKey = strtoupper(trim($listingKey));
         $property = Property::query()
             ->where('external_id', $listingKey)
