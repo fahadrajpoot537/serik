@@ -19,7 +19,7 @@ use Throwable;
  */
 class HomepageFeaturedPropertiesAction
 {
-    private const CACHE_SECONDS = 180;
+    private const CACHE_SECONDS = 600;
 
     private const INACTIVE_STATUSES = [
         'Sold', 'Leased', 'Sold Conditional', 'Sold Conditional Escape',

@@ -5422,9 +5422,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function buildHsPricePinImageData(fillColor) {
         const scale = 2;
-        const bodyW = 72;
-        const bodyH = 24;
-        const pointerH = 8;
+        const bodyW = 88;
+        const bodyH = 28;
+        const pointerH = 9;
         const totalW = bodyW;
         const totalH = bodyH + pointerH;
         const canvas = document.createElement('canvas');
@@ -5477,7 +5477,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         Object.entries(variants).forEach(([id, color]) => {
             if (mapInstance.hasImage(id)) {
-                return;
+                mapInstance.removeImage(id);
             }
             const image = buildHsPricePinImageData(color);
             if (image) {
@@ -5640,19 +5640,50 @@ function geojsonBounds(geometry) {
     });
 }
 
-async function showCityBoundary(cityName) {
+async function showCityBoundary(cityName, fallbackCoords = null) {
 
     if (!cityName || !map) return;
 
     ensureCityLayer();
-
-    if (!map.getLayer('city-fill')) return;
 
     const normalized = cityName
         .toString()
         .trim()
         .toLowerCase()
         .replace(/\s+/g, '');
+
+    const normKey = normalizeCity(cityName);
+    const fallback = fallbackCoords || cityCoordinatesNormalized[normKey] || null;
+
+    const loadAfterMove = () => {
+        clearTimeout(moveTimer);
+        moveTimer = null;
+        if (typeof loadProperties === 'function') {
+            loadProperties({ fromInit: true });
+        }
+    };
+
+    const flyToFallback = () => {
+        if (!fallback || !Number.isFinite(fallback.lat) || !Number.isFinite(fallback.lng)) {
+            loadAfterMove();
+            return;
+        }
+
+        if (typeof window.runProgrammaticMapMove === 'function') {
+            window.runProgrammaticMapMove(() => {
+                map.easeTo({ center: [fallback.lng, fallback.lat], zoom: 12 });
+            });
+        } else {
+            map.easeTo({ center: [fallback.lng, fallback.lat], zoom: 12 });
+        }
+
+        map.once('moveend', loadAfterMove);
+    };
+
+    if (!map.getLayer('city-fill')) {
+        flyToFallback();
+        return;
+    }
 
     map.setFilter('city-fill', [
         '==',
@@ -5708,20 +5739,18 @@ async function showCityBoundary(cityName) {
             map.once('moveend', () => {
                 clearTimeout(moveTimer);
                 moveTimer = null;
-                if (typeof loadProperties === 'function') {
-                    loadProperties({ fromInit: true });
-                }
+                loadAfterMove();
             });
         } else {
             activeCityPolygon = null;
             activeCityGeometryType = null;
-            loadProperties({ fromInit: true });
+            flyToFallback();
         }
     } catch (e) {
         console.warn('City boundary fit failed', e);
         activeCityPolygon = null;
         activeCityGeometryType = null;
-        loadProperties({ fromInit: true });
+        flyToFallback();
     }
 }
     
@@ -6343,9 +6372,9 @@ if (urlLocation) {
                     'hs-price-pin-sale',
                 ],
                 'icon-text-fit': 'both',
-                'icon-text-fit-padding': [2, 8, 2, 8],
+                'icon-text-fit-padding': [3, 10, 3, 10],
                 'text-field': ['coalesce', ['get', 'price_label'], ''],
-                'text-size': 11,
+                'text-size': 13,
                 'text-font': ['Noto Sans Bold', 'Noto Sans Regular'],
                 'text-anchor': 'center',
                 'text-offset': [0, -0.55],
@@ -6499,8 +6528,11 @@ map.on('mouseleave', 'clusters', () => {
     map.getCanvas().style.cursor = '';
 });
 
-map.on('mouseenter', 'unclustered-point', () => {
+map.on('mouseenter', 'unclustered-point', (e) => {
     map.getCanvas().style.cursor = 'pointer';
+    if (e.features?.[0] && typeof prefetchMapBundlesForFeatures === 'function') {
+        prefetchMapBundlesForFeatures([e.features[0]], 1);
+    }
 });
 map.on('mouseleave', 'unclustered-point', () => {
     map.getCanvas().style.cursor = '';
@@ -8604,7 +8636,6 @@ function mapMovedEnoughToRefetch() {
     function buildPropertyPopupHtml(props, status, detailRes) {
         const soldLocked = mapBlurClass(status, props);
         const detail = detailRes?.data || null;
-        const isLoading = !detailRes && props.external_id && !props.requires_login;
         const res = detailRes || buildFallbackDetailRes(props, status);
         const keyFacts = res.key_facts || {};
         const propertyDetails = res.property_details || {};
@@ -8646,11 +8677,9 @@ function mapMovedEnoughToRefetch() {
 
         const descriptionHtml = description
             ? `<div class="hs-map-description">${escapeMapHtml(description)}</div>`
-            : (isLoading ? '' : '');
+            : '';
 
-        const centerBody = isLoading
-            ? '<div class="hs-map-popup-loading">Loading property details…</div>'
-            : `
+        const centerBody = `
                 <div class="map-popup-price-row">
                     <div class="map-popup-price">${buildMapPriceHtml(props, status, soldLocked)}</div>
                     <div class="map-popup-date">${escapeMapHtml(relativeListedLabel(props.date, 'Listed'))}</div>
@@ -9727,11 +9756,78 @@ function mapMovedEnoughToRefetch() {
             return;
         }
 
+        const opened = openHsMapPropertyPanel(feature);
+        if (!opened) {
+            openPropertyDetailModal(feature.properties);
+        }
+    }
+
+    function openHsMapPropertyPanel(feature) {
+        const props = feature?.properties;
+        if (!props) {
+            return null;
+        }
+
+        const status = mapListingStatus(props);
+        if (!isMapUserLoggedIn && isMapSoldListing(status, props)) {
+            if (typeof openAuthModal === 'function') {
+                openAuthModal('login');
+            }
+            return null;
+        }
+
+        closeClusterListSidebar();
+        if (typeof closePropertyDetailModal === 'function') {
+            closePropertyDetailModal();
+        }
         setHsMapSelectedMarker(feature);
-        openPropertyDetailModal(feature.properties);
+
+        const ui = ensureHsMapCenterPanel();
+        ensureHsMapCenterPanelInWrapper();
+        if (!ui) {
+            return null;
+        }
+
+        const cacheKey = props.external_id ? String(props.external_id).toUpperCase() : '';
+        const cachedBundle = cacheKey && window.hsMapDetailCache.has(cacheKey)
+            ? window.hsMapDetailCache.get(cacheKey)
+            : null;
+        const initialRes = cachedBundle
+            ? (cachedBundle.success === true ? hsMergeMapBundle(props, status, cachedBundle) : cachedBundle)
+            : buildFallbackDetailRes(props, status);
+
+        const { panel, body } = ui;
+        hsMapCenterPanelOpenToken += 1;
+
+        panel.classList.remove('is-cluster');
+        panel.classList.add('is-open');
+        panel.setAttribute('aria-hidden', 'false');
+        panel.style.left = '';
+        panel.style.top = '';
+        panel.style.transform = '';
+        body.innerHTML = buildPropertyPopupHtml(props, status, initialRes);
+
+        markHsMapSelectionOpened();
+
+        const adapter = createMapPanelAdapter(body);
+        setupMapPopupScrollAreas(body);
+        bindMapPopupGallery(adapter.getElement());
+        bindMapPopupTabs(adapter.getElement());
+        bindMapPopupScrollIsolation(adapter);
+
+        window._hsActiveMapPopup = adapter;
+        window._hsActiveMapPopupProps = props;
+        window._hsActiveMapPopupStatus = status;
+
+        if (!cachedBundle && props.external_id && !props.requires_login) {
+            enrichMapPopup(adapter, props, status);
+        }
+
+        return adapter;
     }
 
     window.showPropertyMapPopup = showPropertyMapPopup;
+    window.openHsMapPropertyPanel = openHsMapPropertyPanel;
 
     function showClusterListInSidebar(leaves, coordinates) {
         const snapshot = snapshotClusterLeaves(leaves);
@@ -9878,14 +9974,12 @@ document.addEventListener('click', function (e) {
     // =========================
     if (item.classList.contains('city-item')) {
 
-    const cityName = item.dataset.city || item.innerText.replace(/[^\w\s]/g, '').trim();
-
+    const cityName = item.dataset.city || item.innerText.replace(/[^\w\s-]/g, '').trim();
 
     selectedCity = cityName;
     seoCitySlug = slugify(cityName);
     cityFromUrl = cityName;
     updateSeoUrl();
-    showCityBoundary(cityName);
 
     if (activeMarker) {
         activeMarker.remove();
@@ -9893,6 +9987,8 @@ document.addEventListener('click', function (e) {
     }
 
     document.getElementById('mapSmartInput').value = cityName;
+
+    showCityBoundary(cityName, { lat, lng });
 
     return;
 
@@ -10858,6 +10954,8 @@ function buildCitySuggestionsHtml(keyword) {
 
         cityHTML += `
             <div class="location-item city-item"
+                role="button"
+                tabindex="0"
                 data-city="${city.label}"
                 data-lat="${coords.lat}"
                 data-lng="${coords.lng}">

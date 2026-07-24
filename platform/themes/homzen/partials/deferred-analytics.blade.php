@@ -42,7 +42,9 @@
     })(window, document, 'script', 'dataLayer', 'GTM-M57VSQWW');
 </script>
 
+@if(! \App\Support\SerikHomepage::isHomepageRequest())
 <script defer src="{{ Theme::asset()->url('js/visitor-location.js') }}?v={{ get_cms_version() }}"></script>
+@endif
 
 <noscript>
     <img height="1" width="1" style="display:none" alt=""

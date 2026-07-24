@@ -108,6 +108,33 @@ class AppServiceProvider extends ServiceProvider
 
             return new HtmlString($markup);
         }, 20, 4);
+
+        add_filter('core_media_image', static function ($html, ?string $url = null, $alt = null, array $attributes = [], $secure = false) {
+            if (! \App\Support\SerikHomepage::isHomepageRequest()) {
+                return $html;
+            }
+
+            $eager = ($attributes['fetchpriority'] ?? null) === 'high'
+                || ($attributes['loading'] ?? null) === 'eager'
+                || ($attributes['data-bb-lazy'] ?? null) === 'false';
+
+            if (! $eager || ! is_string($url) || $url === '') {
+                return $html;
+            }
+
+            $markup = $html instanceof HtmlString ? $html->toHtml() : (string) $html;
+
+            if (str_contains($markup, 'data-src=')) {
+                $markup = preg_replace('/\ssrc=(["\'])[^"\']*\1/', ' src="' . e($url) . '"', $markup, 1) ?? $markup;
+                $markup = preg_replace('/\sdata-src=(["\'])[^"\']*\1/', '', $markup) ?? $markup;
+                $markup = str_replace('data-bb-lazy="true"', 'data-bb-lazy="false"', $markup);
+                $markup = str_replace("loading=\"lazy\"", 'loading="eager"', $markup);
+
+                return new HtmlString($markup);
+            }
+
+            return $html;
+        }, 125, 4);
     }
 
     protected function registerBotbleHooks(): void

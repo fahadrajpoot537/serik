@@ -8,6 +8,17 @@ use Botble\Slug\Facades\SlugHelper;
 
 final class SerikHomepage
 {
+    /**
+     * Homepage shortcodes rendered server-side (skip AJAX lazy placeholders).
+     *
+     * @var array<string, list<string>>
+     */
+    private const SERVER_RENDER_STYLES = [
+        'properties' => ['5'],
+        'location' => ['2'],
+        'services' => ['3'],
+    ];
+
     public static function isHomepageRequest(): bool
     {
         if (! app()->bound('request')) {
@@ -44,14 +55,20 @@ final class SerikHomepage
      */
     public static function shouldServerRenderShortcode(string $name, object|array $shortcode): bool
     {
-        if (! self::isHomepageRequest() || $name !== 'properties') {
+        if (! self::isHomepageRequest()) {
+            return false;
+        }
+
+        $allowedStyles = self::SERVER_RENDER_STYLES[$name] ?? null;
+
+        if ($allowedStyles === null) {
             return false;
         }
 
         $style = is_array($shortcode)
-            ? ($shortcode['style'] ?? null)
-            : ($shortcode->style ?? null);
+            ? (string) ($shortcode['style'] ?? '')
+            : (string) ($shortcode->style ?? '');
 
-        return (string) $style === '5';
+        return in_array($style, $allowedStyles, true);
     }
 }

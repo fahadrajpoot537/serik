@@ -207,6 +207,14 @@ $app->booted(function () use ($app): void {
         return $skip || \App\Support\SerikHomepage::shouldServerRenderShortcode($name, $compiled);
     }, 10, 3);
 
+    add_filter('theme_preloader', static function (?string $html): ?string {
+        if (\App\Support\SerikHomepage::isHomepageRequest()) {
+            return null;
+        }
+
+        return $html;
+    }, 1000);
+
     if (class_exists(\Botble\RealEstate\Models\Property::class) && ! defined('SERIK_PROPERTY_OBSERVER_REGISTERED')) {
         \Botble\RealEstate\Models\Property::observe(\App\Observers\PropertyHomepageCacheObserver::class);
         define('SERIK_PROPERTY_OBSERVER_REGISTERED', true);

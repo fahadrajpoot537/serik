@@ -344,7 +344,14 @@
     use App\Support\ImageAlt;
 
     $heroAltContext = trim(strip_tags((string) ($shortcode->title ?: $shortcode->subtitle ?: __('Ontario homes for sale'))));
+    $heroLcpUrl = $shortcode->background_image ? RvMedia::getImageUrl($shortcode->background_image) : null;
 @endphp
+
+@if ($heroLcpUrl)
+    @push('header')
+        <link rel="preload" as="image" href="{{ $heroLcpUrl }}" fetchpriority="high">
+    @endpush
+@endif
 
 <section class="flat-slider home-2">
     <div class="container relative">
@@ -352,10 +359,10 @@
             <div class="col-xl-10">
                 <div class="slider-content">
                     <div class="heading">
-                        <h1 class="subtitle body-1 hero-banner-headline wow fadeIn" style="color: {{ $descriptionColor }} !important; font-weight:700;" data-wow-delay=".8s" data-wow-duration="2000ms">
+                        <h1 class="subtitle body-1 hero-banner-headline" style="color: {{ $descriptionColor }} !important; font-weight:700;">
                             Top Realtor in Ontario - Buy or Sell Homes and Get
                         </h1>
-                        <div class="title title1 wow fadeIn animationtext clip" style="color: {{ $titleColor }} !important; font-weight:700; font-size: 35px;" data-wow-delay=".2s" data-wow-duration="2000ms">
+                        <div class="title title1 animationtext clip" style="color: {{ $titleColor }} !important; font-weight:700; font-size: 35px;">
                            <div>  {!! Theme::partial('shortcodes.hero-banner.partials.animation-text', compact('shortcode')) !!}
 						   </div>
                             <div style="margin-top: 15px;">
@@ -364,7 +371,7 @@
 							</div>
                         </div>
                         @if ($shortcode->description)
-                            <p class="subtitle body-1 wow fadeIn" style="color: {{ $descriptionColor }} !important; font-weight:700;" data-wow-delay=".8s" data-wow-duration="2000ms">
+                            <p class="subtitle body-1" style="color: {{ $descriptionColor }} !important; font-weight:700;">
                                 {!! BaseHelper::clean($shortcode->description) !!}
                             </p>
                         @endif
@@ -383,7 +390,7 @@
                 $shortcode->background_image,
                 ImageAlt::resolve($shortcode->title, $shortcode->background_image, $heroAltContext),
                 lazy: false,
-                attributes: ['fetchpriority' => 'high', 'loading' => 'eager']
+                attributes: ['data-bb-lazy' => 'false', 'fetchpriority' => 'high', 'loading' => 'eager', 'decoding' => 'async']
             ) }}
         </div>
     @endif
@@ -403,8 +410,8 @@
                                 ImageAlt::resolve($shortcode->title, $shortcode->{"slider_image_$i"}, $heroAltContext),
                                 lazy: $heroSlideIndex > 1,
                                 attributes: $heroSlideIndex === 1
-                                    ? ['fetchpriority' => 'high', 'loading' => 'eager']
-                                    : ['loading' => 'lazy']
+                                    ? ['data-bb-lazy' => 'false', 'fetchpriority' => 'high', 'loading' => 'eager', 'decoding' => 'async']
+                                    : ['data-bb-lazy' => 'true', 'loading' => 'lazy']
                             ) }}
                         </div>
                     </div>

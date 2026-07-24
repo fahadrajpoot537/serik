@@ -982,9 +982,29 @@ function getHeaderMatchingCities(keyword) {
     return matches.sort((a, b) => a.score - b.score || a.label.localeCompare(b.label)).slice(0, 6);
 }
 
+function headerSlugify(text) {
+    return String(text || '')
+        .trim()
+        .toLowerCase()
+        .replace(/&/g, 'and')
+        .replace(/\s+/g, '-')
+        .replace(/--+/g, '-');
+}
+
+function buildHeaderCityMapUrl(cityName) {
+    const citySlug = headerSlugify(cityName);
+    const tx = selectedFilters.transaction === 'For Lease' ? 'lease' : 'sale';
+    return `${SITE_BASE}/on/houses-for-${tx}-in-${citySlug}/map`;
+}
+
 function buildHeaderCitySuggestionsHtml(keyword) {
     return getHeaderMatchingCities(keyword).map((city) => `
-        <div class="location-item city-item" data-city="${city.label}">
+        <div class="location-item city-item"
+            role="button"
+            tabindex="0"
+            data-city="${city.label}"
+            data-lat="${city.coords.lat}"
+            data-lng="${city.coords.lng}">
             🌆 ${city.label}
         </div>
     `).join('');
@@ -1125,6 +1145,40 @@ input.addEventListener('focus', function () {
     if (String(this.value || '').trim().length >= 2) {
         handleHeaderSearchInput(this.value);
     }
+});
+
+dropdown.addEventListener('click', function (e) {
+    const item = e.target.closest('.city-item');
+    if (!item) {
+        return;
+    }
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const cityName = item.dataset.city || item.innerText.replace(/[^\w\s-]/g, '').trim();
+    if (!cityName) {
+        return;
+    }
+
+    input.value = cityName;
+    dropdown.style.display = 'none';
+    loader.style.display = 'none';
+    window.location.href = buildHeaderCityMapUrl(cityName);
+});
+
+dropdown.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' && e.key !== ' ') {
+        return;
+    }
+
+    const item = e.target.closest('.city-item');
+    if (!item) {
+        return;
+    }
+
+    e.preventDefault();
+    item.click();
 });
 
 

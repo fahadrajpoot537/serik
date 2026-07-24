@@ -77,11 +77,16 @@
                 margin-left: auto;
                 margin-right: auto;
             }
+@php
+    $isSerikHomepage = \App\Support\SerikHomepage::isHomepageRequest();
+@endphp
         </style>
-<link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css">
-<script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js" defer></script>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+<link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" rel="stylesheet"></noscript>
 
+        @stack('header')
         {!! Theme::header() !!}
     </head>
 
@@ -110,56 +115,69 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         @if(!request()->boolean('iframe'))
             @include(Theme::getThemeNamespace('partials.visitor-city-detect'))
         @endif
-   @if(!request()->has('iframe')) 
-   <div id="chat-widget-mobile">
-        <script 
-  src="https://widgets.leadconnectorhq.com/loader.js"  
-  data-resources-url="https://widgets.leadconnectorhq.com/chat-widget/loader.js" 
- data-widget-id="69b43d7e4d840e870b2cf29f"   > 
- </script>
-   </div>
-  
+   @if(!request()->has('iframe'))
+   <div id="chat-widget-mobile"></div>
  @endif
 
-
-
  <script>
- 
-function moveWidget() {
-    if (!window.matchMedia("(max-width: 768px)").matches) return;
-
-    const host = [...document.querySelectorAll("*")].find(el => el.shadowRoot);
-    if (!host) return;
-
-    const btn = host.shadowRoot.querySelector("#lc_text-widget--btn");
-
-    if (btn) {
-        btn.style.bottom = "80px";
-        btn.style.position = "fixed";
+(function () {
+    if (window.__serikChatLoaderBound) {
+        return;
     }
-}
+    window.__serikChatLoaderBound = true;
 
-setInterval(moveWidget, 1000);
+    function moveWidget() {
+        if (!window.matchMedia('(max-width: 768px)').matches) {
+            return;
+        }
 
- /*  fetch("https://ipinfo.io/json")
-  .then(res => res.json())
-  .then(data => {
-    console.log("IP:", data.ip);
-    console.log("City:", data.city);
-    console.log("Country:", data.country);
-    const [lat, lon] = data.loc.split(",");
+        const host = [...document.querySelectorAll('*')].find((el) => el.shadowRoot);
+        if (!host) {
+            return;
+        }
 
-    console.log("Latitude:", lat);
-    console.log("Longitude:", lon);
-  });
-  */
-  
-  
-  
-  
-  
+        const btn = host.shadowRoot.querySelector('#lc_text-widget--btn');
+        if (!btn) {
+            return;
+        }
+
+        btn.style.bottom = '80px';
+        btn.style.position = 'fixed';
+    }
+
+    function loadChatWidget() {
+        if (window.__serikChatLoaded) {
+            return;
+        }
+        window.__serikChatLoaded = true;
+
+        const mount = document.getElementById('chat-widget-mobile');
+        if (!mount) {
+            return;
+        }
+
+        const script = document.createElement('script');
+        script.src = 'https://widgets.leadconnectorhq.com/loader.js';
+        script.setAttribute('data-resources-url', 'https://widgets.leadconnectorhq.com/chat-widget/loader.js');
+        script.setAttribute('data-widget-id', '69b43d7e4d840e870b2cf29f');
+        script.onload = function () {
+            const observer = new MutationObserver(moveWidget);
+            observer.observe(document.body, { childList: true, subtree: true });
+            moveWidget();
+            setTimeout(() => observer.disconnect(), 15000);
+        };
+        mount.appendChild(script);
+    }
+
+    ['scroll', 'pointerdown', 'keydown', 'touchstart'].forEach((eventName) => {
+        window.addEventListener(eventName, loadChatWidget, { once: true, passive: true });
+    });
+    window.setTimeout(loadChatWidget, {{ $isSerikHomepage ? '12000' : '6000' }});
+})();
  </script>
+ @if(! $isSerikHomepage && !request()->boolean('iframe'))
  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+ @endif
    </body>
     
     
