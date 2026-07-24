@@ -274,7 +274,7 @@ $(() => {
         }
     }
 
-    if (document.body && document.body.id !== 'page-home' && typeof WOW !== 'undefined') {
+    if (typeof WOW !== 'undefined') {
         new WOW().init()
     }
 
@@ -617,7 +617,7 @@ $(() => {
         $('.select_js').niceSelect()
     }
 
-    if (document.body && document.body.id !== 'page-home' && typeof WOW !== 'undefined') {
+    if (typeof WOW !== 'undefined') {
         new WOW().init()
     }
 

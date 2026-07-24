@@ -173,6 +173,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
         $middleware->prepend(\App\Http\Middleware\ForceCanonicalDomainMiddleware::class);
         $middleware->prepend(\App\Http\Middleware\BlockSensitivePathsMiddleware::class);
         $middleware->prepend(\App\Http\Middleware\WagesMaintenanceMiddleware::class);
+        $middleware->prependToGroup('web', \App\Http\Middleware\CacheHomepageResponseMiddleware::class);
         $middleware->appendToGroup('web', \App\Http\Middleware\GeoBlockMiddleware::class);
         $middleware->appendToGroup('web', \App\Http\Middleware\RequestProfilerMiddleware::class);
         $middleware->prependToGroup('web', \App\Http\Middleware\UseRequestRootUrlInLocal::class);
@@ -219,12 +220,6 @@ $app->booted(function () use ($app): void {
 
         return $html;
     }, 1000);
-
-    if (defined('THEME_FRONT_FOOTER')) {
-        add_filter(THEME_FRONT_FOOTER, static function (?string $html): ?string {
-            return \App\Support\SerikHomepageAssets::optimizeFooterHtml($html);
-        }, 9998);
-    }
 
     if (class_exists(\Botble\RealEstate\Models\Property::class) && ! defined('SERIK_PROPERTY_OBSERVER_REGISTERED')) {
         \Botble\RealEstate\Models\Property::observe(\App\Observers\PropertyHomepageCacheObserver::class);

@@ -77,13 +77,6 @@
                 margin-left: auto;
                 margin-right: auto;
             }
-
-            /* Homepage: show all sections on first paint (no WOW hide-then-fade jank on reload) */
-            #page-home .wow {
-                visibility: visible !important;
-                opacity: 1 !important;
-                transform: none !important;
-            }
 @php
     $isSerikHomepage = \App\Support\SerikHomepage::isHomepageRequest();
 @endphp
@@ -123,7 +116,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
         {!! Theme::footer() !!}
 
-        @include(Theme::getThemeNamespace('partials.deferred-analytics'))
+        @if(! \App\Support\SerikHomepage::isHomepageRequest())
+            @include(Theme::getThemeNamespace('partials.deferred-analytics'))
+        @endif
 
         @if(!request()->boolean('iframe'))
             @include(Theme::getThemeNamespace('partials.visitor-city-detect'))

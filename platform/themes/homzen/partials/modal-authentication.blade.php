@@ -1,11 +1,8 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/intl-tel-input@19.5.6/build/css/intlTelInput.css" media="print" onload="this.media='all'" />
 @php
     use Theme\homzen\Supports\RecaptchaHelper;
-    $deferAuthVendorScripts = \App\Support\SerikHomepage::isHomepageRequest();
 @endphp
-@if (! $deferAuthVendorScripts)
 <script src="https://www.google.com/recaptcha/api.js?onload=initSerikRecaptcha&render=explicit" async defer></script>
-@endif
 <style>
     #modalLogin.modal:not(.show) {
         display: none !important;

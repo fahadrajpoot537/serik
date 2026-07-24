@@ -3,6 +3,7 @@
 namespace App\Observers;
 
 use App\Support\HomepageFeaturedCache;
+use App\Support\HomepageResponseCache;
 use App\Support\RealEstateCountCache;
 use App\Support\ShortcodeRenderCache;
 use Botble\RealEstate\Models\Property;
@@ -22,6 +23,7 @@ class PropertyHomepageCacheObserver
     private function invalidate(): void
     {
         HomepageFeaturedCache::bump();
+        HomepageResponseCache::bump();
         RealEstateCountCache::bump();
         ShortcodeRenderCache::bumpPropertyDependents();
     }

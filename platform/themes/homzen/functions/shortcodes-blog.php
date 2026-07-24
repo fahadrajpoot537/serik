@@ -20,20 +20,30 @@ Event::listen(RouteMatched::class, function (): void {
     Shortcode::register('blog-posts', __('Blog Posts'), __('Blog Posts'), function (ShortcodeCompiler $shortcode) {
         $limit = (int) $shortcode->limit ?: 3;
 
-        /**
-         * @var Collection<\Botble\Blog\Models\Post> $posts
-         */
-        $posts = match ($shortcode->type) {
-            'featured' => get_featured_posts($limit),
-            'popular' => get_popular_posts($limit),
-            default => get_recent_posts($limit),
+        $resolvePosts = static function () use ($shortcode, $limit) {
+            $posts = match ($shortcode->type) {
+                'featured' => get_featured_posts($limit),
+                'popular' => get_popular_posts($limit),
+                default => get_recent_posts($limit),
+            };
+
+            if ($posts->isEmpty()) {
+                return $posts;
+            }
+
+            return $posts->loadMissing(['author', 'slugable', 'categories']);
         };
+
+        if (\App\Support\SerikHomepage::isHomepageRequest()) {
+            $cacheKey = 'serik_homepage_blog_posts_v1:' . ($shortcode->type ?: 'recent') . ':' . $limit;
+            $posts = \Illuminate\Support\Facades\Cache::remember($cacheKey, 300, $resolvePosts);
+        } else {
+            $posts = $resolvePosts();
+        }
 
         if ($posts->isEmpty()) {
             return null;
         }
-
-        $posts->loadMissing(['author', 'slugable']);
 
         return Theme::partial('shortcodes.blog-posts.index', compact('shortcode', 'posts'));
     });

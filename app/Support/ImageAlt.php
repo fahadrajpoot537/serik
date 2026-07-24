@@ -230,15 +230,7 @@ final class ImageAlt
             return self::$mediaCache[$relative];
         }
 
-        $basename = basename($relative);
-
-        $file = MediaFile::query()
-            ->where(function ($query) use ($relative, $basename): void {
-                $query->where('url', $relative)
-                    ->orWhere('url', 'like', '%/' . $basename);
-            })
-            ->orderByRaw('CASE WHEN url = ? THEN 0 ELSE 1 END', [$relative])
-            ->first();
+        $file = MediaFileLookupCache::find($relative);
 
         self::$mediaCache[$relative] = $file;
 

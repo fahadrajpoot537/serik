@@ -26,6 +26,11 @@ class AppServiceProvider extends ServiceProvider
 
         $this->app->singleton(\Botble\Theme\Supports\SiteMapManager::class, \App\Support\SerikSiteMapManager::class);
 
+        if (class_exists(\Botble\Ads\Supports\AdsManager::class)) {
+            $this->app->singleton(\Botble\Ads\Supports\AdsManager::class, \App\Support\SerikCachedAdsManager::class);
+            $this->app->alias(\Botble\Ads\Supports\AdsManager::class, 'AdsManager');
+        }
+
         $this->app->singleton(\App\Services\Geocoding\GeocodingManager::class);
         $this->app->bind(
             \App\Contracts\GeocodingProviderInterface::class,
@@ -142,6 +147,46 @@ class AppServiceProvider extends ServiceProvider
                     \Botble\Theme\Facades\Theme::asset()->remove('ckeditor-content-styles');
                 }
             }, 16);
+        }
+
+        if (class_exists(\Botble\Page\Models\Page::class)) {
+            \Botble\Page\Models\Page::saved(static function (\Botble\Page\Models\Page $page): void {
+                try {
+                    if ((int) $page->id === (int) \Botble\Base\Facades\BaseHelper::getHomepageId()) {
+                        \App\Support\HomepageResponseCache::bump();
+                    }
+                } catch (\Throwable) {
+                    // ignore
+                }
+            });
+        }
+
+        if (class_exists(\Botble\Blog\Models\Post::class)) {
+            $forgetBlogCache = static function (): void {
+                foreach (['recent', 'featured', 'popular'] as $type) {
+                    \Illuminate\Support\Facades\Cache::forget('serik_homepage_blog_posts_v1:' . $type . ':3');
+                }
+            };
+
+            \Botble\Blog\Models\Post::saved($forgetBlogCache);
+            \Botble\Blog\Models\Post::deleted($forgetBlogCache);
+        }
+
+        if (class_exists(\Botble\Ads\Models\Ads::class)) {
+            $bustAds = static function (): void {
+                \App\Support\SerikCachedAdsManager::bust();
+            };
+
+            \Botble\Ads\Models\Ads::saved($bustAds);
+            \Botble\Ads\Models\Ads::deleted($bustAds);
+        }
+
+        if (class_exists(\Botble\Media\Models\MediaFile::class)) {
+            \Botble\Media\Models\MediaFile::saved(static function (\Botble\Media\Models\MediaFile $file): void {
+                if (is_string($file->url) && $file->url !== '') {
+                    \App\Support\MediaFileLookupCache::forget($file->url);
+                }
+            });
         }
     }
 

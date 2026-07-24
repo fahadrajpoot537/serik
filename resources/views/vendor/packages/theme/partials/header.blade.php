@@ -12,23 +12,14 @@
 
 {!! Theme::typography()->renderCssVariables() !!}
 
-@php
-    $themeStyles = Theme::asset()->container('before_header')->styles()
-        . Theme::asset()->styles()
-        . Theme::asset()->container('after_header')->styles();
-
-    if (\App\Support\SerikHomepage::isHomepageRequest()) {
-        $themeStyles = \App\Support\SerikHomepageAssets::optimizeHeaderHtml($themeStyles) ?? $themeStyles;
-    }
-@endphp
-{!! $themeStyles !!}
+{!! Theme::asset()->container('before_header')->styles() !!}
+{!! Theme::asset()->styles() !!}
+{!! Theme::asset()->container('after_header')->styles() !!}
 {!! Theme::asset()->container('header')->scripts() !!}
 
 {!! apply_filters(THEME_FRONT_HEADER, null) !!}
 
-@if (! \App\Support\SerikHomepage::isHomepageRequest())
 {!! SeoHelper::meta()->getAnalytics()->render() !!}
-@endif
 
 <script>
     window.siteUrl = "{{ rescue(fn() => BaseHelper::getHomepageUrl()) }}"
