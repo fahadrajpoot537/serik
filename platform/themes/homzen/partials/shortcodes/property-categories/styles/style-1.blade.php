@@ -33,16 +33,10 @@ $allowedTypes = [
     'Att/Row/Townhouse',
     'Condo Townhouse',
     'Condo Apartment',
-    'Duplex'
+    'Duplex',
 ];
 
-// Fetch from DB and order by custom sequence
-$propertySubTypes = \Illuminate\Support\Facades\DB::table('re_properties')
-    ->select('PropertySubType', \Illuminate\Support\Facades\DB::raw('COUNT(*) as total'))
-    ->whereIn('PropertySubType', $allowedTypes)
-    ->groupBy('PropertySubType')
-    ->orderByRaw("FIELD(PropertySubType, 'Detached','Semi-Detached','Att/Row/Townhouse','Condo Townhouse','Condo Apartment','Duplex')")
-    ->get();
+$propertySubTypes = \App\Support\RealEstateCountCache::propertySubTypeCounts($allowedTypes);
 @endphp
 
 

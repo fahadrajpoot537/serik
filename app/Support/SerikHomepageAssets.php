@@ -24,7 +24,6 @@ final class SerikHomepageAssets
      */
     private const ASYNC_PATTERNS = [
         'animate.min.css',
-        'bootstrap',
         'social-login',
         'front-auth',
         'auth-css',
@@ -99,34 +98,5 @@ final class SerikHomepageAssets
             },
             $html
         ) ?? $html;
-    }
-
-    /**
-     * @return list<array{href: string, as: string, crossorigin?: string}>
-     */
-    public static function fontPreloads(): array
-    {
-        if (! SerikHomepage::isHomepageRequest()) {
-            return [];
-        }
-
-        $preloads = [];
-
-        try {
-            $css = (string) theme()->typography()->renderCssVariables();
-        } catch (\Throwable) {
-            return [];
-        }
-
-        if (preg_match_all('/url\(([^)]+\.woff2[^)]*)\)/i', $css, $matches)) {
-            foreach (array_unique($matches[1]) as $rawUrl) {
-                $href = trim($rawUrl, " '\"");
-                if ($href !== '') {
-                    $preloads[] = ['href' => $href, 'as' => 'font', 'crossorigin' => 'anonymous'];
-                }
-            }
-        }
-
-        return array_slice($preloads, 0, 2);
     }
 }

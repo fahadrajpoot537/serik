@@ -220,12 +220,6 @@ $app->booted(function () use ($app): void {
         return $html;
     }, 1000);
 
-    if (defined('THEME_FRONT_HEADER')) {
-        add_filter(THEME_FRONT_HEADER, static function (?string $html): ?string {
-            return \App\Support\SerikHomepageAssets::optimizeHeaderHtml($html);
-        }, 9998);
-    }
-
     if (defined('THEME_FRONT_FOOTER')) {
         add_filter(THEME_FRONT_FOOTER, static function (?string $html): ?string {
             return \App\Support\SerikHomepageAssets::optimizeFooterHtml($html);

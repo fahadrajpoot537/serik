@@ -84,9 +84,6 @@
 @if ($isSerikHomepage)
 <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-@foreach (\App\Support\SerikHomepageAssets::fontPreloads() as $fontPreload)
-<link rel="preload" href="{{ $fontPreload['href'] }}" as="font" type="font/woff2" crossorigin>
-@endforeach
 @endif
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">

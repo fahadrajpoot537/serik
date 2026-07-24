@@ -15,6 +15,8 @@ final class RealEstateCountCache
 
     private const AGENT_KEY = 're_agent_property_counts_v1';
 
+    private const SUBTYPE_KEY = 're_property_subtype_counts_v1';
+
     private const MIN_SQUARE_KEY = 're_properties_min_square_v1';
 
     private const MAX_SQUARE_KEY = 're_properties_max_square_v1';
@@ -55,6 +57,37 @@ final class RealEstateCountCache
                 ->groupBy('author_id')
                 ->pluck('aggregate', 'author_id')
                 ->map(static fn ($count) => (int) $count);
+        });
+    }
+
+    /**
+     * Property counts grouped by PropertySubType for homepage category cards.
+     *
+     * @param  list<string>  $allowedTypes
+     * @return list<object{PropertySubType: string, total: int}>
+     */
+    public static function propertySubTypeCounts(array $allowedTypes): array
+    {
+        if ($allowedTypes === []) {
+            return [];
+        }
+
+        $version = self::version();
+        $typesKey = md5(implode('|', $allowedTypes));
+
+        return Cache::remember(self::SUBTYPE_KEY.':'.$version.':'.$typesKey, 3600, function () use ($allowedTypes): array {
+            $order = implode(',', array_map(
+                static fn (string $type): string => "'" . str_replace("'", "''", $type) . "'",
+                $allowedTypes
+            ));
+
+            return DB::table('re_properties')
+                ->select('PropertySubType', DB::raw('COUNT(*) as total'))
+                ->whereIn('PropertySubType', $allowedTypes)
+                ->groupBy('PropertySubType')
+                ->orderByRaw("FIELD(PropertySubType, {$order})")
+                ->get()
+                ->all();
         });
     }
 

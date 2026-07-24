@@ -16,7 +16,7 @@ return [
             $isHomepage = \App\Support\SerikHomepage::isHomepageRequest();
             $asyncCssAttrs = $isHomepage ? ['media' => 'print', 'onload' => "this.media='all'"] : [];
 
-            $theme->asset()->usePath()->add('bootstrap', "plugins/bootstrap/css/$boostrapCss", [], $asyncCssAttrs);
+            $theme->asset()->usePath()->add('bootstrap', "plugins/bootstrap/css/$boostrapCss");
             $theme->asset()->usePath()->add('animate', 'css/animate.min.css', [], $asyncCssAttrs);
             $theme->asset()->usePath()->add('swiper', 'plugins/swiper/swiper-bundle.min.css');
             $theme->asset()->usePath()->add('style', 'css/style.css', version: $version);
