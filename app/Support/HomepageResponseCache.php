@@ -43,11 +43,24 @@ final class HomepageResponseCache
             return false;
         }
 
-        if ($request->hasSession() && $request->user()) {
+        if (self::isAuthenticatedRequest($request)) {
             return false;
         }
 
         return true;
+    }
+
+    private static function isAuthenticatedRequest(Request $request): bool
+    {
+        if (! $request->hasSession()) {
+            return false;
+        }
+
+        if ($request->user()) {
+            return true;
+        }
+
+        return is_plugin_active('real-estate') && auth('account')->check();
     }
 
     public static function cacheKey(Request $request): string
