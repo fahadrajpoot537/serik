@@ -9627,8 +9627,9 @@ function mapMovedEnoughToRefetch() {
 
         const slug = props.url || '';
         if (!slug || slug === 'undefined') {
-            if (typeof openAuthModal === 'function') {
-                openAuthModal('login');
+            const extId = String(props.external_id || '').trim();
+            if (extId) {
+                fetch(`/api/v1/add-single-property/${encodeURIComponent(extId)}`).catch(() => {});
             }
             return;
         }
@@ -9996,6 +9997,10 @@ document.addEventListener('click', function (e) {
     // ADDRESS → MOVE + POPUP (SAME AS LISTING)
     // =========================
     if (item.classList.contains('address-item')) {
+        const listingKey = item.dataset.external_id;
+        if (listingKey) {
+            fetch(`/api/v1/add-single-property/${listingKey}`).catch(() => {});
+        }
         showPopupFromSearchItem(item);
         return;
     }
@@ -11155,6 +11160,24 @@ function loadResults(keyword, reset = false){
     });
 }
 
+function buildMapSearchResultDataAttrs(item, listingStatus) {
+    const esc = (value) => mapEscapeHtml(value);
+
+    return `data-lat="${item.lat}"
+                data-lng="${item.lng}"
+                data-external_id="${esc(item.ListingKey)}"
+                data-id="${esc(item.id || '')}"
+                data-slug="${esc(item.URL || '')}"
+                data-image="${esc(item.MediaURL || '')}"
+                data-transaction="${esc(listingStatus)}"
+                data-price="${esc(item.ListPrice ?? '')}"
+                data-name="${esc(item.UnparsedAddress || '')}"
+                data-bedrooms="${esc(item.BedroomsTotal ?? 0)}"
+                data-bathrooms="${esc(item.BathroomsTotalInteger ?? 0)}"
+                data-square="${esc(item.LivingAreaRange || '')}"
+                data-agency="${esc(item.ListOfficeName || '')}"`;
+}
+
 function renderSmartSearchResults(keyword, reset, cityHTML, data, isMlsKey) {
     if (loader) {
         loader.style.display = "none";
@@ -11195,9 +11218,8 @@ function renderSmartSearchResults(keyword, reset, cityHTML, data, isMlsKey) {
         const garageCount = item.CoveredSpaces ?? item.covered_spaces ?? 0;
 
         addressHTML += `
-            <div class="location-item address-item" 
-                data-lat="${item.lat}"
-                data-lng="${item.lng}">
+            <div class="location-item address-item"
+                ${buildMapSearchResultDataAttrs(item, listingStatus)}>
                 📍 ${item.UnparsedAddress}
             </div>
         `;
@@ -11205,19 +11227,8 @@ function renderSmartSearchResults(keyword, reset, cityHTML, data, isMlsKey) {
    listingsHTML += `
              ${mapLoginGateHtml(listingStatus)}
                 <div class="listing-item ${mapBlurClass(listingStatus)}" style="width: 100%"
-                  data-lat="${item.lat}"
-                data-lng="${item.lng}"
-                 data-external_id="${item.ListingKey}"
-                 data-price="$${Number(item.ListPrice).toLocaleString()}"
-                 data-name="${item.UnparsedAddress}"
-                 data-bedrooms="${item.BedroomsTotal ?? 0}"
-                 data-bathrooms="${item.BathroomsTotalInteger ?? 0}"
-                 data-parking="${garageCount}"
-                 data-image="${item.MediaURL}"
-                 data-square="${item.LivingAreaRange}"
-                 data-agency="${item.ListOfficeName}"
-                 data-transaction="${listingStatus}"
-                 data-slug="${item.URL}"
+                ${buildMapSearchResultDataAttrs(item, listingStatus)}
+                 data-parking="${mapEscapeHtml(garageCount)}"
                 >
                     <img src="${item.MediaURL}"   loading="lazy"
                     data-key="${item.ListingKey}"
