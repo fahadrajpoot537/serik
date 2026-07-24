@@ -274,7 +274,9 @@ $(() => {
         }
     }
 
-    new WOW().init()
+    if (document.body && document.body.id !== 'page-home' && typeof WOW !== 'undefined') {
+        new WOW().init()
+    }
 
     /* Sidebar Toggle
     -------------------------------------------------------------------------------------*/
@@ -615,7 +617,9 @@ $(() => {
         $('.select_js').niceSelect()
     }
 
-    new WOW().init()
+    if (document.body && document.body.id !== 'page-home' && typeof WOW !== 'undefined') {
+        new WOW().init()
+    }
 
     //Submenu Dropdown Toggle
     if ($('.main-header li.dropdown2 ul').length) {

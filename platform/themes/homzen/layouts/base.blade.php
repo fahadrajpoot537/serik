@@ -77,6 +77,13 @@
                 margin-left: auto;
                 margin-right: auto;
             }
+
+            /* Homepage: show all sections on first paint (no WOW hide-then-fade jank on reload) */
+            #page-home .wow {
+                visibility: visible !important;
+                opacity: 1 !important;
+                transform: none !important;
+            }
 @php
     $isSerikHomepage = \App\Support\SerikHomepage::isHomepageRequest();
 @endphp
@@ -84,11 +91,13 @@
 @if ($isSerikHomepage)
 <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-@endif
+<link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" rel="stylesheet">
+@else
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
 <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" rel="stylesheet" media="print" onload="this.media='all'">
 <noscript><link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" rel="stylesheet"></noscript>
+@endif
 
         @stack('header')
         {!! Theme::header() !!}

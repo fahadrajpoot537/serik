@@ -23,7 +23,6 @@ final class SerikHomepageAssets
      * @var list<string>
      */
     private const ASYNC_PATTERNS = [
-        'animate.min.css',
         'social-login',
         'front-auth',
         'auth-css',

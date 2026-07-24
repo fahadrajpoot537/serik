@@ -14,10 +14,10 @@ return [
 
             $boostrapCss = BaseHelper::isRtlEnabled() ? 'bootstrap.rtl.min.css' : 'bootstrap.min.css';
             $isHomepage = \App\Support\SerikHomepage::isHomepageRequest();
-            $asyncCssAttrs = $isHomepage ? ['media' => 'print', 'onload' => "this.media='all'"] : [];
+            $optionalAsyncCss = $isHomepage ? ['media' => 'print', 'onload' => "this.media='all'"] : [];
 
             $theme->asset()->usePath()->add('bootstrap', "plugins/bootstrap/css/$boostrapCss");
-            $theme->asset()->usePath()->add('animate', 'css/animate.min.css', [], $asyncCssAttrs);
+            $theme->asset()->usePath()->add('animate', 'css/animate.min.css');
             $theme->asset()->usePath()->add('swiper', 'plugins/swiper/swiper-bundle.min.css');
             $theme->asset()->usePath()->add('style', 'css/style.css', version: $version);
 
@@ -38,7 +38,7 @@ return [
                         'social-login-css',
                         asset('vendor/core/plugins/social-login/css/social-login.css'),
                         [],
-                        $asyncCssAttrs,
+                        $optionalAsyncCss,
                         '2.0.6'
                     );
             }
