@@ -3,6 +3,7 @@
 namespace App\Observers;
 
 use App\Support\HomepageFeaturedCache;
+use App\Support\HomepageFragmentCache;
 use App\Support\HomepageResponseCache;
 use App\Support\RealEstateCountCache;
 use App\Support\ShortcodeRenderCache;
@@ -26,5 +27,6 @@ class PropertyHomepageCacheObserver
         HomepageResponseCache::bump();
         RealEstateCountCache::bump();
         ShortcodeRenderCache::bumpPropertyDependents();
+        HomepageFragmentCache::bumpPropertyDependents();
     }
 }

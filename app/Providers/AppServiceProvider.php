@@ -154,6 +154,7 @@ class AppServiceProvider extends ServiceProvider
                 try {
                     if ((int) $page->id === (int) \Botble\Base\Facades\BaseHelper::getHomepageId()) {
                         \App\Support\HomepageResponseCache::bump();
+                        \App\Support\HomepageFragmentCache::bumpAll();
                     }
                 } catch (\Throwable) {
                     // ignore
@@ -166,6 +167,9 @@ class AppServiceProvider extends ServiceProvider
                 foreach (['recent', 'featured', 'popular'] as $type) {
                     \Illuminate\Support\Facades\Cache::forget('serik_homepage_blog_posts_v1:' . $type . ':3');
                 }
+
+                \App\Support\HomepageFragmentCache::bump('shortcode:blog-posts');
+                \App\Support\HomepageResponseCache::bump();
             };
 
             \Botble\Blog\Models\Post::saved($forgetBlogCache);

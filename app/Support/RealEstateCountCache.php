@@ -61,6 +61,35 @@ final class RealEstateCountCache
     }
 
     /**
+     * Property counts for specific agent IDs (homepage agents shortcode).
+     *
+     * @param  list<int|string>  $authorIds
+     * @return Collection<int|string, int>
+     */
+    public static function agentPropertyCountsFor(array $authorIds): Collection
+    {
+        $authorIds = array_values(array_unique(array_filter(array_map('intval', $authorIds))));
+
+        if ($authorIds === []) {
+            return collect();
+        }
+
+        sort($authorIds);
+        $version = self::version();
+        $idsKey = md5(implode(',', $authorIds));
+
+        return Cache::remember(self::AGENT_KEY.':scoped:'.$version.':'.$idsKey, 3600, function () use ($authorIds): Collection {
+            return DB::table('re_properties')
+                ->select('author_id', DB::raw('COUNT(*) as aggregate'))
+                ->where('moderation_status', ModerationStatusEnum::APPROVED)
+                ->whereIn('author_id', $authorIds)
+                ->groupBy('author_id')
+                ->pluck('aggregate', 'author_id')
+                ->map(static fn ($count) => (int) $count);
+        });
+    }
+
+    /**
      * Property counts grouped by PropertySubType for homepage category cards.
      *
      * @param  list<string>  $allowedTypes

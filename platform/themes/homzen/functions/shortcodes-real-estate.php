@@ -424,7 +424,7 @@ app()->booted(function (): void {
                 ->oldest('first_name')
                 ->get();
 
-            $counts = \App\Support\RealEstateCountCache::agentPropertyCounts();
+            $counts = \App\Support\RealEstateCountCache::agentPropertyCountsFor($accountIds);
             $accounts->each(function (Account $account) use ($counts): void {
                 $account->setAttribute('properties_count', (int) ($counts[$account->id] ?? 0));
             });

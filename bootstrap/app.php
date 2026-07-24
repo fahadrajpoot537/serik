@@ -14,6 +14,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
     ->withCommands([
         \App\Console\Commands\SerikQueueStatusCommand::class,
         \App\Console\Commands\SerikQueueInstallImagesWorkerCommand::class,
+        \App\Console\Commands\WarmHomepageCacheCommand::class,
     ])
     ->withRouting(
         web: __DIR__ . '/../routes/web.php',

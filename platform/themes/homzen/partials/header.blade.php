@@ -601,10 +601,10 @@
                         
                         <nav class="main-menu show navbar-expand-md">
                             <div class="navbar-collapse collapse clearfix" id="navbarSupportedContent" style="">
-                                {!! Menu::renderMenuLocation('main-menu', [
+                                {!! \App\Support\HomepageFragmentCache::rememberMenu('main-menu', static fn () => Menu::renderMenuLocation('main-menu', [
                                     'options' => ['class' => 'navigation clearfix'],
                                     'view' => 'main-menu',
-                                ]) !!}
+                                ])) !!}
                             </div>
                         </nav>
                         
