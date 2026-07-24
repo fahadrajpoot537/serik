@@ -9756,10 +9756,8 @@ function mapMovedEnoughToRefetch() {
             return;
         }
 
-        const opened = openHsMapPropertyPanel(feature);
-        if (!opened) {
-            openPropertyDetailModal(feature.properties);
-        }
+        closeHsMapCenterPanel();
+        openPropertyDetailModal(feature.properties);
     }
 
     function openHsMapPropertyPanel(feature) {
