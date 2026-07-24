@@ -553,9 +553,45 @@
         document.getElementById('loginPassErr').style.display = 'none';
     }
 
+    const authCsrfRefreshUrl = @json(route('auth.csrf-token'));
+
+    function refreshAuthCsrfTokens() {
+        return fetch(authCsrfRefreshUrl, {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => {
+                if (!data || !data.token) {
+                    return false;
+                }
+
+                const modal = document.getElementById('modalLogin');
+                if (modal) {
+                    modal.querySelectorAll('input[name="_token"]').forEach((input) => {
+                        input.value = data.token;
+                    });
+                }
+
+                const meta = document.querySelector('meta[name="csrf-token"]');
+                if (meta) {
+                    meta.setAttribute('content', data.token);
+                }
+
+                return true;
+            })
+            .catch(() => false);
+    }
+
     function openAuthModal(mode = 'login') {
         toggleAuthMode(mode);
-        getAuthModal()?.show();
+        refreshAuthCsrfTokens().finally(() => {
+            getAuthModal()?.show();
+        });
     }
 
     function toggleForgotPassword(show) {
@@ -579,6 +615,10 @@
     document.addEventListener("DOMContentLoaded", function () {
         const modalEl = document.getElementById('modalLogin');
         getAuthModal();
+
+        modalEl?.addEventListener('show.bs.modal', () => {
+            refreshAuthCsrfTokens();
+        });
 
         modalEl?.addEventListener('hidden.bs.modal', resetAuthModalState);
 
@@ -677,6 +717,7 @@
         btn.disabled = true;
         errDiv.style.display = 'none';
 
+        refreshAuthCsrfTokens().then(() => {
         fetch(form.action, {
             method: 'POST',
             body: new FormData(form),
@@ -733,6 +774,7 @@
                 btn.innerHTML = originalText;
                 btn.disabled = false;
             });
+        });
     });
 
     let emailExists = false;
@@ -921,6 +963,9 @@
         const formData = new FormData(form);
         formData.set('g-recaptcha-response', captchaResponse);
 
+        refreshAuthCsrfTokens().then(() => {
+            formData.set('_token', form.querySelector('input[name="_token"]')?.value || '');
+
         fetch(form.action, {
             method: 'POST',
             body: formData,
@@ -960,6 +1005,7 @@
                 btn.innerHTML = originalText;
                 btn.disabled = false;
             });
+        });
     });
 
     // Handle AJAX Register Form Submission
@@ -1007,6 +1053,9 @@
             formData.append('username', username);
         }
 
+        refreshAuthCsrfTokens().then(() => {
+            formData.set('_token', form.querySelector('input[name="_token"]')?.value || '');
+
         fetch(form.action, {
             method: 'POST',
             body: formData,
@@ -1046,5 +1095,6 @@
                 btn.innerHTML = originalText;
                 btn.disabled = false;
             });
+        });
     });
 </script>
