@@ -342,9 +342,10 @@
 
 @php
     use App\Support\ImageAlt;
+    use App\Support\SerikMediaUrl;
 
     $heroAltContext = trim(strip_tags((string) ($shortcode->title ?: $shortcode->subtitle ?: __('Ontario homes for sale'))));
-    $heroLcpUrl = $shortcode->background_image ? RvMedia::getImageUrl($shortcode->background_image) : null;
+    $heroLcpUrl = $shortcode->background_image ? SerikMediaUrl::cmsImageUrl($shortcode->background_image, 'large') : null;
 @endphp
 
 @if ($heroLcpUrl)
@@ -389,6 +390,7 @@
             {{ RvMedia::image(
                 $shortcode->background_image,
                 ImageAlt::resolve($shortcode->title, $shortcode->background_image, $heroAltContext),
+                'large',
                 lazy: false,
                 attributes: array_merge(
                     ['data-bb-lazy' => 'false', 'fetchpriority' => 'high', 'loading' => 'eager', 'decoding' => 'async', 'width' => 800, 'height' => 600],
@@ -411,6 +413,7 @@
                             {{ RvMedia::image(
                                 $shortcode->{"slider_image_$i"},
                                 ImageAlt::resolve($shortcode->title, $shortcode->{"slider_image_$i"}, $heroAltContext),
+                                'large',
                                 lazy: $heroSlideIndex > 1,
                                 attributes: array_merge(
                                     $heroSlideIndex === 1

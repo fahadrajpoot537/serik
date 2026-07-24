@@ -320,7 +320,7 @@
                                 <span>🏠</span>
                                 <span>Find Home →</span>
                             </a>
-                            <img src="https://serik.ca/storage/269369802-11088650.png" style="width:100%;" alt="{{ __('Serik Realty Ontario property search guide') }}"/>
+                            <img src="{{ \App\Support\SerikMediaUrl::cmsImageUrl('269369802-11088650.png', 'medium') }}" width="400" height="300" loading="lazy" decoding="async" style="width:100%;" alt="{{ __('Serik Realty Ontario property search guide') }}"/>
 
                             
                         </div>
@@ -543,7 +543,7 @@
                                 <span>Find Home →</span>
                             </a>
 
-                            <img src="https://serik.ca/storage/269369790-11088646.png" style="width:100%;" alt="{{ __('Serik Realty services and resources') }}"/>
+                            <img src="{{ \App\Support\SerikMediaUrl::cmsImageUrl('269369790-11088646.png', 'medium') }}" width="400" height="300" loading="lazy" decoding="async" style="width:100%;" alt="{{ __('Serik Realty services and resources') }}"/>
                         </div>
 
                         {{-- RIGHT --}}
@@ -570,7 +570,7 @@
                                 <span>Find Home →</span>
                             </a>
 
-                            <img src="https://serik.ca/storage/269369790-11088646.png" style="width:100%;" alt="{{ __('Serik Realty services and resources') }}"/>
+                            <img src="{{ \App\Support\SerikMediaUrl::cmsImageUrl('269369790-11088646.png', 'medium') }}" width="400" height="300" loading="lazy" decoding="async" style="width:100%;" alt="{{ __('Serik Realty services and resources') }}"/>
                         </div>
 
                         {{-- RIGHT --}}

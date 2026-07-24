@@ -546,7 +546,7 @@
                                <div class="smart-search">
                                 <div class="search-box">
                                      <x-core::icon name="ti ti-search" />
-                                    <input type="text" id="smartInput" placeholder="Search address, street or listing...">
+                                    <input type="text" id="smartInput" placeholder="Search address, community, street or listing...">
                                     <span class="clear-btn" id="clearBtn">✕</span>
                                 </div>
         
@@ -1010,6 +1010,117 @@ function buildHeaderCitySuggestionsHtml(keyword) {
     `).join('');
 }
 
+const headerCommunitySuggestCache = new Map();
+const HEADER_COMMUNITY_SUGGEST_CACHE_MAX = 80;
+let headerCommunityAbort = null;
+
+function filterCommunityRowsByKeyword(rows, keyword) {
+    const needle = String(keyword || '').trim().toLowerCase();
+    if (!needle) {
+        return [];
+    }
+
+    return (rows || []).filter((row) => {
+        const name = String(row?.name || '').toLowerCase();
+        const city = String(row?.city || '').toLowerCase();
+        return name.includes(needle) || city.includes(needle);
+    });
+}
+
+function getPrefixCommunityCache(keyword, cache) {
+    const trimmed = String(keyword || '').trim().toLowerCase();
+    if (trimmed.length < 2) {
+        return null;
+    }
+
+    let best = null;
+
+    for (const [url, rows] of cache.entries()) {
+        const match = url.match(/keyword=([^&]+)/);
+        if (!match) {
+            continue;
+        }
+
+        const cachedKeyword = decodeURIComponent(match[1]).toLowerCase();
+        if (!trimmed.startsWith(cachedKeyword) || cachedKeyword.length < 2) {
+            continue;
+        }
+
+        if (!best || cachedKeyword.length > best.keyword.length) {
+            best = { keyword: cachedKeyword, rows };
+        }
+    }
+
+    if (!best) {
+        return null;
+    }
+
+    return filterCommunityRowsByKeyword(best.rows, trimmed);
+}
+
+function fetchHeaderCommunitySuggestions(keyword, signal) {
+    const trimmed = String(keyword || '').trim();
+    if (trimmed.length < 2) {
+        return Promise.resolve([]);
+    }
+
+    const url = `/api/v1/community-suggestions?keyword=${encodeURIComponent(trimmed)}&limit=8`;
+    if (headerCommunitySuggestCache.has(url)) {
+        return Promise.resolve(headerCommunitySuggestCache.get(url));
+    }
+
+    return fetch(url, {
+        signal,
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    })
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data) => {
+            const rows = Array.isArray(data) ? data : [];
+            if (headerCommunitySuggestCache.size >= HEADER_COMMUNITY_SUGGEST_CACHE_MAX) {
+                headerCommunitySuggestCache.delete(headerCommunitySuggestCache.keys().next().value);
+            }
+            headerCommunitySuggestCache.set(url, rows);
+            return rows;
+        })
+        .catch(() => []);
+}
+
+function buildHeaderCommunitySuggestionsHtml(communities) {
+    return (communities || []).map((community) => {
+        const name = community.name || '';
+        const city = community.city || '';
+        const citySuffix = city ? ` <span style="color:#6b7280;font-size:12px;">${city}</span>` : '';
+
+        return `
+            <div class="location-item community-item"
+                role="button"
+                tabindex="0"
+                data-community="${name.replace(/"/g, '&quot;')}"
+                data-city="${city.replace(/"/g, '&quot;')}"
+                data-lat="${community.lat ?? ''}"
+                data-lng="${community.lng ?? ''}">
+                🏘️ ${name}${citySuffix}
+            </div>
+        `;
+    }).join('');
+}
+
+function buildHeaderLocationSuggestionsHtml(keyword, communities) {
+    return buildHeaderCitySuggestionsHtml(keyword) + buildHeaderCommunitySuggestionsHtml(communities);
+}
+
+function buildHeaderCommunityMapUrl(community) {
+    let url = `${SITE_BASE}/map?community=${encodeURIComponent(community.name)}`;
+    if (community.city) {
+        url += `&city=${encodeURIComponent(community.city)}`;
+    }
+    if (community.lat && community.lng) {
+        url += `&lat=${community.lat}&lng=${community.lng}`;
+    }
+    return url;
+}
+
 function renderHeaderSearchShell(keyword) {
     const cityHTML = buildHeaderCitySuggestionsHtml(keyword);
     const locationEl = document.getElementById('locationResults');
@@ -1105,6 +1216,17 @@ function showHeaderSearchPending() {
     dropdown.style.display = 'block';
 }
 
+function isHeaderLocationOnlyKeyword(keyword) {
+    const trimmed = String(keyword || '').trim();
+    if (!trimmed || trimmed.length < 2) {
+        return false;
+    }
+    if (/\d/.test(trimmed)) {
+        return false;
+    }
+    return !isHeaderMlsKeyword(trimmed) && !looksLikeHeaderMlsPrefix(trimmed);
+}
+
 function handleHeaderSearchInput(keyword) {
     currentKeyword = keyword;
     skip = 0;
@@ -1120,21 +1242,7 @@ function handleHeaderSearchInput(keyword) {
     }
 
     renderHeaderSearchShell(trimmed);
-
-    const searchUrl = buildHeaderSearchUrl(trimmed);
-    const hasDigit = /\d/.test(trimmed);
-    if (headerSearchCache.has(searchUrl) || isHeaderMlsKeyword(trimmed) || looksLikeHeaderMlsPrefix(trimmed)) {
-        loadResults(trimmed, true);
-        return;
-    }
-
-    if (hasDigit) {
-        loadResults(trimmed, true);
-        return;
-    }
-
-    const delay = trimmed.length >= 3 ? 50 : 80;
-    typingTimer = setTimeout(() => loadResults(trimmed, true), delay);
+    loadResults(trimmed, true);
 }
 
 input.addEventListener('input', function () {
@@ -1148,6 +1256,30 @@ input.addEventListener('focus', function () {
 });
 
 dropdown.addEventListener('click', function (e) {
+    const communityItem = e.target.closest('.community-item');
+    if (communityItem) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const communityName = communityItem.dataset.community || '';
+        if (!communityName) {
+            return;
+        }
+
+        input.value = communityItem.dataset.city
+            ? `${communityName}, ${communityItem.dataset.city}`
+            : communityName;
+        dropdown.style.display = 'none';
+        loader.style.display = 'none';
+        window.location.href = buildHeaderCommunityMapUrl({
+            name: communityName,
+            city: communityItem.dataset.city || '',
+            lat: communityItem.dataset.lat || '',
+            lng: communityItem.dataset.lng || '',
+        });
+        return;
+    }
+
     const item = e.target.closest('.city-item');
     if (!item) {
         return;
@@ -1172,7 +1304,7 @@ dropdown.addEventListener('keydown', function (e) {
         return;
     }
 
-    const item = e.target.closest('.city-item');
+    const item = e.target.closest('.city-item, .community-item');
     if (!item) {
         return;
     }
@@ -1195,13 +1327,45 @@ function buildPropertyUrl(item) {
 
 
 
+function getPrefixSearchCache(keyword, cache) {
+    const trimmed = String(keyword || '').trim().toLowerCase();
+    if (trimmed.length < 2) {
+        return null;
+    }
+
+    let best = null;
+
+    for (const [url, rows] of cache.entries()) {
+        const match = url.match(/keyword=([^&]+)/);
+        if (!match) {
+            continue;
+        }
+
+        const cachedKeyword = decodeURIComponent(match[1]).toLowerCase();
+        if (!trimmed.startsWith(cachedKeyword) || cachedKeyword.length < 2) {
+            continue;
+        }
+
+        if (!best || cachedKeyword.length > best.keyword.length) {
+            best = { keyword: cachedKeyword, rows };
+        }
+    }
+
+    return best?.rows || null;
+}
+
 function loadResults(keyword, reset = false){
     const requestId = ++headerSearchRequestId;
     const cityHTML = buildHeaderCitySuggestionsHtml(keyword);
 
     if (reset) {
-        document.getElementById('locationResults').innerHTML = cityHTML;
-        if (!document.getElementById('listingResults').innerHTML) {
+        const prefixListings = getPrefixSearchCache(keyword, headerSearchCache);
+        const prefixCommunities = getPrefixCommunityCache(keyword, headerCommunitySuggestCache);
+        const locationHTML = buildHeaderLocationSuggestionsHtml(keyword, prefixCommunities || []);
+        document.getElementById('locationResults').innerHTML = locationHTML || cityHTML;
+        if (prefixListings && prefixListings.length) {
+            renderHeaderSearchResults(keyword, true, locationHTML || cityHTML, prefixListings, isHeaderMlsKeyword(keyword));
+        } else if (!document.getElementById('listingResults').innerHTML) {
             document.getElementById('listingResults').innerHTML =
                 '<div class="hs-search-pending" style="padding:10px 12px;color:#6b7280;">Searching...</div>';
         }
@@ -1211,6 +1375,7 @@ function loadResults(keyword, reset = false){
         searchController.abort();
     }
     searchController = new AbortController();
+    const communityPromise = fetchHeaderCommunitySuggestions(keyword, searchController.signal);
     loadResults._activeKeyword = keyword;
 
     const isMlsKey = isHeaderMlsKeyword(keyword);
@@ -1219,18 +1384,28 @@ function loadResults(keyword, reset = false){
     const searchUrl = buildHeaderSearchUrl(keyword);
 
     if (headerSearchCache.has(searchUrl)) {
-        renderHeaderSearchResults(keyword, reset, cityHTML, headerSearchCache.get(searchUrl), isMlsKey);
+        communityPromise.then((communities) => {
+            if (requestId !== headerSearchRequestId) {
+                return;
+            }
+            const locationHTML = buildHeaderLocationSuggestionsHtml(keyword, communities);
+            renderHeaderSearchResults(keyword, reset, locationHTML, headerSearchCache.get(searchUrl), isMlsKey);
+        });
         clearTimeout(searchTimeoutId);
         loader.style.display = 'none';
         return;
     }
 
-    headerSmartSearchFetch(searchUrl, searchController.signal)
-    .then((data) => {
+    Promise.all([
+        headerSmartSearchFetch(searchUrl, searchController.signal),
+        communityPromise,
+    ])
+    .then(([data, communities]) => {
         if (requestId !== headerSearchRequestId) {
             return;
         }
-        renderHeaderSearchResults(keyword, reset, cityHTML, data, isMlsKey);
+        const locationHTML = buildHeaderLocationSuggestionsHtml(keyword, communities);
+        renderHeaderSearchResults(keyword, reset, locationHTML, data, isMlsKey);
     })
     .catch((err) => {
         if (requestId !== headerSearchRequestId || err.name === 'AbortError') {

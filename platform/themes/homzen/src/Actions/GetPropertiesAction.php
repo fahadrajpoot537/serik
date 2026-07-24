@@ -23,6 +23,7 @@ class GetPropertiesAction
 
         $model = Property::query()
             ->where(RealEstateHelper::getPropertyDisplayQueryConditions())
+            ->residential()
             ->when(
                 $featured,
                 fn (Builder $query) => $query->where('is_featured', true)

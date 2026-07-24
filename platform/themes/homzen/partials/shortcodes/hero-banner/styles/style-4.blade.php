@@ -4340,7 +4340,7 @@ position: absolute;
                <div class="smart-search">
                         <div class="search-box">
                             <i class="icon">🔍</i>
-                            <input type="text" id="mapSmartInput" placeholder="Address, Street Name or Listing#">
+                            <input type="text" id="mapSmartInput" placeholder="Address, Community, Street or Listing#">
                             <span class="clear-btn" id="mapClearBtn">✕</span>
                         </div>
 
@@ -5136,6 +5136,75 @@ position: absolute;
 window.SERIK_IS_MAP_SEARCH_PAGE = @json($isMapSearchPageView);
 window.SERIK_CANONICAL_ORIGIN = @json(rtrim(\App\Support\CanonicalUrl::normalize(url('/')), '/'));
 
+// CARTO Voyager raster shows neighbourhood/area labels from ~zoom 12+.
+const HS_MAP_DEFAULT_ZOOM = 15;
+const HS_MAP_CITY_ZOOM = 15;
+
+function resolveInitialMapView() {
+    const cached = window.SerikVisitorLocation?.getSessionLocation?.();
+    if (cached && Number.isFinite(cached.lat) && Number.isFinite(cached.lng)) {
+        return {
+            center: [cached.lng, cached.lat],
+            zoom: HS_MAP_DEFAULT_ZOOM,
+        };
+    }
+
+    return {
+        center: [-79.3832, 43.6532],
+        zoom: HS_MAP_DEFAULT_ZOOM,
+    };
+}
+
+function ensureVisitorLocationReady(maxWaitMs = 2500) {
+    if (window.SerikVisitorLocation) {
+        return Promise.resolve(window.SerikVisitorLocation);
+    }
+
+    return new Promise((resolve) => {
+        const started = Date.now();
+        const timer = setInterval(() => {
+            if (window.SerikVisitorLocation || Date.now() - started >= maxWaitMs) {
+                clearInterval(timer);
+                resolve(window.SerikVisitorLocation || null);
+            }
+        }, 50);
+    });
+}
+
+function fetchServerVisitorLocation() {
+    return fetch('/api/v1/visitor-location', {
+        credentials: 'same-origin',
+        headers: {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+    })
+        .then((res) => (res.ok ? res.json() : null))
+        .catch(() => null);
+}
+
+function shouldUseIpMapCenter(urlCommunity) {
+    if (getLatLngFromUrl()) {
+        return false;
+    }
+
+    if (urlCommunity) {
+        return false;
+    }
+
+    const path = window.location.pathname.toLowerCase().replace(/\/$/, '');
+    if (path !== '/map' && path !== '/on/map') {
+        return false;
+    }
+
+    const queryCity = getCityFromUrl().toLowerCase();
+    if (queryCity && queryCity !== 'ontario') {
+        return false;
+    }
+
+    return true;
+}
+
 function updateSeoUrlpassed() {
 
    const params = new URLSearchParams(window.location.search);
@@ -5659,7 +5728,9 @@ async function showCityBoundary(cityName, fallbackCoords = null) {
         clearTimeout(moveTimer);
         moveTimer = null;
         if (typeof loadProperties === 'function') {
-            loadProperties({ fromInit: true });
+            loadProperties({ fromInit: true, force: true });
+        } else if (window.HsMapFetchCoordinator?.executeLoad) {
+            window.HsMapFetchCoordinator.executeLoad(buildMapPropertiesRequest, { fromInit: true, force: true });
         }
     };
 
@@ -5671,10 +5742,10 @@ async function showCityBoundary(cityName, fallbackCoords = null) {
 
         if (typeof window.runProgrammaticMapMove === 'function') {
             window.runProgrammaticMapMove(() => {
-                map.easeTo({ center: [fallback.lng, fallback.lat], zoom: 12 });
+                map.easeTo({ center: [fallback.lng, fallback.lat], zoom: HS_MAP_DEFAULT_ZOOM });
             });
         } else {
-            map.easeTo({ center: [fallback.lng, fallback.lat], zoom: 12 });
+            map.easeTo({ center: [fallback.lng, fallback.lat], zoom: HS_MAP_DEFAULT_ZOOM });
         }
 
         map.once('moveend', loadAfterMove);
@@ -5731,10 +5802,20 @@ async function showCityBoundary(cityName, fallbackCoords = null) {
             const bounds = geojsonBounds(feature.geometry);
             if (typeof window.runProgrammaticMapMove === 'function') {
                 window.runProgrammaticMapMove(() => {
-                    map.fitBounds(bounds, { padding: 50, duration: 1000, maxZoom: 12 });
+                    map.fitBounds(bounds, {
+                        padding: 50,
+                        duration: 1000,
+                        minZoom: HS_MAP_DEFAULT_ZOOM,
+                        maxZoom: HS_MAP_DEFAULT_ZOOM,
+                    });
                 });
             } else {
-                map.fitBounds(bounds, { padding: 50, duration: 1000, maxZoom: 12 });
+                map.fitBounds(bounds, {
+                    padding: 50,
+                    duration: 1000,
+                    minZoom: HS_MAP_DEFAULT_ZOOM,
+                    maxZoom: HS_MAP_DEFAULT_ZOOM,
+                });
             }
             map.once('moveend', () => {
                 clearTimeout(moveTimer);
@@ -5829,6 +5910,7 @@ async function showCityBoundary(cityName, fallbackCoords = null) {
 
     let activeMarker = null;
     let selectedCity = '';
+    let selectedCommunity = '';
     let hsMobileDateSale = 'all';
     let hsMobileDateSold = 'all';
     let draw = null;
@@ -5846,39 +5928,49 @@ async function showCityBoundary(cityName, fallbackCoords = null) {
     // ==============================
     // INITIALIZE MAP
     // ==============================
+    ensureVisitorLocationReady().then((detector) => {
+        if (detector && !detector.getSessionLocation()) {
+            detector.detectLocation({ preferCached: true, preferBrowser: false }).catch(() => {});
+        }
+    });
+    fetchServerVisitorLocation().then((location) => {
+        if (location && window.SerikVisitorLocation?.saveSessionLocation) {
+            window.SerikVisitorLocation.saveSessionLocation(location);
+        }
+    });
+
     const map = new maplibregl.Map({
         container: mapContainer,
         style: {
-        version: 8,
-        glyphs: "https://api.maptiler.com/fonts/{fontstack}/{range}.pbf?key=bt17xhTzpkGNXIhaRMl2",
-        sources: {
-            'carto-voyager': {
-                type: 'raster',
-                tiles: [
-                    'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
-                    'https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
-                    'https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
-                    'https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png'
-                ],
-                tileSize: 256,
-                maxzoom: 20,
-                attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
-            }
+            version: 8,
+            glyphs: 'https://api.maptiler.com/fonts/{fontstack}/{range}.pbf?key=bt17xhTzpkGNXIhaRMl2',
+            sources: {
+                'carto-voyager': {
+                    type: 'raster',
+                    tiles: [
+                        'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+                        'https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+                        'https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+                        'https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+                    ],
+                    tileSize: 256,
+                    maxzoom: 20,
+                    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+                },
+            },
+            layers: [
+                {
+                    id: 'carto-voyager-layer',
+                    type: 'raster',
+                    source: 'carto-voyager',
+                },
+            ],
         },
-        layers: [
-            {
-                id: 'carto-voyager-layer',
-                type: 'raster',
-                source: 'carto-voyager'
-            }
-        ]
-    },
-    
-        center: [-79.3832, 43.6532],
-        zoom: 11,
+        center: resolveInitialMapView().center,
+        zoom: resolveInitialMapView().zoom,
         maxZoom: 20,
         minZoom: 6,
-        maxBounds: [[-95.2, 41.6], [-74.0, 56.9]]
+        maxBounds: [[-95.2, 41.6], [-74.0, 56.9]],
     });
   
     map.addControl(new maplibregl.NavigationControl(), window.innerWidth <= 991 ? 'bottom-right' : 'top-right');
@@ -6261,12 +6353,12 @@ function bustMapFetchCache() {
 }
 
 
-    map.on('load', function () { 
+    map.on('load', async function () { 
         
         updateSeoUrlpassed();
 
  
-        setTimeout(() => {
+        setTimeout(async () => {
             
               const pathFilters = getFiltersFromPath();
     
@@ -6324,6 +6416,8 @@ const cityKey = normalizeCity(cityFromUrlRaw);
     
     
     const urlLocation = getLatLngFromUrl();
+    const urlCommunity = new URLSearchParams(window.location.search).get('community');
+    const urlCommunityCity = new URLSearchParams(window.location.search).get('city');
 
 if (urlLocation) {
     const { lat, lng } = urlLocation;
@@ -6333,7 +6427,15 @@ if (urlLocation) {
         .addTo(map);
 
     map.setCenter([lng, lat]);
-    map.setZoom(13);
+    map.setZoom(HS_MAP_DEFAULT_ZOOM);
+
+    if (urlCommunity) {
+        selectedCommunity = urlCommunity;
+        if (urlCommunityCity) {
+            selectedCity = urlCommunityCity;
+            cityFromUrl = urlCommunityCity;
+        }
+    }
 }
     
     // Cluster number text
@@ -6439,18 +6541,39 @@ if (urlLocation) {
     const resolvedCity = explicitPathCity || queryCity || cityFromUrlRaw || '';
     const resolvedCityLower = resolvedCity.toLowerCase();
 
+    const runInitialPropertyLoad = () => {
+        if (!mapLayersReady || !map?.getSource?.('properties')) {
+            return;
+        }
+        if (window.HsMapFetchCoordinator?.executeLoad) {
+            window.HsMapFetchCoordinator.executeLoad(buildMapPropertiesRequest, { fromInit: true, force: true });
+            return;
+        }
+        const loader = window.loadProperties || (typeof loadProperties === 'function' ? loadProperties : null);
+        if (loader) {
+            loader({ fromInit: true, force: true });
+        }
+    };
+
+    // Fetch pins for the current viewport immediately — do not wait for IP/city fly.
+    requestAnimationFrame(() => runInitialPropertyLoad());
+
     if (!urlLocation) {
         if (resolvedCity && resolvedCityLower !== 'ontario') {
             selectedCity = resolvedCity;
             cityFromUrl = resolvedCity;
+            seoCitySlug = slugify(resolvedCity);
         } else if (resolvedCityLower === 'ontario') {
             selectedCity = '';
             cityFromUrl = 'ontario';
         }
 
-        if (resolvedCityLower === 'ontario') {
-            // Ontario-wide search: center on the visitor's area (zoomed in) so
-            // they see nearby properties first; subtype filters still apply.
+        if (shouldUseIpMapCenter(urlCommunity)) {
+            selectedCity = '';
+            cityFromUrl = '';
+            clearCityBoundaryLock();
+            centerOnVisitorAreaNoLock();
+        } else if (resolvedCityLower === 'ontario') {
             centerOnVisitorAreaNoLock();
         } else if (shouldAutoCenterOnUserLocation()) {
             setMapToUserLocation();
@@ -6468,22 +6591,35 @@ if (urlLocation) {
                 const ne = [Math.max(...lngs), Math.max(...lats)];
 
                 runProgrammaticMapMove(() => {
-                    map.fitBounds([sw, ne], { padding: 50 });
+                    map.fitBounds([sw, ne], {
+                        padding: 50,
+                        minZoom: HS_MAP_DEFAULT_ZOOM,
+                        maxZoom: HS_MAP_DEFAULT_ZOOM,
+                    });
                 });
                 map.once('moveend', () => {
                     clearTimeout(moveTimer);
                     moveTimer = null;
-                    loadProperties({ fromInit: true });
+                    runInitialPropertyLoad();
                 });
             } else {
                 showCityBoundary(resolvedCity);
             }
-        } else {
-            loadProperties({ fromInit: true });
+        } else if (urlCommunity) {
+            selectedCommunity = urlCommunity;
+            if (urlCommunityCity) {
+                selectedCity = urlCommunityCity;
+                cityFromUrl = urlCommunityCity;
+            }
         }
-    } else {
-        loadProperties({ fromInit: true });
     }
+
+    // Safety net: if no fetch completed yet, load viewport pins anyway.
+    setTimeout(() => {
+        if (!window.HsMapFetchCoordinator?.getLastFetchKey?.()) {
+            runInitialPropertyLoad();
+        }
+    }, 2000);
     
 
     if (pathFilters.transaction) {
@@ -6635,12 +6771,16 @@ document.querySelectorAll('input[name="date"], input[name="date-sold"], input[na
         item.addEventListener('click', function() {
             selectedTransaction = this.dataset.transaction;
             document.getElementById('transactionDropdown').innerText = selectedTransaction;
-    
-            // Remove active class from all items
+
             document.querySelectorAll('.transaction-item').forEach(i => i.classList.remove('active'));
-            // Add active class to clicked item
             this.classList.add('active');
-    
+
+            if (selectedTransaction === 'For Lease') {
+                applyPriceConfig(LEASE_CONFIG);
+            } else {
+                applyPriceConfig(SALE_CONFIG);
+            }
+
             loadProperties({ fromFilters: true });
         });
     });
@@ -6809,7 +6949,6 @@ function resetDropdown(dropdown) {
         selectedMaxPrice = PRICE_SALE_MAX;
     }
 
-    const transactionItems = document.querySelectorAll('.transaction-item');
     const priceScale = document.querySelector('.price-scale');
     
     
@@ -6872,17 +7011,6 @@ function applyPriceConfig(config) {
     updatePriceDisplay();
 }
 
-transactionItems.forEach(item => {
-    item.addEventListener('click', function () {
-        const type = this.dataset.transaction;
-
-        if (type === "For Lease") {
-            applyPriceConfig(LEASE_CONFIG);
-        } else {
-            applyPriceConfig(SALE_CONFIG);
-        }
-    });
-});
     
     
     function formatPriceShort(value) {
@@ -7112,8 +7240,13 @@ document.querySelector('.clear-btn-main').addEventListener('click', function () 
     // ==============================
     // 1️⃣ Reset JS Variables
     // ==============================
-    selectedTransaction = 'all';
-    selectedStatus = 'all';
+    selectedTransaction = 'For Sale';
+    selectedStatus = [
+        'New',
+        'Price Change',
+        'Extension',
+        'Previous Status',
+    ];
     selectedSubTypes = [];
     activeCityPolygon = null;
     activeCityGeometryType = null;
@@ -7125,9 +7258,11 @@ document.querySelector('.clear-btn-main').addEventListener('click', function () 
     // ==============================
     // Reset Transaction UI
     // ==============================
-    document.getElementById('transactionDropdown').innerText = 'Transaction';
-    document.querySelectorAll('.transaction-item')
-        .forEach(i => i.classList.remove('active'));
+    document.getElementById('transactionDropdown').innerText = 'For Sale';
+    document.querySelectorAll('.transaction-item').forEach((i) => {
+        i.classList.toggle('active', i.dataset.transaction === 'For Sale');
+    });
+    applyPriceConfig(SALE_CONFIG);
 
     // ==============================
     // Reset Status Buttons
@@ -7161,11 +7296,11 @@ document.querySelector('.clear-btn-main').addEventListener('click', function () 
     selectedMaxSquare = 4000;
     selectedMinSquare = 0;
     squareTitle.innerText = 'Square Footage: Unspecified - Max';
-//alert('hello');
-    // ==============================
-    //  Reload Map With Defaults
-    // ==============================
-    
+
+    syncFilterUiFromState();
+    syncDateRadiosFromState();
+    updatePriceDisplay();
+
     loadProperties({ fromFilters: true });
 });
 
@@ -7215,36 +7350,66 @@ function shouldAutoCenterOnUserLocation() {
 
 function getZoomForDetectedLocation(detectedLocation) {
     if (!detectedLocation) {
-        return 11;
+        return HS_MAP_DEFAULT_ZOOM;
     }
 
     if (detectedLocation.source === 'browser') {
         if (detectedLocation.accuracy && detectedLocation.accuracy <= 250) {
-            return 13;
+            return 16;
         }
 
-        return 12;
+        return HS_MAP_DEFAULT_ZOOM;
     }
 
     if (detectedLocation.source === 'ip' && detectedLocation.accuracy === 'city') {
-        return 11;
+        return HS_MAP_CITY_ZOOM;
     }
 
     if (detectedLocation.source === 'ip') {
-        return 12;
+        return HS_MAP_DEFAULT_ZOOM;
     }
 
-    return detectedLocation.zoom || 11;
+    return detectedLocation.zoom || HS_MAP_DEFAULT_ZOOM;
+}
+
+function resolveMapFlyZoom(detectedLocation) {
+    const targetZoom = Number.isFinite(detectedLocation?.zoom)
+        ? detectedLocation.zoom
+        : getZoomForDetectedLocation(detectedLocation);
+
+    const currentZoom = map?.getZoom?.() ?? HS_MAP_DEFAULT_ZOOM;
+
+    // Auto-centering must never zoom out after the map has already opened close-in.
+    return Math.max(targetZoom, HS_MAP_DEFAULT_ZOOM, currentZoom);
 }
 
 function flyMapToDetectedLocation(detectedLocation) {
+    const triggerLoad = () => {
+        const loader = window.loadProperties || (typeof loadProperties === 'function' ? loadProperties : null);
+        if (loader) {
+            loader({ fromInit: true, force: true });
+        }
+    };
+
     if (!map || !detectedLocation || !Number.isFinite(detectedLocation.lat) || !Number.isFinite(detectedLocation.lng)) {
-        loadProperties({ fromInit: true });
+        triggerLoad();
         return;
     }
 
+    if (detectedLocation.city) {
+        seoCitySlug = slugify(detectedLocation.city);
+    }
+
+    const targetCenter = [detectedLocation.lng, detectedLocation.lat];
+    const targetZoom = resolveMapFlyZoom(detectedLocation);
+    const currentCenter = map.getCenter();
+    const alreadyThere = Math.abs(currentCenter.lng - targetCenter[0]) < 0.0005
+        && Math.abs(currentCenter.lat - targetCenter[1]) < 0.0005
+        && Math.abs(map.getZoom() - targetZoom) < 0.25;
+
     autoCenteringMap = true;
     let centeringFinished = false;
+    let fallbackTimer = null;
 
     const finishCentering = () => {
         if (centeringFinished) {
@@ -7252,18 +7417,26 @@ function flyMapToDetectedLocation(detectedLocation) {
         }
         centeringFinished = true;
         autoCenteringMap = false;
+        if (fallbackTimer) {
+            clearTimeout(fallbackTimer);
+            fallbackTimer = null;
+        }
         clearTimeout(moveTimer);
         moveTimer = null;
-        if (!isMapPanelOpen()) {
-            loadProperties({ fromInit: true });
-        }
+        triggerLoad();
     };
 
     map.once('moveend', finishCentering);
+    fallbackTimer = setTimeout(finishCentering, alreadyThere ? 100 : 2500);
+
+    if (alreadyThere) {
+        finishCentering();
+        return;
+    }
 
     map.flyTo({
-        center: [detectedLocation.lng, detectedLocation.lat],
-        zoom: getZoomForDetectedLocation(detectedLocation),
+        center: targetCenter,
+        zoom: targetZoom,
         duration: 1500,
         essential: true,
     });
@@ -7272,7 +7445,7 @@ function flyMapToDetectedLocation(detectedLocation) {
 function applyOntarioDefaultLocation() {
     const fallback = window.SerikVisitorLocation
         ? window.SerikVisitorLocation.ONTARIO_DEFAULT
-        : { lat: 43.6532, lng: -79.3832, zoom: 11 };
+        : { lat: 43.6532, lng: -79.3832, zoom: HS_MAP_DEFAULT_ZOOM };
 
     flyMapToDetectedLocation(fallback);
 }
@@ -7283,31 +7456,57 @@ async function centerOnVisitorAreaNoLock() {
     activeCityPolygon = null;
     activeCityGeometryType = null;
     selectedCity = '';
+    clearCityBoundaryLock();
 
+    await ensureVisitorLocationReady();
+
+    let location = null;
     const detector = window.SerikVisitorLocation;
-    if (!detector) {
-        applyOntarioDefaultLocation();
+
+    if (detector) {
+        location = detector.getSessionLocation();
+        if (!location) {
+            try {
+                location = await detector.detectLocation({ preferCached: false, preferBrowser: false });
+            } catch (e) {
+                console.warn('Visitor IP detection failed', e);
+            }
+        }
+    }
+
+    if (!location) {
+        try {
+            const serverLocation = await fetchServerVisitorLocation();
+            if (serverLocation && Number.isFinite(Number(serverLocation.lat)) && Number.isFinite(Number(serverLocation.lng))) {
+                location = {
+                    lat: Number(serverLocation.lat),
+                    lng: Number(serverLocation.lng),
+                    city: serverLocation.city || null,
+                    source: serverLocation.source || 'ip',
+                    accuracy: serverLocation.accuracy || 'ip',
+                };
+                detector?.saveSessionLocation?.(location);
+            }
+        } catch (e) {
+            console.warn('Server visitor location failed', e);
+        }
+    }
+
+    if (location && Number.isFinite(location.lat) && Number.isFinite(location.lng)) {
+        if (location.city) {
+            seoCitySlug = slugify(location.city);
+        }
+        flyMapToDetectedLocation({
+            lat: location.lat,
+            lng: location.lng,
+            city: location.city || null,
+            source: location.source || 'ip',
+            zoom: location.source === 'browser' ? HS_MAP_DEFAULT_ZOOM : HS_MAP_CITY_ZOOM,
+        });
         return;
     }
 
-    try {
-        const location = await detector.detectLocation({ preferCached: true, preferBrowser: false });
-
-        if (location && Number.isFinite(location.lat) && Number.isFinite(location.lng)) {
-            // Force a closer zoom regardless of accuracy, but never lock.
-            flyMapToDetectedLocation({
-                lat: location.lat,
-                lng: location.lng,
-                source: location.source,
-                zoom: location.source === 'browser' ? 12 : 11,
-            });
-        } else {
-            applyOntarioDefaultLocation();
-        }
-    } catch (e) {
-        console.warn('Visitor area centering failed', e);
-        applyOntarioDefaultLocation();
-    }
+    applyOntarioDefaultLocation();
 }
 
 function getVisitorCityFromCookie() {
@@ -7346,58 +7545,62 @@ async function setMapToUserLocation() {
         return;
     }
 
+    await ensureVisitorLocationReady();
+
+    let location = null;
     const detector = window.SerikVisitorLocation;
-    if (!detector) {
+
+    if (detector) {
+        try {
+            location = await detector.detectLocation({
+                preferCached: true,
+                preferBrowser: false,
+            });
+        } catch (e) {
+            console.warn('Visitor location detection failed', e);
+        }
+    }
+
+    if (!location) {
+        try {
+            const serverLocation = await fetchServerVisitorLocation();
+            if (serverLocation && Number.isFinite(Number(serverLocation.lat)) && Number.isFinite(Number(serverLocation.lng))) {
+                location = {
+                    lat: Number(serverLocation.lat),
+                    lng: Number(serverLocation.lng),
+                    city: serverLocation.city || null,
+                    source: serverLocation.source || 'ip',
+                    accuracy: serverLocation.accuracy || 'ip',
+                };
+                detector?.saveSessionLocation?.(location);
+            }
+        } catch (e) {
+            console.warn('Server visitor location failed', e);
+        }
+    }
+
+    if (!location) {
         applyOntarioDefaultLocation();
         return;
     }
 
-    try {
-        const location = await detector.detectLocation({
-            preferCached: true,
-            preferBrowser: false,
-        });
+    activeCityPolygon = null;
+    activeCityGeometryType = null;
+    selectedCity = '';
+    cityFromUrl = '';
 
-        if (!location) {
-            applyOntarioDefaultLocation();
-            return;
-        }
-
-        activeCityPolygon = null;
-        activeCityGeometryType = null;
-
-        // City-level IP hit: center + zoom on the area but DON'T lock to the
-        // city polygon, so the visitor can freely pan/explore nearby areas.
-        if (location.accuracy === 'city' && location.city) {
-            selectedCity = '';
-            cityFromUrl = '';
-            seoCitySlug = slugify(location.city);
-
-            if (Number.isFinite(location.lat) && Number.isFinite(location.lng)) {
-                flyMapToDetectedLocation(location);
-            } else {
-                applyOntarioDefaultLocation();
-            }
-            return;
-        }
-
-        if (Number.isFinite(location.lat) && Number.isFinite(location.lng)) {
-            selectedCity = '';
-            cityFromUrl = '';
-            if (location.city) {
-                seoCitySlug = slugify(location.city);
-            }
-            flyMapToDetectedLocation(location);
-            return;
-        }
-
-        selectedCity = '';
-        cityFromUrl = '';
-        flyMapToDetectedLocation(location);
-    } catch (e) {
-        console.warn('Visitor location detection failed', e);
-        applyOntarioDefaultLocation();
+    if (location.accuracy === 'city' && location.city) {
+        seoCitySlug = slugify(location.city);
+    } else if (location.city) {
+        seoCitySlug = slugify(location.city);
     }
+
+    if (Number.isFinite(location.lat) && Number.isFinite(location.lng)) {
+        flyMapToDetectedLocation(location);
+        return;
+    }
+
+    applyOntarioDefaultLocation();
 }
 
 
@@ -7453,6 +7656,7 @@ function getTransactionFromUrl() {
             return;
         }
         userHasMovedMap = true;
+        selectedCommunity = '';
         if (!activeCityPolygon) clearCityBoundaryLock();
     });
 
@@ -7478,7 +7682,7 @@ function getTransactionFromUrl() {
             if (!window.HsMapFetchCoordinator?.movedEnoughToRefetch?.(map)) return;
             skipSeoUrlOnNextLoad = true;
             loadProperties({ fromMapMove: true });
-        }, 500);
+        }, 250);
     });
     
  
@@ -7821,6 +8025,32 @@ function mapMovedEnoughToRefetch() {
 
 
 
+    function normalizeMapStatusFilter() {
+        const activeDefaults = ['New', 'Price Change', 'Extension', 'Previous Status'];
+
+        if (!selectedStatus) {
+            return activeDefaults;
+        }
+
+        if (Array.isArray(selectedStatus)) {
+            return selectedStatus.length ? selectedStatus : activeDefaults;
+        }
+
+        if (selectedStatus === 'all') {
+            return activeDefaults;
+        }
+
+        return [selectedStatus];
+    }
+
+    function normalizeMapTransactionFilter() {
+        const tx = (selectedTransaction || '').trim();
+        if (!tx || tx === 'all' || tx === 'null') {
+            return 'For Sale';
+        }
+        return tx;
+    }
+
     function buildMapPropertiesRequest(mapInstance) {
         if (!userHasMovedMap && !selectedCity && cityFromUrl && cityFromUrl.toLowerCase() !== 'ontario') {
             selectedCity = cityFromUrl;
@@ -7838,16 +8068,18 @@ function mapMovedEnoughToRefetch() {
         }
 
         const fetchBounds = getFetchBoundsFromMap();
+        const apiTransaction = normalizeMapTransactionFilter();
+        const apiStatus = normalizeMapStatusFilter();
         const params = new URLSearchParams({
             south: fetchBounds.south,
             north: fetchBounds.north,
             west: fetchBounds.west,
             east: fetchBounds.east,
             zoom: Math.round(mapInstance.getZoom()),
-            transaction: selectedTransaction || '',
+            transaction: apiTransaction,
             min_price: selectedMinPrice || 0,
             max_price: isDefaultMaxPrice(selectedMaxPrice) ? PRICE_NO_LIMIT : selectedMaxPrice,
-            status: selectedStatus ? selectedStatus.join(',') : '',
+            status: apiStatus.join(','),
             square_min: selectedMinSquare || 0,
             square_max: selectedMaxSquare === 4000 ? '' : selectedMaxSquare,
             bedrooms: selectedBedrooms || '',
@@ -7857,6 +8089,10 @@ function mapMovedEnoughToRefetch() {
             subtypes: effectiveSubtypes.join(','),
             city: apiCity || '',
         });
+
+        if (selectedCommunity) {
+            params.set('community', selectedCommunity);
+        }
 
         if (selectedDate && selectedDate !== 'all') {
             params.set('date', selectedDate);
@@ -7886,7 +8122,6 @@ function mapMovedEnoughToRefetch() {
     function loadProperties(options = {}) {
         const fromMapMove = options.fromMapMove === true;
         const fromFilters = options.fromFilters === true;
-        const forDebounce = fromFilters || (!fromMapMove && !options.fromInit);
 
         if (fromFilters) {
             if (window._hsClusterListActive || isClusterPanelOpen()) {
@@ -7914,6 +8149,13 @@ function mapMovedEnoughToRefetch() {
             return;
         }
 
+        if (fromFilters && window.HsMapFetchCoordinator?.executeLoad) {
+            window.HsMapFetchCoordinator.clearDebounce?.();
+            window.HsMapFetchCoordinator.executeLoad(buildMapPropertiesRequest, options);
+            return;
+        }
+
+        const forDebounce = fromFilters || (!fromMapMove && !options.fromInit);
         window.HsMapFetchCoordinator?.scheduleLoad?.(
             buildMapPropertiesRequest,
             Object.assign({}, options, { fromFilters: forDebounce }),
@@ -8684,6 +8926,7 @@ function mapMovedEnoughToRefetch() {
                     <div class="map-popup-price">${buildMapPriceHtml(props, status, soldLocked)}</div>
                     <div class="map-popup-date">${escapeMapHtml(relativeListedLabel(props.date, 'Listed'))}</div>
                 </div>
+                ${!soldLocked && !isMapSoldListing(status, props) ? '<div style="color:#e63946;font-size:14px;margin:4px 0 8px;">Your cash back upto 1.5% on purchase price (*Terms and Conditions Apply)</div>' : ''}
                 <div class="map-popup-detail-header">${escapeMapHtml(displayName)}</div>
                 ${displayLocation ? `<div class="map-popup-detail-location">${escapeMapHtml(displayLocation)}</div>` : ''}
                 ${displayType ? `<div class="map-popup-detail-type">${escapeMapHtml(displayType)}</div>` : ''}
@@ -9949,7 +10192,7 @@ document.addEventListener('click', function (e) {
         runProgrammaticMapMove(() => {
             map.easeTo({
                 center: [lng, lat],
-                zoom: 12,
+                zoom: HS_MAP_DEFAULT_ZOOM,
             });
         });
     }
@@ -9966,7 +10209,51 @@ document.addEventListener('click', function (e) {
     const lat = parseFloat(item.dataset.lat);
     const lng = parseFloat(item.dataset.lng);
 
-    if (isNaN(lat) || isNaN(lng)) return;
+    // =========================
+    // COMMUNITY → CENTER MAP + FILTER
+    // =========================
+    if (item.classList.contains('community-item')) {
+        const communityName = item.dataset.community || '';
+        const cityName = item.dataset.city || '';
+
+        if (!communityName) {
+            return;
+        }
+
+        selectedCommunity = communityName;
+        selectedCity = cityName;
+        cityFromUrl = cityName;
+        seoCitySlug = cityName ? slugify(cityName) : 'ontario';
+        activeCityPolygon = null;
+        activeCityGeometryType = null;
+        userHasMovedMap = false;
+
+        if (map?.getLayer('city-fill')) {
+            map.setFilter('city-fill', ['==', ['get', 'NAME_3'], '']);
+            map.setFilter('city-outline', ['==', ['get', 'NAME_3'], '']);
+        }
+
+        if (activeMarker) {
+            activeMarker.remove();
+            activeMarker = null;
+        }
+
+        const label = cityName ? `${communityName}, ${cityName}` : communityName;
+        document.getElementById('mapSmartInput').value = label;
+        updateSeoUrl();
+
+        if (!isNaN(lat) && !isNaN(lng)) {
+            runProgrammaticMapMove(() => {
+                map.easeTo({
+                    center: [lng, lat],
+                    zoom: HS_MAP_DEFAULT_ZOOM,
+                });
+            });
+        }
+
+        loadProperties({ fromFilters: true });
+        return;
+    }
 
     // =========================
     // CITY → ONLY MOVE MAP
@@ -9975,6 +10262,7 @@ document.addEventListener('click', function (e) {
 
     const cityName = item.dataset.city || item.innerText.replace(/[^\w\s-]/g, '').trim();
 
+    selectedCommunity = '';
     selectedCity = cityName;
     seoCitySlug = slugify(cityName);
     cityFromUrl = cityName;
@@ -9987,12 +10275,18 @@ document.addEventListener('click', function (e) {
 
     document.getElementById('mapSmartInput').value = cityName;
 
-    showCityBoundary(cityName, { lat, lng });
+    if (!isNaN(lat) && !isNaN(lng)) {
+        showCityBoundary(cityName, { lat, lng });
+    } else {
+        showCityBoundary(cityName);
+    }
 
     return;
 
  
 }
+    if (isNaN(lat) || isNaN(lng)) return;
+
     // =========================
     // ADDRESS → MOVE + POPUP (SAME AS LISTING)
     // =========================
@@ -10904,6 +11198,17 @@ function renderInstantSearchShell(keyword) {
     }
 }
 
+function isLocationOnlySearchKeyword(keyword) {
+    const trimmed = String(keyword || '').trim();
+    if (!trimmed || trimmed.length < 2) {
+        return false;
+    }
+    if (/\d/.test(trimmed)) {
+        return false;
+    }
+    return !isMlsSearchKeyword(trimmed) && !looksLikeMlsPrefix(trimmed);
+}
+
 function handleSmartSearchInput(keyword) {
     currentKeyword = keyword;
     skip = 0;
@@ -10924,21 +11229,7 @@ function handleSmartSearchInput(keyword) {
     }
 
     renderInstantSearchShell(trimmed);
-
-    const searchUrl = buildSmartSearchUrl(trimmed);
-    const hasDigit = /\d/.test(trimmed);
-    if (smartSearchCache.has(searchUrl) || isMlsSearchKeyword(trimmed) || looksLikeMlsPrefix(trimmed)) {
-        loadResults(trimmed, true);
-        return;
-    }
-
-    if (hasDigit && trimmed.length >= 2) {
-        loadResults(trimmed, true);
-        return;
-    }
-
-    const delay = trimmed.length >= 3 ? 50 : 80;
-    typingTimer = setTimeout(() => loadResults(trimmed, true), delay);
+    loadResults(trimmed, true);
 }
 
 function buildCitySuggestionsHtml(keyword) {
@@ -10968,6 +11259,108 @@ function buildCitySuggestionsHtml(keyword) {
     });
 
     return cityHTML;
+}
+
+const communitySuggestCache = new Map();
+const COMMUNITY_SUGGEST_CACHE_MAX = 80;
+let mapCommunityAbort = null;
+
+function filterMapCommunityRowsByKeyword(rows, keyword) {
+    const needle = String(keyword || '').trim().toLowerCase();
+    if (!needle) {
+        return [];
+    }
+
+    return (rows || []).filter((row) => {
+        const name = String(row?.name || '').toLowerCase();
+        const city = String(row?.city || '').toLowerCase();
+        return name.includes(needle) || city.includes(needle);
+    });
+}
+
+function getMapPrefixCommunityCache(keyword) {
+    const trimmed = String(keyword || '').trim().toLowerCase();
+    if (trimmed.length < 2) {
+        return null;
+    }
+
+    let best = null;
+
+    for (const [url, rows] of communitySuggestCache.entries()) {
+        const match = url.match(/keyword=([^&]+)/);
+        if (!match) {
+            continue;
+        }
+
+        const cachedKeyword = decodeURIComponent(match[1]).toLowerCase();
+        if (!trimmed.startsWith(cachedKeyword) || cachedKeyword.length < 2) {
+            continue;
+        }
+
+        if (!best || cachedKeyword.length > best.keyword.length) {
+            best = { keyword: cachedKeyword, rows };
+        }
+    }
+
+    if (!best) {
+        return null;
+    }
+
+    return filterMapCommunityRowsByKeyword(best.rows, trimmed);
+}
+
+function fetchCommunitySuggestions(keyword, signal) {
+    const trimmed = String(keyword || '').trim();
+    if (trimmed.length < 2) {
+        return Promise.resolve([]);
+    }
+
+    const url = `/api/v1/community-suggestions?keyword=${encodeURIComponent(trimmed)}&limit=8`;
+    if (communitySuggestCache.has(url)) {
+        return Promise.resolve(communitySuggestCache.get(url));
+    }
+
+    return fetch(url, {
+        signal,
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    })
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data) => {
+            const rows = Array.isArray(data) ? data : [];
+            if (communitySuggestCache.size >= COMMUNITY_SUGGEST_CACHE_MAX) {
+                communitySuggestCache.delete(communitySuggestCache.keys().next().value);
+            }
+            communitySuggestCache.set(url, rows);
+            return rows;
+        })
+        .catch(() => []);
+}
+
+function buildCommunitySuggestionsHtml(communities) {
+    return (communities || []).map((community) => {
+        const name = community.name || '';
+        const city = community.city || '';
+        const lat = community.lat;
+        const lng = community.lng;
+        const citySuffix = city ? ` <span style="color:#6b7280;font-size:12px;">${city}</span>` : '';
+
+        return `
+            <div class="location-item community-item"
+                role="button"
+                tabindex="0"
+                data-community="${name.replace(/"/g, '&quot;')}"
+                data-city="${city.replace(/"/g, '&quot;')}"
+                data-lat="${lat ?? ''}"
+                data-lng="${lng ?? ''}">
+                🏘️ ${name}${citySuffix}
+            </div>
+        `;
+    }).join('');
+}
+
+function buildLocationSuggestionsHtml(keyword, communities) {
+    return buildCitySuggestionsHtml(keyword) + buildCommunitySuggestionsHtml(communities);
 }
 
 function buildSmartSearchUrl(keyword) {
@@ -11071,6 +11464,33 @@ function shouldKeepSearchRequest(newKeyword) {
     return next.startsWith(prev) && next.length > prev.length;
 }
 
+function getMapPrefixSearchCache(keyword) {
+    const trimmed = String(keyword || '').trim().toLowerCase();
+    if (trimmed.length < 2) {
+        return null;
+    }
+
+    let best = null;
+
+    for (const [url, rows] of smartSearchCache.entries()) {
+        const match = url.match(/keyword=([^&]+)/);
+        if (!match) {
+            continue;
+        }
+
+        const cachedKeyword = decodeURIComponent(match[1]).toLowerCase();
+        if (!trimmed.startsWith(cachedKeyword) || cachedKeyword.length < 2) {
+            continue;
+        }
+
+        if (!best || cachedKeyword.length > best.keyword.length) {
+            best = { keyword: cachedKeyword, rows };
+        }
+    }
+
+    return best?.rows || null;
+}
+
 function loadResults(keyword, reset = false){
     const requestId = ++searchRequestId;
 
@@ -11086,9 +11506,17 @@ function loadResults(keyword, reset = false){
     const cityHTML = buildCitySuggestionsHtml(keyword);
 
     if (reset) {
-        document.getElementById("mapLocationResults").innerHTML = cityHTML;
-        if (!document.getElementById("mapListingResults").innerHTML) {
-            document.getElementById("mapListingResults").innerHTML =
+        const prefixListings = getMapPrefixSearchCache(keyword);
+        const prefixCommunities = getMapPrefixCommunityCache(keyword);
+        const locationHTML = buildLocationSuggestionsHtml(keyword, prefixCommunities || []);
+        const locationEl = document.getElementById('mapLocationResults');
+        if (locationEl) {
+            locationEl.innerHTML = locationHTML || cityHTML;
+        }
+        if (prefixListings && prefixListings.length) {
+            renderSmartSearchResults(keyword, true, locationHTML || cityHTML, prefixListings, isMlsSearchKeyword(keyword));
+        } else if (!document.getElementById('mapListingResults').innerHTML) {
+            document.getElementById('mapListingResults').innerHTML =
                 '<div class="hs-search-pending" style="padding:10px 12px;color:#6b7280;">Searching...</div>';
         }
     }
@@ -11097,6 +11525,7 @@ function loadResults(keyword, reset = false){
         searchAbortController.abort();
     }
     searchAbortController = new AbortController();
+    const communityPromise = fetchCommunitySuggestions(keyword, searchAbortController.signal);
     loadResults._activeKeyword = keyword;
     const isMlsKey = isMlsSearchKeyword(keyword);
     const searchTimeoutId = setTimeout(() => searchAbortController.abort(), isMlsKey ? 45000 : 12000);
@@ -11108,7 +11537,13 @@ function loadResults(keyword, reset = false){
         if (requestId !== searchRequestId) {
             return;
         }
-        renderSmartSearchResults(keyword, reset, cityHTML, cached, isMlsKey);
+        communityPromise.then((communities) => {
+            if (requestId !== searchRequestId) {
+                return;
+            }
+            const locationHTML = buildLocationSuggestionsHtml(keyword, communities);
+            renderSmartSearchResults(keyword, reset, locationHTML, cached, isMlsKey);
+        });
         clearTimeout(searchTimeoutId);
         if (loader) {
             loader.style.display = 'none';
@@ -11116,17 +11551,22 @@ function loadResults(keyword, reset = false){
         return;
     }
 
-    smartSearchFetch(searchUrl, searchAbortController.signal)
-    .then(data => {
+    Promise.all([
+        smartSearchFetch(searchUrl, searchAbortController.signal),
+        communityPromise,
+    ])
+    .then(([data, communities]) => {
         if (requestId !== searchRequestId) {
             return;
         }
         try {
-            renderSmartSearchResults(keyword, reset, cityHTML, data, isMlsKey);
+            const locationHTML = buildLocationSuggestionsHtml(keyword, communities);
+            renderSmartSearchResults(keyword, reset, locationHTML, data, isMlsKey);
         } catch (renderErr) {
             console.error('Search render failed:', renderErr);
             if (reset) {
-                document.getElementById("mapLocationResults").innerHTML = cityHTML;
+                const locationHTML = buildLocationSuggestionsHtml(keyword, communities);
+                document.getElementById("mapLocationResults").innerHTML = locationHTML;
                 document.getElementById("mapListingResults").innerHTML =
                     '<div style="padding:12px;color:#666;">Could not display search results. Please refresh and try again.</div>';
             }

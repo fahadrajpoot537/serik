@@ -107,6 +107,19 @@ Route::group([
         Route::get('getPropertyImages/{listingKey}', 'PropertyController@getPropertyImages');
         Route::get('getPropertyBasicDetails/{listingKey}', 'PropertyController@getPropertyBasicDetails');
         Route::get('smart-search', 'PropertyController@smartSearch');
+        Route::get('community-suggestions', 'PropertyController@communitySuggestions');
+        Route::get('visitor-location', function (\Illuminate\Http\Request $request) {
+            $ip = (string) $request->ip();
+            $default = \App\Support\VisitorIpLocation::defaultPayload();
+
+            if ($ip === '' || in_array($ip, ['127.0.0.1', '::1'], true)) {
+                return response()->json($default);
+            }
+
+            $payload = \App\Support\VisitorIpLocation::resolveFromIp($ip);
+
+            return response()->json($payload ?: $default);
+        });
     });
 
     Route::get('propertiesName', 'PropertyController@fetchProperties');

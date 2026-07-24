@@ -534,7 +534,7 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
         $limit = $limit > 1 ? $limit : 4;
 
         // @phpstan-ignore-next-line
-        $this->model = $this->originalModel->active();
+        $this->model = $this->originalModel->active()->residential();
 
         $params = [
             'condition' => $condition,

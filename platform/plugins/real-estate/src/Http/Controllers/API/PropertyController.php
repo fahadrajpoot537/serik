@@ -2859,6 +2859,7 @@ class PropertyController extends BaseController
             'st=' . trim((string) $request->input('status', '')),
             'tx=' . trim((string) $request->input('transaction', '')),
             'city=' . strtolower(trim((string) $request->input('city', ''))),
+            'comm=' . strtolower(trim((string) $request->input('community', ''))),
             'sub=' . trim((string) $request->input('subtypes', '')),
             'minp=' . (float) $request->input('min_price', 0),
             'maxp=' . (float) $request->input('max_price', 0),
@@ -3062,8 +3063,15 @@ class PropertyController extends BaseController
             return $payload;
         };
 
-        // Short alphabetic keywords are handled by client-side city suggestions.
+        // Short alphabetic keywords: try community inventory before giving up.
         if (mb_strlen($keyword) < 5 && ! $isListingKey && ! preg_match('/\d/', $keyword)) {
+            $communityRows = $this->smartSearchRowsFromCommunities($keyword, $top, $skip);
+            if ($communityRows !== []) {
+                return response()->json(
+                    $rememberSearch(TrebPropertyHelper::groupListingsByBuilding(array_slice($communityRows, 0, $top)))
+                );
+            }
+
             return response()->json([]);
         }
 
@@ -3072,6 +3080,10 @@ class PropertyController extends BaseController
             ->where('moderation_status', 'approved');
 
         $parsed = $this->parseAddressSearchKeyword($keyword);
+
+        $communityRows = (! $isListingKey && ! $parsed)
+            ? $this->smartSearchRowsFromCommunities($keyword, $top, $skip)
+            : [];
 
         // --- Meilisearch fast path (typo-tolerant, ~10ms). When Meili is DOWN
         // (searchIds => null), do NOT fall through to leading-% LIKE on the full
@@ -3085,9 +3097,8 @@ class PropertyController extends BaseController
                 $meiliOpts = [
                     'limit' => max($top * 3, 30),
                     'offset' => $skip,
-                    // Exact address search may need commercial hits (390 Bank St).
-                    // Map/browse still uses residential_only elsewhere.
-                    'residential_only' => ! $parsed,
+                    // Residential inventory only — commercial never appears in search.
+                    'residential_only' => true,
                     'transaction' => $request->filled('transaction') ? $request->transaction : null,
                     'status' => $request->filled('status') ? $request->status : null,
                 ];
@@ -3108,12 +3119,9 @@ class PropertyController extends BaseController
         } else {
                     // Meili answered — never fall through to AMP for free-text.
                     if ($ids === []) {
-                        if (! $parsed) {
-                            return response()->json([]);
-                        }
                         // Parsed street address: allow FULLTEXT / AMP address ingest below.
                     } else {
-                        $ordered = $this->hydrateSmartSearchRows($ids, max($top * 3, 30), (bool) $parsed);
+                        $ordered = $this->hydrateSmartSearchRows($ids, max($top * 3, 30), false);
                         if ($parsed) {
                             $ordered = array_values(array_filter(
                                 $ordered,
@@ -3124,9 +3132,10 @@ class PropertyController extends BaseController
                             ));
                         }
 
-                        if ($ordered !== [] || ! $parsed) {
+                        $merged = $this->mergeSmartSearchRows($communityRows, $ordered, $top);
+                        if ($merged !== [] || ! $parsed) {
                             return response()->json(
-                                $rememberSearch(TrebPropertyHelper::groupListingsByBuilding(array_slice($ordered, 0, $top)))
+                                $rememberSearch(TrebPropertyHelper::groupListingsByBuilding($merged))
                             );
                         }
                     }
@@ -3137,15 +3146,10 @@ class PropertyController extends BaseController
             }
         }
 
-        // Meili down + general keyword: refuse full-table LIKE (protects MySQL RAM).
-        // Listing keys and parsed street searches still use FULLTEXT / cheap MySQL paths.
-        if ($meiliUnavailable && ! $isListingKey && ! $parsed) {
-            return response()->json([]);
-        }
-
-        // Meili up but zero hits for a free-text (non-address) query — skip LIKE thrash.
-        if ($meiliTried && ! $meiliUnavailable && ! $isListingKey && ! $parsed) {
-            return response()->json([]);
+        if ($communityRows !== [] && ! $isListingKey && ! $parsed) {
+            return response()->json(
+                $rememberSearch(TrebPropertyHelper::groupListingsByBuilding(array_slice($communityRows, 0, $top)))
+            );
         }
 
         // Shared post-filters applied to whichever MySQL strategy wins.
@@ -3170,9 +3174,7 @@ class PropertyController extends BaseController
         };
 
         if ($isListingKey) {
-            // Exact MLS lookup: never apply residential / transaction / status
-            // filters — users typing a ListingKey expect that one row (incl. sold,
-            // leased, and commercial) or a real-time AMP ingest.
+            $this->applyResidentialSubTypeScope($localQuery);
             $localQuery->where(function ($q) use ($keyword) {
                 $q->where('external_id', strtoupper($keyword))
                     ->orWhere('external_id', strtolower($keyword));
@@ -3237,12 +3239,19 @@ class PropertyController extends BaseController
 
         $mappedLocal = $this->mapLocalSearchCollection($localResults);
 
-        // Exact MLS hit from local DB — return immediately (incl. sold/commercial).
+        // Exact MLS hit from local DB — residential only.
         if ($isListingKey && $mappedLocal !== []) {
             return response()->json($rememberSearch(TrebPropertyHelper::groupListingsByBuilding(array_slice($mappedLocal, 0, $top))));
         }
 
         if (count($mappedLocal) > 0 && ! $isListingKey) {
+            $localRows = TrebPropertyHelper::groupListingsByBuilding(array_slice($mappedLocal, 0, $top));
+            $merged = $this->mergeSmartSearchRows($communityRows, $localRows, $top);
+
+            return response()->json($rememberSearch($merged));
+        }
+
+        if (count($mappedLocal) > 0 && $isListingKey) {
             return response()->json($rememberSearch(TrebPropertyHelper::groupListingsByBuilding(array_slice($mappedLocal, 0, $top))));
         }
 
@@ -3253,7 +3262,7 @@ class PropertyController extends BaseController
             $ingestedIds = app(\Botble\RealEstate\Services\LiveTrebPropertyFallbackService::class)
                 ->ingestAddressSearchHits($parsed, $top);
             if ($ingestedIds !== []) {
-                $ordered = $this->hydrateSmartSearchRows($ingestedIds, $top, true);
+                $ordered = $this->hydrateSmartSearchRows($ingestedIds, $top, false);
 
                 return response()->json($rememberSearch(TrebPropertyHelper::groupListingsByBuilding($ordered)));
             }
@@ -3269,8 +3278,7 @@ class PropertyController extends BaseController
                 ->ingestByListingKey($keyword, true, false);
 
             if ($ingested !== null) {
-                // Allow commercial on exact MLS hit — subtype filter must not hide it.
-                $ordered = $this->hydrateSmartSearchRows([(int) $ingested->id], $top, true);
+                $ordered = $this->hydrateSmartSearchRows([(int) $ingested->id], $top, false);
                 if ($ordered !== []) {
                     return response()->json($rememberSearch(TrebPropertyHelper::groupListingsByBuilding($ordered)));
                 }
@@ -3282,7 +3290,7 @@ class PropertyController extends BaseController
             $ingested = app(\Botble\RealEstate\Services\LiveTrebPropertyFallbackService::class)
                 ->searchAndIngestByKeyword($keyword);
             if ($ingested !== null) {
-                $ordered = $this->hydrateSmartSearchRows([(int) $ingested->id], $top, true);
+                $ordered = $this->hydrateSmartSearchRows([(int) $ingested->id], $top, false);
                 if ($ordered !== []) {
                     return response()->json($rememberSearch(TrebPropertyHelper::groupListingsByBuilding($ordered)));
                 }
@@ -3293,6 +3301,23 @@ class PropertyController extends BaseController
         // Listing-key miss already handled above.
             return response()->json($rememberSearch(TrebPropertyHelper::groupListingsByBuilding(array_slice($mappedLocal, 0, $top))));
         }
+
+    public function communitySuggestions(Request $request)
+    {
+        $keyword = trim((string) ($request->keyword ?? $request->input('q', '')));
+        $limit = min(12, max(1, (int) $request->input('limit', 8)));
+
+        if ($keyword === '' || mb_strlen($keyword) < 2) {
+            return response()->json([]);
+        }
+
+        $suggestions = app(\Botble\RealEstate\Services\PropertySearchService::class)
+            ->searchCommunitySuggestions($keyword, $limit);
+
+        return response()
+            ->json($suggestions)
+            ->header('Cache-Control', 'private, max-age=120');
+    }
 
     /**
      * Attach real slugs.key then map to smart-search JSON rows.
@@ -3388,6 +3413,76 @@ class PropertyController extends BaseController
         }
 
         return $ids;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function smartSearchRowsFromCommunities(string $keyword, int $top, int $skip = 0): array
+    {
+        if (mb_strlen(trim($keyword)) < 3) {
+            return [];
+        }
+
+        $searchService = app(\Botble\RealEstate\Services\PropertySearchService::class);
+        $matches = $searchService->searchCommunitySuggestions($keyword, 5);
+        if ($matches === []) {
+            return [];
+        }
+
+        $ids = [];
+        foreach ($matches as $match) {
+            $city = trim((string) ($match['city'] ?? ''));
+            foreach ($searchService->searchCommunityIds(
+                (string) ($match['name'] ?? ''),
+                $city !== '' ? $city : null,
+                max($top * 4, 40)
+            ) as $id) {
+                $ids[] = (int) $id;
+            }
+        }
+
+        $ids = array_values(array_unique($ids));
+        if ($ids === []) {
+            return [];
+        }
+
+        if ($skip > 0) {
+            $ids = array_slice($ids, $skip);
+        }
+
+        return $this->hydrateSmartSearchRows(array_slice($ids, 0, max($top * 2, 20)), $top * 2, false);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $primary
+     * @param  array<int, array<string, mixed>>  $secondary
+     * @return array<int, array<string, mixed>>
+     */
+    private function mergeSmartSearchRows(array $primary, array $secondary, int $limit): array
+    {
+        $seen = [];
+        $merged = [];
+
+        foreach (array_merge($primary, $secondary) as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $key = strtoupper((string) ($row['ListingKey'] ?? ''));
+            if ($key === '' || isset($seen[$key])) {
+                continue;
+            }
+
+            $seen[$key] = true;
+            $merged[] = $row;
+
+            if (count($merged) >= $limit) {
+                break;
+            }
+        }
+
+        return $merged;
     }
 
     /**
@@ -3922,10 +4017,19 @@ class PropertyController extends BaseController
         $property = Property::query()
             ->where('id', $slug->reference_id)
             ->where(RealEstateHelper::getPropertyDisplayQueryConditions())
+            ->residential()
             ->with(RealEstateHelper::getPropertyRelationsQuery())
             ->first();
 
         if (!$property) {
+            return $this
+                ->httpResponse()
+                ->setError()
+                ->setCode(404)
+                ->setMessage('Property not found');
+        }
+
+        if (TrebPropertyHelper::isCommercialSubType($property->PropertySubType ?? null)) {
             return $this
                 ->httpResponse()
                 ->setError()
@@ -3950,6 +4054,7 @@ class PropertyController extends BaseController
         $property = Property::query()
             ->where('id', $id)
             ->where(RealEstateHelper::getPropertyDisplayQueryConditions())
+            ->residential()
             ->with(RealEstateHelper::getPropertyRelationsQuery())
             ->first();
 
@@ -5567,6 +5672,17 @@ class PropertyController extends BaseController
                 $this->applyMapCityFilter($query, $city, $cityMap);
             }
 
+            $community = TrebPropertyHelper::formatRegionLabel(trim((string) $request->input('community', '')));
+            if ($community !== '') {
+                $communityIds = app(\Botble\RealEstate\Services\PropertySearchService::class)
+                    ->searchCommunityIds($community, $city !== '' ? $city : null);
+                if ($communityIds === []) {
+                    $query->whereRaw('0 = 1');
+                } else {
+                    $query->whereIn('id', $communityIds);
+                }
+            }
+
 
             // --- Subtypes ---
             $subtypes = $request->input('subtypes');
@@ -5896,6 +6012,8 @@ class PropertyController extends BaseController
             $city = ucwords(strtolower($city));
         }
 
+        $community = TrebPropertyHelper::formatRegionLabel(trim((string) $request->input('community', '')));
+
         $transaction = $request->input('transaction');
         $zoom = (int) $request->input('zoom', 10);
         $limit = match (true) {
@@ -5914,6 +6032,7 @@ class PropertyController extends BaseController
         $opts = [
             'residential_only' => true,
             'city' => $city ?: null,
+            'community' => $community !== '' ? $community : null,
             'transaction' => (! empty($transaction) && $transaction !== 'null') ? $transaction : null,
             'min_price' => (float) $request->input('min_price', 0),
             'max_price' => (float) $request->input('max_price', 0),
@@ -6240,6 +6359,7 @@ class PropertyController extends BaseController
 
         $query = Property::query()
             ->select(['id', 'external_id', 'image_val'])
+            ->residential()
             ->whereNotNull('external_id')
             ->where('external_id', '!=', '');
 
@@ -6281,9 +6401,25 @@ class PropertyController extends BaseController
             ], 401);
         }
 
+        if ($property && TrebPropertyHelper::isCommercialSubType($property->PropertySubType ?? null)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Property not found',
+                'data' => null,
+            ], 404);
+        }
+
         $local = $property
             ? TrebPropertyHelper::dbRowToLocalArray($property)
             : TrebPropertyHelper::localPropertyArray($listingKey);
+
+        if (TrebPropertyHelper::isCommercialSubType($local['PropertySubType'] ?? $local['property_subtype'] ?? null)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Property not found',
+                'data' => null,
+            ], 404);
+        }
 
         $bundle = TrebPropertyHelper::fetchMapPopupBundle($listingKey, $local);
 
@@ -6347,6 +6483,14 @@ class PropertyController extends BaseController
                 'message' => 'Unauthenticated access to sold property details',
                 'data' => null
             ], 401);
+        }
+
+        if ($property && TrebPropertyHelper::isCommercialSubType($property->PropertySubType ?? null)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Property not found',
+                'data' => null,
+            ], 404);
         }
 
         $cacheKey = 'treb_property_basic_' . $listingKey;

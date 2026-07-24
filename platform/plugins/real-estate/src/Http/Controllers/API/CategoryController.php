@@ -184,6 +184,7 @@ class CategoryController extends BaseController
         $perPage = min($perPage, 100);
 
         $properties = $category->properties()
+            ->residential()
             ->where('status', BaseStatusEnum::PUBLISHED)
             ->with(['features', 'facilities', 'categories', 'author', 'project'])
             ->paginate($perPage);

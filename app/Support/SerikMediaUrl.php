@@ -278,6 +278,42 @@ final class SerikMediaUrl
         return self::resolvePublic(self::newsletterPopupCandidates($themeOptionValue));
     }
 
+    /**
+     * CMS / theme image URL — prefers WebP sibling + Botble thumbnail size when available.
+     */
+    public static function cmsImageUrl(?string $path, ?string $size = 'large', ?string $fallback = null): string
+    {
+        $relative = self::normalizeStorageRelativePath($path);
+
+        if ($relative === null) {
+            return $fallback ?? self::placeholder();
+        }
+
+        $candidates = [];
+        if (preg_match('/\.(jpe?g|png)$/i', $relative)) {
+            $candidates[] = preg_replace('/\.(jpe?g|png)$/i', '.webp', $relative);
+        }
+        $candidates[] = $relative;
+
+        foreach ($candidates as $candidate) {
+            if (self::resolveExistingRelativePath($candidate) === null) {
+                continue;
+            }
+
+            if ($size !== null && $size !== '' && class_exists(\Botble\Media\Facades\RvMedia::class)) {
+                try {
+                    return \Botble\Media\Facades\RvMedia::getImageUrl($candidate, $size);
+                } catch (\Throwable) {
+                    return self::toPublic($candidate, $fallback);
+                }
+            }
+
+            return self::toPublic($candidate, $fallback);
+        }
+
+        return $fallback ?? self::placeholder();
+    }
+
     private static function normalizeStorageRelativePath(?string $path): ?string
     {
         $path = trim((string) $path);

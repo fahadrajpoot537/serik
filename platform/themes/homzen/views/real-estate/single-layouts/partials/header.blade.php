@@ -106,12 +106,6 @@
                     </span>
 
                 @else
-                    @php
-                        $cash_back = is_numeric($model->price) && (float) $model->price > 0
-                            ? ((float) $model->price / 100) * 1.5
-                            : 0;
-                    @endphp
-
                     Listed For :
                     <span>
                         {{ $model->price_html ?? $model->formatted_price }}
@@ -120,7 +114,7 @@
                     <br>
 
                     <span style="color:#e63946;font-size:14px;">
-                        Your Cash Back is ${{ number_format($cash_back) }} (*Terms and Conditions Apply)
+                        Your cash back upto 1.5% on purchase price (*Terms and Conditions Apply)
                     </span>
 
                     <br>

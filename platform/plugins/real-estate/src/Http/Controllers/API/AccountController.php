@@ -158,6 +158,7 @@ class AccountController extends BaseController
         $perPage = min($perPage, 100);
 
         $properties = $account->properties()
+            ->residential()
             ->where('status', BaseStatusEnum::PUBLISHED)
             ->where('moderation_status', ModerationStatusEnum::APPROVED)
             ->with(['features', 'facilities', 'categories', 'project'])

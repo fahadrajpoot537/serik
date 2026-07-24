@@ -178,6 +178,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
         $middleware->appendToGroup('web', \App\Http\Middleware\GeoBlockMiddleware::class);
         $middleware->appendToGroup('web', \App\Http\Middleware\RequestProfilerMiddleware::class);
         $middleware->prependToGroup('web', \App\Http\Middleware\UseRequestRootUrlInLocal::class);
+        $middleware->prependToGroup('web', \App\Http\Middleware\DetectVisitorCityMiddleware::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

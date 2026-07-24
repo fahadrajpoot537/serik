@@ -70,11 +70,11 @@
 
         if (delayMs == null) {
             if (options.fromMapMove) {
-                delayMs = 200;
+                delayMs = 120;
             } else if (options.fromFilters) {
-                delayMs = 350;
+                delayMs = options.force ? 0 : 80;
             } else {
-                delayMs = 200;
+                delayMs = 120;
             }
         }
 

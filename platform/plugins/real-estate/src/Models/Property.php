@@ -24,6 +24,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Laravel\Scout\Searchable;
 
@@ -606,7 +608,7 @@ class Property extends BaseModel
             'street_name' => $parts['street_name'],
             'unit' => $parts['unit'],
             'city' => $parts['city'],
-            'community' => $parts['community'],
+            'community' => $this->resolveSearchCommunity($parts),
             'postal_code' => $parts['postal_code'] ?: (string) $this->zip_code,
             'zip_code' => (string) $this->zip_code,
             'broker' => (string) $this->broker,
@@ -703,6 +705,41 @@ class Property extends BaseModel
 
         // Guard against corrupt future dates (e.g. bad AMP parse -> year 9899).
         return ($year >= 1990 && $year <= ((int) date('Y') + 1)) ? $year : null;
+    }
+
+    /**
+     * @param  array<string, string>  $parts
+     */
+    private function resolveSearchCommunity(array $parts): string
+    {
+        $fromAddress = \Theme\homzen\Supports\TrebPropertyHelper::formatRegionLabel((string) ($parts['community'] ?? ''));
+        if ($fromAddress !== '') {
+            return $fromAddress;
+        }
+
+        $listingKey = strtoupper(trim((string) $this->external_id));
+        if ($listingKey === '') {
+            return '';
+        }
+
+        $snapshot = Cache::get('treb_property_record_raw_v1_' . $listingKey);
+        if (! is_array($snapshot) && $this->id) {
+            $raw = DB::table('meta_boxes')
+                ->where('reference_type', self::class)
+                ->where('reference_id', $this->id)
+                ->where('meta_key', 'amp_snapshot')
+                ->value('meta_value');
+
+            if (is_string($raw) && $raw !== '') {
+                $snapshot = json_decode($raw, true);
+            }
+        }
+
+        if (is_array($snapshot) && ! empty($snapshot['CityRegion'])) {
+            return \Theme\homzen\Supports\TrebPropertyHelper::formatRegionLabel((string) $snapshot['CityRegion']);
+        }
+
+        return '';
     }
 
     /**

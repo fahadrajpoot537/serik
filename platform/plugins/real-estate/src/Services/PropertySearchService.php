@@ -3,7 +3,9 @@
 namespace Botble\RealEstate\Services;
 
 use Botble\RealEstate\Models\Property;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Meilisearch\Client;
 use Theme\homzen\Supports\TrebPropertyHelper;
 use Throwable;
@@ -342,6 +344,236 @@ class PropertySearchService
         return true;
     }
 
+    /**
+     * Distinct community/neighbourhood suggestions for search autocomplete.
+     *
+     * @return array<int, array{name: string, city: string, lat: float|null, lng: float|null, count: int}>
+     */
+    public function searchCommunitySuggestions(string $keyword, int $limit = 8): array
+    {
+        $keyword = trim($keyword);
+        if (mb_strlen($keyword) < 2 || $limit < 1) {
+            return [];
+        }
+
+        $limit = min($limit, 12);
+        $needle = mb_strtolower($keyword);
+        $communities = [];
+
+        foreach ($this->getCommunityIndex() as $row) {
+            $nameLower = mb_strtolower((string) ($row['name'] ?? ''));
+            $rawLower = mb_strtolower((string) ($row['raw_region'] ?? ''));
+
+            if (! str_contains($nameLower, $needle) && ! str_contains($rawLower, $needle)) {
+                continue;
+            }
+
+            $key = $nameLower . '|' . mb_strtolower((string) ($row['city'] ?? ''));
+            $communities[$key] = [
+                'name' => $row['name'],
+                'city' => $row['city'],
+                'lat' => $row['lat'],
+                'lng' => $row['lng'],
+                'count' => (int) ($row['count'] ?? 1),
+            ];
+        }
+
+        return $this->sortCommunitySuggestions($communities, $keyword, $limit);
+    }
+
+    /**
+     * Property IDs for a community (optionally scoped to a city).
+     *
+     * @return int[]
+     */
+    public function searchCommunityIds(string $community, ?string $city = null, int $limit = 5000): array
+    {
+        $community = TrebPropertyHelper::formatRegionLabel(trim($community));
+        if ($community === '') {
+            return [];
+        }
+
+        $opts = [
+            'limit' => max(1, min($limit, 8000)),
+            'residential_only' => true,
+            'community' => $community,
+        ];
+
+        if ($city !== null && trim($city) !== '' && strcasecmp(trim($city), 'ontario') !== 0) {
+            $opts['city'] = ucwords(strtolower(trim($city)));
+        }
+
+        $cacheKey = 'serik_community_ids_v2:' . md5(mb_strtolower($community) . '|' . mb_strtolower(trim((string) $city)) . '|' . $limit);
+
+        return Cache::remember($cacheKey, 1800, function () use ($community, $city, $limit, $opts) {
+            if ($this->isAvailable()) {
+                $ids = $this->searchIds('', $opts);
+                if (is_array($ids) && $ids !== []) {
+                    return $ids;
+                }
+            }
+
+            return $this->searchCommunityIdsFromMysql($community, $city, $limit);
+        });
+    }
+
+    /**
+     * Pre-built distinct community list for instant autocomplete.
+     *
+     * @return array<int, array{name: string, city: string, lat: float|null, lng: float|null, count: int, raw_region: string}>
+     */
+    private function getCommunityIndex(): array
+    {
+        return Cache::remember('serik_community_index_v4', 21600, function () {
+            $rows = $this->communitySnapshotQuery()
+                ->select([
+                    DB::raw('JSON_UNQUOTE(JSON_EXTRACT(mb.meta_value, "$.CityRegion")) as raw_region'),
+                    DB::raw('JSON_UNQUOTE(JSON_EXTRACT(mb.meta_value, "$.City")) as raw_city'),
+                    DB::raw('AVG(p.latitude) as avg_lat'),
+                    DB::raw('AVG(p.longitude) as avg_lng'),
+                    DB::raw('COUNT(*) as cnt'),
+                ])
+                ->groupBy('raw_region', 'raw_city')
+                ->orderByDesc('cnt')
+                ->get();
+
+            $index = [];
+
+            foreach ($rows as $row) {
+                $rawRegion = (string) ($row->raw_region ?? '');
+                $name = TrebPropertyHelper::formatRegionLabel($rawRegion);
+                if ($name === '' || preg_match('/^[A-Z]\d+$/i', $name)) {
+                    continue;
+                }
+
+                $city = TrebPropertyHelper::formatCityLabel((string) ($row->raw_city ?? ''));
+                $key = mb_strtolower($name . '|' . $city);
+
+                if (! isset($index[$key])) {
+                    $index[$key] = [
+                        'name' => $name,
+                        'city' => $city,
+                        'lat' => is_numeric($row->avg_lat ?? null) ? (float) $row->avg_lat : null,
+                        'lng' => is_numeric($row->avg_lng ?? null) ? (float) $row->avg_lng : null,
+                        'count' => (int) ($row->cnt ?? 1),
+                        'raw_region' => $rawRegion,
+                    ];
+
+                    continue;
+                }
+
+                $index[$key]['count'] += (int) ($row->cnt ?? 1);
+                if ($index[$key]['lat'] === null && is_numeric($row->avg_lat ?? null) && is_numeric($row->avg_lng ?? null)) {
+                    $index[$key]['lat'] = (float) $row->avg_lat;
+                    $index[$key]['lng'] = (float) $row->avg_lng;
+                }
+            }
+
+            return array_values($index);
+        });
+    }
+
+    /**
+     * @param  array<string, array{name: string, city: string, lat: float|null, lng: float|null, count: int}>  $communities
+     * @return array<int, array{name: string, city: string, lat: float|null, lng: float|null, count: int}>
+     */
+    private function sortCommunitySuggestions(array $communities, string $keyword, int $limit): array
+    {
+        if ($communities === []) {
+            return [];
+        }
+
+        $needle = mb_strtolower($keyword);
+        $values = array_values($communities);
+
+        usort($values, static function (array $a, array $b) use ($needle) {
+            $aName = mb_strtolower($a['name']);
+            $bName = mb_strtolower($b['name']);
+            $aStarts = str_starts_with($aName, $needle) ? 0 : 1;
+            $bStarts = str_starts_with($bName, $needle) ? 0 : 1;
+            if ($aStarts !== $bStarts) {
+                return $aStarts <=> $bStarts;
+            }
+            if ($a['count'] !== $b['count']) {
+                return $b['count'] <=> $a['count'];
+            }
+
+            return strcmp($a['name'], $b['name']);
+        });
+
+        return array_slice($values, 0, $limit);
+    }
+
+    /**
+     * @return int[]
+     */
+    private function searchCommunityIdsFromMysql(string $community, ?string $city, int $limit): array
+    {
+        $needle = mb_strtolower($community);
+        $cityFilter = $city !== null && trim($city) !== '' && strcasecmp(trim($city), 'ontario') !== 0
+            ? TrebPropertyHelper::formatCityLabel(trim($city))
+            : '';
+
+        $query = $this->communitySnapshotQuery()
+            ->where(function ($regionQuery) use ($community, $needle) {
+                $regionQuery->whereRaw('JSON_UNQUOTE(JSON_EXTRACT(mb.meta_value, "$.CityRegion")) = ?', [$community])
+                    ->orWhereRaw('LOWER(JSON_UNQUOTE(JSON_EXTRACT(mb.meta_value, "$.CityRegion"))) = ?', [$needle]);
+            })
+            ->select([
+                'p.id',
+                DB::raw('JSON_UNQUOTE(JSON_EXTRACT(mb.meta_value, "$.CityRegion")) as raw_region'),
+                DB::raw('JSON_UNQUOTE(JSON_EXTRACT(mb.meta_value, "$.City")) as raw_city'),
+            ])
+            ->limit(max(1, min($limit, 8000)) * 2);
+
+        if ($cityFilter !== '') {
+            $cityLike = '%' . addcslashes(mb_strtolower($cityFilter), '%_\\') . '%';
+            $query->whereRaw('LOWER(JSON_UNQUOTE(JSON_EXTRACT(mb.meta_value, "$.City"))) LIKE ?', [$cityLike]);
+        }
+
+        $ids = [];
+
+        foreach ($query->get() as $row) {
+            $label = TrebPropertyHelper::formatRegionLabel((string) ($row->raw_region ?? ''));
+            if (strcasecmp($label, $community) !== 0) {
+                continue;
+            }
+
+            if ($cityFilter !== '') {
+                $rowCity = TrebPropertyHelper::formatCityLabel((string) ($row->raw_city ?? ''));
+                if ($rowCity !== '' && strcasecmp($rowCity, $cityFilter) !== 0) {
+                    continue;
+                }
+            }
+
+            $ids[] = (int) $row->id;
+            if (count($ids) >= $limit) {
+                break;
+            }
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    private function communitySnapshotQuery(): Builder
+    {
+        $excluded = array_values(array_unique(array_merge(
+            TrebPropertyHelper::excludedCommercialSubTypes(),
+            array_map(static fn ($v) => $v . ' ', TrebPropertyHelper::excludedCommercialSubTypes())
+        )));
+
+        return DB::table('meta_boxes as mb')
+            ->join('re_properties as p', 'p.id', '=', 'mb.reference_id')
+            ->where('mb.reference_type', Property::class)
+            ->where('mb.meta_key', 'amp_snapshot')
+            ->where(function ($query) use ($excluded) {
+                $query->whereNull('p.PropertySubType')
+                    ->orWhereNotIn('p.PropertySubType', $excluded);
+            })
+            ->where('p.latitude', '!=', 0)
+            ->where('p.longitude', '!=', 0);
+    }
+
     private function buildFilters(array $opts): string
     {
         $filters = [];
@@ -371,6 +603,10 @@ class PropertySearchService
 
         if (! empty($opts['city'])) {
             $filters[] = 'city = "' . $this->escape($opts['city']) . '"';
+        }
+
+        if (! empty($opts['community'])) {
+            $filters[] = 'community = "' . $this->escape($opts['community']) . '"';
         }
 
         if (! empty($opts['street_number'])) {

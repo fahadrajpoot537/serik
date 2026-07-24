@@ -116,7 +116,7 @@
                     @endforeach
                         <div class="box-service style-1 hover-btn-view" id="secondMain" style="min-height: auto;">
                             <div class="banner-video">
-                                <img src="https://serik.ca/storage/artboard-3-edit.jpg"
+                                <img src="{{ \App\Support\SerikMediaUrl::cmsImageUrl('artboard-3-edit.jpg', 'large') }}"
                                 alt="Welcome To The Serik Realty"
                                 width="640"
                                 height="360"

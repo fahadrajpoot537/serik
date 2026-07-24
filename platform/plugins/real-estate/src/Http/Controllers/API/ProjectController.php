@@ -207,6 +207,7 @@ class ProjectController extends BaseController
         $properties = $project
             ->properties()
             ->where(RealEstateHelper::getPropertyDisplayQueryConditions())
+            ->residential()
             ->with(RealEstateHelper::getPropertyRelationsQuery())
             ->paginate($perPage);
 

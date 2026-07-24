@@ -42,6 +42,7 @@ class HandleFrontPages
                 // abort(404) + redirect_404_to_homepage sends users back home.
                 $property = Property::query()
                     ->where('id', $slug->reference_id)
+                    ->residential()
                     ->when(! $isPreviewing, function (PropertyBuilder $query): void {
                         $query->where('moderation_status', \Botble\RealEstate\Enums\ModerationStatusEnum::APPROVED)
                             ->where(function (PropertyBuilder $statusQuery): void {
@@ -82,11 +83,9 @@ class HandleFrontPages
                     abort(404);
                 }
 
-                // Hide non-MLS commercial pages. Exact address search may surface
-                // MLS commercial (e.g. 390 Bank St) — those must remain openable.
+                // Hide all commercial property pages from public browsing.
                 if (
                     \Theme\homzen\Supports\TrebPropertyHelper::isCommercialSubType($property->PropertySubType ?? null)
-                    && (empty($property->external_id))
                 ) {
                     abort(404);
                 }

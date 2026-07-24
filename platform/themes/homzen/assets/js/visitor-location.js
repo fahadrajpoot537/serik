@@ -16,7 +16,7 @@
         lat: 43.6532,
         lng: -79.3832,
         city: 'Toronto',
-        zoom: 11,
+        zoom: 15,
         source: 'default',
     };
 
@@ -340,13 +340,55 @@
         });
     }
 
-    function detectFromIp() {
-        if (isLocalHost()) {
-            return detectFromIpInfo();
-        }
+    function detectFromServer() {
+        return fetch('/api/v1/visitor-location', {
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        })
+            .then(function (response) {
+                return response.ok ? response.json() : null;
+            })
+            .then(function (data) {
+                if (!data) {
+                    return null;
+                }
 
-        return detectFromIpApi().then(function (location) {
-            return location || detectFromIpInfo();
+                const lat = roundCoord(parseFloat(data.lat));
+                const lng = roundCoord(parseFloat(data.lng));
+
+                if (!Number.isFinite(lat) || !Number.isFinite(lng) || !isInOntarioBounds(lat, lng)) {
+                    return null;
+                }
+
+                return {
+                    lat: lat,
+                    lng: lng,
+                    city: data.city ? String(data.city).trim() : null,
+                    source: data.source || 'ip',
+                    accuracy: data.accuracy || 'ip',
+                };
+            })
+            .catch(function () {
+                return null;
+            });
+    }
+
+    function detectFromIp() {
+        return detectFromServer().then(function (serverLocation) {
+            if (serverLocation) {
+                return serverLocation;
+            }
+
+            if (isLocalHost()) {
+                return detectFromIpInfo();
+            }
+
+            return detectFromIpApi().then(function (location) {
+                return location || detectFromIpInfo();
+            });
         });
     }
 
