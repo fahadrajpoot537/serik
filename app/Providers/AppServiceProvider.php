@@ -135,6 +135,26 @@ class AppServiceProvider extends ServiceProvider
 
             return $html;
         }, 125, 4);
+
+        add_filter('core_media_image', static function ($html, ?string $url = null, $alt = null, array $attributes = [], $secure = false) {
+            if (! \App\Support\SerikHomepage::isHomepageRequest()) {
+                return $html;
+            }
+
+            $markup = $html instanceof HtmlString ? $html->toHtml() : (string) $html;
+            $size = $attributes['data-size'] ?? null;
+            $enhanced = \App\Support\SerikResponsiveImage::enhance($markup, $url, is_string($size) ? $size : null, $attributes);
+
+            return $enhanced === $markup ? $html : new HtmlString($enhanced);
+        }, 130, 4);
+
+        if (defined('BASE_ACTION_PUBLIC_RENDER_SINGLE')) {
+            add_action(BASE_ACTION_PUBLIC_RENDER_SINGLE, static function (): void {
+                if (\App\Support\SerikHomepage::isHomepageRequest()) {
+                    \Botble\Theme\Facades\Theme::asset()->remove('ckeditor-content-styles');
+                }
+            }, 16);
+        }
     }
 
     protected function registerBotbleHooks(): void

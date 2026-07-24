@@ -13,20 +13,18 @@ return [
             $version = get_cms_version();
 
             $boostrapCss = BaseHelper::isRtlEnabled() ? 'bootstrap.rtl.min.css' : 'bootstrap.min.css';
+            $isHomepage = \App\Support\SerikHomepage::isHomepageRequest();
+            $asyncCssAttrs = $isHomepage ? ['media' => 'print', 'onload' => "this.media='all'"] : [];
 
-            $theme->asset()->usePath()->add('bootstrap', "plugins/bootstrap/css/$boostrapCss");
-            if (! \App\Support\SerikHomepage::isHomepageRequest()) {
-                $theme->asset()->usePath()->add('animate', 'css/animate.min.css');
-            }
+            $theme->asset()->usePath()->add('bootstrap', "plugins/bootstrap/css/$boostrapCss", [], $asyncCssAttrs);
+            $theme->asset()->usePath()->add('animate', 'css/animate.min.css', [], $asyncCssAttrs);
             $theme->asset()->usePath()->add('swiper', 'plugins/swiper/swiper-bundle.min.css');
             $theme->asset()->usePath()->add('style', 'css/style.css', version: $version);
 
             $theme->asset()->container('footer')->usePath()->add('jquery', 'js/jquery.min.js');
             $theme->asset()->container('footer')->usePath()->add('popper', 'js/popper.min.js', ['jquery']);
             $theme->asset()->container('footer')->usePath()->add('bootstrap', 'plugins/bootstrap/js/bootstrap.min.js', ['jquery', 'popper']);
-            if (! \App\Support\SerikHomepage::isHomepageRequest()) {
-                $theme->asset()->container('footer')->usePath()->add('wow', 'js/wow.min.js', ['jquery']);
-            }
+            $theme->asset()->container('footer')->usePath()->add('wow', 'js/wow.min.js', ['jquery']);
             $theme->asset()->container('footer')->usePath()->add('swiper', 'plugins/swiper/swiper-bundle.min.js');
             if (! \App\Support\SerikHomepage::isHomepageRequest()) {
                 $theme->asset()->usePath()->add('visitor-location', 'js/visitor-location.js', version: $version);
@@ -40,7 +38,7 @@ return [
                         'social-login-css',
                         asset('vendor/core/plugins/social-login/css/social-login.css'),
                         [],
-                        [],
+                        $asyncCssAttrs,
                         '2.0.6'
                     );
             }

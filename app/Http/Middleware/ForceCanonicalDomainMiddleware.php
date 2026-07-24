@@ -41,6 +41,13 @@ class ForceCanonicalDomainMiddleware
 
         CanonicalUrl::forceApplicationUrl();
 
-        return $next($request);
+        $response = $next($request);
+
+        if (str_contains((string) $response->headers->get('Content-Type', ''), 'text/html')) {
+            $response->headers->set('Cache-Control', 'no-cache, no-store, must-revalidate');
+            $response->headers->set('Pragma', 'no-cache');
+        }
+
+        return $response;
     }
 }

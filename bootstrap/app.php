@@ -199,6 +199,11 @@ $app->booting(function () use ($app): void {
 });
 
 $app->booted(function () use ($app): void {
+    $app->make('view')->prependNamespace(
+        'packages/theme',
+        resource_path('views/vendor/packages/theme')
+    );
+
     $app->make('view')->composer('packages/theme::partials.header', function (): void {
         \App\Support\SerikSeo::apply();
     });
@@ -217,27 +222,13 @@ $app->booted(function () use ($app): void {
 
     if (defined('THEME_FRONT_HEADER')) {
         add_filter(THEME_FRONT_HEADER, static function (?string $html): ?string {
-            if (! \App\Support\SerikHomepage::isHomepageRequest() || ! is_string($html) || $html === '') {
-                return $html;
-            }
+            return \App\Support\SerikHomepageAssets::optimizeHeaderHtml($html);
+        }, 9998);
+    }
 
-            $asyncPatterns = [
-                'social-login',
-                'front-auth',
-                'content-styles',
-                'language-public',
-                'announcement',
-            ];
-
-            foreach ($asyncPatterns as $pattern) {
-                $html = preg_replace(
-                    '/<link([^>]*href="[^"]*' . preg_quote($pattern, '/') . '[^"]*"[^>]*)>/i',
-                    '<link$1 media="print" onload="this.media=\'all\'">',
-                    $html
-                ) ?? $html;
-            }
-
-            return $html;
+    if (defined('THEME_FRONT_FOOTER')) {
+        add_filter(THEME_FRONT_FOOTER, static function (?string $html): ?string {
+            return \App\Support\SerikHomepageAssets::optimizeFooterHtml($html);
         }, 9998);
     }
 
