@@ -390,7 +390,10 @@
                 $shortcode->background_image,
                 ImageAlt::resolve($shortcode->title, $shortcode->background_image, $heroAltContext),
                 lazy: false,
-                attributes: ['data-bb-lazy' => 'false', 'fetchpriority' => 'high', 'loading' => 'eager', 'decoding' => 'async']
+                attributes: array_merge(
+                    ['data-bb-lazy' => 'false', 'fetchpriority' => 'high', 'loading' => 'eager', 'decoding' => 'async', 'width' => 800, 'height' => 600],
+                    []
+                )
             ) }}
         </div>
     @endif
@@ -409,9 +412,12 @@
                                 $shortcode->{"slider_image_$i"},
                                 ImageAlt::resolve($shortcode->title, $shortcode->{"slider_image_$i"}, $heroAltContext),
                                 lazy: $heroSlideIndex > 1,
-                                attributes: $heroSlideIndex === 1
-                                    ? ['data-bb-lazy' => 'false', 'fetchpriority' => 'high', 'loading' => 'eager', 'decoding' => 'async']
-                                    : ['data-bb-lazy' => 'true', 'loading' => 'lazy']
+                                attributes: array_merge(
+                                    $heroSlideIndex === 1
+                                        ? ['data-bb-lazy' => 'false', 'fetchpriority' => 'high', 'loading' => 'eager', 'decoding' => 'async', 'width' => 800, 'height' => 600]
+                                        : ['data-bb-lazy' => 'true', 'loading' => 'lazy', 'decoding' => 'async', 'width' => 800, 'height' => 600],
+                                    []
+                                )
                             ) }}
                         </div>
                     </div>
@@ -464,15 +470,15 @@
                                     <button type="submit" style="border: none; background: none;"
                                         
                                         onclick="calculatePercentage()">
-                                       <img src="https://serik.ca/storage/button-calculate-cashback-1.png" alt="{{ __('Calculate cash back') }}"/>
+                                       <img src="https://serik.ca/storage/button-calculate-cashback-1.png" alt="{{ __('Calculate cash back') }}" width="180" height="54" decoding="async" loading="lazy"/>
                                     </button>
                                 
                                     <a href="{{ url('/mortgage-calculator') }}">
-                                        <img src="https://serik.ca/storage/button-mortgage-calculator-blue-1.png" alt="{{ __('Mortgage Calculator') }}"/>
+                                        <img src="https://serik.ca/storage/button-mortgage-calculator-blue-1.png" alt="{{ __('Mortgage Calculator') }}" width="180" height="54" decoding="async" loading="lazy"/>
                                     </a>
                                     
                                     <a href="{{ url('/appointment-scheduler') }}">
-                                        <img src="https://serik.ca/storage/button-copy1-2.png" alt="{{ __('Schedule an appointment') }}"/>
+                                        <img src="https://serik.ca/storage/button-copy1-2.png" alt="{{ __('Schedule an appointment') }}" width="180" height="54" decoding="async" loading="lazy"/>
                                     </a>
                                 
                                 </div>

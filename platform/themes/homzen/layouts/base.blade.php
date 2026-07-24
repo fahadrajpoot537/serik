@@ -81,6 +81,9 @@
     $isSerikHomepage = \App\Support\SerikHomepage::isHomepageRequest();
 @endphp
         </style>
+@if ($isSerikHomepage)
+        @include(Theme::getThemeNamespace('partials.homepage-performance'))
+@endif
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
 <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" rel="stylesheet" media="print" onload="this.media='all'">

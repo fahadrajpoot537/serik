@@ -75,7 +75,7 @@ $accounts = $accounts->sortBy(function ($account) use ($order) {
                 <div class="box col">
                     <div class="box-agent hover-img wow fadeIn" data-wow-delay=".2s" data-wow-duration="2000ms">
                         <div class="box-img img-style mb-2">
-                            {{ RvMedia::image($account->avatar_url, $account->name) }}
+                            {{ RvMedia::image($account->avatar_url, $account->name, attributes: ['width' => 300, 'height' => 400, 'decoding' => 'async', 'loading' => 'lazy']) }}
                             {!! Theme::partial('shortcodes.agents.partials.social-links', compact('account')) !!}
                         </div>
                         <div class="content">

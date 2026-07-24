@@ -98,7 +98,7 @@ $locations = $locations->sortBy(function ($location) use ($order) {
                    class="box-location-v2 hover-img location-item">
 
                     <div class="box-img img-style">
-                        {{ RvMedia::image($location->image, $location->name, 'medium-rectangle') }}
+                        {{ RvMedia::image($location->image, $location->name, 'medium-rectangle', attributes: ['width' => 400, 'height' => 300, 'decoding' => 'async', 'loading' => 'lazy']) }}
                     </div>
 
                     <div class="content">

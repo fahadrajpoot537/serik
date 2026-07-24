@@ -1,5 +1,5 @@
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.css"/>
-<script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.umd.js"></script>
+<link rel="preload" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.css"></noscript>
 <style>
     .banner-video{
     position:relative;
@@ -85,7 +85,7 @@
                         <div class="box-service style-1 hover-btn-view" id="formMain" >
                             <div class="icon-box">
                                 @if ($service['icon_image'])
-                                    {{ RvMedia::image($service['icon_image'], $service['title'], attributes: ['class' => 'icon', 'data-bb-lazy' => 'false', 'style' => sprintf('max-width: %spx !important; max-height: %spx !important;', $iconImageSize, $iconImageSize)]) }}
+                                    {{ RvMedia::image($service['icon_image'], $service['title'], attributes: ['class' => 'icon', 'data-bb-lazy' => 'false', 'width' => 48, 'height' => 48, 'decoding' => 'async', 'loading' => 'lazy', 'style' => sprintf('max-width: %spx !important; max-height: %spx !important;', $iconImageSize, $iconImageSize)]) }}
                                 @elseif($service['icon'])
                                     <x-core::icon
                                         :name="$service['icon']"
@@ -116,8 +116,13 @@
                     @endforeach
                         <div class="box-service style-1 hover-btn-view" id="secondMain" style="min-height: auto;">
                             <div class="banner-video">
-                                <img src="https://serik.ca/storage/artboard-3-edit.jpg" data-bb-lazy="true" loading="lazy" data-src="https://serik.ca/storage/artboard-3-edit.jpg"
-                                alt="Welcome To The  Serik Realty">
+                                <img src="https://serik.ca/storage/artboard-3-edit.jpg"
+                                alt="Welcome To The Serik Realty"
+                                width="640"
+                                height="360"
+                                decoding="async"
+                                loading="lazy"
+                                class="w-100 h-100 object-fit-cover">
             
                                     <a
                                         href="https://serik.ca/storage/videoplayback.mp4"
@@ -139,23 +144,50 @@
 
 
 <script>
-    
-    
-   function isAboutUsPage() {
-    return window.location.pathname === '/' || window.location.pathname === '';
-}
+(function () {
+    function isAboutUsPage() {
+        return window.location.pathname === '/' || window.location.pathname === '';
+    }
 
+    if (isAboutUsPage()) {
+        document.getElementById('formMain').style.display = 'none';
+    } else {
+        document.getElementById('secondMain').style.display = 'none';
+    }
 
+    let fancyboxReady = false;
 
-if (isAboutUsPage()) {
-    document.getElementById("formMain").style.display = "none";
-    
-}else{
-    document.getElementById("secondMain").style.display = "none";
-   
-}
+    function loadFancybox(callback) {
+        if (fancyboxReady && window.Fancybox) {
+            callback();
+            return;
+        }
 
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.umd.js';
+        script.onload = function () {
+            fancyboxReady = true;
+            callback();
+        };
+        document.body.appendChild(script);
+    }
 
+    document.querySelectorAll('[data-fancybox]').forEach((trigger) => {
+        trigger.addEventListener('click', function (event) {
+            if (window.Fancybox) {
+                return;
+            }
+
+            event.preventDefault();
+            const target = this;
+            loadFancybox(function () {
+                if (window.Fancybox) {
+                    window.Fancybox.show([{ src: target.getAttribute('href'), type: target.dataset.type || 'video' }]);
+                }
+            });
+        }, { once: true });
+    });
+})();
 </script>
 
 

@@ -215,6 +215,32 @@ $app->booted(function () use ($app): void {
         return $html;
     }, 1000);
 
+    if (defined('THEME_FRONT_HEADER')) {
+        add_filter(THEME_FRONT_HEADER, static function (?string $html): ?string {
+            if (! \App\Support\SerikHomepage::isHomepageRequest() || ! is_string($html) || $html === '') {
+                return $html;
+            }
+
+            $asyncPatterns = [
+                'social-login',
+                'front-auth',
+                'content-styles',
+                'language-public',
+                'announcement',
+            ];
+
+            foreach ($asyncPatterns as $pattern) {
+                $html = preg_replace(
+                    '/<link([^>]*href="[^"]*' . preg_quote($pattern, '/') . '[^"]*"[^>]*)>/i',
+                    '<link$1 media="print" onload="this.media=\'all\'">',
+                    $html
+                ) ?? $html;
+            }
+
+            return $html;
+        }, 9998);
+    }
+
     if (class_exists(\Botble\RealEstate\Models\Property::class) && ! defined('SERIK_PROPERTY_OBSERVER_REGISTERED')) {
         \Botble\RealEstate\Models\Property::observe(\App\Observers\PropertyHomepageCacheObserver::class);
         define('SERIK_PROPERTY_OBSERVER_REGISTERED', true);
