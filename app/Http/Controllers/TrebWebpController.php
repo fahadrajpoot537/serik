@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\TrebImageDerivative;
 use App\Support\TrebImageProxy;
 use Botble\RealEstate\Models\Property;
 use Illuminate\Http\Request;
@@ -26,10 +27,14 @@ final class TrebWebpController extends Controller
             ->where('external_id', $listingKey)
             ->first(['image_val', 'external_id']);
 
+        $w = $request->query('w');
+        $maxWidth = is_numeric($w) ? TrebImageDerivative::normalizeWidth((int) $w) : null;
+
         return TrebImageProxy::stream(
             $listingKey,
             $filename,
-            $property?->image_val
+            $property?->image_val,
+            $maxWidth
         );
     }
 }

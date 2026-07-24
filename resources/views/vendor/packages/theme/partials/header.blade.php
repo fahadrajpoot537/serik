@@ -26,7 +26,9 @@
 
 {!! apply_filters(THEME_FRONT_HEADER, null) !!}
 
+@if (! \App\Support\SerikHomepage::isHomepageRequest())
 {!! SeoHelper::meta()->getAnalytics()->render() !!}
+@endif
 
 <script>
     window.siteUrl = "{{ rescue(fn() => BaseHelper::getHomepageUrl()) }}"

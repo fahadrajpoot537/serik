@@ -104,11 +104,21 @@ final class TrebImageProxy
         return false;
     }
 
-    public static function stream(string $listingKey, string $filename, ?string $imageVal = null): Response
+    public static function stream(string $listingKey, string $filename, ?string $imageVal = null, ?int $maxWidth = null): Response
     {
         $index = self::filenameToIndex($filename);
         if ($index === null) {
             abort(404);
+        }
+
+        $listingKey = strtoupper(preg_replace('/[^A-Z0-9]/', '', $listingKey));
+        $targetWidth = TrebImageDerivative::normalizeWidth($maxWidth);
+
+        if ($targetWidth !== null) {
+            $cached = TrebImageDerivative::readCached($listingKey, $filename, $targetWidth);
+            if ($cached !== null) {
+                return response($cached, 200, self::imageHeaders('image/webp', immutable: true));
+            }
         }
 
         $remoteUrl = self::remoteUrlAtIndex($listingKey, $index, $imageVal);
@@ -140,11 +150,30 @@ final class TrebImageProxy
             $contentType = self::guessContentType($remoteUrl, $body);
         }
 
-        return response($body, 200, [
+        if ($targetWidth !== null) {
+            $derivative = TrebImageDerivative::encodeForWidth($body, $targetWidth);
+            if ($derivative !== null) {
+                TrebImageDerivative::writeCached($listingKey, $filename, $targetWidth, $derivative);
+                $body = $derivative;
+                $contentType = 'image/webp';
+            }
+        }
+
+        return response($body, 200, self::imageHeaders($contentType, immutable: $targetWidth !== null));
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function imageHeaders(string $contentType, bool $immutable = false): array
+    {
+        return [
             'Content-Type' => $contentType,
-            'Cache-Control' => 'public, max-age=86400, stale-while-revalidate=604800',
+            'Cache-Control' => $immutable
+                ? 'public, max-age=31536000, immutable'
+                : 'public, max-age=86400, stale-while-revalidate=604800',
             'X-Serik-Image-Source' => 'treb-cdn-proxy',
-        ]);
+        ];
     }
 
     /**
