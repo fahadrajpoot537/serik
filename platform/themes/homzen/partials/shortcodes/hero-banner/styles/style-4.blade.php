@@ -1905,6 +1905,26 @@ button {
     font-weight: 600;
     color: #1e293b;
 }
+.hs-map-popup-full .hs-room-list .hs-room-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 10px 0;
+    border-bottom: 1px solid #e2e8f0;
+}
+.hs-map-popup-full .hs-room-list .hs-room-row:last-child { border-bottom: none; }
+.hs-map-popup-full .hs-room-left { flex: 1; min-width: 0; }
+.hs-map-popup-full .hs-room-name { font-weight: 700; color: #1e293b; font-size: 13px; }
+.hs-map-popup-full .hs-room-size { font-size: 12px; color: #64748b; margin-top: 2px; }
+.hs-map-popup-full .hs-room-level {
+    font-size: 12px;
+    color: #64748b;
+    text-align: right;
+    white-space: nowrap;
+    flex-shrink: 0;
+    padding-top: 2px;
+}
 .hs-map-popup-full .hs-map-group-title {
     grid-column: 1 / -1;
     font-size: 12px;
@@ -8996,19 +9016,18 @@ function mapMovedEnoughToRefetch() {
         return `<div style="overflow-x:auto;"><table class="hs-map-table"><thead><tr><th>Date</th><th>Old Price</th><th>New Price</th><th>Event</th></tr></thead><tbody>${body}</tbody></table></div>`;
     }
 
+    function buildMapRoomRowHtml(room) {
+        const name = escapeMapHtml(room.name || 'Room');
+        const size = room.size && room.size !== '-' ? `<div class="hs-room-size">${escapeMapHtml(room.size)}</div>` : '';
+        const level = room.level && room.level !== '-' ? `<div class="hs-room-level">${escapeMapHtml(room.level)}</div>` : '';
+        return `<div class="hs-room-row"><div class="hs-room-left"><div class="hs-room-name">${name}</div>${size}</div>${level}</div>`;
+    }
+
     function buildMapRoomsTableHtml(rows) {
         if (!rows || !rows.length) {
             return '<p class="text-muted" style="margin:0;">Room details are not available for this listing.</p>';
         }
-        const body = rows.map((room) => `
-            <tr>
-                <td>${escapeMapHtml(room.name || 'Room')}</td>
-                <td>${escapeMapHtml(room.size || '-')}</td>
-                <td>${escapeMapHtml(room.level || '-')}</td>
-                <td>${escapeMapHtml(room.features && room.features !== '-' ? room.features : '')}</td>
-            </tr>
-        `).join('');
-        return `<div style="overflow-x:auto;"><table class="hs-map-table"><thead><tr><th>Room</th><th>Size</th><th>Level</th><th>Features</th></tr></thead><tbody>${body}</tbody></table></div>`;
+        return `<div class="hs-room-list">${rows.map((room) => buildMapRoomRowHtml(room)).join('')}</div>`;
     }
 
     function buildMapKeyFactsHtml(keyFacts, displayName, displayLocation, displayType, listingKey, brokerage) {

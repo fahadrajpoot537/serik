@@ -2907,7 +2907,7 @@ class TrebPropertyHelper
             return [];
         }
 
-        $cacheKey = 'treb_property_rooms_detail_v2_' . $listingKey;
+        $cacheKey = 'treb_property_rooms_detail_v3_' . $listingKey;
 
         $cached = Cache::get($cacheKey);
         if (is_array($cached) && $cached !== []) {
@@ -2953,6 +2953,70 @@ class TrebPropertyHelper
     }
 
     /**
+     * @return array{size: string, dimensions: string, sqft: int|null}
+     */
+    public static function formatAmpRoomSize(array $room): array
+    {
+        $dims = trim((string) ($room['RoomDimensions'] ?? ''));
+        $area = $room['RoomArea'] ?? null;
+        $areaUnits = strtolower(trim((string) ($room['RoomAreaUnits'] ?? '')));
+        $length = $room['RoomLength'] ?? null;
+        $width = $room['RoomWidth'] ?? null;
+        $units = strtolower(trim((string) ($room['RoomLengthWidthUnits'] ?? '')));
+
+        $sqft = null;
+        $dimLabel = '';
+
+        if ($dims !== '' && $dims !== '-') {
+            $dimLabel = $dims;
+        }
+
+        if ($length !== null && $width !== null && (float) $length > 0 && (float) $width > 0) {
+            $len = (float) $length;
+            $wid = (float) $width;
+            $inFeet = str_contains($units, 'foot') || str_contains($units, 'feet') || $units === 'ft';
+
+            if (! $inFeet) {
+                $len *= 3.28084;
+                $wid *= 3.28084;
+            }
+
+            $sqft = (int) round($len * $wid);
+            $dimLabel = self::formatRoomFeetDimension($len) . ' x ' . self::formatRoomFeetDimension($wid) . ' ft';
+        }
+
+        if ($sqft === null && $area !== null && (float) $area > 0) {
+            $areaVal = (float) $area;
+            if (str_contains($areaUnits, 'meter') || str_contains($areaUnits, 'metre')) {
+                $sqft = (int) round($areaVal * 10.76391041671);
+            } else {
+                $sqft = (int) round($areaVal);
+            }
+        }
+
+        if ($sqft !== null && $dimLabel === '') {
+            $dimLabel = number_format($sqft) . ' sq.ft.';
+        } elseif ($sqft !== null) {
+            $dimLabel = $dimLabel . ' (' . number_format($sqft) . ' sq.ft.)';
+        }
+
+        $size = $dimLabel !== '' ? $dimLabel : '-';
+
+        return [
+            'size' => $size,
+            'dimensions' => $dimLabel !== '' ? $dimLabel : '-',
+            'sqft' => $sqft,
+        ];
+    }
+
+    protected static function formatRoomFeetDimension(float $feet): string
+    {
+        $formatted = number_format($feet, 1, '.', '');
+
+        return rtrim(rtrim($formatted, '0'), '.');
+    }
+
+    /**
      * @return array<string, mixed>
      */
     protected static function mapAmpRoomRow(array $room): array
@@ -2968,10 +3032,13 @@ class TrebPropertyHelper
         }
 
         $featureText = $features !== [] ? implode(',', $features) : '-';
+        $sizeInfo = self::formatAmpRoomSize($room);
 
         return [
             'name' => $room['RoomDescription'] ?? $room['RoomType'] ?? 'Room',
-            'size' => '-',
+            'size' => $sizeInfo['size'],
+            'dimensions' => $sizeInfo['dimensions'],
+            'sqft' => $sizeInfo['sqft'],
             'level' => $room['RoomLevel'] ?? $room['Level'] ?? '-',
             'features' => $featureText,
         ];

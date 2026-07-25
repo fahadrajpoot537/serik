@@ -219,6 +219,26 @@
 .hs-history-locked-row { cursor: pointer; }
 .hs-history-locked-row:hover td { background: rgba(2, 85, 161, 0.06); }
 .hs-history-locked-row .hs-sign-in-link { color: rgb(2, 85, 161); text-decoration: underline; }
+.hs-room-list .hs-room-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 12px 0;
+    border-bottom: 1px solid #e2e8f0;
+}
+.hs-room-list .hs-room-row:last-child { border-bottom: none; }
+.hs-room-left { flex: 1; min-width: 0; }
+.hs-room-name { font-weight: 700; color: #1e293b; }
+.hs-room-size { font-size: 14px; color: #64748b; margin-top: 2px; }
+.hs-room-level {
+    font-size: 14px;
+    color: #64748b;
+    text-align: right;
+    white-space: nowrap;
+    flex-shrink: 0;
+    padding-top: 2px;
+}
 .hs-details-group-title {
     grid-column: 1 / -1;
     font-size: 14px;
@@ -466,13 +486,15 @@
             </p>
             <div class="hs-room-list">
                 @foreach ($rooms as $room)
-                    <div class="hs-room-item" style="margin-bottom:16px;">
-                        <div style="font-weight:700;color:#1e293b;">{{ $room['name'] }}</div>
+                    <div class="hs-room-row">
+                        <div class="hs-room-left">
+                            <div class="hs-room-name">{{ $room['name'] }}</div>
+                            @if($hsShow($room['size'] ?? null))
+                                <div class="hs-room-size">{{ $room['size'] }}</div>
+                            @endif
+                        </div>
                         @if($hsShow($room['level'] ?? null))
-                            <div style="font-size:14px;color:#64748b;">{{ __('Level') }}: {{ $room['level'] }}</div>
-                        @endif
-                        @if($hsShow($room['features'] ?? null))
-                            <div style="font-size:14px;color:#334155;">{{ $room['features'] }}</div>
+                            <div class="hs-room-level">{{ $room['level'] }}</div>
                         @endif
                     </div>
                 @endforeach
@@ -594,11 +616,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
             panel.innerHTML = '<div class="hs-room-list">' + rooms.map((room) => {
-                const level = room.level && room.level !== '-' ? '<div style="font-size:14px;color:#64748b;">{{ __('Level') }}: ' + room.level + '</div>' : '';
-                const features = room.features && room.features !== '-' ? '<div style="font-size:14px;color:#334155;">' + room.features + '</div>' : '';
-                return '<div class="hs-room-item" style="margin-bottom:16px;">'
-                    + '<div style="font-weight:700;color:#1e293b;">' + (room.name || 'Room') + '</div>'
-                    + level + features
+                const size = room.size && room.size !== '-' ? '<div class="hs-room-size">' + room.size + '</div>' : '';
+                const level = room.level && room.level !== '-' ? '<div class="hs-room-level">' + room.level + '</div>' : '';
+                return '<div class="hs-room-row">'
+                    + '<div class="hs-room-left"><div class="hs-room-name">' + (room.name || 'Room') + '</div>' + size + '</div>'
+                    + level
                     + '</div>';
             }).join('') + '</div>';
         })
