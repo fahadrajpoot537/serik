@@ -479,6 +479,10 @@
             </div>
         @endif
     </div>
+
+    <div style="color:#e63946;font-size:14px;margin:16px 0 0;font-weight:600;">
+        Coop Commission: upto 2.5%
+    </div>
 </div>
 
 <script>

@@ -9142,7 +9142,7 @@ function mapMovedEnoughToRefetch() {
                     <div class="map-popup-price">${buildMapPriceHtml(props, status, soldLocked)}</div>
                     <div class="map-popup-date">${escapeMapHtml(relativeListedLabel(props.date, 'Listed'))}</div>
                 </div>
-                ${!soldLocked && !isMapSoldListing(status, props) ? '<div style="color:#e63946;font-size:14px;margin:4px 0 8px;">Your cash back upto 1.5% on purchase price (*Terms and Conditions Apply)</div>' : ''}
+                ${!soldLocked && !isMapSoldListing(status, props) ? '<div style="color:#e63946;font-size:14px;margin:4px 0 8px;">Cash back upto 1.5% on purchase price<br>(*Terms and Conditions Apply)</div>' : ''}
                 <div class="map-popup-detail-header">${escapeMapHtml(displayName)}</div>
                 ${displayLocation ? `<div class="map-popup-detail-location">${escapeMapHtml(displayLocation)}</div>` : ''}
                 ${displayType ? `<div class="map-popup-detail-type">${escapeMapHtml(displayType)}</div>` : ''}
@@ -9170,6 +9170,7 @@ function mapMovedEnoughToRefetch() {
                 <div class="hs-map-tab-panel" data-map-panel="facts">${buildMapKeyFactsHtml(keyFacts, displayName, displayLocation, displayType, listingId, brokerage)}</div>
                 <div class="hs-map-tab-panel" data-map-panel="details">${buildMapDetailsGridHtml(propertyDetails)}</div>
                 <div class="hs-map-tab-panel" data-map-panel="rooms">${buildMapRoomsTableHtml(rooms)}</div>
+                <div style="color:#e63946;font-size:14px;margin:16px 0 8px;font-weight:600;">Coop Commission: upto 2.5%</div>
                 <div class="property-popup-footer" style="margin-top:8px;font-size:12px;color:#6c757d;">${escapeMapHtml(listingId)}${brokerage ? ' , ' + escapeMapHtml(brokerage) : ''}</div>
             `;
 

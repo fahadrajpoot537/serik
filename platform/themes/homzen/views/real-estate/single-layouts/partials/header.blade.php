@@ -114,7 +114,8 @@
                     <br>
 
                     <span style="color:#e63946;font-size:14px;">
-                        Your cash back upto 1.5% on purchase price (*Terms and Conditions Apply)
+                        Cash back upto 1.5% on purchase price<br>
+                        (*Terms and Conditions Apply)
                     </span>
 
                     <br>
