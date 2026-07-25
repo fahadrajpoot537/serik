@@ -823,6 +823,7 @@
     @endif
 
 </div>
+{!! Theme::partial('community-search-index') !!}
 <script>
 
 
@@ -1064,6 +1065,11 @@ function fetchHeaderCommunitySuggestions(keyword, signal) {
         return Promise.resolve([]);
     }
 
+    const local = window.SerikCommunitySearch?.filter?.(trimmed, 8);
+    if (local && local.length) {
+        return Promise.resolve(local);
+    }
+
     const url = `/api/v1/community-suggestions?keyword=${encodeURIComponent(trimmed)}&limit=8`;
     if (headerCommunitySuggestCache.has(url)) {
         return Promise.resolve(headerCommunitySuggestCache.get(url));
@@ -1091,16 +1097,20 @@ function buildHeaderCommunitySuggestionsHtml(communities) {
         const name = community.name || '';
         const city = community.city || '';
         const citySuffix = city ? ` <span style="color:#6b7280;font-size:12px;">${city}</span>` : '';
+        const isPlace = community.source === 'place';
+        const itemClass = isPlace ? 'location-item place-item' : 'location-item community-item';
+        const icon = isPlace ? '📍' : '🏘️';
 
         return `
-            <div class="location-item community-item"
+            <div class="${itemClass}"
                 role="button"
                 tabindex="0"
                 data-community="${name.replace(/"/g, '&quot;')}"
                 data-city="${city.replace(/"/g, '&quot;')}"
                 data-lat="${community.lat ?? ''}"
-                data-lng="${community.lng ?? ''}">
-                🏘️ ${name}${citySuffix}
+                data-lng="${community.lng ?? ''}"
+                data-source="${community.source || 'mls'}">
+                ${icon} ${name}${citySuffix}
             </div>
         `;
     }).join('');
@@ -1111,7 +1121,16 @@ function buildHeaderLocationSuggestionsHtml(keyword, communities) {
 }
 
 function buildHeaderCommunityMapUrl(community) {
-    let url = `${SITE_BASE}/map?community=${encodeURIComponent(community.name)}`;
+    const isPlace = community.source === 'place';
+    let url = `${SITE_BASE}/map?lat=${community.lat}&lng=${community.lng}`;
+    if (isPlace) {
+        url += `&place=${encodeURIComponent(community.name)}`;
+        if (community.city) {
+            url += `&city=${encodeURIComponent(community.city)}`;
+        }
+        return url;
+    }
+    url = `${SITE_BASE}/map?community=${encodeURIComponent(community.name)}`;
     if (community.city) {
         url += `&city=${encodeURIComponent(community.city)}`;
     }
@@ -1256,7 +1275,7 @@ input.addEventListener('focus', function () {
 });
 
 dropdown.addEventListener('click', function (e) {
-    const communityItem = e.target.closest('.community-item');
+    const communityItem = e.target.closest('.community-item, .place-item');
     if (communityItem) {
         e.preventDefault();
         e.stopPropagation();
@@ -1276,6 +1295,7 @@ dropdown.addEventListener('click', function (e) {
             city: communityItem.dataset.city || '',
             lat: communityItem.dataset.lat || '',
             lng: communityItem.dataset.lng || '',
+            source: communityItem.dataset.source || 'mls',
         });
         return;
     }
@@ -1360,7 +1380,10 @@ function loadResults(keyword, reset = false){
 
     if (reset) {
         const prefixListings = getPrefixSearchCache(keyword, headerSearchCache);
-        const prefixCommunities = getPrefixCommunityCache(keyword, headerCommunitySuggestCache);
+        const localCommunities = window.SerikCommunitySearch?.filter?.(keyword, 8);
+        const prefixCommunities = (localCommunities && localCommunities.length)
+            ? localCommunities
+            : getPrefixCommunityCache(keyword, headerCommunitySuggestCache);
         const locationHTML = buildHeaderLocationSuggestionsHtml(keyword, prefixCommunities || []);
         document.getElementById('locationResults').innerHTML = locationHTML || cityHTML;
         if (prefixListings && prefixListings.length) {

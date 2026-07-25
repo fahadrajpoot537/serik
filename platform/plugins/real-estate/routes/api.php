@@ -108,6 +108,8 @@ Route::group([
         Route::get('getPropertyBasicDetails/{listingKey}', 'PropertyController@getPropertyBasicDetails');
         Route::get('smart-search', 'PropertyController@smartSearch');
         Route::get('community-suggestions', 'PropertyController@communitySuggestions');
+        Route::get('community-index', 'PropertyController@communityIndex');
+        Route::get('geocode-community', 'PropertyController@geocodeCommunity');
         Route::get('visitor-location', function (\Illuminate\Http\Request $request) {
             $ip = (string) $request->ip();
             $default = \App\Support\VisitorIpLocation::defaultPayload();

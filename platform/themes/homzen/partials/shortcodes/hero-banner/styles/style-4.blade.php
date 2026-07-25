@@ -5130,6 +5130,7 @@ position: absolute;
 @endif
 @endif
 
+{!! Theme::partial('community-search-index') !!}
 
 <script>
 
@@ -5887,13 +5888,172 @@ async function showCityBoundary(cityName, fallbackCoords = null) {
             return;
         }
         autoCenteringMap = true;
+        window.autoCenteringMap = true;
         map.once('moveend', () => {
             autoCenteringMap = false;
+            window.autoCenteringMap = false;
         });
         moveFn();
     }
 
     window.runProgrammaticMapMove = runProgrammaticMapMove;
+
+    function applyCommunityMapState(communityName, cityName) {
+        selectedCommunity = communityName || '';
+        selectedCity = cityName || '';
+        cityFromUrl = cityName || '';
+        seoCitySlug = cityName ? slugify(cityName) : 'ontario';
+        communityEnforceTransaction = false;
+        communityFitOnce = !!communityName;
+        activeCityPolygon = null;
+        activeCityGeometryType = null;
+        userHasMovedMap = false;
+
+        if (map?.getLayer('city-fill')) {
+            map.setFilter('city-fill', ['==', ['get', 'NAME_3'], '']);
+            map.setFilter('city-outline', ['==', ['get', 'NAME_3'], '']);
+        }
+
+        if (activeMarker) {
+            activeMarker.remove();
+            activeMarker = null;
+        }
+
+        const inputEl = document.getElementById('mapSmartInput');
+        if (inputEl && communityName) {
+            inputEl.value = cityName ? `${communityName}, ${cityName}` : communityName;
+        }
+    }
+
+    function resolveCommunityCenter(communityName, cityName) {
+        const name = String(communityName || '').trim();
+        if (!name) {
+            return Promise.resolve(null);
+        }
+
+        const url = `/api/v1/community-suggestions?keyword=${encodeURIComponent(name)}&limit=8`;
+
+        return fetch(url, {
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        })
+            .then((res) => (res.ok ? res.json() : []))
+            .then((rows) => {
+                const cityNeedle = String(cityName || '').trim().toLowerCase();
+                let match = (rows || []).find((row) => {
+                    if (String(row?.name || '').toLowerCase() !== name.toLowerCase()) {
+                        return false;
+                    }
+                    if (!cityNeedle) {
+                        return true;
+                    }
+                    return String(row?.city || '').toLowerCase() === cityNeedle;
+                });
+
+                if (!match) {
+                    match = (rows || []).find((row) => String(row?.name || '').toLowerCase() === name.toLowerCase());
+                }
+
+                if (!match || match.lat == null || match.lng == null) {
+                    return null;
+                }
+
+                return { lat: Number(match.lat), lng: Number(match.lng) };
+            })
+            .catch(() => null);
+    }
+
+    function flyMapToCommunityCoords(lat, lng, onArrived) {
+        if (!map || isNaN(lat) || isNaN(lng)) {
+            if (typeof onArrived === 'function') {
+                onArrived();
+            }
+            return;
+        }
+
+        runProgrammaticMapMove(() => {
+            map.easeTo({
+                center: [lng, lat],
+                zoom: HS_MAP_DEFAULT_ZOOM,
+            });
+        });
+        map.once('moveend', () => {
+            if (typeof onArrived === 'function') {
+                onArrived();
+            }
+        });
+    }
+
+    window.applyCommunityMapState = applyCommunityMapState;
+    window.flyMapToCommunityCoords = flyMapToCommunityCoords;
+
+    function fitMapToCommunityFeatures(features) {
+        if (!map || !Array.isArray(features) || features.length === 0) {
+            return;
+        }
+
+        const bounds = new maplibregl.LngLatBounds();
+        let count = 0;
+
+        features.forEach((feature) => {
+            const coords = feature?.geometry?.coordinates;
+            if (!coords || coords.length < 2) {
+                return;
+            }
+            bounds.extend(coords);
+            count++;
+        });
+
+        if (count === 0) {
+            return;
+        }
+
+        if (count === 1) {
+            const center = bounds.getCenter();
+            flyMapToCommunityCoords(center.lat, center.lng, () => {});
+            return;
+        }
+
+        runProgrammaticMapMove(() => {
+            map.fitBounds(bounds, {
+                padding: 70,
+                maxZoom: HS_MAP_DEFAULT_ZOOM + 1,
+                duration: 700,
+            });
+        });
+    }
+
+    function scheduleCommunityGeocodeReload(communityName) {
+        const name = String(communityName || '').trim();
+        if (!name || window.__hsCommunityGeocodePending === name) {
+            return;
+        }
+
+        window.__hsCommunityGeocodePending = name;
+        const geocoder = window.SerikCommunitySearch?.geocodeInBackground;
+        if (typeof geocoder !== 'function') {
+            window.__hsCommunityGeocodePending = '';
+            return;
+        }
+
+        geocoder(name).then((result) => {
+            window.__hsCommunityGeocodePending = '';
+            if ((result?.geocoded || 0) > 0 && typeof loadProperties === 'function') {
+                communityFitOnce = true;
+                loadProperties({ fromFilters: true, force: true });
+            }
+        });
+    }
+
+    function deferCommunityGeocodeReload(communityName) {
+        const name = String(communityName || '').trim();
+        if (!name) {
+            return;
+        }
+        setTimeout(() => scheduleCommunityGeocodeReload(name), 4000);
+    }
+
+    window.fitMapToCommunityFeatures = fitMapToCommunityFeatures;
 
     const HS_MOBILE_PROPERTY_TYPES = [
         { label: 'All property types', value: '' },
@@ -5911,6 +6071,8 @@ async function showCityBoundary(cityName, fallbackCoords = null) {
     let activeMarker = null;
     let selectedCity = '';
     let selectedCommunity = '';
+    let communityEnforceTransaction = false;
+    let communityFitOnce = false;
     let hsMobileDateSale = 'all';
     let hsMobileDateSold = 'all';
     let draw = null;
@@ -6418,6 +6580,7 @@ const cityKey = normalizeCity(cityFromUrlRaw);
     const urlLocation = getLatLngFromUrl();
     const urlCommunity = new URLSearchParams(window.location.search).get('community');
     const urlCommunityCity = new URLSearchParams(window.location.search).get('city');
+    const urlPlace = new URLSearchParams(window.location.search).get('place');
 
 if (urlLocation) {
     const { lat, lng } = urlLocation;
@@ -6430,11 +6593,7 @@ if (urlLocation) {
     map.setZoom(HS_MAP_DEFAULT_ZOOM);
 
     if (urlCommunity) {
-        selectedCommunity = urlCommunity;
-        if (urlCommunityCity) {
-            selectedCity = urlCommunityCity;
-            cityFromUrl = urlCommunityCity;
-        }
+        applyCommunityMapState(urlCommunity, urlCommunityCity || '');
     }
 }
     
@@ -6555,8 +6714,55 @@ if (urlLocation) {
         }
     };
 
-    // Fetch pins for the current viewport immediately — do not wait for IP/city fly.
-    requestAnimationFrame(() => runInitialPropertyLoad());
+    const bootCommunityMapView = () => {
+        applyCommunityMapState(urlCommunity, urlCommunityCity || '');
+        deferCommunityGeocodeReload(urlCommunity);
+
+        const startLoad = () => runInitialPropertyLoad();
+
+        const readyLat = urlLocation ? urlLocation.lat : NaN;
+        const readyLng = urlLocation ? urlLocation.lng : NaN;
+
+        if (!isNaN(readyLat) && !isNaN(readyLng)) {
+            flyMapToCommunityCoords(readyLat, readyLng, startLoad);
+            return;
+        }
+
+        resolveCommunityCenter(urlCommunity, urlCommunityCity || '').then((coords) => {
+            if (coords) {
+                flyMapToCommunityCoords(coords.lat, coords.lng, startLoad);
+            } else {
+                requestAnimationFrame(startLoad);
+            }
+        });
+    };
+
+    const bootPlaceMapView = () => {
+        selectedCommunity = '';
+        communityEnforceTransaction = false;
+        selectedCity = urlCommunityCity || '';
+        cityFromUrl = urlCommunityCity || '';
+
+        const inputEl = document.getElementById('mapSmartInput');
+        if (inputEl && urlPlace) {
+            inputEl.value = urlCommunityCity ? `${urlPlace}, ${urlCommunityCity}` : urlPlace;
+        }
+
+        const startLoad = () => runInitialPropertyLoad();
+        if (urlLocation) {
+            flyMapToCommunityCoords(urlLocation.lat, urlLocation.lng, startLoad);
+        } else {
+            requestAnimationFrame(startLoad);
+        }
+    };
+
+    if (urlCommunity) {
+        bootCommunityMapView();
+    } else if (urlPlace && urlLocation) {
+        bootPlaceMapView();
+    } else {
+        requestAnimationFrame(() => runInitialPropertyLoad());
+    }
 
     if (!urlLocation) {
         if (resolvedCity && resolvedCityLower !== 'ontario') {
@@ -6604,12 +6810,6 @@ if (urlLocation) {
                 });
             } else {
                 showCityBoundary(resolvedCity);
-            }
-        } else if (urlCommunity) {
-            selectedCommunity = urlCommunity;
-            if (urlCommunityCity) {
-                selectedCity = urlCommunityCity;
-                cityFromUrl = urlCommunityCity;
             }
         }
     }
@@ -6770,6 +6970,7 @@ document.querySelectorAll('input[name="date"], input[name="date-sold"], input[na
    document.querySelectorAll('.transaction-item').forEach(item => {
         item.addEventListener('click', function() {
             selectedTransaction = this.dataset.transaction;
+            communityEnforceTransaction = true;
             document.getElementById('transactionDropdown').innerText = selectedTransaction;
 
             document.querySelectorAll('.transaction-item').forEach(i => i.classList.remove('active'));
@@ -7656,7 +7857,12 @@ function getTransactionFromUrl() {
             return;
         }
         userHasMovedMap = true;
-        selectedCommunity = '';
+        if (selectedCommunity) {
+            selectedCommunity = '';
+            communityEnforceTransaction = false;
+            communityFitOnce = false;
+            bustMapFetchCache();
+        }
         if (!activeCityPolygon) clearCityBoundaryLock();
     });
 
@@ -7682,7 +7888,7 @@ function getTransactionFromUrl() {
             if (!window.HsMapFetchCoordinator?.movedEnoughToRefetch?.(map)) return;
             skipSeoUrlOnNextLoad = true;
             loadProperties({ fromMapMove: true });
-        }, 250);
+        }, 0);
     });
     
  
@@ -8045,6 +8251,9 @@ function mapMovedEnoughToRefetch() {
 
     function normalizeMapTransactionFilter() {
         const tx = (selectedTransaction || '').trim();
+        if (selectedCommunity && !communityEnforceTransaction) {
+            return '';
+        }
         if (!tx || tx === 'all' || tx === 'null') {
             return 'For Sale';
         }
@@ -8076,7 +8285,6 @@ function mapMovedEnoughToRefetch() {
             west: fetchBounds.west,
             east: fetchBounds.east,
             zoom: Math.round(mapInstance.getZoom()),
-            transaction: apiTransaction,
             min_price: selectedMinPrice || 0,
             max_price: isDefaultMaxPrice(selectedMaxPrice) ? PRICE_NO_LIMIT : selectedMaxPrice,
             status: apiStatus.join(','),
@@ -8087,8 +8295,12 @@ function mapMovedEnoughToRefetch() {
             basement: selectedBasement || '',
             basement1: selectedBasement1 || '',
             subtypes: effectiveSubtypes.join(','),
-            city: apiCity || '',
+            city: selectedCommunity ? '' : (apiCity || ''),
         });
+
+        if (apiTransaction) {
+            params.set('transaction', apiTransaction);
+        }
 
         if (selectedCommunity) {
             params.set('community', selectedCommunity);
@@ -8113,6 +8325,10 @@ function mapMovedEnoughToRefetch() {
                         || (cityFromUrl && cityFromUrl.toLowerCase() !== 'ontario'));
                 if (!cityLocked) {
                     out = filterFeaturesByCityPolygon(out);
+                }
+                if (communityFitOnce && selectedCommunity && out.length) {
+                    communityFitOnce = false;
+                    requestAnimationFrame(() => fitMapToCommunityFeatures(out));
                 }
                 return window.enrichMapFeaturesWithPriceLabels(out);
             },
@@ -8149,7 +8365,7 @@ function mapMovedEnoughToRefetch() {
             return;
         }
 
-        if (fromFilters && window.HsMapFetchCoordinator?.executeLoad) {
+        if ((fromFilters || fromMapMove) && window.HsMapFetchCoordinator?.executeLoad) {
             window.HsMapFetchCoordinator.clearDebounce?.();
             window.HsMapFetchCoordinator.executeLoad(buildMapPropertiesRequest, options);
             return;
@@ -10210,6 +10426,35 @@ document.addEventListener('click', function (e) {
     const lng = parseFloat(item.dataset.lng);
 
     // =========================
+    // PLACE (OSM) → CENTER MAP + VIEWPORT LISTINGS
+    // =========================
+    if (item.classList.contains('place-item')) {
+        const placeName = item.dataset.community || '';
+        const cityName = item.dataset.city || '';
+
+        if (!placeName || isNaN(lat) || isNaN(lng)) {
+            return;
+        }
+
+        selectedCommunity = '';
+        communityEnforceTransaction = false;
+        selectedCity = cityName || '';
+        cityFromUrl = cityName || '';
+        userHasMovedMap = false;
+
+        const inputEl = document.getElementById('mapSmartInput');
+        if (inputEl) {
+            inputEl.value = cityName ? `${placeName}, ${cityName}` : placeName;
+        }
+        updateSeoUrl();
+
+        flyMapToCommunityCoords(lat, lng, () => {
+            loadProperties({ fromFilters: true, force: true });
+        });
+        return;
+    }
+
+    // =========================
     // COMMUNITY → CENTER MAP + FILTER
     // =========================
     if (item.classList.contains('community-item')) {
@@ -10220,38 +10465,25 @@ document.addEventListener('click', function (e) {
             return;
         }
 
-        selectedCommunity = communityName;
-        selectedCity = cityName;
-        cityFromUrl = cityName;
-        seoCitySlug = cityName ? slugify(cityName) : 'ontario';
-        activeCityPolygon = null;
-        activeCityGeometryType = null;
-        userHasMovedMap = false;
-
-        if (map?.getLayer('city-fill')) {
-            map.setFilter('city-fill', ['==', ['get', 'NAME_3'], '']);
-            map.setFilter('city-outline', ['==', ['get', 'NAME_3'], '']);
-        }
-
-        if (activeMarker) {
-            activeMarker.remove();
-            activeMarker = null;
-        }
-
-        const label = cityName ? `${communityName}, ${cityName}` : communityName;
-        document.getElementById('mapSmartInput').value = label;
+        applyCommunityMapState(communityName, cityName);
         updateSeoUrl();
 
+        const loadCommunityProperties = () => {
+            deferCommunityGeocodeReload(communityName);
+            loadProperties({ fromFilters: true, force: true });
+        };
+
         if (!isNaN(lat) && !isNaN(lng)) {
-            runProgrammaticMapMove(() => {
-                map.easeTo({
-                    center: [lng, lat],
-                    zoom: HS_MAP_DEFAULT_ZOOM,
-                });
+            flyMapToCommunityCoords(lat, lng, loadCommunityProperties);
+        } else {
+            resolveCommunityCenter(communityName, cityName).then((coords) => {
+                if (coords) {
+                    flyMapToCommunityCoords(coords.lat, coords.lng, loadCommunityProperties);
+                } else {
+                    loadCommunityProperties();
+                }
             });
         }
-
-        loadProperties({ fromFilters: true });
         return;
     }
 
@@ -11315,6 +11547,11 @@ function fetchCommunitySuggestions(keyword, signal) {
         return Promise.resolve([]);
     }
 
+    const local = window.SerikCommunitySearch?.filter?.(trimmed, 8);
+    if (local) {
+        return Promise.resolve(local);
+    }
+
     const url = `/api/v1/community-suggestions?keyword=${encodeURIComponent(trimmed)}&limit=8`;
     if (communitySuggestCache.has(url)) {
         return Promise.resolve(communitySuggestCache.get(url));
@@ -11344,16 +11581,20 @@ function buildCommunitySuggestionsHtml(communities) {
         const lat = community.lat;
         const lng = community.lng;
         const citySuffix = city ? ` <span style="color:#6b7280;font-size:12px;">${city}</span>` : '';
+        const isPlace = community.source === 'place';
+        const itemClass = isPlace ? 'location-item place-item' : 'location-item community-item';
+        const icon = isPlace ? '📍' : '🏘️';
 
         return `
-            <div class="location-item community-item"
+            <div class="${itemClass}"
                 role="button"
                 tabindex="0"
                 data-community="${name.replace(/"/g, '&quot;')}"
                 data-city="${city.replace(/"/g, '&quot;')}"
                 data-lat="${lat ?? ''}"
-                data-lng="${lng ?? ''}">
-                🏘️ ${name}${citySuffix}
+                data-lng="${lng ?? ''}"
+                data-source="${community.source || 'mls'}">
+                ${icon} ${name}${citySuffix}
             </div>
         `;
     }).join('');
@@ -11507,7 +11748,10 @@ function loadResults(keyword, reset = false){
 
     if (reset) {
         const prefixListings = getMapPrefixSearchCache(keyword);
-        const prefixCommunities = getMapPrefixCommunityCache(keyword);
+        const localCommunities = window.SerikCommunitySearch?.filter?.(keyword, 8);
+        const prefixCommunities = (localCommunities && localCommunities.length)
+            ? localCommunities
+            : getMapPrefixCommunityCache(keyword);
         const locationHTML = buildLocationSuggestionsHtml(keyword, prefixCommunities || []);
         const locationEl = document.getElementById('mapLocationResults');
         if (locationEl) {

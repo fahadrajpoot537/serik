@@ -3314,9 +3314,78 @@ class PropertyController extends BaseController
         $suggestions = app(\Botble\RealEstate\Services\PropertySearchService::class)
             ->searchCommunitySuggestions($keyword, $limit);
 
+        $placeSearch = app(\App\Support\OntarioPlaceSearch::class);
+        if ($placeSearch->shouldSupplement($keyword, $suggestions)) {
+            $places = $placeSearch->search($keyword, min(4, $limit));
+            if ($places !== []) {
+                $seen = [];
+                foreach ($suggestions as $row) {
+                    $seen[mb_strtolower(($row['name'] ?? '') . '|' . ($row['city'] ?? ''))] = true;
+                }
+                foreach ($places as $place) {
+                    $key = mb_strtolower(($place['name'] ?? '') . '|' . ($place['city'] ?? ''));
+                    if (isset($seen[$key])) {
+                        continue;
+                    }
+                    $suggestions[] = $place;
+                    $seen[$key] = true;
+                    if (count($suggestions) >= $limit) {
+                        break;
+                    }
+                }
+            }
+        }
+
         return response()
             ->json($suggestions)
             ->header('Cache-Control', 'private, max-age=120');
+    }
+
+    public function communityIndex()
+    {
+        $index = app(\Botble\RealEstate\Services\PropertySearchService::class)->getPublicCommunityIndex();
+
+        return response()
+            ->json($index)
+            ->header('Cache-Control', 'public, max-age=3600');
+    }
+
+    public function geocodeCommunity(Request $request)
+    {
+        $community = TrebPropertyHelper::formatRegionLabel(trim((string) $request->input('community', '')));
+        if ($community === '') {
+            return response()->json(['geocoded' => 0, 'processed' => 0]);
+        }
+
+        $ids = app(\Botble\RealEstate\Services\PropertySearchService::class)
+            ->searchCommunityIds($community, null, 500);
+
+        if ($ids === []) {
+            return response()->json(['geocoded' => 0, 'processed' => 0]);
+        }
+
+        $missing = Property::query()
+            ->whereIn('id', $ids)
+            ->where(function ($q) {
+                $q->whereNull('latitude')->orWhere('latitude', 0)
+                    ->orWhereNull('longitude')->orWhere('longitude', 0);
+            })
+            ->whereIn('MlsStatus', ['New', 'Price Change', 'Extension', 'Previous Status'])
+            ->limit(8)
+            ->pluck('id')
+            ->all();
+
+        if ($missing === []) {
+            return response()->json(['geocoded' => 0, 'processed' => 0]);
+        }
+
+        @set_time_limit(45);
+        $result = $this->geocodePropertyBatch(count($missing), $missing, ['active_only' => true]);
+
+        return response()->json([
+            'geocoded' => (int) ($result['geocoded'] ?? 0),
+            'processed' => (int) ($result['processed'] ?? 0),
+        ]);
     }
 
     /**
@@ -5615,6 +5684,8 @@ class PropertyController extends BaseController
         $geojson = (function () use ($request, $south, $north, $west, $east) {
             $canViewSold = auth('account')->check() || auth()->check();
 
+            $community = TrebPropertyHelper::formatRegionLabel(trim((string) $request->input('community', '')));
+
             $query = Property::query()
                 ->select([
                     'id',
@@ -5641,9 +5712,14 @@ class PropertyController extends BaseController
                 ->whereNotNull('latitude')
                 ->whereNotNull('longitude')
                 ->where('latitude', '!=', 0)
-                ->where('longitude', '!=', 0)
-                ->whereBetween('latitude', [$south, $north])
-                ->whereBetween('longitude', [$west, $east]);
+                ->where('longitude', '!=', 0);
+
+            // Community filter defines the result set — do not also require the
+            // current viewport bounds (arrives before the map finishes flying).
+            if ($community === '') {
+                $query->whereBetween('latitude', [$south, $north])
+                    ->whereBetween('longitude', [$west, $east]);
+            }
 
             $this->applyMapResidentialScope($query);
 
@@ -5668,14 +5744,13 @@ class PropertyController extends BaseController
             ];
 
 
-            if (!empty($city) && strtolower($city) !== 'ontario') {
+            if (! empty($city) && strtolower($city) !== 'ontario' && $community === '') {
                 $this->applyMapCityFilter($query, $city, $cityMap);
             }
 
-            $community = TrebPropertyHelper::formatRegionLabel(trim((string) $request->input('community', '')));
             if ($community !== '') {
                 $communityIds = app(\Botble\RealEstate\Services\PropertySearchService::class)
-                    ->searchCommunityIds($community, $city !== '' ? $city : null);
+                    ->searchCommunityIds($community, null);
                 if ($communityIds === []) {
                     $query->whereRaw('0 = 1');
                 } else {
@@ -5717,7 +5792,7 @@ class PropertyController extends BaseController
 
             // --- Transaction (skip for sold/de-listed — MlsStatus is authoritative) ---
             $transaction = $request->input('transaction');
-            if (!empty($transaction) && $transaction !== 'null' && !$isSoldOrDelistedFilter) {
+            if (! empty($transaction) && $transaction !== 'null' && ! $isSoldOrDelistedFilter) {
                 $query->where('TransactionType', $transaction);
             }
 
@@ -5979,6 +6054,14 @@ class PropertyController extends BaseController
      */
     private function fetchMapPropertiesViaMeili(Request $request, float $south, float $north, float $west, float $east): ?array
     {
+        $community = TrebPropertyHelper::formatRegionLabel(trim((string) $request->input('community', '')));
+
+        // Meili's community facet is often empty — use the MySQL community-ID
+        // path so neighbourhood picks always return pins.
+        if ($community !== '') {
+            return null;
+        }
+
         $status = trim((string) $request->input('status', ''));
         $statuses = $status !== '' ? array_values(array_filter(array_map('trim', explode(',', $status)))) : [];
         $soldStatuses = ['Sold', 'Sold Conditional', 'Sold Conditional Escape', 'Leased', 'Leased Conditional'];

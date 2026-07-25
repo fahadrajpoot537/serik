@@ -361,14 +361,11 @@ class PropertySearchService
         $communities = [];
 
         foreach ($this->getCommunityIndex() as $row) {
-            $nameLower = mb_strtolower((string) ($row['name'] ?? ''));
-            $rawLower = mb_strtolower((string) ($row['raw_region'] ?? ''));
-
-            if (! str_contains($nameLower, $needle) && ! str_contains($rawLower, $needle)) {
+            if (! $this->communityKeywordMatches($needle, $row)) {
                 continue;
             }
 
-            $key = $nameLower . '|' . mb_strtolower((string) ($row['city'] ?? ''));
+            $key = mb_strtolower((string) ($row['name'] ?? '')) . '|' . mb_strtolower((string) ($row['city'] ?? ''));
             $communities[$key] = [
                 'name' => $row['name'],
                 'city' => $row['city'],
@@ -379,6 +376,30 @@ class PropertySearchService
         }
 
         return $this->sortCommunitySuggestions($communities, $keyword, $limit);
+    }
+
+    /**
+     * Compact community list for instant client-side autocomplete.
+     *
+     * @return array<int, array{n: string, c: string, la: float|null, lo: float|null, t: int}>
+     */
+    public function getPublicCommunityIndex(): array
+    {
+        return Cache::remember('serik_community_index_public_v1', 21600, function () {
+            $out = [];
+
+            foreach ($this->getCommunityIndex() as $row) {
+                $out[] = [
+                    'n' => (string) ($row['name'] ?? ''),
+                    'c' => (string) ($row['city'] ?? ''),
+                    'la' => $row['lat'] ?? null,
+                    'lo' => $row['lng'] ?? null,
+                    't' => (int) ($row['count'] ?? 1),
+                ];
+            }
+
+            return $out;
+        });
     }
 
     /**
@@ -400,19 +421,15 @@ class PropertySearchService
         ];
 
         if ($city !== null && trim($city) !== '' && strcasecmp(trim($city), 'ontario') !== 0) {
-            $opts['city'] = ucwords(strtolower(trim($city)));
+            $normalizedCity = TrebPropertyHelper::formatCityLabel(trim($city));
+            if ($normalizedCity !== '') {
+                $opts['city'] = $normalizedCity;
+            }
         }
 
-        $cacheKey = 'serik_community_ids_v2:' . md5(mb_strtolower($community) . '|' . mb_strtolower(trim((string) $city)) . '|' . $limit);
+        $cacheKey = 'serik_community_ids_v3:' . md5(mb_strtolower($community) . '|' . mb_strtolower(trim((string) $city)) . '|' . $limit);
 
-        return Cache::remember($cacheKey, 1800, function () use ($community, $city, $limit, $opts) {
-            if ($this->isAvailable()) {
-                $ids = $this->searchIds('', $opts);
-                if (is_array($ids) && $ids !== []) {
-                    return $ids;
-                }
-            }
-
+        return Cache::remember($cacheKey, 1800, function () use ($community, $city, $limit) {
             return $this->searchCommunityIdsFromMysql($community, $city, $limit);
         });
     }
@@ -424,13 +441,13 @@ class PropertySearchService
      */
     private function getCommunityIndex(): array
     {
-        return Cache::remember('serik_community_index_v4', 21600, function () {
-            $rows = $this->communitySnapshotQuery()
+        return Cache::remember('serik_community_index_v6', 21600, function () {
+            $rows = $this->communityRegionQuery()
                 ->select([
                     DB::raw('JSON_UNQUOTE(JSON_EXTRACT(mb.meta_value, "$.CityRegion")) as raw_region'),
                     DB::raw('JSON_UNQUOTE(JSON_EXTRACT(mb.meta_value, "$.City")) as raw_city'),
-                    DB::raw('AVG(p.latitude) as avg_lat'),
-                    DB::raw('AVG(p.longitude) as avg_lng'),
+                    DB::raw('AVG(CASE WHEN p.latitude != 0 AND p.longitude != 0 THEN p.latitude END) as avg_lat'),
+                    DB::raw('AVG(CASE WHEN p.latitude != 0 AND p.longitude != 0 THEN p.longitude END) as avg_lng'),
                     DB::raw('COUNT(*) as cnt'),
                 ])
                 ->groupBy('raw_region', 'raw_city')
@@ -514,7 +531,7 @@ class PropertySearchService
             ? TrebPropertyHelper::formatCityLabel(trim($city))
             : '';
 
-        $query = $this->communitySnapshotQuery()
+        $query = $this->communityRegionQuery()
             ->where(function ($regionQuery) use ($community, $needle) {
                 $regionQuery->whereRaw('JSON_UNQUOTE(JSON_EXTRACT(mb.meta_value, "$.CityRegion")) = ?', [$community])
                     ->orWhereRaw('LOWER(JSON_UNQUOTE(JSON_EXTRACT(mb.meta_value, "$.CityRegion"))) = ?', [$needle]);
@@ -555,7 +572,16 @@ class PropertySearchService
         return array_values(array_unique($ids));
     }
 
-    private function communitySnapshotQuery(): Builder
+    private function suffixFamily(string $value): string
+    {
+        if (preg_match('/(ville|borough|burg|wood|dale|view|park|hill|side|town|grove|valley)$/i', $value, $m)) {
+            return mb_strtolower($m[1]);
+        }
+
+        return '';
+    }
+
+    private function communityRegionQuery(): Builder
     {
         $excluded = array_values(array_unique(array_merge(
             TrebPropertyHelper::excludedCommercialSubTypes(),
@@ -569,9 +595,52 @@ class PropertySearchService
             ->where(function ($query) use ($excluded) {
                 $query->whereNull('p.PropertySubType')
                     ->orWhereNotIn('p.PropertySubType', $excluded);
-            })
+            });
+    }
+
+    private function communitySnapshotQuery(): Builder
+    {
+        return $this->communityRegionQuery()
             ->where('p.latitude', '!=', 0)
             ->where('p.longitude', '!=', 0);
+    }
+
+    /**
+     * @param  array{name: string, city: string, lat: float|null, lng: float|null, count: int, raw_region?: string}  $row
+     */
+    private function communityKeywordMatches(string $needle, array $row): bool
+    {
+        $nameLower = mb_strtolower((string) ($row['name'] ?? ''));
+        $rawLower = mb_strtolower((string) ($row['raw_region'] ?? ''));
+        $cityLower = mb_strtolower((string) ($row['city'] ?? ''));
+
+        if (str_contains($nameLower, $needle)
+            || str_contains($rawLower, $needle)
+            || str_contains($cityLower, $needle)) {
+            return true;
+        }
+
+        if (mb_strlen($needle) < 5) {
+            return false;
+        }
+
+        $prefixLen = 0;
+        $nameLen = mb_strlen($nameLower);
+        $needleLen = mb_strlen($needle);
+        $max = min($needleLen, $nameLen);
+
+        while ($prefixLen < $max && mb_substr($needle, $prefixLen, 1) === mb_substr($nameLower, $prefixLen, 1)) {
+            $prefixLen++;
+        }
+
+        // Typo tolerance only when suffix family matches (ville→ville, borough→borough).
+        $needleFamily = $this->suffixFamily($needle);
+        $nameFamily = $this->suffixFamily($nameLower);
+        if ($needleFamily !== '' && $needleFamily === $nameFamily) {
+            return $prefixLen >= 6;
+        }
+
+        return false;
     }
 
     private function buildFilters(array $opts): string

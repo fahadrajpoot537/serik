@@ -233,7 +233,7 @@ class TrebPropertyHelper
             return '';
         }
 
-        return trim((string) preg_replace('/\s+C\d+$/i', '', $city));
+        return trim((string) preg_replace('/\s+[CW]\d+$/i', '', $city));
     }
 
     public static function formatRegionLabel(?string $region): string
