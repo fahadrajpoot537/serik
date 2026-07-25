@@ -9161,7 +9161,7 @@ function mapMovedEnoughToRefetch() {
                     <div class="map-popup-price">${buildMapPriceHtml(props, status, soldLocked)}</div>
                     <div class="map-popup-date">${escapeMapHtml(relativeListedLabel(props.date, 'Listed'))}</div>
                 </div>
-                ${!soldLocked && !isMapSoldListing(status, props) ? '<div style="color:#e63946;font-size:14px;margin:4px 0 8px;">Cash back upto 1.5% on purchase price<br>(*Terms and Conditions Apply)</div>' : ''}
+                ${!soldLocked && !isMapSoldListing(status, props) ? '<div style="color:#e63946;font-size:14px;margin:4px 0 8px;">Cash back upto 1.5% of purchase price<br>(*Some Terms and Conditions Apply)</div>' : ''}
                 <div class="map-popup-detail-header">${escapeMapHtml(displayName)}</div>
                 ${displayLocation ? `<div class="map-popup-detail-location">${escapeMapHtml(displayLocation)}</div>` : ''}
                 ${displayType ? `<div class="map-popup-detail-type">${escapeMapHtml(displayType)}</div>` : ''}
