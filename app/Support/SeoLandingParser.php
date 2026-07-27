@@ -7,9 +7,16 @@ use Illuminate\Support\Str;
 
 /**
  * Parse /ontario/{seo-slug} into /properties filter parameters.
+ *
+ * Preferred:  toronto-houses-for-sale
+ * Legacy:     houses-for-sale-in-toronto
  */
 final class SeoLandingParser
 {
+    private const TYPE_PATTERN = 'houses|house|townhouses|townhouse|condos|condo|apartments|apartment'
+        . '|detached-houses|semi-detached-houses|condo-townhouses|freehold-townhouses'
+        . '|condo-apartments|condos-apartments|detached|semi-detached';
+
     /**
      * @return array<string, mixed>
      */
@@ -18,13 +25,28 @@ final class SeoLandingParser
         $seoSlug = trim(strtolower($seoSlug), '/');
         $filters = [];
 
-        if (! preg_match('#^(.*)-for-(sale|lease)(?:-in-(.+))?$#', $seoSlug, $matches)) {
+        $typePart = null;
+        $transaction = null;
+        $citySlug = '';
+
+        // Preferred: {city}-{type}-for-{sale|lease}
+        if (preg_match('#^(.+)-(' . self::TYPE_PATTERN . ')-for-(sale|lease)$#', $seoSlug, $matches)) {
+            $citySlug = trim($matches[1]);
+            $typePart = $matches[2];
+            $transaction = $matches[3];
+        // Legacy: {type}-for-{sale|lease}-in-{city}
+        } elseif (preg_match('#^(' . self::TYPE_PATTERN . ')-for-(sale|lease)(?:-in-(.+))?$#', $seoSlug, $matches)) {
+            $typePart = $matches[1];
+            $transaction = $matches[2];
+            $citySlug = trim((string) ($matches[3] ?? ''));
+        // Legacy catch-all (compound types before -for-sale-in-)
+        } elseif (preg_match('#^(.*)-for-(sale|lease)(?:-in-(.+))?$#', $seoSlug, $matches)) {
+            $typePart = $matches[1];
+            $transaction = $matches[2];
+            $citySlug = trim((string) ($matches[3] ?? ''));
+        } else {
             return $filters;
         }
-
-        $typePart = $matches[1];
-        $transaction = $matches[2];
-        $citySlug = trim((string) ($matches[3] ?? ''));
 
         $filters['type'] = $transaction === 'lease' ? 'rent' : 'sale';
 
@@ -41,7 +63,7 @@ final class SeoLandingParser
                 : self::formatCityLabel($citySlug);
         }
 
-        $homeType = self::resolveHomeType($typePart);
+        $homeType = self::resolveHomeType((string) $typePart);
         if ($homeType !== null) {
             $filters['home_types'] = [$homeType];
         }
@@ -67,6 +89,7 @@ final class SeoLandingParser
             'condo-apartments' => 'condo',
             'condos-apartments' => 'condo',
             'apartments' => 'condo',
+            'apartment' => 'condo',
         ];
 
         if (isset($map[$typePart])) {

@@ -12,6 +12,7 @@
         $mobileColClass = 'col-6';
     }
     $wrapClass = $layout === 'properties' ? 'container-fluid' : 'container';
+    $neighborhoodsTitle = __('Neighborhoods');
     $popularCitiesTitle = __('Popular Cities');
 @endphp
 
@@ -31,7 +32,7 @@
             @foreach ($sections as $section)
                 @if (($section['links'] ?? []) !== [])
                     @php
-                        $isPopularCities = ($section['title'] ?? '') === $popularCitiesTitle;
+                        $isScrollList = in_array($section['title'] ?? '', [$popularCitiesTitle, $neighborhoodsTitle], true);
                     @endphp
                     <div class="{{ $mobileColClass }} {{ $colClass }} seo-nav-col">
                         <div class="seo-nav-block">
@@ -42,7 +43,7 @@
                                 @endif
                             </h2>
 
-                            <nav class="seo-nav-list @if ($isPopularCities) seo-nav-list--scroll @endif" aria-label="{{ $section['title'] }}">
+                            <nav class="seo-nav-list @if ($isScrollList) seo-nav-list--scroll @endif" aria-label="{{ $section['title'] }}">
                                 @foreach ($section['links'] as $link)
                                     <a href="{{ $link['url'] }}">{{ $link['label'] }}</a>
                                 @endforeach

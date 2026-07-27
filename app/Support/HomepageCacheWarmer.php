@@ -75,7 +75,7 @@ final class HomepageCacheWarmer
             $html = \Botble\Theme\Facades\Theme::partial('seo.city-navigation', $data) ?: '';
             $slug = $data['current_city']->slug ?? 'ontario';
             \Illuminate\Support\Facades\Cache::put(
-                "seo_nav_html:v5:home:{$slug}:none",
+                "seo_nav_html:v7:home:{$slug}:none",
                 $html,
                 (int) config('seo_navigation.cache_ttl', 3600)
             );

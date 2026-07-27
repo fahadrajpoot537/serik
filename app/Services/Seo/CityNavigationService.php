@@ -9,6 +9,8 @@ use App\Support\SeoLandingUrl;
 use Botble\Location\Models\City;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Theme\homzen\Supports\TrebPropertyHelper;
 
 final class CityNavigationService
 {
@@ -35,7 +37,7 @@ final class CityNavigationService
             $slug = $city?->slug ?? 'ontario';
             $ttl = (int) config('seo_navigation.cache_ttl', 3600);
 
-            return Cache::remember("seo_nav:v5:home:{$slug}", $ttl, fn () => $this->buildHomeLayout($city));
+            return Cache::remember("seo_nav:v8:home:{$slug}", $ttl, fn () => $this->buildHomeLayout($city));
         }
 
         $city ??= $this->cityResolution->resolve()
@@ -45,7 +47,7 @@ final class CityNavigationService
         $communityKey = $community !== '' ? md5(mb_strtolower($community)) : 'none';
 
         return Cache::remember(
-            "seo_nav:v5:properties:{$slug}:{$communityKey}",
+            "seo_nav:v8:properties:{$slug}:{$communityKey}",
             $ttl,
             fn () => $this->buildPropertiesLayout($city, $community !== '' ? $community : null)
         );
@@ -54,20 +56,35 @@ final class CityNavigationService
     public function bustCache(?string $citySlug = null): void
     {
         if ($citySlug) {
-            foreach (['v2:home', 'v2:properties', 'v3:home', 'v3:properties', 'v5:home', 'v5:properties', 'neighborhoods', 'nearby', 'popular_cities'] as $prefix) {
+            foreach ([
+                'v2:home', 'v2:properties', 'v3:home', 'v3:properties',
+                'v5:home', 'v5:properties', 'v6:home', 'v6:properties',
+                'v7:home', 'v7:properties', 'v8:home', 'v8:properties',
+                'neighborhoods', 'nearby', 'popular_cities',
+            ] as $prefix) {
                 Cache::forget("seo_nav:{$prefix}:{$citySlug}");
             }
             Cache::forget("seo_nav_html:v1:properties:{$citySlug}");
             Cache::forget("seo_nav_html:v2:home:{$citySlug}");
             Cache::forget("seo_nav_html:v3:properties:{$citySlug}");
             Cache::forget("seo_nav_html:v5:home:{$citySlug}:none");
+            Cache::forget("seo_nav_html:v6:home:{$citySlug}:none");
+            Cache::forget("seo_nav_html:v7:home:{$citySlug}:none");
+            Cache::forget("seo_nav_html:v8:home:{$citySlug}:none");
+            Cache::forget("seo_nav_html:v7:properties:{$citySlug}:none");
+            Cache::forget("seo_nav_html:v8:properties:{$citySlug}:none");
         }
 
         Cache::forget('seo_nav:v2:ontario_active_cities');
         Cache::forget('seo_nav:v2:ontario_sold_cities');
         Cache::forget('seo_nav:v3:ontario_active_cities');
         Cache::forget('seo_nav:v3:ontario_sold_cities');
+        Cache::forget('seo_nav:v4:ontario_active_cities');
+        Cache::forget('seo_nav:v4:ontario_sold_cities');
+        Cache::forget('seo_nav:v5:ontario_active_cities');
+        Cache::forget('seo_nav:v5:ontario_sold_cities');
         Cache::forget('seo_nav:v5:popular_real_estate_cities');
+        Cache::forget('seo_nav:v6:popular_real_estate_cities');
 
         try {
             HomepageResponseCache::bump();
@@ -98,23 +115,20 @@ final class CityNavigationService
             'current_city' => $ipCity,
             'sections' => [
                 [
-                    'title' => __('Popular Searches'),
-                    'subtitle' => __('Active'),
-                    'links' => $this->homePopularSearches($ipCity),
-                ],
-                [
                     'title' => __('Active'),
-                    'subtitle' => __('Ontario'),
                     'links' => $this->activeOntarioCityLinks(),
                 ],
                 [
                     'title' => __('Sold'),
-                    'subtitle' => __('Ontario'),
                     'links' => $this->soldOntarioCityLinks(),
                 ],
                 [
-                    'title' => __('Popular Cities'),
-                    'links' => $this->popularRealEstateCityLinks(),
+                    'title' => __('Popular Searches'),
+                    'links' => $this->homePopularSearches($ipCity),
+                ],
+                [
+                    'title' => __('Neighborhoods'),
+                    'links' => $this->homeNeighborhoodLinks($ipCity),
                 ],
             ],
         ];
@@ -160,6 +174,10 @@ final class CityNavigationService
             'current_community' => null,
             'sections' => [
                 [
+                    'title' => __('Popular Searches'),
+                    'links' => $this->propertiesPopularSearches($city),
+                ],
+                [
                     'title' => __('Neighborhoods'),
                     'links' => $this->neighborhoodLinks($city),
                 ],
@@ -170,10 +188,6 @@ final class CityNavigationService
                 [
                     'title' => __('Popular Cities'),
                     'links' => $this->popularCityLinks($city),
-                ],
-                [
-                    'title' => __('Popular Searches'),
-                    'links' => $this->propertiesPopularSearches($city),
                 ],
             ],
         ];
@@ -224,7 +238,7 @@ final class CityNavigationService
     }
 
     /**
-     * Homepage col 1 — IP city.
+     * Homepage col 3 — IP city popular searches.
      *
      * @return array<int, array{label: string, url: string}>
      */
@@ -233,12 +247,38 @@ final class CityNavigationService
         $prefix = $city?->name ?? 'Ontario';
 
         return [
-            $this->link(__('House For Sale In Ontario'), SeoLandingUrl::housesForSale(null)),
-            $this->link("{$prefix} Open Houses For Sale", SeoLandingUrl::openHouses($city)),
-            $this->link("{$prefix} Houses For Sale", SeoLandingUrl::housesForSale($city)),
-            $this->link("{$prefix} Townhouses For Sale", SeoLandingUrl::townhousesForSale($city)),
-            $this->link("{$prefix} Condos For Sale", SeoLandingUrl::condosForSale($city)),
+            $this->link('Ontario houses for sale', SeoLandingUrl::housesForSale(null)),
+            $this->link("{$prefix} open houses for sale", SeoLandingUrl::openHouses($city)),
+            $this->link("{$prefix} houses for sale", SeoLandingUrl::housesForSale($city)),
+            $this->link("{$prefix} townhouses for sale", SeoLandingUrl::townhousesForSale($city)),
+            $this->link("{$prefix} condos for sale", SeoLandingUrl::condosForSale($city)),
         ];
+    }
+
+    /**
+     * Homepage col 4 — IP city + its neighborhoods ("… houses for sale").
+     *
+     * @return array<int, array{label: string, url: string}>
+     */
+    private function homeNeighborhoodLinks(?City $city): array
+    {
+        $links = [];
+
+        if ($city) {
+            $links[] = $this->link(
+                "{$city->name} houses for sale",
+                SeoLandingUrl::housesForSale($city)
+            );
+        }
+
+        foreach ($this->neighborhoodsForCity($city) as $neighborhood) {
+            $links[] = $this->link(
+                "{$neighborhood->name} houses for sale",
+                SeoLandingUrl::community($city, $neighborhood->name)
+            );
+        }
+
+        return $links;
     }
 
     /**
@@ -251,11 +291,11 @@ final class CityNavigationService
         $prefix = $city?->name ?? 'Ontario';
 
         return [
-            $this->link(__('Ontario Real Estate'), SeoLandingUrl::ontarioRealEstate()),
-            $this->link("{$prefix} Open Houses", SeoLandingUrl::openHouses($city)),
-            $this->link("{$prefix} Houses", SeoLandingUrl::housesForSale($city)),
-            $this->link("{$prefix} Townhouses", SeoLandingUrl::townhousesForSale($city)),
-            $this->link("{$prefix} Condos", SeoLandingUrl::condosForSale($city)),
+            $this->link('Ontario houses for sale', SeoLandingUrl::ontarioRealEstate()),
+            $this->link("{$prefix} open houses for sale", SeoLandingUrl::openHouses($city)),
+            $this->link("{$prefix} houses for sale", SeoLandingUrl::housesForSale($city)),
+            $this->link("{$prefix} townhouses for sale", SeoLandingUrl::townhousesForSale($city)),
+            $this->link("{$prefix} condos for sale", SeoLandingUrl::condosForSale($city)),
         ];
     }
 
@@ -266,16 +306,14 @@ final class CityNavigationService
     {
         $ttl = (int) config('seo_navigation.cache_ttl', 3600);
 
-        return Cache::remember('seo_nav:v3:ontario_active_cities', $ttl, function () {
+        return Cache::remember('seo_nav:v5:ontario_active_cities', $ttl, function () {
             $links = [];
-            $index = 0;
 
             foreach ($this->citiesBySlugs(config('seo_navigation.ontario_active_cities', [])) as $city) {
-                $label = $index < 3
-                    ? __('House for Sale in :city', ['city' => $city->name])
-                    : __('Home for Sale in :city', ['city' => $city->name]);
-                $links[] = $this->link($label, SeoLandingUrl::housesForSale($city));
-                $index++;
+                $links[] = $this->link(
+                    "{$city->name} houses for sale",
+                    SeoLandingUrl::housesForSale($city)
+                );
             }
 
             return $links;
@@ -289,12 +327,12 @@ final class CityNavigationService
     {
         $ttl = (int) config('seo_navigation.cache_ttl', 3600);
 
-        return Cache::remember('seo_nav:v3:ontario_sold_cities', $ttl, function () {
+        return Cache::remember('seo_nav:v5:ontario_sold_cities', $ttl, function () {
             $links = [];
 
             foreach ($this->citiesBySlugs(config('seo_navigation.ontario_sold_cities', [])) as $city) {
                 $links[] = $this->link(
-                    __('Sold House for Sale in :city', ['city' => $city->name]),
+                    "{$city->name} sold houses",
                     SeoLandingUrl::soldHomes($city)
                 );
             }
@@ -312,7 +350,7 @@ final class CityNavigationService
     {
         $ttl = (int) config('seo_navigation.cache_ttl', 3600);
 
-        return Cache::remember('seo_nav:v5:popular_real_estate_cities', $ttl, function () {
+        return Cache::remember('seo_nav:v6:popular_real_estate_cities', $ttl, function () {
             $links = [];
 
             foreach (config('seo_navigation.popular_real_estate_cities', []) as $row) {
@@ -323,8 +361,8 @@ final class CityNavigationService
                 }
 
                 $links[] = $this->link(
-                    __(':city Real Estate', ['city' => $name]),
-                    SeoLandingUrl::url('houses-for-sale-in-' . $slug)
+                    "{$name} houses for sale",
+                    SeoLandingUrl::url($slug . '-houses-for-sale')
                 );
             }
 
@@ -338,14 +376,12 @@ final class CityNavigationService
     private function neighborhoodLinks(?City $city): array
     {
         $links = [];
-        $index = 0;
 
         foreach ($this->neighborhoodsForCity($city) as $neighborhood) {
-            $label = $index % 2 === 0
-                ? "{$neighborhood->name} Houses for sale"
-                : "{$neighborhood->name} Real Estate";
-            $links[] = $this->link($label, SeoLandingUrl::community($city, $neighborhood->name));
-            $index++;
+            $links[] = $this->link(
+                "{$neighborhood->name} houses for sale",
+                SeoLandingUrl::community($city, $neighborhood->name)
+            );
         }
 
         return $links;
@@ -360,7 +396,7 @@ final class CityNavigationService
 
         foreach ($this->nearbyCitiesFor($city) as $nearbyCity) {
             $links[] = $this->link(
-                "{$nearbyCity->name} Houses For Sale",
+                "{$nearbyCity->name} houses for sale",
                 SeoLandingUrl::housesForSale($nearbyCity)
             );
         }
@@ -377,7 +413,7 @@ final class CityNavigationService
 
         foreach ($this->popularCities($excludeCity) as $popularCity) {
             $links[] = $this->link(
-                "{$popularCity->name} Houses For Sale",
+                "{$popularCity->name} houses for sale",
                 SeoLandingUrl::housesForSale($popularCity)
             );
         }
@@ -414,15 +450,95 @@ final class CityNavigationService
         }
 
         $ttl = (int) config('seo_navigation.cache_ttl', 3600);
+        $limit = (int) config('seo_navigation.neighborhood_limit', 10);
 
-        return Cache::remember("seo_nav:neighborhoods:{$city->slug}", $ttl, function () use ($city) {
-            return Neighborhood::query()
+        return Cache::remember("seo_nav:neighborhoods:v4:{$city->slug}:{$limit}", $ttl, function () use ($city, $limit) {
+            $owned = Neighborhood::query()
                 ->where('city_id', $city->id)
                 ->orderByDesc('property_count')
                 ->orderBy('name')
-                ->limit((int) config('seo_navigation.neighborhood_limit', 10))
+                ->limit($limit)
                 ->get(['id', 'city_id', 'name', 'slug', 'property_count', 'latitude', 'longitude']);
+
+            if ($owned->isNotEmpty()) {
+                return $owned;
+            }
+
+            // Former municipalities (North York, Scarborough, Etobicoke, …) store
+            // MLS City as "Toronto C15" etc. — pull communities from those districts.
+            return $this->neighborhoodsFromTrebDistricts($city, $limit);
         });
+    }
+
+    /**
+     * Build neighborhood rows from TREB district codes when the city has none synced.
+     *
+     * @return Collection<int, Neighborhood>
+     */
+    private function neighborhoodsFromTrebDistricts(City $city, int $limit): Collection
+    {
+        $districts = config('seo_navigation.treb_city_districts.' . $city->slug, []);
+        if (! is_array($districts) || $districts === []) {
+            return collect();
+        }
+
+        $districts = array_values(array_unique(array_map('strval', $districts)));
+        $placeholders = implode(',', array_fill(0, count($districts), '?'));
+
+        try {
+            $rows = DB::table('meta_boxes as mb')
+                ->join('re_properties as p', 'p.id', '=', 'mb.reference_id')
+                ->where('mb.meta_key', 'amp_snapshot')
+                ->where('mb.reference_type', \Botble\RealEstate\Models\Property::class)
+                ->whereRaw(
+                    'JSON_UNQUOTE(JSON_EXTRACT(mb.meta_value, "$.City")) IN (' . $placeholders . ')',
+                    $districts
+                )
+                ->select([
+                    DB::raw('JSON_UNQUOTE(JSON_EXTRACT(mb.meta_value, "$.CityRegion")) as raw_region'),
+                    DB::raw('AVG(CASE WHEN p.latitude != 0 AND p.longitude != 0 THEN p.latitude END) as avg_lat'),
+                    DB::raw('AVG(CASE WHEN p.latitude != 0 AND p.longitude != 0 THEN p.longitude END) as avg_lng'),
+                    DB::raw('COUNT(*) as cnt'),
+                ])
+                ->groupBy('raw_region')
+                ->orderByDesc('cnt')
+                ->limit(max($limit * 4, 40))
+                ->get();
+        } catch (\Throwable) {
+            return collect();
+        }
+
+        $out = collect();
+        $seen = [];
+
+        foreach ($rows as $row) {
+            $name = TrebPropertyHelper::formatRegionLabel((string) ($row->raw_region ?? ''));
+            if ($name === '' || preg_match('/^[A-Z]\d+$/i', $name)) {
+                continue;
+            }
+
+            $key = mb_strtolower($name);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+
+            $neighborhood = new Neighborhood([
+                'city_id' => $city->id,
+                'name' => $name,
+                'slug' => \Illuminate\Support\Str::slug($name),
+                'latitude' => is_numeric($row->avg_lat ?? null) ? (float) $row->avg_lat : null,
+                'longitude' => is_numeric($row->avg_lng ?? null) ? (float) $row->avg_lng : null,
+                'property_count' => (int) ($row->cnt ?? 0),
+            ]);
+            $out->push($neighborhood);
+
+            if ($out->count() >= $limit) {
+                break;
+            }
+        }
+
+        return $out->values();
     }
 
     /** @return Collection<int, Neighborhood> */
@@ -434,25 +550,37 @@ final class CityNavigationService
 
         $ttl = (int) config('seo_navigation.cache_ttl', 3600);
         $limit = (int) config('seo_navigation.neighborhood_limit', 10);
-        $cacheKey = 'seo_nav:nearby_neighborhoods:v1:' . $city->slug . ':' . md5(mb_strtolower($community));
+        $cacheKey = 'seo_nav:nearby_neighborhoods:v2:' . $city->slug . ':' . md5(mb_strtolower($community));
 
         return Cache::remember($cacheKey, $ttl, function () use ($city, $community, $limit) {
-            $current = Neighborhood::query()
-                ->where('city_id', $city->id)
-                ->where(function ($q) use ($community): void {
-                    $q->where('name', $community)
-                        ->orWhere('slug', \Illuminate\Support\Str::slug($community));
-                })
-                ->first(['id', 'city_id', 'name', 'slug', 'property_count', 'latitude', 'longitude']);
+            $pool = $this->neighborhoodsForCity($city);
+            // Refresh a wider pool for distance sorting when city uses district fallback.
+            if ($pool->count() < $limit) {
+                $pool = $this->neighborhoodsFromTrebDistricts($city, max($limit * 4, 40));
+                if ($pool->isEmpty()) {
+                    $pool = Neighborhood::query()
+                        ->where('city_id', $city->id)
+                        ->orderByDesc('property_count')
+                        ->orderBy('name')
+                        ->limit(max($limit * 4, 40))
+                        ->get(['id', 'city_id', 'name', 'slug', 'property_count', 'latitude', 'longitude']);
+                }
+            }
 
-            $candidates = Neighborhood::query()
-                ->where('city_id', $city->id)
-                ->when($current, fn ($q) => $q->where('id', '!=', $current->id))
-                ->when(! $current, fn ($q) => $q->where('name', '!=', $community))
-                ->orderByDesc('property_count')
-                ->orderBy('name')
-                ->limit(max($limit * 4, 40))
-                ->get(['id', 'city_id', 'name', 'slug', 'property_count', 'latitude', 'longitude']);
+            $current = $pool->first(function (Neighborhood $n) use ($community) {
+                return strcasecmp((string) $n->name, $community) === 0
+                    || $n->slug === \Illuminate\Support\Str::slug($community);
+            });
+
+            $candidates = $pool
+                ->filter(function (Neighborhood $n) use ($community, $current) {
+                    if ($current && (int) ($n->id ?? 0) !== 0 && (int) $n->id === (int) $current->id) {
+                        return false;
+                    }
+
+                    return strcasecmp((string) $n->name, $community) !== 0;
+                })
+                ->values();
 
             if (! $current || ! $current->latitude || ! $current->longitude) {
                 return $candidates->take($limit)->values();

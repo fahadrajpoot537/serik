@@ -124,7 +124,12 @@
         params.set('context', 'properties');
 
         var city = mount.dataset.city || '';
-        var pathMatch = window.location.pathname.match(/\/ontario\/.+?-for-(?:sale|lease)-in-([a-z0-9-]+)\/?$/i);
+        var pathMatch = window.location.pathname.match(
+            /\/ontario\/([a-z0-9-]+)-(?:houses|house|townhouses|townhouse|condos|condo|apartments|apartment|detached-houses|semi-detached-houses)-for-(?:sale|lease)\/?$/i
+        );
+        if (!pathMatch) {
+            pathMatch = window.location.pathname.match(/\/ontario\/.+?-for-(?:sale|lease)-in-([a-z0-9-]+)\/?$/i);
+        }
         if (pathMatch && pathMatch[1] && pathMatch[1] !== 'ontario') {
             city = pathMatch[1];
         }

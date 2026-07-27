@@ -196,7 +196,9 @@ class SyncSeoNavigationCommand extends Command
             return;
         }
 
-        $index = app(\Botble\RealEstate\Services\PropertySearchService::class)->getPublicCommunityIndex();
+        $search = app(\Botble\RealEstate\Services\PropertySearchService::class);
+        // Prefer full index (keeps raw City district codes) when available via reflection-safe path.
+        $index = $search->getPublicCommunityIndex();
         if ($index === []) {
             $this->warn('Community index empty — skip neighborhoods.');
 
@@ -205,18 +207,54 @@ class SyncSeoNavigationCommand extends Command
 
         $citiesByName = City::query()
             ->where('is_active', true)
-            ->pluck('id', 'name');
+            ->get(['id', 'name', 'slug'])
+            ->keyBy(fn (City $c) => mb_strtolower((string) $c->name));
+
+        $citiesBySlug = City::query()
+            ->where('is_active', true)
+            ->pluck('id', 'slug');
+
+        $districtToSlug = [];
+        foreach (config('seo_navigation.treb_city_districts', []) as $slug => $codes) {
+            foreach ((array) $codes as $code) {
+                $districtToSlug[mb_strtolower(trim((string) $code))] = (string) $slug;
+            }
+        }
 
         $inserted = 0;
 
-        foreach ($index as $entry) {
-            $community = trim((string) ($entry['n'] ?? $entry['name'] ?? ''));
-            $cityName = trim((string) ($entry['c'] ?? $entry['city'] ?? ''));
-            if ($community === '' || $cityName === '') {
+        // District-aware sync from amp_snapshot so North York / Scarborough get their own rows.
+        $rows = DB::table('meta_boxes as mb')
+            ->join('re_properties as p', 'p.id', '=', 'mb.reference_id')
+            ->where('mb.meta_key', 'amp_snapshot')
+            ->where('mb.reference_type', Property::class)
+            ->select([
+                DB::raw('JSON_UNQUOTE(JSON_EXTRACT(mb.meta_value, "$.CityRegion")) as raw_region'),
+                DB::raw('JSON_UNQUOTE(JSON_EXTRACT(mb.meta_value, "$.City")) as raw_city'),
+                DB::raw('AVG(CASE WHEN p.latitude != 0 AND p.longitude != 0 THEN p.latitude END) as avg_lat'),
+                DB::raw('AVG(CASE WHEN p.latitude != 0 AND p.longitude != 0 THEN p.longitude END) as avg_lng'),
+                DB::raw('COUNT(*) as cnt'),
+            ])
+            ->groupBy('raw_region', 'raw_city')
+            ->orderByDesc('cnt')
+            ->get();
+
+        foreach ($rows as $row) {
+            $community = TrebPropertyHelper::formatRegionLabel((string) ($row->raw_region ?? ''));
+            $rawCity = trim((string) ($row->raw_city ?? ''));
+            if ($community === '' || $rawCity === '' || preg_match('/^[A-Z]\d+$/i', $community)) {
                 continue;
             }
 
-            $cityId = $citiesByName[$cityName] ?? null;
+            $cityId = null;
+            $districtSlug = $districtToSlug[mb_strtolower($rawCity)] ?? null;
+            if ($districtSlug) {
+                $cityId = $citiesBySlug[$districtSlug] ?? null;
+            }
+            if (! $cityId) {
+                $formattedCity = TrebPropertyHelper::formatCityLabel($rawCity);
+                $cityId = $citiesByName[mb_strtolower($formattedCity)]->id ?? null;
+            }
             if (! $cityId) {
                 continue;
             }
@@ -226,11 +264,44 @@ class SyncSeoNavigationCommand extends Command
                 ['city_id' => $cityId, 'slug' => $slug],
                 [
                     'name' => $community,
-                    'latitude' => $entry['la'] ?? $entry['lat'] ?? null,
-                    'longitude' => $entry['lo'] ?? $entry['lng'] ?? null,
-                    'property_count' => (int) ($entry['t'] ?? $entry['count'] ?? 0),
+                    'latitude' => is_numeric($row->avg_lat ?? null) ? (float) $row->avg_lat : null,
+                    'longitude' => is_numeric($row->avg_lng ?? null) ? (float) $row->avg_lng : null,
+                    'property_count' => (int) ($row->cnt ?? 0),
                 ]
             );
+            $inserted++;
+        }
+
+        // Keep public-index fallback for cities already represented there.
+        foreach ($index as $entry) {
+            $community = trim((string) ($entry['n'] ?? $entry['name'] ?? ''));
+            $cityName = trim((string) ($entry['c'] ?? $entry['city'] ?? ''));
+            if ($community === '' || $cityName === '') {
+                continue;
+            }
+
+            $cityId = $citiesByName[mb_strtolower($cityName)]->id ?? null;
+            if (! $cityId) {
+                continue;
+            }
+
+            $slug = Str::slug($community);
+            $exists = Neighborhood::query()
+                ->where('city_id', $cityId)
+                ->where('slug', $slug)
+                ->exists();
+            if ($exists) {
+                continue;
+            }
+
+            Neighborhood::query()->create([
+                'city_id' => $cityId,
+                'slug' => $slug,
+                'name' => $community,
+                'latitude' => $entry['la'] ?? $entry['lat'] ?? null,
+                'longitude' => $entry['lo'] ?? $entry['lng'] ?? null,
+                'property_count' => (int) ($entry['t'] ?? $entry['count'] ?? 0),
+            ]);
             $inserted++;
         }
 

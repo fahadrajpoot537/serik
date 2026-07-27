@@ -6,7 +6,8 @@ use Botble\Location\Models\City;
 use Illuminate\Support\Str;
 
 /**
- * SEO landing URLs: /ontario/{type}-for-{sale|lease}-in-{city}
+ * SEO landing URLs: /ontario/{city}-{type}-for-{sale|lease}
+ * Legacy /ontario/{type}-for-{sale|lease}-in-{city} still parses.
  */
 final class SeoLandingUrl
 {
@@ -40,37 +41,37 @@ final class SeoLandingUrl
 
     public static function ontarioRealEstate(): string
     {
-        return self::url('houses-for-sale-in-ontario');
+        return self::url('ontario-houses-for-sale');
     }
 
     public static function housesForSale(?City $city): string
     {
-        return self::url('houses-for-sale-in-' . self::citySlug($city));
+        return self::url(self::citySlug($city) . '-houses-for-sale');
     }
 
     public static function townhousesForSale(?City $city): string
     {
-        return self::url('townhouses-for-sale-in-' . self::citySlug($city));
+        return self::url(self::citySlug($city) . '-townhouses-for-sale');
     }
 
     public static function condosForSale(?City $city): string
     {
-        return self::url('condos-for-sale-in-' . self::citySlug($city));
+        return self::url(self::citySlug($city) . '-condos-for-sale');
     }
 
     public static function housesForLease(?City $city): string
     {
-        return self::url('houses-for-lease-in-' . self::citySlug($city));
+        return self::url(self::citySlug($city) . '-houses-for-lease');
     }
 
     public static function townhousesForLease(?City $city): string
     {
-        return self::url('townhouses-for-lease-in-' . self::citySlug($city));
+        return self::url(self::citySlug($city) . '-townhouses-for-lease');
     }
 
     public static function apartmentsForLease(?City $city, array $query = []): string
     {
-        return self::url('condos-for-lease-in-' . self::citySlug($city), $query);
+        return self::url(self::citySlug($city) . '-condos-for-lease', $query);
     }
 
     public static function studioApartmentsForLease(?City $city): string
@@ -85,46 +86,46 @@ final class SeoLandingUrl
 
     public static function openHouses(?City $city): string
     {
-        return self::url('houses-for-sale-in-' . self::citySlug($city), ['open_house' => 1]);
+        return self::url(self::citySlug($city) . '-houses-for-sale', ['open_house' => 1]);
     }
 
     public static function soldHomes(?City $city): string
     {
-        return self::url('houses-for-sale-in-' . self::citySlug($city), ['status' => 'sold']);
+        return self::url(self::citySlug($city) . '-houses-for-sale', ['status' => 'sold']);
     }
 
     public static function community(?City $city, string $communityName, array $query = []): string
     {
         return self::url(
-            'houses-for-sale-in-' . self::citySlug($city),
+            self::citySlug($city) . '-houses-for-sale',
             array_merge(['community' => $communityName], $query)
         );
     }
 
     public static function communityTownhouses(?City $city, string $communityName): string
     {
-        return self::url('townhouses-for-sale-in-' . self::citySlug($city), ['community' => $communityName]);
+        return self::url(self::citySlug($city) . '-townhouses-for-sale', ['community' => $communityName]);
     }
 
     public static function communityCondos(?City $city, string $communityName): string
     {
-        return self::url('condos-for-sale-in-' . self::citySlug($city), ['community' => $communityName]);
+        return self::url(self::citySlug($city) . '-condos-for-sale', ['community' => $communityName]);
     }
 
     public static function communityHousesForLease(?City $city, string $communityName): string
     {
-        return self::url('houses-for-lease-in-' . self::citySlug($city), ['community' => $communityName]);
+        return self::url(self::citySlug($city) . '-houses-for-lease', ['community' => $communityName]);
     }
 
     public static function communityTownhousesForLease(?City $city, string $communityName): string
     {
-        return self::url('townhouses-for-lease-in-' . self::citySlug($city), ['community' => $communityName]);
+        return self::url(self::citySlug($city) . '-townhouses-for-lease', ['community' => $communityName]);
     }
 
     public static function communityApartmentsForLease(?City $city, string $communityName, array $query = []): string
     {
         return self::url(
-            'condos-for-lease-in-' . self::citySlug($city),
+            self::citySlug($city) . '-condos-for-lease',
             array_merge(['community' => $communityName], $query)
         );
     }
@@ -136,10 +137,21 @@ final class SeoLandingUrl
 
     /**
      * Extract city slug from /ontario/{seo} path segment.
+     * Supports toronto-houses-for-sale and legacy houses-for-sale-in-toronto.
      */
     public static function parseCitySlugFromSeo(string $seoSlug): ?string
     {
         $seoSlug = trim(strtolower($seoSlug), '/');
+
+        $types = 'houses|house|townhouses|townhouse|condos|condo|apartments|apartment'
+            . '|detached-houses|semi-detached-houses|condo-townhouses|freehold-townhouses'
+            . '|condo-apartments|condos-apartments|detached|semi-detached';
+
+        if (preg_match('#^(.+)-(' . $types . ')-for-(?:sale|lease)$#', $seoSlug, $matches)) {
+            $city = trim($matches[1]);
+
+            return $city !== '' ? $city : null;
+        }
 
         if (preg_match('#-for-(?:sale|lease)-in-(.+)$#', $seoSlug, $matches)) {
             $city = trim($matches[1]);

@@ -151,6 +151,15 @@ final class PageH1
             return null;
         }
 
+        $types = 'houses|house|townhouses|townhouse|condos|condo|apartments|apartment'
+            . '|detached-houses|semi-detached-houses|condo-townhouses|freehold-townhouses'
+            . '|condo-apartments|condos-apartments|detached|semi-detached';
+
+        // Preferred: toronto-houses-for-sale
+        if (preg_match('#^(.+)-(' . $types . ')-for-(sale|lease)$#', $slug, $matches)) {
+            return self::formatMapH1($matches[2], $matches[1], $matches[3] === 'lease' ? 'Lease' : 'Sale');
+        }
+
         if (preg_match('#^(.+)-for-sale-in-(.+)$#', $slug, $matches)) {
             return self::formatMapH1($matches[1], $matches[2]);
         }
