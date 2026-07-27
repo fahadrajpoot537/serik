@@ -221,11 +221,11 @@ class RealEstateHelper
         return $this->projectsListingPageUrl;
     }
 
-    public function getPropertiesFilter(?int $perPage = 10, array $extra = []): LengthAwarePaginator|Paginator|Collection
+    public function getPropertiesFilter(?int $perPage = 12, array $extra = []): LengthAwarePaginator|Paginator|Collection
     {
         $request = request();
 
-        $perPage = $request->integer('per_page') ?: ($perPage ?? 10);
+        $perPage = $request->integer('per_page') ?: ($perPage ?? 12);
 
         try {
             $filters = $request->validate(apply_filters('properties_filter_validation_rules', [

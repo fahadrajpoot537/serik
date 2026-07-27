@@ -5642,8 +5642,8 @@ class PropertyController extends BaseController
         // Falls back to MySQL for complex sold/date/subtype filters, or when Meili
         // is unavailable. engine=mysql forces the MySQL path for A/B testing.
         if ($request->input('engine') !== 'mysql') {
-            // v6: empty Meili results no longer cached — ignore stale v5 empty payloads.
-            $meiliCacheKey = 'map_meili_v6_' . md5(implode('|', [
+            // v7: overwrite Meili `_geo` with live DB lat/lng for exact pin placement.
+            $meiliCacheKey = 'map_meili_v7_' . md5(implode('|', [
                 round($south, 4), round($north, 4), round($west, 4), round($east, 4),
                 $this->mapFilterSignature($request),
             ]));
@@ -6237,6 +6237,42 @@ class PropertyController extends BaseController
                     'requires_login' => false,
                 ],
             ];
+        }
+
+        // Prefer live DB coordinates over possibly-stale Meili `_geo` so pins
+        // sit on the exact stored latitude/longitude.
+        if ($features !== []) {
+            $ids = [];
+            foreach ($features as $feature) {
+                $id = (int) ($feature['properties']['id'] ?? 0);
+                if ($id > 0) {
+                    $ids[] = $id;
+                }
+            }
+            $ids = array_values(array_unique($ids));
+            if ($ids !== []) {
+                $coordRows = DB::table('re_properties')
+                    ->whereIn('id', $ids)
+                    ->whereNotNull('latitude')
+                    ->whereNotNull('longitude')
+                    ->where('latitude', '!=', 0)
+                    ->where('longitude', '!=', 0)
+                    ->get(['id', 'latitude', 'longitude'])
+                    ->keyBy('id');
+
+                foreach ($features as &$feature) {
+                    $id = (int) ($feature['properties']['id'] ?? 0);
+                    $row = $coordRows->get($id);
+                    if (! $row) {
+                        continue;
+                    }
+                    $feature['geometry']['coordinates'] = [
+                        (float) $row->longitude,
+                        (float) $row->latitude,
+                    ];
+                }
+                unset($feature);
+            }
         }
 
         return ['type' => 'FeatureCollection', 'features' => $features];

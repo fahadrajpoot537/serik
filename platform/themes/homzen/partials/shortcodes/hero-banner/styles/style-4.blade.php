@@ -5184,7 +5184,7 @@ position: absolute;
 <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.3/mapbox-gl-draw.js"></script>
 <script src="{{ Theme::asset()->url('js/map/interaction-state.js') }}?v={{ get_cms_version() }}"></script>
 <script src="{{ Theme::asset()->url('js/map/marker-manager.js') }}?v={{ get_cms_version() }}"></script>
-<script src="{{ Theme::asset()->url('js/map/fetch-coordinator.js') }}?v={{ get_cms_version() }}-mf3"></script>
+<script src="{{ Theme::asset()->url('js/map/fetch-coordinator.js') }}?v={{ get_cms_version() }}-mf4"></script>
 @if (request()->boolean('hs_map_trace') || request()->cookie('hs_map_trace'))
 <script src="{{ Theme::asset()->url('js/map/map-trace.js') }}?v={{ get_cms_version() }}"></script>
 @endif
@@ -5200,9 +5200,10 @@ window.SERIK_CANONICAL_ORIGIN = @json(rtrim(\App\Support\CanonicalUrl::normalize
 // CARTO Voyager raster shows neighbourhood/area labels from ~zoom 12+.
 const HS_MAP_DEFAULT_ZOOM = 15;
 const HS_MAP_CITY_ZOOM = 15;
-/** Keep badges/circles until street-level; must match GeoJSON source clusterMaxZoom. */
-const HS_CLUSTER_MAX_ZOOM = 18;
-const HS_CLUSTER_RADIUS = 62;
+/** Uncluster to exact DB lat/lng once past city zoom (must match GeoJSON source). */
+const HS_CLUSTER_MAX_ZOOM = 16;
+/** Tight radius so separate nearby listings stay separate circles/pins. */
+const HS_CLUSTER_RADIUS = 28;
 /** Cluster click: ≤ this count opens the list; larger circles zoom in. */
 const HS_CLUSTER_LIST_MAX = 15;
 
@@ -5551,8 +5552,31 @@ document.addEventListener("DOMContentLoaded", function () {
             const props = { ...(feature.properties || {}) };
             props.price_label = window.resolveMapMarkerPriceLabel(props);
             props.marker_variant = window.resolveMapMarkerVariant(props);
-            return Object.assign({}, feature, { properties: props });
-        });
+
+            // Always pin from geometry [lng, lat] — never invent/offset coordinates.
+            const raw = feature?.geometry?.coordinates;
+            let lng = Number(raw?.[0]);
+            let lat = Number(raw?.[1]);
+            if (!Number.isFinite(lng) || !Number.isFinite(lat) || (lng === 0 && lat === 0)) {
+                return null;
+            }
+            // Guard against accidental lat/lng swaps outside Ontario bounds.
+            if (Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+                return null;
+            }
+            if (lat < -90 || lat > 90) {
+                return null;
+            }
+
+            return {
+                type: 'Feature',
+                geometry: {
+                    type: 'Point',
+                    coordinates: [lng, lat],
+                },
+                properties: props,
+            };
+        }).filter(Boolean);
     };
 
     function buildHsPricePinImageData(fillColor) {
@@ -6704,8 +6728,10 @@ if (urlLocation) {
                 'text-size': 13,
                 'text-font': ['Noto Sans Bold', 'Noto Sans Regular'],
                 'text-anchor': 'center',
-                'text-offset': [0, -0.55],
+                // Pin tip sits on the exact lat/lng from the database.
+                'text-offset': [0, -0.7],
                 'icon-anchor': 'bottom',
+                'icon-offset': [0, 0],
                 'text-allow-overlap': true,
                 'icon-allow-overlap': true,
                 'text-ignore-placement': true,

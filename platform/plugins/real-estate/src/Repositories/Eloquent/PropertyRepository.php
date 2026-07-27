@@ -11,7 +11,8 @@ use Botble\RealEstate\Models\Account;
 use Botble\RealEstate\Models\Property;
 use Botble\RealEstate\Repositories\Interfaces\PropertyInterface;
 use Botble\Support\Repositories\Eloquent\RepositoriesAbstract;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator as LengthAwarePaginatorContract;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Arr;
@@ -20,7 +21,7 @@ use Illuminate\Support\Facades\Cache;
 
 class PropertyRepository extends RepositoriesAbstract implements PropertyInterface
 {
-    public function getRelatedProperties(int $propertyId, int $limit = 4, array $with = [], array $extra = []): Collection|LengthAwarePaginator
+    public function getRelatedProperties(int $propertyId, int $limit = 4, array $with = [], array $extra = []): Collection|LengthAwarePaginatorContract
     {
         $limit = $limit > 1 ? $limit : 4;
         $currentProperty = $this->findById($propertyId, ['categories']);
@@ -54,7 +55,7 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
         return $this->advancedGet($params);
     }
 
-    public function getProperties(array $filters = [], array $params = []): Collection|LengthAwarePaginator|Paginator
+    public function getProperties(array $filters = [], array $params = []): Collection|LengthAwarePaginatorContract|Paginator
     {
         $filters = array_merge([
             'keyword' => null,
@@ -452,10 +453,10 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
         return $this->advancedGet($params);
     }
 
-    protected function browseListingPaginate(array $params, array $filters): LengthAwarePaginator|Paginator
+    protected function browseListingPaginate(array $params, array $filters): LengthAwarePaginatorContract|Paginator
     {
         $paginate = $params['paginate'] ?? [];
-        $perPage = max(1, (int) ($paginate['per_page'] ?? 10));
+        $perPage = max(1, (int) ($paginate['per_page'] ?? 12));
         $page = max(1, (int) ($paginate['current_paged'] ?? 1));
         $pageName = $paginate['page_name'] ?? 'page';
 
@@ -501,11 +502,12 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
 
         $query = $this->applyBeforeExecuteQuery($query);
 
-        // Skip COUNT(*) on the request path — it can take 10–20s on filtered MLS browse.
         $items = (clone $query)->forPage($page, $perPage)->get();
+        $total = $this->resolveBrowseListingTotal($query, $filters);
 
-        return new Paginator(
+        return new LengthAwarePaginator(
             $items,
+            $total,
             $perPage,
             $page,
             [
@@ -535,6 +537,10 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
 
     protected function browseListingHasFilters(array $filters): bool
     {
+        if (! empty($filters['open_house']) || ($filters['status'] ?? '') === 'sold' || trim((string) ($filters['community'] ?? '')) !== '') {
+            return true;
+        }
+
         foreach ([
             'keyword',
             'bedroom',
@@ -558,6 +564,7 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
             'features',
             'category_ids',
             'locations',
+            'type',
         ] as $key) {
             $value = $filters[$key] ?? null;
 
@@ -601,6 +608,9 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
             'features',
             'category_ids',
             'locations',
+            'open_house',
+            'status',
+            'community',
         ]);
 
         ksort($signature);
@@ -625,7 +635,7 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
         return $this->advancedGet($params);
     }
 
-    public function getPropertiesByConditions(array $condition, int $limit = 4, array $with = []): Collection|LengthAwarePaginator
+    public function getPropertiesByConditions(array $condition, int $limit = 4, array $with = []): Collection|LengthAwarePaginatorContract
     {
         $limit = $limit > 1 ? $limit : 4;
 

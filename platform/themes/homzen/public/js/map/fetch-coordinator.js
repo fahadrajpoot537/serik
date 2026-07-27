@@ -49,10 +49,10 @@
             return true;
         }
 
-        // Zoom-in on the same area: keep current GeoJSON so cluster badges
-        // do not collapse/jump into single pins mid-gesture.
+        // Zoom-in on the same area: refetch so denser local pins land on exact
+        // DB coordinates for the tighter viewport (avoids sparse city-level sample).
         if (lastFetchZoom !== null && zoom > lastFetchZoom) {
-            return false;
+            return true;
         }
 
         // Zoom-out needs a wider sample from the API.

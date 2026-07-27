@@ -68,7 +68,7 @@
     }
 @endphp
 
-<input type="hidden" name="per_page" value="{{ request()->integer('per_page', 10) }}">
+<input type="hidden" name="per_page" value="{{ request()->integer('per_page', 12) }}">
 <input type="hidden" name="type" id="serikTxType" value="{{ $txTypeValue }}">
 <input type="hidden" name="status" id="serikStatus" value="{{ $isSoldFilter ? 'sold' : '' }}" @disabled(! $isSoldFilter)>
 @if ($location = trim((string) request('location')))

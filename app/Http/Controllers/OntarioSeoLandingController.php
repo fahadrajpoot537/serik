@@ -20,9 +20,9 @@ class OntarioSeoLandingController extends Controller
 
         $request->merge($parsed);
 
-        // Lean listing pages: 10 cards per page for faster HTML + filter AJAX.
+        // Lean listing pages: 12 cards per page.
         if (! $request->filled('per_page')) {
-            $request->merge(['per_page' => 10]);
+            $request->merge(['per_page' => 12]);
         }
 
         $cacheKey = $this->pageCacheKey($request, $seo);
@@ -85,6 +85,6 @@ class OntarioSeoLandingController extends Controller
             }
         }
 
-        return 'ontario_seo_html_v5' . $authPart . ':' . md5(strtolower($seo) . '|' . $request->getQueryString());
+        return 'ontario_seo_html_v6' . $authPart . ':' . md5(strtolower($seo) . '|' . $request->getQueryString());
     }
 }
