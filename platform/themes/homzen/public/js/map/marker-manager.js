@@ -38,22 +38,34 @@
         const enrichedFeatures = (typeof global.enrichMapFeaturesWithPriceLabels === 'function')
             ? global.enrichMapFeaturesWithPriceLabels(safeFeatures)
             : safeFeatures;
+        const seenIds = new Set();
+        const dedupedFeatures = enrichedFeatures.filter((feature) => {
+            const idKey = String(feature?.properties?.id ?? feature?.properties?.property_id ?? '').trim();
+            if (idKey === '') {
+                return true;
+            }
+            if (seenIds.has(idKey)) {
+                return false;
+            }
+            seenIds.add(idKey);
+            return true;
+        });
         source.setData({
             type: 'FeatureCollection',
-            features: enrichedFeatures,
+            features: dedupedFeatures,
         });
 
-        lastFeatures = enrichedFeatures;
+        lastFeatures = dedupedFeatures;
         lastAppliedGeneration = generation;
-        global.lastMapFeatures = enrichedFeatures;
+        global.lastMapFeatures = dedupedFeatures;
 
         const countEl = document.getElementById('map-property-count');
         if (countEl) {
-            countEl.innerText = 'Available Properties : ' + enrichedFeatures.length;
+            countEl.innerText = 'Available Properties : ' + dedupedFeatures.length;
         }
 
         if (typeof global.renderMapListCards === 'function' && !state?.isClusterPanelOpen?.()) {
-            global.renderMapListCards(enrichedFeatures);
+            global.renderMapListCards(dedupedFeatures);
         }
 
         return true;

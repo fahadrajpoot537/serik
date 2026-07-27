@@ -5642,8 +5642,8 @@ class PropertyController extends BaseController
         // Falls back to MySQL for complex sold/date/subtype filters, or when Meili
         // is unavailable. engine=mysql forces the MySQL path for A/B testing.
         if ($request->input('engine') !== 'mysql') {
-            // v7: overwrite Meili `_geo` with live DB lat/lng for exact pin placement.
-            $meiliCacheKey = 'map_meili_v7_' . md5(implode('|', [
+            // v8: DB lat/lng on geometry + properties for exact pin placement.
+            $meiliCacheKey = 'map_meili_v8_' . md5(implode('|', [
                 round($south, 4), round($north, 4), round($west, 4), round($east, 4),
                 $this->mapFilterSignature($request),
             ]));
@@ -5669,9 +5669,8 @@ class PropertyController extends BaseController
             }
         }
 
-        // v25: grid-snapped bounds + filter signature (matches the Meili key
-        // strategy) so the MySQL fallback also benefits from pan/zoom cache reuse.
-        $cacheKey = 'map_v25_' . md5(implode('|', [
+        // v26: include latitude/longitude on feature properties for exact pins.
+        $cacheKey = 'map_v26_' . md5(implode('|', [
             round($south, 4), round($north, 4), round($west, 4), round($east, 4),
             $this->mapFilterSignature($request),
         ]));
@@ -5984,6 +5983,8 @@ class PropertyController extends BaseController
                                 'external_id' => '',
                                 'transaction' => $property->MlsStatus,
                                 'mls_status' => $property->MlsStatus,
+                                'latitude' => (float) $property->latitude,
+                                'longitude' => (float) $property->longitude,
                                 'image' => 'https://serik.ca/storage/avatars/1.jpg',
                                 'price' => 0,
                                 'ClosePrice' => null,
@@ -6016,6 +6017,8 @@ class PropertyController extends BaseController
                                 ? ($property->TransactionType === 'For Lease' ? 'For Lease' : 'For Sale')
                                 : $property->MlsStatus,
                             'mls_status' => $property->MlsStatus,
+                            'latitude' => (float) $property->latitude,
+                            'longitude' => (float) $property->longitude,
                             'image' => \App\Support\SerikMediaUrl::mapListingCover(
                                 (string) $property->external_id,
                                 (string) ($property->image_val ?: '')
@@ -6220,6 +6223,8 @@ class PropertyController extends BaseController
                     'id' => $h['id'],
                     'name' => $name,
                     'external_id' => $h['external_id'] ?? '',
+                    'latitude' => (float) $h['_geo']['lat'],
+                    'longitude' => (float) $h['_geo']['lng'],
                     'transaction' => $mls === 'New'
                         ? (($h['transaction_type'] ?? '') === 'For Lease' ? 'For Lease' : 'For Sale')
                         : $mls,
@@ -6266,10 +6271,11 @@ class PropertyController extends BaseController
                     if (! $row) {
                         continue;
                     }
-                    $feature['geometry']['coordinates'] = [
-                        (float) $row->longitude,
-                        (float) $row->latitude,
-                    ];
+                    $lat = (float) $row->latitude;
+                    $lng = (float) $row->longitude;
+                    $feature['geometry']['coordinates'] = [$lng, $lat];
+                    $feature['properties']['latitude'] = $lat;
+                    $feature['properties']['longitude'] = $lng;
                 }
                 unset($feature);
             }

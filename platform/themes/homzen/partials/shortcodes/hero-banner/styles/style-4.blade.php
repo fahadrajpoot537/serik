@@ -5200,9 +5200,12 @@ window.SERIK_CANONICAL_ORIGIN = @json(rtrim(\App\Support\CanonicalUrl::normalize
 // CARTO Voyager raster shows neighbourhood/area labels from ~zoom 12+.
 const HS_MAP_DEFAULT_ZOOM = 15;
 const HS_MAP_CITY_ZOOM = 15;
-/** Uncluster to exact DB lat/lng once past city zoom (must match GeoJSON source). */
+/**
+ * Uncluster past city zoom so each pin sits on its exact DB lat/lng.
+ * Same-building stacks are collapsed client-side (see enrichMapFeatures).
+ */
 const HS_CLUSTER_MAX_ZOOM = 16;
-/** Tight radius so separate nearby listings stay separate circles/pins. */
+/** Tight radius so nearby-but-distinct homes uncluster as you zoom in. */
 const HS_CLUSTER_RADIUS = 28;
 /** Cluster click: ≤ this count opens the list; larger circles zoom in. */
 const HS_CLUSTER_LIST_MAX = 15;
@@ -5547,36 +5550,96 @@ document.addEventListener("DOMContentLoaded", function () {
         return 'sale';
     };
 
+    window._hsColocatedStacks = Object.create(null);
+
     window.enrichMapFeaturesWithPriceLabels = function (features) {
-        return (features || []).map((feature) => {
+        const seenIds = new Set();
+        const prepared = [];
+
+        (features || []).forEach((feature) => {
             const props = { ...(feature.properties || {}) };
+            const idKey = String(props.id ?? props.property_id ?? '').trim();
+            if (idKey !== '' && seenIds.has(idKey)) {
+                return;
+            }
+            if (idKey !== '') {
+                seenIds.add(idKey);
+            }
+
+            // Prefer live lat/lng on properties (from API DB overwrite) over geometry.
+            let lng = Number(props.longitude ?? props.lng);
+            let lat = Number(props.latitude ?? props.lat);
+            const raw = feature?.geometry?.coordinates;
+            if (!Number.isFinite(lng) || !Number.isFinite(lat) || (lng === 0 && lat === 0)) {
+                lng = Number(raw?.[0]);
+                lat = Number(raw?.[1]);
+            }
+            if (!Number.isFinite(lng) || !Number.isFinite(lat) || (lng === 0 && lat === 0)) {
+                return;
+            }
+            if (Math.abs(lat) > 90 || Math.abs(lng) > 180 || lat < -90 || lat > 90) {
+                return;
+            }
+
+            props.latitude = lat;
+            props.longitude = lng;
             props.price_label = window.resolveMapMarkerPriceLabel(props);
             props.marker_variant = window.resolveMapMarkerVariant(props);
 
-            // Always pin from geometry [lng, lat] — never invent/offset coordinates.
-            const raw = feature?.geometry?.coordinates;
-            let lng = Number(raw?.[0]);
-            let lat = Number(raw?.[1]);
-            if (!Number.isFinite(lng) || !Number.isFinite(lat) || (lng === 0 && lat === 0)) {
-                return null;
-            }
-            // Guard against accidental lat/lng swaps outside Ontario bounds.
-            if (Math.abs(lat) > 90 || Math.abs(lng) > 180) {
-                return null;
-            }
-            if (lat < -90 || lat > 90) {
-                return null;
-            }
-
-            return {
+            prepared.push({
                 type: 'Feature',
                 geometry: {
                     type: 'Point',
+                    // Exact DB coordinates — no jitter / spiderfy offset.
                     coordinates: [lng, lat],
                 },
                 properties: props,
-            };
-        }).filter(Boolean);
+            });
+        });
+
+        // One pin per building: merge listings that share the same ~1m coordinate.
+        const groups = new Map();
+        prepared.forEach((feature) => {
+            const [lng, lat] = feature.geometry.coordinates;
+            const key = lng.toFixed(5) + ',' + lat.toFixed(5);
+            if (!groups.has(key)) {
+                groups.set(key, []);
+            }
+            groups.get(key).push(feature);
+        });
+
+        window._hsColocatedStacks = Object.create(null);
+        const collapsed = [];
+
+        groups.forEach((group) => {
+            const primary = group[0];
+            const props = { ...primary.properties };
+            if (group.length > 1) {
+                const ids = group
+                    .map((f) => String(f.properties?.id ?? '').trim())
+                    .filter(Boolean);
+                props.stack_count = group.length;
+                props.stack_ids = ids.join(',');
+                props.price_label = String(props.price_label || '') + ' ·' + group.length;
+                const stackKey = String(props.id ?? ids[0] ?? '');
+                if (stackKey) {
+                    window._hsColocatedStacks[stackKey] = group;
+                }
+            } else {
+                props.stack_count = 1;
+                props.stack_ids = String(props.id ?? '');
+            }
+            collapsed.push({
+                type: 'Feature',
+                geometry: {
+                    type: 'Point',
+                    coordinates: primary.geometry.coordinates.slice(),
+                },
+                properties: props,
+            });
+        });
+
+        return collapsed;
     };
 
     function buildHsPricePinImageData(fillColor) {
@@ -6626,7 +6689,7 @@ const cityKey = normalizeCity(cityFromUrlRaw);
                 features: []
             },
             cluster: true,
-            // Stay above city zoom (15) so badges do not collapse into jumping pins.
+            maxzoom: 18,
             clusterMaxZoom: HS_CLUSTER_MAX_ZOOM,
             clusterRadius: HS_CLUSTER_RADIUS
         });
@@ -6709,6 +6772,20 @@ if (urlLocation) {
 
         ensureHsPriceMarkerImages(map);
 
+        // Exact lat/lng anchor (true point). Price pin tip sits on this.
+        map.addLayer({
+            id: 'unclustered-exact-dot',
+            type: 'circle',
+            source: 'properties',
+            filter: ['!', ['has', 'point_count']],
+            paint: {
+                'circle-radius': 3.5,
+                'circle-color': '#0255a1',
+                'circle-stroke-width': 1.5,
+                'circle-stroke-color': '#ffffff',
+            },
+        });
+
         map.addLayer({
             id: 'unclustered-point',
             type: 'symbol',
@@ -6722,14 +6799,14 @@ if (urlLocation) {
                     'lease', 'hs-price-pin-lease',
                     'hs-price-pin-sale',
                 ],
-                'icon-text-fit': 'both',
-                'icon-text-fit-padding': [3, 10, 3, 10],
+                // Width-only fit keeps pin tip height so anchor stays on the point.
+                'icon-text-fit': 'width',
+                'icon-text-fit-padding': [4, 10, 4, 10],
                 'text-field': ['coalesce', ['get', 'price_label'], ''],
                 'text-size': 13,
                 'text-font': ['Noto Sans Bold', 'Noto Sans Regular'],
                 'text-anchor': 'center',
-                // Pin tip sits on the exact lat/lng from the database.
-                'text-offset': [0, -0.7],
+                'text-offset': [0, -0.85],
                 'icon-anchor': 'bottom',
                 'icon-offset': [0, 0],
                 'text-allow-overlap': true,
@@ -6962,7 +7039,16 @@ map.on('mouseenter', 'unclustered-point', (e) => {
         prefetchMapBundlesForFeatures([e.features[0]], 1);
     }
 });
+map.on('mouseenter', 'unclustered-exact-dot', (e) => {
+    map.getCanvas().style.cursor = 'pointer';
+    if (e.features?.[0] && typeof prefetchMapBundlesForFeatures === 'function') {
+        prefetchMapBundlesForFeatures([e.features[0]], 1);
+    }
+});
 map.on('mouseleave', 'unclustered-point', () => {
+    map.getCanvas().style.cursor = '';
+});
+map.on('mouseleave', 'unclustered-exact-dot', () => {
     map.getCanvas().style.cursor = '';
 });
 
@@ -8749,7 +8835,7 @@ function mapMovedEnoughToRefetch() {
         [pt.x + pad, pt.y + pad],
     ];
     const hits = dedupeFeaturesById(
-        map.queryRenderedFeatures(bbox, { layers: ['unclustered-point'] })
+        map.queryRenderedFeatures(bbox, { layers: ['unclustered-point', 'unclustered-exact-dot'] })
     );
 
     if (hits.length > 1) {
@@ -8760,6 +8846,16 @@ function mapMovedEnoughToRefetch() {
 
     const feature = hits[0] || e.features?.[0];
     if (!feature) return;
+
+    const stackKey = String(feature.properties?.id ?? '');
+    const stacked = stackKey && window._hsColocatedStacks
+        ? window._hsColocatedStacks[stackKey]
+        : null;
+    if (Array.isArray(stacked) && stacked.length > 1) {
+        const coords = featureCoords(feature) || (e.lngLat ? [e.lngLat.lng, e.lngLat.lat] : null);
+        openLeavesAsListOrPopup(stacked, coords);
+        return;
+    }
 
     if (typeof window.showPropertyMapPopup === 'function') {
         window.showPropertyMapPopup(feature);
@@ -8775,7 +8871,20 @@ function mapMovedEnoughToRefetch() {
     runMarkerSelectionHandler(e, handleUnclusteredMarkerClick);
   });
 
+  map.on('click', 'unclustered-exact-dot', function (e) {
+    if (e.originalEvent?.type === 'click' && Date.now() - lastUnclusteredPointerTs < 500) {
+        return;
+    }
+    runMarkerSelectionHandler(e, handleUnclusteredMarkerClick);
+  });
+
   map.on('touchend', 'unclustered-point', function (e) {
+    if (!e.features || !e.features.length) return;
+    lastUnclusteredPointerTs = Date.now();
+    runMarkerSelectionHandler(e, handleUnclusteredMarkerClick);
+  });
+
+  map.on('touchend', 'unclustered-exact-dot', function (e) {
     if (!e.features || !e.features.length) return;
     lastUnclusteredPointerTs = Date.now();
     runMarkerSelectionHandler(e, handleUnclusteredMarkerClick);
@@ -8791,7 +8900,7 @@ function mapMovedEnoughToRefetch() {
     }
 
     const markerFeatures = map.queryRenderedFeatures(e.point, {
-        layers: ['unclustered-point', 'clusters'],
+        layers: ['unclustered-point', 'unclustered-exact-dot', 'clusters'],
     });
     if (markerFeatures.length) {
         return;
