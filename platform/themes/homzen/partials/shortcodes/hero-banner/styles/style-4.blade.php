@@ -4350,9 +4350,9 @@ position: absolute;
         || request()->is('on/*/map')
         || (bool) preg_match('#^on/.+-for-(sale|lease)(?:-in-.+)?/map$#', $serikRequestPath)
         || (bool) preg_match('#^.+-for-(sale|lease)(?:-in-.+)?$#', $serikRequestPath);
-    $mapPageH1 = $isMapSearchPageView ? \App\Support\PageH1::resolveMap() : null;
 
-    if ($mapPageH1) {
+    // Prevent layout from injecting the map H1 above the topbar.
+    if ($isMapSearchPageView) {
         Theme::set('pageH1ProvidedByContent', true);
     }
 @endphp
@@ -4383,10 +4383,6 @@ position: absolute;
 
 @if ($isMapSearchPageView)
 <section class="flat-map hero-banner-4 map-housesigma" id="secondMain">
-
-    @if ($mapPageH1)
-        {!! Theme::partial('page-h1', ['text' => $mapPageH1, 'variant' => 'map']) !!}
-    @endif
 
     <!-- ===== TOP BAR UI ===== -->
     <div class="hs-topbar">
@@ -5188,7 +5184,7 @@ position: absolute;
 <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.3/mapbox-gl-draw.js"></script>
 <script src="{{ Theme::asset()->url('js/map/interaction-state.js') }}?v={{ get_cms_version() }}"></script>
 <script src="{{ Theme::asset()->url('js/map/marker-manager.js') }}?v={{ get_cms_version() }}"></script>
-<script src="{{ Theme::asset()->url('js/map/fetch-coordinator.js') }}?v={{ get_cms_version() }}-mf2"></script>
+<script src="{{ Theme::asset()->url('js/map/fetch-coordinator.js') }}?v={{ get_cms_version() }}-mf3"></script>
 @if (request()->boolean('hs_map_trace') || request()->cookie('hs_map_trace'))
 <script src="{{ Theme::asset()->url('js/map/map-trace.js') }}?v={{ get_cms_version() }}"></script>
 @endif
@@ -5204,6 +5200,11 @@ window.SERIK_CANONICAL_ORIGIN = @json(rtrim(\App\Support\CanonicalUrl::normalize
 // CARTO Voyager raster shows neighbourhood/area labels from ~zoom 12+.
 const HS_MAP_DEFAULT_ZOOM = 15;
 const HS_MAP_CITY_ZOOM = 15;
+/** Keep badges/circles until street-level; must match GeoJSON source clusterMaxZoom. */
+const HS_CLUSTER_MAX_ZOOM = 18;
+const HS_CLUSTER_RADIUS = 62;
+/** Cluster click: ≤ this count opens the list; larger circles zoom in. */
+const HS_CLUSTER_LIST_MAX = 15;
 
 function resolveInitialMapView() {
     const cached = window.SerikVisitorLocation?.getSessionLocation?.();
@@ -6601,8 +6602,9 @@ const cityKey = normalizeCity(cityFromUrlRaw);
                 features: []
             },
             cluster: true,
-            clusterMaxZoom: 15,
-            clusterRadius: 55
+            // Stay above city zoom (15) so badges do not collapse into jumping pins.
+            clusterMaxZoom: HS_CLUSTER_MAX_ZOOM,
+            clusterRadius: HS_CLUSTER_RADIUS
         });
 
         // ======================
@@ -8506,17 +8508,13 @@ function mapMovedEnoughToRefetch() {
     }
 
     /**
-     * Cluster click UX (simple + predictable):
-     * - 2–15 → always open list
-     * - Larger circle → open list when next step would show stacked/individual pins
-     *   (same building, leaf cluster, or zoom past clustering)
-     * - Only zoom when there are real sub-circles across an area
-     * - Zoom never crosses clusterMaxZoom (that dumps overlapping pins)
+     * Cluster click UX:
+     * - ≤15 properties → open list
+     * - >15 → zoom in toward sub-circles (never past clusterMaxZoom)
+     * - If zoom cannot help (already max / same building) → open list
      */
-    const HS_CLUSTER_LIST_MAX = 15;
-    const HS_CLUSTER_LEAF_FETCH_MAX = 100;
-    const HS_CLUSTER_MAX_ZOOM = 15; // keep in sync with map source clusterMaxZoom
-    const HS_COLOCATED_DEG = 0.002; // ~200m — condo / tower stacks
+    const HS_CLUSTER_LEAF_FETCH_MAX = 5000;
+    const HS_COLOCATED_DEG = 0.00035; // ~35m — same building / stacked units only
 
     function featureCoords(feature) {
         const c = feature?.geometry?.coordinates;
@@ -8553,10 +8551,6 @@ function mapMovedEnoughToRefetch() {
 
     function childrenAreAllPoints(children) {
         return !!(children?.length) && children.every((child) => !isClusterFeature(child));
-    }
-
-    function countChildClusters(children) {
-        return (children || []).filter(isClusterFeature).length;
     }
 
     function dedupeFeaturesById(features) {
@@ -8603,10 +8597,10 @@ function mapMovedEnoughToRefetch() {
     }
 
     function smoothZoomToCluster(clusterCoords, targetZoom) {
-        // Stay below clusterMaxZoom so MapLibre keeps circles (no pin soup).
-        const safeZoom = Math.min(Number(targetZoom), HS_CLUSTER_MAX_ZOOM - 0.35);
+        // Stay below clusterMaxZoom so MapLibre keeps circles (no pin soup / jump).
+        const safeZoom = Math.min(Number(targetZoom), HS_CLUSTER_MAX_ZOOM - 0.4);
         const currentZoom = map.getZoom();
-        if (!Number.isFinite(safeZoom) || safeZoom <= currentZoom + 0.08) {
+        if (!Number.isFinite(safeZoom) || safeZoom <= currentZoom + 0.15) {
             return false;
         }
 
@@ -8639,83 +8633,73 @@ function mapMovedEnoughToRefetch() {
             return;
         }
 
-        const leafLimit = Math.min(Math.max(pointCount, 2), HS_CLUSTER_LEAF_FETCH_MAX);
-
-        fetchClusterLeaves(source, clusterId, leafLimit, function (leafErr, leaves) {
-            if (leafErr || !leaves.length) return;
-
-            const openList = function () {
+        const openAllLeavesAsList = function () {
+            const leafLimit = Math.min(Math.max(pointCount, 2), HS_CLUSTER_LEAF_FETCH_MAX);
+            fetchClusterLeaves(source, clusterId, leafLimit, function (leafErr, leaves) {
+                if (leafErr || !leaves.length) return;
                 openLeavesAsListOrPopup(leaves, clusterCoords);
-            };
+            });
+        };
 
-            // Small circles → list (user-friendly default).
-            if (leaves.length === 1 || pointCount <= HS_CLUSTER_LIST_MAX) {
-                openList();
-                return;
-            }
+        // ≤15 → list with every property in the circle.
+        if (pointCount <= HS_CLUSTER_LIST_MAX) {
+            openAllLeavesAsList();
+            return;
+        }
 
-            const afterMeta = function (children, expansionZoom) {
-                const childClusters = countChildClusters(children);
+        // >15 → zoom when possible; only open full list when zoom cannot help.
+        let children = null;
+        let expansionZoom = NaN;
+        let pending = 2;
 
-                // Next step is only individual markers → list (fixes 22/32 stacks).
-                if (childrenAreAllPoints(children) || childClusters === 0) {
-                    openList();
+        const maybeDone = function () {
+            pending -= 1;
+            if (pending > 0) return;
+
+            // Sample leaves only to detect same-building stacks (not for full list yet).
+            fetchClusterLeaves(source, clusterId, Math.min(pointCount, 40), function (err, sample) {
+                if (!err && sample.length && leavesAreColocated(sample)) {
+                    openAllLeavesAsList();
                     return;
                 }
 
-                // Same building / tight area → list, never pin-stack.
-                if (leavesAreColocated(leaves)) {
-                    openList();
+                const tryZoom = function (zoomTarget) {
+                    return smoothZoomToCluster(clusterCoords, zoomTarget);
+                };
+
+                if (Number.isFinite(expansionZoom) && expansionZoom < HS_CLUSTER_MAX_ZOOM - 0.15) {
+                    if (tryZoom(expansionZoom)) {
+                        return;
+                    }
+                }
+
+                const steppedZoom = Math.min(map.getZoom() + 1.35, HS_CLUSTER_MAX_ZOOM - 0.4);
+                if (!childrenAreAllPoints(children) && tryZoom(steppedZoom)) {
                     return;
                 }
 
-                // Only one nested circle (32→32) → list.
-                if (childClusters <= 1) {
-                    openList();
-                    return;
-                }
+                openAllLeavesAsList();
+            });
+        };
 
-                // Expansion would uncluster → list.
-                if (!Number.isFinite(expansionZoom) || expansionZoom >= HS_CLUSTER_MAX_ZOOM - 0.2) {
-                    openList();
-                    return;
-                }
-
-                // Real geographic split into multiple circles → smooth zoom.
-                if (!smoothZoomToCluster(clusterCoords, expansionZoom)) {
-                    openList();
-                }
-            };
-
-            let children = null;
-            let expansionZoom = NaN;
-            let pending = 2;
-
-            const maybeDone = function () {
-                pending -= 1;
-                if (pending > 0) return;
-                afterMeta(children, expansionZoom);
-            };
-
-            if (typeof source.getClusterChildren === 'function') {
-                source.getClusterChildren(clusterId, function (err, kids) {
-                    children = err ? [] : (kids || []);
-                    maybeDone();
-                });
-            } else {
-                children = [];
+        if (typeof source.getClusterChildren === 'function') {
+            source.getClusterChildren(clusterId, function (err, kids) {
+                children = err ? [] : (kids || []);
                 maybeDone();
-            }
+            });
+        } else {
+            children = [];
+            maybeDone();
+        }
 
-            if (typeof source.getClusterExpansionZoom === 'function') {
-                source.getClusterExpansionZoom(clusterId, function (err, zoom) {
-                    expansionZoom = err ? NaN : Number(zoom);
-                    maybeDone();
-                });
-            } else {
+        if (typeof source.getClusterExpansionZoom === 'function') {
+            source.getClusterExpansionZoom(clusterId, function (err, zoom) {
+                expansionZoom = err ? NaN : Number(zoom);
                 maybeDone();
-            }
-        });
+            });
+        } else {
+            maybeDone();
+        }
     }
 
     map.on('click', 'clusters', function (e) {
@@ -8732,7 +8716,7 @@ function mapMovedEnoughToRefetch() {
 
   function handleUnclusteredMarkerClick(e) {
     // Stacked pins at one building → open list instead of a single random pin.
-    const pad = 16;
+    const pad = 22;
     const pt = e.point || { x: 0, y: 0 };
     const bbox = [
         [pt.x - pad, pt.y - pad],
@@ -10964,9 +10948,13 @@ function renderMapListCards(features, options) {
         return;
     }
 
-    const capped = (features || []).slice(0, 150);
+    const capped = options.cluster
+        ? (features || [])
+        : (features || []).slice(0, 300);
     hsMapListFeatures = capped;
-    const total = capped.length;
+    const shown = capped.length;
+    const fullTotal = Array.isArray(features) ? features.length : shown;
+    const total = options.cluster ? fullTotal : shown;
     const countText = clusterMode
         ? total + (total === 1 ? ' listing' : ' listings')
         : total + (total === 1 ? ' property' : ' properties');

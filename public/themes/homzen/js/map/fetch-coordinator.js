@@ -37,16 +37,30 @@
             return true;
         }
         const zoom = Math.round(map.getZoom());
-        if (lastFetchZoom !== null && zoom !== lastFetchZoom) {
-            return true;
-        }
         const bounds = map.getBounds();
         const center = map.getCenter();
         const latSpan = Math.abs(bounds.getNorth() - bounds.getSouth());
         const lngSpan = Math.abs(bounds.getEast() - bounds.getWest());
         const movedLat = Math.abs(center.lat - lastFetchCenter.lat);
         const movedLng = Math.abs(center.lng - lastFetchCenter.lng);
-        return movedLat > latSpan * 0.08 || movedLng > lngSpan * 0.08;
+        const panned = movedLat > latSpan * 0.08 || movedLng > lngSpan * 0.08;
+
+        if (panned) {
+            return true;
+        }
+
+        // Zoom-in on the same area: keep current GeoJSON so cluster badges
+        // do not collapse/jump into single pins mid-gesture.
+        if (lastFetchZoom !== null && zoom > lastFetchZoom) {
+            return false;
+        }
+
+        // Zoom-out needs a wider sample from the API.
+        if (lastFetchZoom !== null && zoom < lastFetchZoom) {
+            return true;
+        }
+
+        return false;
     }
 
     function rememberFetchMeta(map) {
