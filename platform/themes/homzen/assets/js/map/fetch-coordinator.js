@@ -70,9 +70,9 @@
 
         if (delayMs == null) {
             if (options.fromMapMove) {
-                delayMs = 0;
+                delayMs = 80;
             } else if (options.fromFilters) {
-                delayMs = options.force ? 0 : 50;
+                delayMs = 100;
             } else {
                 delayMs = 80;
             }
@@ -207,7 +207,7 @@
         if (!map || !movedEnoughToRefetch(map)) {
             return;
         }
-        scheduleLoad(buildRequest, { fromMapMove: true }, 0);
+        scheduleLoad(buildRequest, { fromMapMove: true }, 500);
     }
 
     global.HsMapFetchCoordinator = {

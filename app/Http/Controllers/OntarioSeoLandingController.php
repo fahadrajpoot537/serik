@@ -20,6 +20,11 @@ class OntarioSeoLandingController extends Controller
 
         $request->merge($parsed);
 
+        // Lean listing pages: 10 cards per page for faster HTML + filter AJAX.
+        if (! $request->filled('per_page')) {
+            $request->merge(['per_page' => 10]);
+        }
+
         $cacheKey = $this->pageCacheKey($request, $seo);
         if ($cacheKey !== null) {
             $cached = Cache::get($cacheKey);
@@ -69,14 +74,17 @@ class OntarioSeoLandingController extends Controller
         $isAuthed = (bool) ($request->user() || $accountAuthed || auth()->check());
         $authPart = $isAuthed ? ':auth' : ':anon';
 
-        // Only cache "clean" SEO landings (city/type/open_house/sold/community).
-        $allowed = ['open_house', 'status', 'community', 'home_types', 'page', 'bedroom', 'k'];
+        // Cache SEO landings including common filter query params (fast repeat visits).
+        $allowed = [
+            'open_house', 'status', 'community', 'home_types', 'page', 'bedroom', 'k',
+            'type', 'per_page', 'min_price', 'max_price', 'bathroom', 'min_square', 'sort_by',
+        ];
         foreach ($request->query() as $key => $value) {
             if (! in_array($key, $allowed, true)) {
                 return null;
             }
         }
 
-        return 'ontario_seo_html_v4' . $authPart . ':' . md5(strtolower($seo) . '|' . $request->getQueryString());
+        return 'ontario_seo_html_v5' . $authPart . ':' . md5(strtolower($seo) . '|' . $request->getQueryString());
     }
 }

@@ -49,6 +49,45 @@ return [
     ],
 
     /**
+     * Homepage "Popular Cities" column — "{City} Real Estate" links.
+     * Order is display order. Slug drives /ontario/houses-for-sale-in-{slug}.
+     *
+     * @var list<array{name: string, slug: string}>
+     */
+    'popular_real_estate_cities' => [
+        ['name' => 'Toronto', 'slug' => 'toronto'],
+        ['name' => 'Calgary', 'slug' => 'calgary'],
+        ['name' => 'Edmonton', 'slug' => 'edmonton'],
+        ['name' => 'Vancouver', 'slug' => 'vancouver'],
+        ['name' => 'Ottawa', 'slug' => 'ottawa'],
+        ['name' => 'Surrey', 'slug' => 'surrey'],
+        ['name' => 'Hamilton', 'slug' => 'hamilton'],
+        ['name' => 'Mississauga', 'slug' => 'mississauga'],
+        ['name' => 'Brampton', 'slug' => 'brampton'],
+        ['name' => 'Richmond', 'slug' => 'richmond'],
+        ['name' => 'Kelowna', 'slug' => 'kelowna'],
+        ['name' => 'Burnaby', 'slug' => 'burnaby'],
+        ['name' => 'Langley', 'slug' => 'langley'],
+        ['name' => 'Vaughan', 'slug' => 'vaughan'],
+        ['name' => 'Markham', 'slug' => 'markham'],
+        ['name' => 'Coquitlam', 'slug' => 'coquitlam'],
+        ['name' => 'Oakville', 'slug' => 'oakville'],
+        ['name' => 'Abbotsford', 'slug' => 'abbotsford'],
+        ['name' => 'Kitchener', 'slug' => 'kitchener'],
+        ['name' => 'Windsor', 'slug' => 'windsor'],
+        ['name' => 'Richmond Hill', 'slug' => 'richmond-hill'],
+        ['name' => 'Kamloops', 'slug' => 'kamloops'],
+        ['name' => 'Chilliwack', 'slug' => 'chilliwack'],
+        ['name' => 'Kawartha Lakes', 'slug' => 'kawartha-lakes'],
+        ['name' => 'Barrie', 'slug' => 'barrie'],
+        ['name' => 'London South', 'slug' => 'london-south'],
+        ['name' => 'St. Catharines', 'slug' => 'st-catharines'],
+        ['name' => 'North Vancouver', 'slug' => 'north-vancouver'],
+        ['name' => 'Niagara Falls', 'slug' => 'niagara-falls'],
+        ['name' => 'Burlington', 'slug' => 'burlington'],
+    ],
+
+    /**
      * Former Toronto municipalities are stored in MLS as district codes
      * (e.g. "Toronto C15"), not as "North York". Used when Meili city facet
      * has no exact match.

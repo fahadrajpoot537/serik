@@ -35,7 +35,7 @@ final class CityNavigationService
             $slug = $city?->slug ?? 'ontario';
             $ttl = (int) config('seo_navigation.cache_ttl', 3600);
 
-            return Cache::remember("seo_nav:v3:home:{$slug}", $ttl, fn () => $this->buildHomeLayout($city));
+            return Cache::remember("seo_nav:v5:home:{$slug}", $ttl, fn () => $this->buildHomeLayout($city));
         }
 
         $city ??= $this->cityResolution->resolve()
@@ -45,7 +45,7 @@ final class CityNavigationService
         $communityKey = $community !== '' ? md5(mb_strtolower($community)) : 'none';
 
         return Cache::remember(
-            "seo_nav:v4:properties:{$slug}:{$communityKey}",
+            "seo_nav:v5:properties:{$slug}:{$communityKey}",
             $ttl,
             fn () => $this->buildPropertiesLayout($city, $community !== '' ? $community : null)
         );
@@ -54,19 +54,20 @@ final class CityNavigationService
     public function bustCache(?string $citySlug = null): void
     {
         if ($citySlug) {
-            foreach (['v2:home', 'v2:properties', 'v3:home', 'v3:properties', 'neighborhoods', 'nearby', 'popular_cities'] as $prefix) {
+            foreach (['v2:home', 'v2:properties', 'v3:home', 'v3:properties', 'v5:home', 'v5:properties', 'neighborhoods', 'nearby', 'popular_cities'] as $prefix) {
                 Cache::forget("seo_nav:{$prefix}:{$citySlug}");
             }
             Cache::forget("seo_nav_html:v1:properties:{$citySlug}");
             Cache::forget("seo_nav_html:v2:home:{$citySlug}");
             Cache::forget("seo_nav_html:v3:properties:{$citySlug}");
-            // Community-scoped HTML keys use md5 suffixes — bump data version via homepage caches below.
+            Cache::forget("seo_nav_html:v5:home:{$citySlug}:none");
         }
 
         Cache::forget('seo_nav:v2:ontario_active_cities');
         Cache::forget('seo_nav:v2:ontario_sold_cities');
         Cache::forget('seo_nav:v3:ontario_active_cities');
         Cache::forget('seo_nav:v3:ontario_sold_cities');
+        Cache::forget('seo_nav:v5:popular_real_estate_cities');
 
         try {
             HomepageResponseCache::bump();
@@ -108,7 +109,12 @@ final class CityNavigationService
                 ],
                 [
                     'title' => __('Sold'),
+                    'subtitle' => __('Ontario'),
                     'links' => $this->soldOntarioCityLinks(),
+                ],
+                [
+                    'title' => __('Popular Cities'),
+                    'links' => $this->popularRealEstateCityLinks(),
                 ],
             ],
         ];
@@ -290,6 +296,35 @@ final class CityNavigationService
                 $links[] = $this->link(
                     __('Sold House for Sale in :city', ['city' => $city->name]),
                     SeoLandingUrl::soldHomes($city)
+                );
+            }
+
+            return $links;
+        });
+    }
+
+    /**
+     * Homepage col 4 — national/popular "{City} Real Estate" links (config-driven, no DB).
+     *
+     * @return array<int, array{label: string, url: string}>
+     */
+    private function popularRealEstateCityLinks(): array
+    {
+        $ttl = (int) config('seo_navigation.cache_ttl', 3600);
+
+        return Cache::remember('seo_nav:v5:popular_real_estate_cities', $ttl, function () {
+            $links = [];
+
+            foreach (config('seo_navigation.popular_real_estate_cities', []) as $row) {
+                $name = trim((string) ($row['name'] ?? ''));
+                $slug = trim((string) ($row['slug'] ?? ''));
+                if ($name === '' || $slug === '') {
+                    continue;
+                }
+
+                $links[] = $this->link(
+                    __(':city Real Estate', ['city' => $name]),
+                    SeoLandingUrl::url('houses-for-sale-in-' . $slug)
                 );
             }
 

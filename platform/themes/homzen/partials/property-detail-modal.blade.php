@@ -173,7 +173,7 @@ html.hs-property-modal-open .serik-mobile-map-fab {
 
                 showLoader();
                 if (loaderTimeoutId) clearTimeout(loaderTimeoutId);
-                loaderTimeoutId = setTimeout(hideLoader, 8000);
+                loaderTimeoutId = setTimeout(hideLoader, 4000);
 
                 iframe.onload = function () {
                     if (loaderTimeoutId) clearTimeout(loaderTimeoutId);
@@ -185,6 +185,7 @@ html.hs-property-modal-open .serik-mobile-map-fab {
                 };
 
                 iframe.dataset.hsLoadedUrl = url;
+                iframe.setAttribute('fetchpriority', 'high');
                 iframe.src = url;
                 return true;
             },
@@ -286,6 +287,14 @@ html.hs-property-modal-open .serik-mobile-map-fab {
                 window.closePropertyDetailModal();
             }
         });
+
+        window.addEventListener('message', function (e) {
+            if (e.data && e.data.type === 'hs-property-iframe-ready') {
+                if (window.PropertyDetailModalManager && window.PropertyDetailModalManager.onContentSettled) {
+                    window.PropertyDetailModalManager.onContentSettled();
+                }
+            }
+        });
     }
 
     function bindListingClicks() {
@@ -306,6 +315,31 @@ html.hs-property-modal-open .serik-mobile-map-fab {
             e.preventDefault();
             e.stopPropagation();
             window.openPropertyDetailUrl(toIframeUrl(href));
+        }, true);
+
+        // Prefetch modal HTML on hover so open feels instant.
+        var prefetchTimer = null;
+        var prefetched = Object.create(null);
+        document.addEventListener('pointerover', function (e) {
+            var link = e.target.closest('a.js-property-modal-link, .serik-prop-card a[href*="/properties/"], .property-item.list-style-1 a[href*="/properties/"]');
+            if (!link) return;
+            var href = link.getAttribute('href') || '';
+            if (!href || href.indexOf('/properties/') === -1) return;
+            var url = toIframeUrl(href);
+            if (prefetched[url]) return;
+            clearTimeout(prefetchTimer);
+            prefetchTimer = setTimeout(function () {
+                if (prefetched[url]) return;
+                prefetched[url] = true;
+                if (window.fetch) {
+                    fetch(url, { credentials: 'same-origin', headers: { 'Purpose': 'prefetch', 'X-Requested-With': 'XMLHttpRequest' } }).catch(function () {});
+                }
+                var tip = document.createElement('link');
+                tip.rel = 'prefetch';
+                tip.href = url;
+                tip.as = 'document';
+                document.head.appendChild(tip);
+            }, 120);
         }, true);
     }
 

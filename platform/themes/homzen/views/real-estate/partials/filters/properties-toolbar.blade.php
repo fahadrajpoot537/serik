@@ -9,6 +9,20 @@
     $propertyCount = $propertyCount ?? null;
     $sortBy = request()->query('sort_by');
 
+    $requestType = strtolower(trim((string) request('type', '')));
+    $isSoldFilter = request('status') === 'sold';
+    $isLeaseFilter = ! $isSoldFilter && in_array($requestType, ['rent', 'lease'], true);
+    if ($isSoldFilter) {
+        $txTypeValue = '';
+        $txLabel = __('Sold');
+    } elseif ($isLeaseFilter) {
+        $txTypeValue = 'rent';
+        $txLabel = __('For Lease');
+    } else {
+        $txTypeValue = 'sale';
+        $txLabel = __('For Sale');
+    }
+
     $priceLabel = __('Any Price');
     if ($minPrice || $maxPrice) {
         $priceLabel = ($minPrice ? '$' . number_format((int) $minPrice) : '$0')
@@ -54,16 +68,14 @@
     }
 @endphp
 
-<input type="hidden" name="per_page" value="{{ request()->integer('per_page', 12) }}">
-<input type="hidden" name="type" value="sale">
+<input type="hidden" name="per_page" value="{{ request()->integer('per_page', 10) }}">
+<input type="hidden" name="type" id="serikTxType" value="{{ $txTypeValue }}">
+<input type="hidden" name="status" id="serikStatus" value="{{ $isSoldFilter ? 'sold' : '' }}" @disabled(! $isSoldFilter)>
 @if ($location = trim((string) request('location')))
     <input type="hidden" name="location" value="{{ $location }}">
 @endif
 @if (filter_var(request('open_house'), FILTER_VALIDATE_BOOLEAN))
     <input type="hidden" name="open_house" value="1">
-@endif
-@if (request('status') === 'sold')
-    <input type="hidden" name="status" value="sold">
 @endif
 @if ($community = trim((string) request('community')))
     <input type="hidden" name="community" value="{{ $community }}">
@@ -81,11 +93,13 @@
     <div class="container-fluid py-2 py-md-3">
         <ul class="nav-filters-menu serik-nav-filters list-unstyled d-flex flex-wrap align-items-center gap-2 mb-0">
             <li class="dropdown">
-                <button type="button" class="serik-filter-btn dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside">
-                    {{ __('For Sale') }}
+                <button type="button" class="serik-filter-btn dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" id="serikTxChip">
+                    {{ $txLabel }}
                 </button>
                 <div class="dropdown-menu serik-filter-menu p-2">
-                    <button type="button" class="serik-filter-option active w-100 text-start">{{ __('For Sale') }}</button>
+                    <button type="button" class="serik-filter-option serik-tx-option w-100 text-start @if (! $isLeaseFilter && ! $isSoldFilter) active @endif" data-tx="sale">{{ __('For Sale') }}</button>
+                    <button type="button" class="serik-filter-option serik-tx-option w-100 text-start mt-1 @if ($isLeaseFilter) active @endif" data-tx="lease">{{ __('For Lease') }}</button>
+                    <button type="button" class="serik-filter-option serik-tx-option w-100 text-start mt-1 @if ($isSoldFilter) active @endif" data-tx="sold">{{ __('Sold') }}</button>
                 </div>
             </li>
 
@@ -177,9 +191,6 @@
                 if (filter_var(request('open_house'), FILTER_VALIDATE_BOOLEAN)) {
                     $clearQuery['open_house'] = 1;
                 }
-                if (request('status') === 'sold') {
-                    $clearQuery['status'] = 'sold';
-                }
                 if ($clearQuery !== []) {
                     $clearUrl .= (str_contains($clearUrl, '?') ? '&' : '?') . http_build_query($clearQuery);
                 }
@@ -227,10 +238,17 @@
                     if ($countPlace === '') {
                         $countPlace = 'Ontario';
                     }
+                    if ($activeChips !== []) {
+                        $countLabelText = __('homes match your filters');
+                    } elseif ($isSoldFilter) {
+                        $countLabelText = __('sold homes in :place', ['place' => $countPlace]);
+                    } elseif ($isLeaseFilter) {
+                        $countLabelText = __('homes for lease in :place', ['place' => $countPlace]);
+                    } else {
+                        $countLabelText = __('homes for sale in :place', ['place' => $countPlace]);
+                    }
                 @endphp
-                {{ $activeChips !== []
-                    ? __('homes match your filters')
-                    : __('homes for sale in :place', ['place' => $countPlace]) }}
+                {{ $countLabelText }}
             </span>
             <span class="serik-filter-loading ms-2 d-none" id="serikFilterLoading" aria-hidden="true">{{ __('Updating…') }}</span>
         </p>
@@ -300,7 +318,7 @@
 .serik-mobile-map-fab:hover { color: #fff !important; opacity: 0.95; }
 .serik-listing-toolbar {
     top: calc(var(--serik-top-header-height, 0px) + var(--serik-main-header-height, 60px));
-    z-index: 9998;
+    z-index: 1030;
 }
 .serik-nav-filters { row-gap: 8px; }
 .serik-filter-btn {
@@ -347,6 +365,8 @@ document.addEventListener('DOMContentLoaded', function () {
     let debounceTimer = null;
     let filterXhr = null;
 
+    const countPlace = @json(trim((string) ($seoNavCommunity ?? request('community') ?? $seoNavLocation ?? request('location') ?? 'Ontario')) ?: 'Ontario');
+
     const formatPriceLabel = () => {
         const min = form.querySelector('input[name="min_price"]');
         const max = form.querySelector('input[name="max_price"]');
@@ -354,6 +374,20 @@ document.addEventListener('DOMContentLoaded', function () {
         const maxV = max?.value ? '$' + Number(max.value).toLocaleString() : '';
         if (!minV && !maxV) return 'Any Price';
         return (minV || '$0') + ' – ' + (maxV || 'Max');
+    };
+
+    const txLabelFor = (tx) => {
+        if (tx === 'sold') return 'Sold';
+        if (tx === 'lease') return 'For Lease';
+        return 'For Sale';
+    };
+
+    const currentTx = () => {
+        const status = form.querySelector('#serikStatus')?.value;
+        const type = form.querySelector('#serikTxType')?.value;
+        if (status === 'sold') return 'sold';
+        if (type === 'rent' || type === 'lease') return 'lease';
+        return 'sale';
     };
 
     const updateActiveChips = () => {
@@ -385,7 +419,14 @@ document.addEventListener('DOMContentLoaded', function () {
         wrap.innerHTML = chips.map((text) => '<span class="serik-active-chip">' + text + '</span>').join('');
         wrap.classList.toggle('d-none', chips.length === 0);
         if (countLabel) {
-            countLabel.textContent = chips.length ? 'homes match your filters' : 'homes for sale in Ontario';
+            if (chips.length) {
+                countLabel.textContent = 'homes match your filters';
+            } else {
+                const tx = currentTx();
+                if (tx === 'sold') countLabel.textContent = 'sold homes in ' + countPlace;
+                else if (tx === 'lease') countLabel.textContent = 'homes for lease in ' + countPlace;
+                else countLabel.textContent = 'homes for sale in ' + countPlace;
+            }
         }
 
         const typeChip = form.querySelector('#serikTypeChip');
@@ -440,6 +481,40 @@ document.addEventListener('DOMContentLoaded', function () {
             filterXhr = xhr;
         },
     };
+
+    form.querySelectorAll('.serik-tx-option').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const tx = btn.dataset.tx || 'sale';
+            const typeInput = form.querySelector('#serikTxType');
+            const statusInput = form.querySelector('#serikStatus');
+            const chip = form.querySelector('#serikTxChip');
+
+            if (tx === 'sold') {
+                if (typeInput) typeInput.value = '';
+                if (statusInput) {
+                    statusInput.value = 'sold';
+                    statusInput.disabled = false;
+                }
+            } else if (tx === 'lease') {
+                if (typeInput) typeInput.value = 'rent';
+                if (statusInput) {
+                    statusInput.value = '';
+                    statusInput.disabled = true;
+                }
+            } else {
+                if (typeInput) typeInput.value = 'sale';
+                if (statusInput) {
+                    statusInput.value = '';
+                    statusInput.disabled = true;
+                }
+            }
+
+            form.querySelectorAll('.serik-tx-option').forEach((b) => b.classList.remove('active'));
+            btn.classList.add('active');
+            if (chip) chip.textContent = txLabelFor(tx);
+            submitFilters();
+        });
+    });
 
     form.querySelectorAll('.serik-bed-preset').forEach((btn) => {
         btn.addEventListener('click', () => {

@@ -3,9 +3,16 @@
     $sections = $sections ?? [];
     $currentCity = $current_city ?? null;
     $currentCommunity = $current_community ?? null;
-    $colClass = $layout === 'home' ? 'col-md-4' : 'col-md-3';
-    $mobileColClass = $layout === 'home' ? 'col-12' : 'col-6';
+    $sectionCount = count(array_filter($sections, static fn ($s) => ($s['links'] ?? []) !== []));
+    if ($layout === 'home') {
+        $colClass = $sectionCount >= 4 ? 'col-lg-3 col-md-6' : 'col-md-4';
+        $mobileColClass = 'col-12';
+    } else {
+        $colClass = 'col-md-3';
+        $mobileColClass = 'col-6';
+    }
     $wrapClass = $layout === 'properties' ? 'container-fluid' : 'container';
+    $popularCitiesTitle = __('Popular Cities');
 @endphp
 
 @if ($sections !== [])
@@ -23,6 +30,9 @@
         <div class="row seo-nav-row">
             @foreach ($sections as $section)
                 @if (($section['links'] ?? []) !== [])
+                    @php
+                        $isPopularCities = ($section['title'] ?? '') === $popularCitiesTitle;
+                    @endphp
                     <div class="{{ $mobileColClass }} {{ $colClass }} seo-nav-col">
                         <div class="seo-nav-block">
                             <h2 class="seo-nav-title">
@@ -32,7 +42,7 @@
                                 @endif
                             </h2>
 
-                            <nav class="seo-nav-list" aria-label="{{ $section['title'] }}">
+                            <nav class="seo-nav-list @if ($isPopularCities) seo-nav-list--scroll @endif" aria-label="{{ $section['title'] }}">
                                 @foreach ($section['links'] as $link)
                                     <a href="{{ $link['url'] }}">{{ $link['label'] }}</a>
                                 @endforeach
@@ -47,9 +57,9 @@
 
 <style>
 .seo-city-navigation {
-    padding: 2.5rem 0;
+    padding: 2rem 0;
     border-top: 1px solid #e8ecf1;
-    margin-top: 2rem;
+    margin-top: 1.5rem;
     background: #fafbfc;
 }
 .seo-nav-context {
@@ -58,7 +68,7 @@
     margin: 0;
 }
 .seo-nav-row {
-    row-gap: 1.75rem;
+    row-gap: 1.5rem;
 }
 .seo-nav-col {
     display: flex;
@@ -71,8 +81,8 @@
     font-size: 1rem;
     font-weight: 700;
     color: #1a1a1a;
-    margin: 0 0 0.875rem;
-    padding-bottom: 0.5rem;
+    margin: 0 0 0.75rem;
+    padding-bottom: 0.4rem;
     border-bottom: 2px solid #0255a1;
 }
 .seo-nav-subtitle-inline {
@@ -85,22 +95,29 @@
 .seo-nav-list {
     display: flex;
     flex-direction: column;
-    gap: 0.3rem;
+    gap: 0.25rem;
+}
+.seo-nav-list--scroll {
+    max-height: 22rem;
+    overflow-y: auto;
+    padding-right: 0.35rem;
+    scrollbar-width: thin;
 }
 .seo-nav-list a {
     color: #0255a1;
     text-decoration: none;
     font-size: 0.875rem;
-    line-height: 1.5;
+    line-height: 1.45;
     display: block;
-    padding: 0.1rem 0;
+    padding: 0.05rem 0;
 }
 .seo-nav-list a:hover {
     text-decoration: underline;
     color: #013d73;
 }
 @media (max-width: 767.98px) {
-    .seo-city-navigation { padding: 1.5rem 0; }
+    .seo-city-navigation { padding: 1.25rem 0; }
+    .seo-nav-list--scroll { max-height: 16rem; }
 }
 </style>
 @endif

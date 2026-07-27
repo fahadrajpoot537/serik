@@ -39,8 +39,8 @@ class TrebPropertyHelper
 
     /**
      * Human-friendly relative "Listed" label instead of an exact date.
-     * Returns e.g. "Listed today", "Listed this week", "Listed this month",
-     * "Listed this year", or "Listed in 2023" for older listings.
+     * Returns e.g. "Listed today", "Listed 1 day ago", "Listed this week",
+     * "Listed this month", or "Listed in May 2025" for older listings.
      *
      * @param  \Carbon\Carbon|\DateTimeInterface|string|null  $date
      */
@@ -51,7 +51,7 @@ class TrebPropertyHelper
         }
 
         try {
-            $listed = \Carbon\Carbon::parse($date);
+            $listed = \Carbon\Carbon::parse($date)->startOfDay();
         } catch (\Throwable) {
             return '';
         }
@@ -62,23 +62,35 @@ class TrebPropertyHelper
             return '';
         }
 
-        $now = \Carbon\Carbon::now();
+        $now = \Carbon\Carbon::now()->startOfDay();
+        // Absolute calendar-day gap (listed in the past → positive).
+        $days = (int) $listed->diffInDays($now);
+        if ($listed->greaterThan($now)) {
+            $days = 0;
+        }
 
-        if ($listed->isSameDay($now)) {
+        if ($days === 0) {
             return trim($prefix . ' today');
         }
 
-        // "This week" = within the last 7 days.
-        if ($listed->greaterThanOrEqualTo($now->copy()->subDays(7)->startOfDay())) {
+        if ($days === 1) {
+            return trim($prefix . ' 1 day ago');
+        }
+
+        if ($days <= 6) {
+            return trim($prefix . ' ' . $days . ' days ago');
+        }
+
+        if ($days <= 13) {
             return trim($prefix . ' this week');
         }
 
-        if ($listed->isSameMonth($now)) {
+        if ($listed->isSameMonth($now) && $listed->isSameYear($now)) {
             return trim($prefix . ' this month');
         }
 
-        // Older than this month: show the month + year, e.g. "Listed June 2026".
-        return trim($prefix . ' ' . $listed->format('F Y'));
+        // Older than this month: e.g. "Listed in May 2025".
+        return trim($prefix . ' in ' . $listed->format('F Y'));
     }
 
     /**
@@ -1214,13 +1226,14 @@ class TrebPropertyHelper
         $beds = $bedMain > 0 ? $bedMain . ($bedBelow > 0 ? '+' . $bedBelow : '') : '';
 
         $listedAt = $property->listing_contract_date ?? $property->created_at;
-        $listedActive = self::formatListingActiveMonthYear($listedAt);
+        // Relative fragment without prefix — cards already render "Listed …".
+        $listedActive = self::relativeListedLabel($listedAt, '');
 
         return [
             'address' => $address,
             'location' => $location,
-            'listed_ago' => self::formatRelativeTime($listedAt ? (string) $listedAt : null),
-            'listed_active' => $listedActive,
+            'listed_ago' => self::relativeListedLabel($listedAt),
+            'listed_active' => $listedActive !== '' ? $listedActive : null,
             'beds' => $beds,
             'url' => self::listingSeoUrl($property),
         ];
@@ -2184,43 +2197,60 @@ class TrebPropertyHelper
         ];
     }
 
+    /** @var array<string, array<string, mixed>> */
+    private static array $factRecordMemo = [];
+
     /**
      * @return array<string, mixed>
      */
     public static function resolveFactRecordForDetail(string $listingKey, ?array $local = null, ?array $preferredAmp = null): array
     {
         $listingKey = strtoupper(trim($listingKey));
+
+        if ($preferredAmp === null && isset(self::$factRecordMemo[$listingKey])) {
+            return self::$factRecordMemo[$listingKey];
+        }
+
         $local ??= self::localPropertyArray($listingKey) ?? [];
 
-        // Local-first: browsing must NEVER block on AMP or meta_boxes IO.
-        // Order: caller AMP -> warm Cache snapshot (O(1)) -> local DB row.
-        // Live AMP / meta_boxes hydrate only when we have nothing local.
+        // Prefer rich AMP snapshot/cache over the sparse local DB mapping.
         if ($preferredAmp) {
-            $record = $preferredAmp;
+            $record = self::enrichRecordAddress($preferredAmp);
         } else {
             $cached = Cache::get('treb_property_record_raw_v1_' . $listingKey);
             if (is_array($cached) && $cached !== []) {
                 $record = self::enrichRecordAddress($cached);
-            } elseif ($local !== []) {
-                $record = self::recordFromLocal($local, $listingKey);
             } else {
-                $record = self::loadStoredAmpSnapshot($listingKey)
-                    ?: self::fetchAmpPropertyForResync($listingKey)
-                    ?: self::fetchPropertyRecord($listingKey)
-                    ?: self::fetchPropertyRecordRaw($listingKey);
+                $snapshot = self::loadStoredAmpSnapshot($listingKey);
+                $record = is_array($snapshot) && $snapshot !== []
+                    ? self::enrichRecordAddress($snapshot)
+                    : [];
             }
         }
 
-        if (! $record) {
+        $localRecord = $local !== [] ? self::recordFromLocal($local, $listingKey) : [];
+
+        if ($record === []) {
+            $record = $localRecord;
+        } elseif ($localRecord !== []) {
+            foreach ($localRecord as $field => $value) {
+                $currentEmpty = ! array_key_exists($field, $record)
+                    || $record[$field] === null
+                    || $record[$field] === ''
+                    || $record[$field] === [];
+                if ($currentEmpty && $value !== null && $value !== '' && $value !== []) {
+                    $record[$field] = $value;
+                }
+            }
+        }
+
+        if ($record === []) {
             return [];
         }
 
         $record = self::enrichRecordAddress($record);
         $record['ListingKey'] = $record['ListingKey'] ?? $listingKey;
 
-        // Never call mergeAddressFallbackRecord here — it fans out to live AMP
-        // sibling lookups (~1.8s). Detail pages already have local + warm-cache
-        // facts; richer sibling enrichment belongs to background sync.
         if ($local) {
             foreach ([
                 'City', 'CityRegion', 'PostalCode', 'StreetNumber', 'StreetName',
@@ -2234,7 +2264,117 @@ class TrebPropertyHelper
             }
         }
 
+        // Never block detail/modal SSR on live AMP — warm snapshot after the response.
+        if (self::isThinDetailFactRecord($record) && self::shouldHydrateThinDetailRecord()) {
+            self::scheduleThinDetailHydrate($listingKey);
+        }
+
+        if ($preferredAmp === null) {
+            self::$factRecordMemo[$listingKey] = $record;
+        }
+
         return $record;
+    }
+
+    private static function scheduleThinDetailHydrate(string $listingKey): void
+    {
+        static $scheduled = [];
+
+        $listingKey = strtoupper(trim($listingKey));
+        if ($listingKey === '' || isset($scheduled[$listingKey])) {
+            return;
+        }
+        $scheduled[$listingKey] = true;
+
+        $runner = static function () use ($listingKey): void {
+            try {
+                $cached = Cache::get('treb_property_record_raw_v1_' . $listingKey);
+                if (is_array($cached) && $cached !== [] && ! self::isThinDetailFactRecord($cached)) {
+                    return;
+                }
+                $snap = self::loadStoredAmpSnapshot($listingKey);
+                if (is_array($snap) && $snap !== [] && ! self::isThinDetailFactRecord($snap)) {
+                    return;
+                }
+            } catch (\Throwable) {
+            }
+
+            try {
+                app()->instance('serik.live_treb_fallback', true);
+                self::fetchAmpPropertyForResync($listingKey);
+            } catch (\Throwable) {
+            } finally {
+                try {
+                    app()->forgetInstance('serik.live_treb_fallback');
+                } catch (\Throwable) {
+                }
+            }
+        };
+
+        try {
+            dispatch($runner)->afterResponse();
+        } catch (\Throwable) {
+            app()->terminating($runner);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $record
+     */
+    public static function isThinDetailFactRecord(array $record): bool
+    {
+        $signals = [
+            'TaxAnnualAmount',
+            'ArchitecturalStyle',
+            'LotWidth',
+            'LotDepth',
+            'HeatType',
+            'Cooling',
+            'GarageType',
+            'CityRegion',
+            'WaterSource',
+            'Sewer',
+            'ConstructionMaterials',
+            'DirectionFaces',
+        ];
+
+        $present = 0;
+        foreach ($signals as $field) {
+            if (! array_key_exists($field, $record)) {
+                continue;
+            }
+            $value = $record[$field];
+            if ($value === null || $value === '' || $value === []) {
+                continue;
+            }
+            $present++;
+        }
+
+        return $present < 3;
+    }
+
+    private static function shouldHydrateThinDetailRecord(): bool
+    {
+        if (app()->runningInConsole()) {
+            return false;
+        }
+
+        try {
+            $request = request();
+        } catch (\Throwable) {
+            return false;
+        }
+
+        if (! $request || ! $request->isMethod('GET') || $request->ajax()) {
+            return false;
+        }
+
+        $slugPrefix = \Botble\Slug\Facades\SlugHelper::getPrefix(
+            \Botble\RealEstate\Models\Property::class,
+            'properties'
+        ) ?: 'properties';
+
+        return $request->is($slugPrefix . '/*');
     }
 
     public static function persistAmpSnapshot(string $listingKey, array $ampRecord): void
@@ -2704,8 +2844,8 @@ class TrebPropertyHelper
             'property_features' => $propertyFeatures,
             'pets_allowed' => $petsAllowed,
             'sewer' => self::formatListValue($record['Sewer'] ?? null),
-            'frontage' => isset($record['LotWidth']) ? rtrim(rtrim(number_format((float) $record['LotWidth'], 2), '0'), '.') : ($record['FrontageLength'] ?? '-'),
-            'depth' => isset($record['LotDepth']) ? (int) round((float) $record['LotDepth']) : '-',
+            'frontage' => isset($record['LotWidth']) ? rtrim(rtrim(number_format((float) $record['LotWidth'], 2, '.', ''), '0'), '.') : ($record['FrontageLength'] ?? '-'),
+            'depth' => isset($record['LotDepth']) ? rtrim(rtrim(number_format((float) $record['LotDepth'], 2, '.', ''), '0'), '.') : '-',
             'lot_size' => self::formatLotSize($record),
             'lot_size_code' => self::formatLotSize($record) !== '-' ? 'Feet' : '-',
             'cross_street' => $record['CrossStreet'] ?? '-',

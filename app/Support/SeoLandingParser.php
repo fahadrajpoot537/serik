@@ -26,9 +26,7 @@ final class SeoLandingParser
         $transaction = $matches[2];
         $citySlug = trim((string) ($matches[3] ?? ''));
 
-        if ($transaction === 'lease') {
-            $filters['type'] = 'rent';
-        }
+        $filters['type'] = $transaction === 'lease' ? 'rent' : 'sale';
 
         if ($citySlug !== '' && $citySlug !== 'ontario') {
             // Only pass `location` (city name). Do NOT set city_id/city —

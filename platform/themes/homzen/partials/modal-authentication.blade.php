@@ -14,6 +14,14 @@
         display: block !important;
     }
 
+    /* Stay above sticky listing toolbar (z-index 9998) on Ontario/properties pages */
+    #modalLogin.modal {
+        z-index: 10050 !important;
+    }
+    body.modal-open > .modal-backdrop {
+        z-index: 10040 !important;
+    }
+
     /* Modern Unified Auth Modal Styles */
     .auth-modal-dialog {
         max-width: 480px;
@@ -26,11 +34,29 @@
         overflow: hidden;
         background: #ffffff;
         box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        /* Override map-page global .modal-content height rules */
+        position: relative !important;
+        top: auto !important;
+        left: auto !important;
+        transform: none !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        height: auto !important;
+        max-height: min(75vh, 100dvh - 24px) !important;
+        margin-top: 0 !important;
+        display: flex;
+        flex-direction: column;
+    }
+
+    #modalLogin .auth-modal-dialog {
+        height: auto;
+        max-height: 100dvh;
+        margin: 1.75rem auto;
     }
 
     .auth-header-bg {
         background: #9dbdfd;
-        padding: 30px 30px 20px;
+        padding: 18px 24px 14px;
         position: relative;
         color: #0f172a;
         text-align: center;
@@ -38,8 +64,8 @@
 
     .auth-header-bg .btn-close {
         position: absolute;
-        top: 20px;
-        right: 20px;
+        top: 14px;
+        right: 14px;
         background-color: rgba(15, 23, 42, 0.12);
         border-radius: 50%;
         opacity: 1;
@@ -48,23 +74,26 @@
 
     .auth-header-bg h3 {
         margin: 0;
-        font-size: 24px;
+        font-size: 20px;
         font-weight: 700;
         color: #0f172a;
     }
 
     .auth-header-bg p {
-        margin: 8px 0 0;
+        margin: 4px 0 0;
         color: #1e3a5f;
-        font-size: 14px;
+        font-size: 13px;
     }
 
     .auth-body {
         padding: 0;
         position: relative;
         overflow: hidden;
-        /* For sliding effect */
-        min-height: 380px;
+        /* Height follows the visible panel — no empty gap under login. */
+        min-height: 0;
+        height: auto;
+        flex: 0 0 auto;
+        transition: height 0.18s ease;
     }
 
     .auth-slider-container {
@@ -72,6 +101,7 @@
         width: 200%;
         /* Two panels: Login (50%) and Register (50%) */
         transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        align-items: flex-start;
     }
 
     .auth-slider-container.show-register {
@@ -81,24 +111,24 @@
     .auth-panel {
         width: 50%;
         /* takes up half of 200% = 100% of body */
-        padding: 30px;
+        padding: 18px 22px 12px;
         flex-shrink: 0;
     }
 
     .form-group label {
         font-weight: 600;
         color: #334155;
-        margin-bottom: 8px;
+        margin-bottom: 6px;
         display: block;
-        font-size: 14px;
+        font-size: 13px;
     }
 
     .form-control {
         border-radius: 10px;
-        padding: 12px 16px;
+        padding: 10px 14px;
         border: 1px solid #e2e8f0;
         background-color: #f8fafc;
-        font-size: 15px;
+        font-size: 14px;
         transition: all 0.2s;
     }
 
@@ -112,12 +142,12 @@
         background: rgb(2, 85, 161);
         color: #fff;
         font-weight: 700;
-        font-size: 16px;
-        padding: 14px;
+        font-size: 15px;
+        padding: 11px;
         width: 100%;
-        border-radius: 12px;
+        border-radius: 10px;
         border: none;
-        margin-top: 15px;
+        margin-top: 8px;
         box-shadow: 0 4px 12px rgba(2, 85, 161, 0.25);
         transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
     }
@@ -131,8 +161,8 @@
 
     .auth-switch {
         text-align: center;
-        margin-top: 20px;
-        font-size: 14px;
+        margin-top: 12px;
+        font-size: 13px;
         color: #64748b;
     }
 
@@ -149,9 +179,10 @@
 
     .auth-forgot-link {
         display: inline-block;
-        margin-top: 12px;
+        margin-top: 8px;
+        margin-bottom: 0;
         color: rgb(2, 85, 161);
-        font-size: 13px;
+        font-size: 12px;
         font-weight: 600;
         cursor: pointer;
         text-decoration: none;
@@ -262,10 +293,14 @@
         #modalLogin .auth-modal-dialog {
             max-width: calc(100% - 16px);
             margin: 8px auto;
+            height: auto;
+            max-height: 100dvh;
         }
 
         #modalLogin .auth-modal-content {
-            max-height: calc(100dvh - 16px);
+            height: auto !important;
+            max-height: calc(100dvh - 24px) !important;
+            margin-top: 0 !important;
             overflow-y: auto;
             border-radius: 14px;
         }
@@ -358,7 +393,7 @@
 </style>
 
 <!-- Unified Auth Modal -->
-<div class="modal fade" id="modalLogin" tabindex="-1" aria-hidden="true">
+<div class="modal" id="modalLogin" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered auth-modal-dialog">
         <div class="modal-content auth-modal-content">
 
@@ -382,14 +417,14 @@
                                         required>
                                     <div class="error-msg" id="loginEmailErr"></div>
                                 </div>
-                                <div class="form-group mb-4">
+                                <div class="form-group mb-3">
                                     <label>Password</label>
                                     <input type="password" name="password" class="form-control"
                                         placeholder="Enter your password" required>
                                     <div class="error-msg" id="loginPassErr"></div>
                                 </div>
 
-                                <div id="loginRecaptcha" class="mb-3"></div>
+                                <div id="loginRecaptcha" class="mb-2"></div>
                                 <div class="error-msg" id="loginCaptchaErr"></div>
 
                                 <button type="submit" class="btn-auth-primary" id="btnLoginSubmit">Sign In</button>
@@ -554,9 +589,20 @@
     }
 
     const authCsrfRefreshUrl = @json(route('auth.csrf-token'));
+    let authCsrfRefreshPromise = null;
+    let authCsrfLastOkAt = 0;
 
-    function refreshAuthCsrfTokens() {
-        return fetch(authCsrfRefreshUrl, {
+    function refreshAuthCsrfTokens(force = false) {
+        const now = Date.now();
+        // Reuse in-flight / recent refresh so open + show.bs.modal don't double-hit (~500ms+).
+        if (!force && authCsrfRefreshPromise && (now - authCsrfLastOkAt) < 30000) {
+            return authCsrfRefreshPromise;
+        }
+        if (!force && authCsrfRefreshPromise) {
+            return authCsrfRefreshPromise;
+        }
+
+        authCsrfRefreshPromise = fetch(authCsrfRefreshUrl, {
             method: 'GET',
             credentials: 'same-origin',
             headers: {
@@ -582,17 +628,48 @@
                     meta.setAttribute('content', data.token);
                 }
 
+                authCsrfLastOkAt = Date.now();
                 return true;
             })
-            .catch(() => false);
+            .catch(() => false)
+            .finally(() => {
+                // Keep resolved promise briefly so concurrent callers reuse it.
+                setTimeout(() => {
+                    if (Date.now() - authCsrfLastOkAt > 2500) {
+                        authCsrfRefreshPromise = null;
+                    }
+                }, 2600);
+            });
+
+        return authCsrfRefreshPromise;
     }
 
     function openAuthModal(mode = 'login') {
+        // Show immediately — never wait on CSRF (homepage HTML is cached; token refresh is ~0.5s).
+        const modalEl = document.getElementById('modalLogin');
         toggleAuthMode(mode);
-        refreshAuthCsrfTokens().finally(() => {
-            getAuthModal()?.show();
+
+        if (modalEl) {
+            // Instant paint before Bootstrap finishes wiring backdrop/focus.
+            modalEl.style.display = 'block';
+            modalEl.classList.add('show');
+            modalEl.removeAttribute('aria-hidden');
+            modalEl.setAttribute('aria-modal', 'true');
+            document.body.classList.add('modal-open');
+        }
+
+        const modal = getAuthModal();
+        if (modal) {
+            modal.show();
+        }
+
+        requestAnimationFrame(() => {
+            syncAuthBodyHeight();
         });
+        refreshAuthCsrfTokens();
     }
+
+    window.openAuthModal = openAuthModal;
 
     function toggleForgotPassword(show) {
         document.getElementById('loginView').style.display = show ? 'none' : 'block';
@@ -609,6 +686,11 @@
             title.textContent = 'Welcome Back';
             subtitle.textContent = 'Sign in to unlock exclusive property details';
         }
+
+        requestAnimationFrame(() => {
+            syncAuthBodyHeight();
+            setTimeout(syncAuthBodyHeight, 50);
+        });
     }
 
     // Proxy legacy modal IDs to the unified modal
@@ -616,8 +698,20 @@
         const modalEl = document.getElementById('modalLogin');
         getAuthModal();
 
+        // Warm CSRF in idle time so first Login/Register click is not waiting on network.
+        const warmCsrf = () => refreshAuthCsrfTokens();
+        if ('requestIdleCallback' in window) {
+            requestIdleCallback(warmCsrf, { timeout: 1200 });
+        } else {
+            setTimeout(warmCsrf, 400);
+        }
+
         modalEl?.addEventListener('show.bs.modal', () => {
             refreshAuthCsrfTokens();
+        });
+
+        modalEl?.addEventListener('shown.bs.modal', () => {
+            syncAuthBodyHeight();
         });
 
         modalEl?.addEventListener('hidden.bs.modal', resetAuthModalState);
@@ -626,22 +720,62 @@
             initSerikRecaptcha();
         }
 
-        document.querySelectorAll('.js-auth-open-login, [href="#modalLogin"], [data-bs-target="#modalLogin"]').forEach(el => {
-            el.addEventListener('click', (e) => {
+        // Capture-phase so top-bar Login/Register opens instantly (before other handlers).
+        document.addEventListener('click', function (e) {
+            const loginEl = e.target.closest?.('.js-auth-open-login, [href="#modalLogin"], [data-bs-target="#modalLogin"]');
+            if (loginEl) {
                 e.preventDefault();
+                e.stopPropagation();
                 openAuthModal('login');
-            });
-        });
-
-        document.querySelectorAll('.js-auth-open-register, [href="#modalRegister"], [data-bs-target="#modalRegister"]').forEach(el => {
-            el.addEventListener('click', (e) => {
+                return;
+            }
+            const registerEl = e.target.closest?.('.js-auth-open-register, [href="#modalRegister"], [data-bs-target="#modalRegister"]');
+            if (registerEl) {
                 e.preventDefault();
+                e.stopPropagation();
                 openAuthModal('register');
-            });
-        });
+            }
+        }, true);
     });
 
     // Toggle logic for sliding panel
+    function syncAuthBodyHeight() {
+        const body = document.querySelector('#modalLogin .auth-body');
+        const slider = document.getElementById('authSlider');
+        if (!body || !slider) return;
+
+        const panels = slider.querySelectorAll('.auth-panel');
+        if (panels.length < 2) return;
+
+        const showRegister = slider.classList.contains('show-register');
+        const activePanel = showRegister ? panels[1] : panels[0];
+
+        // Measure only the visible login/forgot view so empty space under
+        // "Forgot Password?" / forgot form does not stretch the modal.
+        let measureEl = activePanel;
+        if (!showRegister) {
+            const views = [
+                document.getElementById('forgotSuccessView'),
+                document.getElementById('forgotView'),
+                document.getElementById('loginView'),
+            ];
+            const visible = views.find((el) => el && el.style.display !== 'none' && getComputedStyle(el).display !== 'none');
+            if (visible) {
+                measureEl = visible;
+            }
+        }
+
+        const nextHeight = Math.ceil(
+            (measureEl.scrollHeight || measureEl.offsetHeight || 0)
+            + (showRegister ? 0 : (parseFloat(getComputedStyle(activePanel).paddingTop) || 0)
+                + (parseFloat(getComputedStyle(activePanel).paddingBottom) || 0))
+        );
+
+        if (nextHeight > 0) {
+            body.style.height = nextHeight + 'px';
+        }
+    }
+
     function toggleAuthMode(mode) {
         const slider = document.getElementById('authSlider');
         const title = document.getElementById('authTitle');
@@ -661,6 +795,12 @@
             title.textContent = 'Welcome Back';
             subtitle.textContent = 'Sign in to unlock exclusive property details';
         }
+
+        requestAnimationFrame(() => {
+            syncAuthBodyHeight();
+            setTimeout(syncAuthBodyHeight, 50);
+            setTimeout(syncAuthBodyHeight, 320);
+        });
     }
 
     function finishRegistrationAndGoToLogin() {
@@ -885,6 +1025,11 @@
         if (step === 4) {
             ensureRegisterRecaptcha();
         }
+
+        requestAnimationFrame(() => {
+            syncAuthBodyHeight();
+            setTimeout(syncAuthBodyHeight, 50);
+        });
     }
 
     const recaptchaSiteKey = @json(RecaptchaHelper::siteKey());
@@ -895,6 +1040,7 @@
         const loginEl = document.getElementById('loginRecaptcha');
         if (loginEl && loginRecaptchaWidgetId === null && typeof grecaptcha !== 'undefined') {
             loginRecaptchaWidgetId = grecaptcha.render(loginEl, { sitekey: recaptchaSiteKey });
+            setTimeout(syncAuthBodyHeight, 100);
         }
     }
     window.initSerikRecaptcha = initSerikRecaptcha;

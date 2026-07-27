@@ -20,6 +20,7 @@ class CacheHomepageResponseMiddleware
             return response($cached, 200, [
                 'Content-Type' => 'text/html; charset=UTF-8',
                 'X-Serik-Homepage-Cache' => 'HIT',
+                'Cache-Control' => 'private, max-age=60, stale-while-revalidate=300',
             ]);
         }
 

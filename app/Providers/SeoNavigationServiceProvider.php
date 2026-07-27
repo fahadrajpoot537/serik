@@ -6,7 +6,6 @@ use App\Services\Seo\CityNavigationService;
 use App\Services\Seo\CityResolutionService;
 use App\Services\Seo\CitySeoService;
 use App\Support\HomepageResponseCache;
-use Botble\Base\Facades\BaseHelper;
 use Botble\RealEstate\Services\PropertySearchService;
 use Botble\Theme\Facades\Theme;
 use Illuminate\Routing\Events\RouteMatched;
@@ -151,60 +150,9 @@ class SeoNavigationServiceProvider extends ServiceProvider
             }
         });
 
-        if (defined('PAGE_FILTER_FRONT_PAGE_CONTENT')) {
-            add_filter(PAGE_FILTER_FRONT_PAGE_CONTENT, function (?string $html, $page = null): ?string {
-                if (! is_string($html)) {
-                    return $html;
-                }
-
-                if (str_contains($html, 'seo-city-navigation') || str_contains($html, 'serikHomeSeoNavMount')) {
-                    return $html;
-                }
-
-                try {
-                    $pageId = is_object($page) ? (int) ($page->id ?? 0) : 0;
-                    if ($pageId <= 0 || $pageId !== (int) BaseHelper::getHomepageId()) {
-                        return $html;
-                    }
-                } catch (\Throwable) {
-                    return $html;
-                }
-
-                // Async mount — keeps homepage TTFB fast and lets visitor-city
-                // personalize the nav without fragmenting the full-page HTML cache.
-                $ajaxUrl = e(route('public.ajax.seo-city-navigation', ['context' => 'home']));
-
-                return $html . <<<HTML
-<div id="serikHomeSeoNavMount" data-url="{$ajaxUrl}" aria-hidden="true"></div>
-<script>
-(function () {
-  var mount = document.getElementById('serikHomeSeoNavMount');
-  if (!mount || !mount.dataset.url) return;
-  var url = mount.dataset.url;
-  try {
-    var city = (document.cookie.match(/(?:^|;\\s*)serik_visitor_city=([^;]+)/) || [])[1];
-    if (city) {
-      city = decodeURIComponent(city.replace(/\\+/g, ' '));
-      url += (url.indexOf('?') >= 0 ? '&' : '?') + 'city=' + encodeURIComponent(city.toLowerCase().replace(/\\s+/g, '-'));
-    }
-  } catch (e) {}
-  var load = function () {
-    fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'text/html' } })
-      .then(function (r) { return r.ok ? r.text() : ''; })
-      .then(function (html) {
-        if (!html) return;
-        mount.innerHTML = html;
-        mount.removeAttribute('aria-hidden');
-      })
-      .catch(function () {});
-  };
-  if ('requestIdleCallback' in window) requestIdleCallback(load, { timeout: 2000 });
-  else setTimeout(load, 150);
-})();
-</script>
-HTML;
-            }, 50, 2);
-        }
+        // Homepage Popular Searches mount lives in style-5 (under Sold History).
+        // Do not append via PAGE_FILTER_FRONT_PAGE_CONTENT — that filter runs
+        // before shortcodes expand and would duplicate the mount.
 
         if (defined('THEME_FRONT_HEADER')) {
             add_filter(THEME_FRONT_HEADER, function (?string $header): ?string {

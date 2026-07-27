@@ -46,7 +46,7 @@
         const lngSpan = Math.abs(bounds.getEast() - bounds.getWest());
         const movedLat = Math.abs(center.lat - lastFetchCenter.lat);
         const movedLng = Math.abs(center.lng - lastFetchCenter.lng);
-        return movedLat > latSpan * 0.2 || movedLng > lngSpan * 0.2;
+        return movedLat > latSpan * 0.08 || movedLng > lngSpan * 0.08;
     }
 
     function rememberFetchMeta(map) {
@@ -70,11 +70,11 @@
 
         if (delayMs == null) {
             if (options.fromMapMove) {
-                delayMs = 200;
+                delayMs = 80;
             } else if (options.fromFilters) {
-                delayMs = 350;
+                delayMs = 100;
             } else {
-                delayMs = 200;
+                delayMs = 80;
             }
         }
 
@@ -207,7 +207,7 @@
         if (!map || !movedEnoughToRefetch(map)) {
             return;
         }
-        scheduleLoad(buildRequest, { fromMapMove: true }, 500);
+        scheduleLoad(buildRequest, { fromMapMove: true }, 80);
     }
 
     global.HsMapFetchCoordinator = {

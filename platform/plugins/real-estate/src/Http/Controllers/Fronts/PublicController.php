@@ -190,7 +190,7 @@ class PublicController extends BaseController
 
         $ajaxCacheKey = null;
         if ($request->ajax() && ! $request->query('minimal')) {
-            $ajaxCacheKey = 'serik_props_ajax_html_v1:' . md5(json_encode($request->except(['_token', '_method'])));
+            $ajaxCacheKey = 'serik_props_ajax_html_v3:' . md5(json_encode($request->except(['_token', '_method'])));
             $cachedAjax = \Illuminate\Support\Facades\Cache::get($ajaxCacheKey);
             if (is_array($cachedAjax) && isset($cachedAjax['html'])) {
                 $response = $this->httpResponse()->setData($cachedAjax['html']);
@@ -202,7 +202,7 @@ class PublicController extends BaseController
             }
         }
 
-        $properties = RealEstateHelper::getPropertiesFilter((int) theme_option('number_of_properties_per_page') ?: 12);
+        $properties = RealEstateHelper::getPropertiesFilter((int) theme_option('number_of_properties_per_page') ?: 10);
 
         if (! \Illuminate\Support\Facades\Cache::has('serik_active_listing_count_v1')) {
             app()->terminating(function (): void {
@@ -240,11 +240,11 @@ class PublicController extends BaseController
                 ];
             }
 
-            if ($ajaxCacheKey) {
+                if ($ajaxCacheKey) {
                 \Illuminate\Support\Facades\Cache::put($ajaxCacheKey, [
                     'html' => $html,
                     'additional' => $additional,
-                ], 45);
+                ], 90);
             }
 
             $response = $this->httpResponse()->setData($html);

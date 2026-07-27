@@ -10,9 +10,9 @@ use Illuminate\Support\Facades\Cache;
  */
 final class HomepageResponseCache
 {
-    private const VERSION_KEY = 'homepage_response_cache_version_v3';
+    private const VERSION_KEY = 'homepage_response_cache_version_v4';
 
-    private const TTL_SECONDS = 1800;
+    private const TTL_SECONDS = 3600;
 
     public static function version(): int
     {
@@ -77,7 +77,7 @@ final class HomepageResponseCache
         // loads via async SEO nav / featured fragments, not per-city full HTML.
         $locale = app()->getLocale();
 
-        return 'homepage_html_v3:' . self::version() . ':' . $locale . ':shared';
+        return 'homepage_html_v4:' . self::version() . ':' . $locale . ':shared';
     }
 
     public static function get(Request $request): ?string

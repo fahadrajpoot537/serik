@@ -35,7 +35,7 @@ class SeoCityNavigationController extends Controller
 
         $cacheSlug = $city?->slug ?? ($slug !== '' ? Str::slug($slug) : 'ontario');
         $communityKey = $community !== '' ? md5(mb_strtolower($community)) : 'none';
-        $cacheKey = "seo_nav_html:v4:{$context}:{$cacheSlug}:{$communityKey}";
+        $cacheKey = "seo_nav_html:v5:{$context}:{$cacheSlug}:{$communityKey}";
 
         $html = Cache::remember($cacheKey, (int) config('seo_navigation.cache_ttl', 3600), function () use ($navigation, $context, $city, $community) {
             $data = $navigation->build($context, $city, $community !== '' ? $community : null);
@@ -45,7 +45,7 @@ class SeoCityNavigationController extends Controller
 
         return response($html, 200, [
             'Content-Type' => 'text/html; charset=UTF-8',
-            'Cache-Control' => 'public, max-age=300',
+            'Cache-Control' => 'public, max-age=600, stale-while-revalidate=86400',
         ]);
     }
 }

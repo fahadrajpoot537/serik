@@ -74,161 +74,178 @@
     }
 
     section.flat-property-detail ~ .flat-latest-property {
-        display: none !important;
+        display: block !important;
+    }
+
+    .single-property-map,
+    #location {
+        display: block !important;
+    }
+
+    #map,
+    [data-bb-toggle="detail-map"] {
+        display: block !important;
+        min-height: 320px;
     }
 </style>
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    const gallery = document.getElementById('galleryContainer');
-    if (gallery) {
-        gallery.style.display = 'block';
+(function () {
+    function notifyParentReady() {
+        try {
+            if (window.parent && window.parent !== window) {
+                window.parent.postMessage({ type: 'hs-property-iframe-ready' }, '*');
+            }
+        } catch (e) {}
     }
 
-    try {
-        if (window.parent && window.parent !== window) {
-            window.parent.postMessage({ type: 'hs-property-iframe-ready' }, '*');
+    // Signal as soon as this script runs (before full DOMContentLoaded).
+    notifyParentReady();
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const gallery = document.getElementById('galleryContainer');
+        if (gallery) {
+            gallery.style.display = 'block';
         }
-    } catch (e) {}
+        notifyParentReady();
 
-    (function initIframeFormPin() {
-        const mq = window.matchMedia('(min-width: 768px)');
-        const formCol = document.querySelector('.flat-property-detail .row > .col-lg-4');
-        const formSidebar = formCol?.querySelector('.widget-sidebar');
-        const formRow = formCol?.closest('.flat-property-detail .row');
+        (function initIframeFormPin() {
+            const mq = window.matchMedia('(min-width: 768px)');
+            const formCol = document.querySelector('.flat-property-detail .row > .col-lg-4');
+            const formSidebar = formCol?.querySelector('.widget-sidebar');
+            const formRow = formCol?.closest('.flat-property-detail .row');
 
-        if (!formCol || !formSidebar || !formRow) {
-            return;
-        }
-
-        let pinLeft = null;
-        let pinWidth = null;
-
-        function navTop() {
-            const nav = document.querySelector('.property-page-nav');
-            return (nav ? nav.offsetHeight : 0) + 4;
-        }
-
-        function resetFormPin() {
-            pinLeft = null;
-            pinWidth = null;
-            formSidebar.style.position = '';
-            formSidebar.style.top = '';
-            formSidebar.style.left = '';
-            formSidebar.style.right = '';
-            formSidebar.style.bottom = '';
-            formSidebar.style.width = '';
-            formSidebar.style.zIndex = '';
-        }
-
-        function capturePinMetrics() {
-            if (pinLeft !== null) {
+            if (!formCol || !formSidebar || !formRow) {
                 return;
             }
 
-            const rect = formSidebar.getBoundingClientRect();
-            pinLeft = rect.left;
-            pinWidth = rect.width;
-        }
+            let pinLeft = null;
+            let pinWidth = null;
 
-        function updateFormPin() {
-            if (!mq.matches) {
-                resetFormPin();
-                return;
+            function navTop() {
+                const nav = document.querySelector('.property-page-nav');
+                return (nav ? nav.offsetHeight : 0) + 4;
             }
 
-            const top = navTop();
-            const rowRect = formRow.getBoundingClientRect();
-            const sidebarHeight = formSidebar.offsetHeight;
-
-            if (rowRect.top >= top) {
-                resetFormPin();
-                return;
+            function resetFormPin() {
+                pinLeft = null;
+                pinWidth = null;
+                formSidebar.style.position = '';
+                formSidebar.style.top = '';
+                formSidebar.style.left = '';
+                formSidebar.style.right = '';
+                formSidebar.style.bottom = '';
+                formSidebar.style.width = '';
+                formSidebar.style.zIndex = '';
             }
 
-            capturePinMetrics();
+            function capturePinMetrics() {
+                if (pinLeft !== null) {
+                    return;
+                }
 
-            if (rowRect.bottom <= top + sidebarHeight) {
-                formSidebar.style.position = 'absolute';
-                formSidebar.style.top = 'auto';
-                formSidebar.style.bottom = '0';
-                formSidebar.style.left = '0';
+                const rect = formSidebar.getBoundingClientRect();
+                pinLeft = rect.left;
+                pinWidth = rect.width;
+            }
+
+            function updateFormPin() {
+                if (!mq.matches) {
+                    resetFormPin();
+                    return;
+                }
+
+                const top = navTop();
+                const rowRect = formRow.getBoundingClientRect();
+                const sidebarHeight = formSidebar.offsetHeight;
+
+                if (rowRect.top >= top) {
+                    resetFormPin();
+                    return;
+                }
+
+                capturePinMetrics();
+
+                if (rowRect.bottom <= top + sidebarHeight) {
+                    formSidebar.style.position = 'absolute';
+                    formSidebar.style.top = 'auto';
+                    formSidebar.style.bottom = '0';
+                    formSidebar.style.left = '0';
+                    formSidebar.style.right = 'auto';
+                    formSidebar.style.width = '100%';
+                    formSidebar.style.zIndex = '4';
+                    return;
+                }
+
+                formSidebar.style.position = 'fixed';
+                formSidebar.style.top = top + 'px';
+                formSidebar.style.left = pinLeft + 'px';
+                formSidebar.style.width = pinWidth + 'px';
+                formSidebar.style.bottom = 'auto';
                 formSidebar.style.right = 'auto';
-                formSidebar.style.width = '100%';
                 formSidebar.style.zIndex = '4';
-                return;
             }
 
-            formSidebar.style.position = 'fixed';
-            formSidebar.style.top = top + 'px';
-            formSidebar.style.left = pinLeft + 'px';
-            formSidebar.style.width = pinWidth + 'px';
-            formSidebar.style.bottom = 'auto';
-            formSidebar.style.right = 'auto';
-            formSidebar.style.zIndex = '4';
-        }
+            window.addEventListener('scroll', updateFormPin, { passive: true });
+            window.addEventListener('resize', function () {
+                resetFormPin();
+                updateFormPin();
+            });
+            mq.addEventListener('change', function () {
+                resetFormPin();
+                updateFormPin();
+            });
 
-        window.addEventListener('scroll', updateFormPin, { passive: true });
-        window.addEventListener('resize', function () {
-            resetFormPin();
             updateFormPin();
-        });
-        mq.addEventListener('change', function () {
-            resetFormPin();
-            updateFormPin();
-        });
 
-        updateFormPin();
+            window.addEventListener('load', function () {
+                resetFormPin();
+                setTimeout(updateFormPin, 100);
+                setTimeout(updateFormPin, 500);
+            });
+        })();
 
-        window.addEventListener('load', function () {
-            resetFormPin();
-            setTimeout(updateFormPin, 100);
-            setTimeout(updateFormPin, 500);
-        });
-    })();
-
-    function refreshDetailMap() {
-        const mapEl = document.getElementById('map');
-        if (!mapEl || typeof L === 'undefined') {
-            return;
-        }
-
-        if (!mapEl._leaflet_id && mapEl.dataset.center) {
+        // Ensure detail map initializes inside the modal iframe after Leaflet loads.
+        function refreshDetailMap() {
+            const mapEl = document.getElementById('map');
+            if (!mapEl || typeof L === 'undefined') {
+                return;
+            }
+            if (mapEl._leaflet_id) {
+                try {
+                    window.dispatchEvent(new Event('resize'));
+                } catch (e) {}
+                return;
+            }
+            if (!mapEl.dataset.center) {
+                return;
+            }
             let center = mapEl.dataset.center;
             try {
                 center = JSON.parse(center);
             } catch (e) {}
-
             const map = L.map(mapEl, {
                 attributionControl: false,
                 scrollWheelZoom: true,
                 dragging: !L.Browser.mobile,
                 touchZoom: true,
             }).setView(center, 14);
-
             L.tileLayer(mapEl.dataset.tileLayer || '', {
                 maxZoom: mapEl.dataset.maxZoom || 22,
             }).addTo(map);
-
             L.marker(center, {
                 icon: L.divIcon({
                     iconSize: L.point(50, 50),
                     className: 'map-marker-home',
                 }),
             }).addTo(map);
-
-            return;
         }
 
-        if (mapEl._leaflet_id) {
-            window.dispatchEvent(new Event('resize'));
-        }
-    }
-
-    window.addEventListener('load', function () {
-        setTimeout(refreshDetailMap, 300);
-        setTimeout(refreshDetailMap, 1000);
+        window.addEventListener('load', function () {
+            setTimeout(refreshDetailMap, 200);
+            setTimeout(refreshDetailMap, 800);
+        });
     });
-});
+})();
 </script>
 @endif
 <style>

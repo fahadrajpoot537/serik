@@ -121,7 +121,12 @@
                     <br>
 
                     <span style="color:#777;font-size:17px;">
-                        <span id="listingDate"></span>
+                        @php
+                            $listedLabelSsr = \Theme\homzen\Supports\TrebPropertyHelper::relativeListedLabel(
+                                $model->listing_contract_date ?? $model->created_at
+                            );
+                        @endphp
+                        <span id="listingDate">{{ $listedLabelSsr }}</span>
                     </span>
                 @endif
 
@@ -152,24 +157,25 @@ function relativeListedLabel(dateStr, prefix) {
 
     const now = new Date();
     const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    const sameDay = startOfDay(listed).getTime() === startOfDay(now).getTime();
+    const listedDay = startOfDay(listed);
+    const nowDay = startOfDay(now);
+    const days = Math.round((nowDay.getTime() - listedDay.getTime()) / 86400000);
 
-    if (sameDay) return prefix + ' today';
-
-    const weekAgo = startOfDay(now);
-    weekAgo.setDate(weekAgo.getDate() - 7);
-    if (listed.getTime() >= weekAgo.getTime()) return prefix + ' this week';
+    if (days <= 0) return (prefix + ' today').trim();
+    if (days === 1) return (prefix + ' 1 day ago').trim();
+    if (days <= 6) return (prefix + ' ' + days + ' days ago').trim();
+    if (days <= 13) return (prefix + ' this week').trim();
 
     if (listed.getFullYear() === now.getFullYear() && listed.getMonth() === now.getMonth()) {
-        return prefix + ' this month';
+        return (prefix + ' this month').trim();
     }
 
-    // Older than this month: show month + year, e.g. "Listed June 2026".
     const monthYear = listed.toLocaleString('en-US', { month: 'long', year: 'numeric' });
-    return (prefix + ' ' + monthYear).trim();
+    return (prefix + ' in ' + monthYear).trim();
 }
 
 document.addEventListener("DOMContentLoaded", function () {
+    @unless(request()->boolean('iframe'))
     let listingKey = "{{ $model->external_id }}";
     const apiBase = "{{ url('/api/v1') }}";
 
@@ -187,9 +193,10 @@ document.addEventListener("DOMContentLoaded", function () {
             const soldDate = item.PurchaseContractDate;
             if (soldDate) {
                 const soldEl = document.getElementById('soldDate');
-                if (soldEl) soldEl.innerText = soldDate.split('T')[0];
+                if (soldEl) soldEl.innerText = String(soldDate).split('T')[0];
             }
         })
-        .catch(err => console.error("API Error:", err));
+        .catch(function () {});
+    @endunless
 });
 </script>

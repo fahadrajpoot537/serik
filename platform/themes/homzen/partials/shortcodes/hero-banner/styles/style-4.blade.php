@@ -1332,7 +1332,8 @@ button {
         }
 
  
-    .modal-content {
+    #propertyModal .modal-content,
+    .property-modal .modal-content {
         position: absolute;
         top: 5%;
         left: 50%;
@@ -1344,7 +1345,8 @@ button {
         overflow: hidden;
     }
     
-    .modal-content iframe {
+    #propertyModal .modal-content iframe,
+    .property-modal .modal-content iframe {
         width: 100%;
         height: 100%;
     }
@@ -1367,7 +1369,8 @@ button {
     z-index: 9999;
 }
 
-.modal-content {
+#propertyModal .modal-content,
+.property-modal .modal-content {
     position: absolute;
     top: 2%;
     left: 50%;
@@ -1413,7 +1416,8 @@ button {
     100% { transform: rotate(360deg); }
 }
 
-.modal-content iframe {
+#propertyModal .modal-content iframe,
+.property-modal .modal-content iframe {
     flex: 1 1 auto;
     width: 100%;
     min-height: 0;
@@ -1431,6 +1435,7 @@ button {
         height: 96vh;
         max-height: 96vh;
         min-height: 0;
+        margin-top: -20px;
         overflow: hidden;
     }
 
@@ -5183,7 +5188,7 @@ position: absolute;
 <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.3/mapbox-gl-draw.js"></script>
 <script src="{{ Theme::asset()->url('js/map/interaction-state.js') }}?v={{ get_cms_version() }}"></script>
 <script src="{{ Theme::asset()->url('js/map/marker-manager.js') }}?v={{ get_cms_version() }}"></script>
-<script src="{{ Theme::asset()->url('js/map/fetch-coordinator.js') }}?v={{ get_cms_version() }}"></script>
+<script src="{{ Theme::asset()->url('js/map/fetch-coordinator.js') }}?v={{ get_cms_version() }}-mf2"></script>
 @if (request()->boolean('hs_map_trace') || request()->cookie('hs_map_trace'))
 <script src="{{ Theme::asset()->url('js/map/map-trace.js') }}?v={{ get_cms_version() }}"></script>
 @endif
@@ -9016,7 +9021,7 @@ function mapMovedEnoughToRefetch() {
     window.escapeMapHtml = escapeMapHtml;
 
     // Human-friendly relative listed label (mirrors TrebPropertyHelper::relativeListedLabel).
-    // e.g. "Listed today", "Listed this week", "Listed this month", "Listed this year", "Listed in 2023".
+    // e.g. "Listed today", "Listed 1 day ago", "Listed this week", "Listed this month", "Listed in May 2025".
     function relativeListedLabel(dateStr, prefix) {
         prefix = (prefix === undefined || prefix === null) ? 'Listed' : prefix;
         if (!dateStr) return '';
@@ -9029,22 +9034,21 @@ function mapMovedEnoughToRefetch() {
 
         const now = new Date();
         const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        const listedDay = startOfDay(listed);
+        const nowDay = startOfDay(now);
+        const days = Math.round((nowDay.getTime() - listedDay.getTime()) / 86400000);
 
-        if (startOfDay(listed).getTime() === startOfDay(now).getTime()) {
-            return (prefix + ' today').trim();
-        }
-
-        const weekAgo = startOfDay(now);
-        weekAgo.setDate(weekAgo.getDate() - 7);
-        if (listed.getTime() >= weekAgo.getTime()) return (prefix + ' this week').trim();
+        if (days <= 0) return (prefix + ' today').trim();
+        if (days === 1) return (prefix + ' 1 day ago').trim();
+        if (days <= 6) return (prefix + ' ' + days + ' days ago').trim();
+        if (days <= 13) return (prefix + ' this week').trim();
 
         if (listed.getFullYear() === now.getFullYear() && listed.getMonth() === now.getMonth()) {
             return (prefix + ' this month').trim();
         }
 
-        // Older than this month: show month + year, e.g. "Listed June 2026".
         const monthYear = listed.toLocaleString('en-US', { month: 'long', year: 'numeric' });
-        return (prefix + ' ' + monthYear).trim();
+        return (prefix + ' in ' + monthYear).trim();
     }
 
     function serikCanonicalOrigin() {
@@ -9654,7 +9658,7 @@ function mapMovedEnoughToRefetch() {
             loaderTimeoutId = setTimeout(() => {
                 hidePropertyIframeLoader();
                 loaderTimeoutId = null;
-            }, 8000);
+            }, 4000);
         }
 
         function applyBodyLock() {

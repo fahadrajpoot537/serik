@@ -69,6 +69,20 @@ final class HomepageCacheWarmer
             return "limit={$propertiesLimit}, sale={$sale}, sold={$sold}";
         });
 
+        $timings[] = self::runStep('seo_nav_home_html', static function (): string {
+            $navigation = app(\App\Services\Seo\CityNavigationService::class);
+            $data = $navigation->build('home');
+            $html = \Botble\Theme\Facades\Theme::partial('seo.city-navigation', $data) ?: '';
+            $slug = $data['current_city']->slug ?? 'ontario';
+            \Illuminate\Support\Facades\Cache::put(
+                "seo_nav_html:v5:home:{$slug}:none",
+                $html,
+                (int) config('seo_navigation.cache_ttl', 3600)
+            );
+
+            return 'bytes=' . strlen($html) . ', sections=' . count($data['sections'] ?? []);
+        });
+
         $timings[] = self::runStep('homepage_response_html', static function (): string {
             $kernel = app(HttpKernel::class);
             $request = self::homepageRequest();

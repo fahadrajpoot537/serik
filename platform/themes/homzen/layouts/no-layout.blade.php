@@ -1,9 +1,11 @@
  <link rel="icon" type="image/x-icon" href="https://serik.ca/storage/whatsapp-image-2025-1.png">
 
 <style>
-    .modal-content{
-        height:95% !important;
-        margin-top:-20px !important;
+    /* Property detail iframe only — do not stretch login/auth modals. */
+    #propertyModal .modal-content,
+    .property-modal .modal-content {
+        height: 95% !important;
+        margin-top: -20px !important;
     }
 </style>
 

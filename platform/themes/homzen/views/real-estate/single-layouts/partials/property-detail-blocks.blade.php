@@ -3,30 +3,10 @@
 
     $model = $model ?? $property ?? null;
     $listingKey = $model->external_id ?? '';
+    $isIframe = request()->boolean('iframe');
     $isLocked = $model->isSoldHistory() && !(auth('account')->check() || auth()->check());
 
-    $localData = [
-        'name' => $model->name,
-        'price' => $model->price,
-        'square' => $model->square,
-        'MlsStatus' => $model->MlsStatus,
-        'TransactionType' => $model->TransactionType,
-        'PropertySubType' => $model->PropertySubType,
-        'broker' => $model->broker,
-        'external_id' => $model->external_id,
-        'created_at' => $model->created_at,
-        'updated_at' => $model->updated_at,
-        'listing_contract_date' => $model->listing_contract_date,
-        'listing_modified_at' => $model->listing_modified_at,
-        'ParkingSpaces' => $model->ParkingSpaces,
-        'CoveredSpaces' => $model->CoveredSpaces,
-        'number_bedroom' => $model->number_bedroom,
-        'number_bathroom' => $model->number_bathroom,
-        'BedroomsBelowGrade' => $model->BedroomsBelowGrade,
-        'number_floor' => $model->number_floor,
-        'Basement' => $model->Basement,
-        'content' => $model->content,
-    ];
+    $localData = TrebPropertyHelper::dbRowToLocalArray($model);
 
     $isAuthenticated = auth('account')->check() || auth()->check();
 
@@ -52,13 +32,23 @@
         $displayName = TrebPropertyHelper::formatDisplayAddress($factRecord) ?: ($model->name ?? '');
         $displayLocation = TrebPropertyHelper::formatLocationLine($factRecord);
         $displayType = $factRecord['PropertySubType'] ?? $model->PropertySubType ?? '';
-        $listingHistory = $listingKey
-            ? TrebPropertyHelper::fetchListingHistoryForDetail($listingKey, $localData, $factRecord)
-            : [];
-        $priceChanges = (! $isLocked && $listingKey) ? TrebPropertyHelper::fetchPriceChanges($listingKey) : [];
+        // Modal/iframe: keep SSR lean — history/rooms/price-changes lazy-load via API.
+        if (! $isIframe && $listingKey) {
+            $listingHistory = TrebPropertyHelper::fetchListingHistoryForDetail($listingKey, $localData, $factRecord);
+            $priceChanges = (! $isLocked) ? TrebPropertyHelper::fetchPriceChanges($listingKey) : [];
+        } elseif ($listingKey && $factRecord !== []) {
+            $listingHistory = [[
+                'date_start' => TrebPropertyHelper::formatDateValue($factRecord['ListingContractDate'] ?? null) ?? '-',
+                'date_end' => '',
+                'price' => $factRecord['ListPrice'] ?? ($model->price ?? null),
+                'event' => $factRecord['MlsStatus'] ?? ($model->MlsStatus ?? 'Listed'),
+                'listing_id' => $listingKey,
+            ]];
+        }
         $keyFacts = TrebPropertyHelper::buildKeyFacts($factRecord, $localData);
         $propertyDetails = TrebPropertyHelper::buildPropertyDetails($factRecord, $localData);
-        $rooms = (! $isLocked && $listingKey) ? TrebPropertyHelper::fetchPropertyRoomsForDetail($listingKey) : [];
+        // Rooms always lazy-loaded on tab click (avoids AMP round-trip on first paint).
+        $rooms = [];
         $addedLabel = $factRecord['ListingContractDate'] ?? $factRecord['OriginalEntryTimestamp'] ?? $model->created_at ?? null;
         $bedroomsLabel = TrebPropertyHelper::formatBedroomLabel($factRecord, $localData);
         $bathrooms = $factRecord['BathroomsTotalInteger'] ?? $localData['number_bathroom'] ?? null;
@@ -140,17 +130,17 @@
 @endphp
 
 <style>
-.hs-detail-section { margin-top: 24px; }
+.hs-detail-section { margin-top: 16px; }
 .hs-detail-section .section-title {
-    font-size: 18px;
+    font-size: 17px;
     font-weight: 700;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
     color: var(--main-header-text-color, #161e2d);
 }
 .hs-detail-section .section-subtitle {
-    font-size: 14px;
+    font-size: 13px;
     color: #64748b;
-    margin-bottom: 16px;
+    margin-bottom: 10px;
 }
 .hs-tabs-scroll {
     overflow-x: auto;
@@ -163,7 +153,7 @@
 .hs-tabs {
     display: flex;
     gap: 0;
-    border-bottom: 2px solid #e2e8f0;
+    border-bottom: 1px solid #e2e8f0;
     margin-bottom: 0;
     flex-wrap: nowrap;
     width: max-content;
@@ -173,12 +163,12 @@
     flex: 0 0 auto;
     border: none;
     background: transparent;
-    padding: 12px 16px;
+    padding: 8px 12px;
     font-weight: 600;
-    font-size: 15px;
+    font-size: 14px;
     color: #64748b;
-    border-bottom: 3px solid transparent;
-    margin-bottom: -2px;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
     cursor: pointer;
     white-space: nowrap;
     line-height: 1.2;
@@ -190,31 +180,42 @@
 .hs-tabs button.active {
     color: rgb(2, 85, 161);
     border-bottom-color: rgb(2, 85, 161);
-    background: rgba(2, 85, 161, 0.06);
+    background: rgba(2, 85, 161, 0.05);
 }
-.hs-tab-panel { display: none; padding: 16px 0; }
+.hs-tab-panel { display: none; padding: 10px 0 4px; }
 .hs-tab-panel.active { display: block; }
 .hs-key-facts, .hs-details-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 12px 24px;
+    gap: 6px 20px;
     background: #f8fafc;
-    border-radius: 12px;
-    padding: 20px;
+    border-radius: 8px;
+    padding: 12px 14px;
 }
 .hs-key-facts .fact-label,
-.hs-details-grid .fact-label { font-size: 13px; color: #64748b; display: block; }
+.hs-details-grid .fact-label {
+    font-size: 12px;
+    color: #64748b;
+    display: block;
+    line-height: 1.25;
+    margin-bottom: 1px;
+}
 .hs-key-facts .fact-value,
-.hs-details-grid .fact-value { font-size: 15px; font-weight: 600; color: #1e293b; }
+.hs-details-grid .fact-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1e293b;
+    line-height: 1.3;
+}
 .hs-stats-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 20px;
-    padding: 12px 0 20px;
+    gap: 12px 16px;
+    padding: 8px 0 12px;
     border-bottom: 1px solid #e2e8f0;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
 }
-.hs-stats-row .stat { font-size: 15px; color: #334155; }
+.hs-stats-row .stat { font-size: 14px; color: #334155; }
 .hs-stats-row .stat strong { font-weight: 700; }
 .hs-history-locked-row { cursor: pointer; }
 .hs-history-locked-row:hover td { background: rgba(2, 85, 161, 0.06); }
@@ -223,29 +224,29 @@
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    gap: 16px;
-    padding: 12px 0;
+    gap: 12px;
+    padding: 8px 0;
     border-bottom: 1px solid #e2e8f0;
 }
 .hs-room-list .hs-room-row:last-child { border-bottom: none; }
 .hs-room-left { flex: 1; min-width: 0; }
-.hs-room-name { font-weight: 700; color: #1e293b; }
-.hs-room-size { font-size: 14px; color: #64748b; margin-top: 2px; }
+.hs-room-name { font-weight: 700; color: #1e293b; font-size: 14px; }
+.hs-room-size { font-size: 13px; color: #64748b; margin-top: 1px; }
 .hs-room-level {
-    font-size: 14px;
+    font-size: 13px;
     color: #64748b;
     text-align: right;
     white-space: nowrap;
     flex-shrink: 0;
-    padding-top: 2px;
+    padding-top: 1px;
 }
 .hs-details-group-title {
     grid-column: 1 / -1;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 700;
     color: rgb(2, 85, 161);
-    margin-top: 8px;
-    padding-top: 8px;
+    margin-top: 4px;
+    padding-top: 6px;
     border-top: 1px solid #e2e8f0;
 }
 .hs-details-group-title:first-child {
@@ -253,55 +254,48 @@
     padding-top: 0;
     border-top: none;
 }
+#propertyDetailBlocks .table { margin-bottom: 0; }
+#propertyDetailBlocks .table th,
+#propertyDetailBlocks .table td {
+    padding: 6px 8px;
+    vertical-align: top;
+}
 @media (max-width: 768px) {
     .hs-detail-section {
-        margin-top: 16px;
-        padding: 0 4px;
+        margin-top: 12px;
+        padding: 0 2px;
         overflow: visible;
     }
     .hs-detail-section .section-title {
-        font-size: 16px;
-        margin-bottom: 6px;
+        font-size: 15px;
+        margin-bottom: 4px;
     }
     .hs-detail-section .section-subtitle {
-        font-size: 13px;
-        margin-bottom: 12px;
-        line-height: 1.45;
+        font-size: 12px;
+        margin-bottom: 8px;
+        line-height: 1.4;
     }
     .hs-stats-row {
-        gap: 12px 16px;
-        padding: 10px 0 14px;
+        gap: 8px 12px;
+        padding: 6px 0 10px;
     }
-    .hs-stats-row .stat {
-        font-size: 13px;
-    }
+    .hs-stats-row .stat { font-size: 13px; }
     .hs-tabs button {
-        padding: 10px 12px;
+        padding: 8px 10px;
         font-size: 13px;
     }
-    .hs-tab-panel {
-        padding: 12px 0;
-    }
+    .hs-tab-panel { padding: 8px 0 2px; }
     .hs-key-facts, .hs-details-grid {
         grid-template-columns: 1fr;
-        padding: 14px;
-        gap: 10px 16px;
+        padding: 10px 12px;
+        gap: 6px 12px;
     }
     .hs-key-facts .fact-value,
-    .hs-details-grid .fact-value {
-        font-size: 14px;
-    }
-    #propertyDetailBlocks .table-responsive {
-        margin: 0 -4px;
-    }
-    #propertyDetailBlocks .table {
-        font-size: 12px;
-    }
+    .hs-details-grid .fact-value { font-size: 13px; }
+    #propertyDetailBlocks .table-responsive { margin: 0 -2px; }
+    #propertyDetailBlocks .table { font-size: 12px; }
     #propertyDetailBlocks .table th,
-    #propertyDetailBlocks .table td {
-        padding: 8px 6px;
-        vertical-align: top;
-    }
+    #propertyDetailBlocks .table td { padding: 6px 5px; }
 }
 </style>
 

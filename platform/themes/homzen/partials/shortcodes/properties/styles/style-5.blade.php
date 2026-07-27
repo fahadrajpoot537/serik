@@ -188,16 +188,12 @@
         @else
             <div class="alert alert-info text-center">{{ __('No sold properties found.') }}</div>
         @endif
-
-        @if ($shortcode->button_label && $shortcode->button_url)
-            <div class="text-center mt-5">
-                <a href="{{ $shortcode->button_url }}" class="tf-btn primary size-1">
-                    {{ $shortcode->button_label }}
-                </a>
-            </div>
-        @endif
     </div>
 </section>
+
+@if (\App\Support\SerikHomepage::isHomepageRequest())
+    @include(Theme::getThemeNamespace('partials.seo.home-nav-mount'))
+@endif
 
 <script>
     

@@ -8,11 +8,14 @@
     Theme::layout('full-width');
     Theme::set('breadcrumbEnabled', 'no');
 
-    if (! request()->boolean('iframe')) {
+    $isIframe = request()->boolean('iframe');
+
+    if (! $isIframe) {
         Theme::asset()->usePath()->add('fancybox', 'plugins/fancybox/jquery.fancybox.min.css');
         Theme::asset()->container('footer')->usePath()->add('fancybox', 'plugins/fancybox/jquery.fancybox.min.js');
     }
 
+    // Leaflet needed for detail map on both full page and modal iframe.
     Theme::asset()->usePath()->add('leaflet', 'plugins/leaflet/leaflet.css');
     Theme::asset()->container('footer')->usePath()->add('leaflet', 'plugins/leaflet/leaflet.js');
 

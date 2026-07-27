@@ -65,6 +65,27 @@ class AppServiceProvider extends ServiceProvider
             }, 9999, 2);
         }
 
+        // Belt-and-suspenders: ensure property detail HTML always has robots noindex.
+        if (defined('THEME_FRONT_HEADER')) {
+            add_filter(THEME_FRONT_HEADER, function (?string $header): ?string {
+                $request = request();
+                $slugPrefix = \Botble\Slug\Facades\SlugHelper::getPrefix(
+                    \Botble\RealEstate\Models\Property::class,
+                    'properties'
+                ) ?: 'properties';
+
+                if (! $request->is($slugPrefix . '/*') || $request->is($slugPrefix, $slugPrefix . '/map')) {
+                    return $header;
+                }
+
+                if (is_string($header) && str_contains($header, 'name="robots"')) {
+                    return $header;
+                }
+
+                return ($header ?? '') . '<meta name="robots" content="noindex, follow">' . "\n";
+            }, 9999);
+        }
+
         Event::listen(JobFailed::class, function (JobFailed $event): void {
             $payload = $event->job->payload();
             $displayName = $payload['displayName'] ?? $event->job->resolveName();

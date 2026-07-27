@@ -183,11 +183,27 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
             }
         }
 
-        if ($filters['type'] !== null) {
-            if ($filters['type'] == PropertyTypeEnum::SALE) {
-                // MLS ingest often leaves type NULL; treat those as for-sale listings.
-                $this->model = $this->model->where(function (Builder $query) {
-                    $query->where('type', PropertyTypeEnum::SALE)->orWhereNull('type');
+        if ($filters['type'] !== null && $filters['type'] !== '') {
+            $type = (string) $filters['type'];
+
+            if ($type === PropertyTypeEnum::SALE || $type === 'sale') {
+                // MLS rows use TransactionType; Botble `type` is often null/empty.
+                $this->model = $this->model->where(function (Builder $query): void {
+                    $query->where('TransactionType', 'For Sale')
+                        ->orWhere(function (Builder $q): void {
+                            $q->where(function (Builder $inner): void {
+                                $inner->whereNull('TransactionType')->orWhere('TransactionType', '');
+                            })->where(function (Builder $inner): void {
+                                $inner->where('type', PropertyTypeEnum::SALE)
+                                    ->orWhereNull('type')
+                                    ->orWhere('type', '');
+                            });
+                        });
+                });
+            } elseif (in_array($type, [PropertyTypeEnum::RENT, 'rent', 'lease'], true)) {
+                $this->model = $this->model->where(function (Builder $query): void {
+                    $query->whereIn('TransactionType', ['For Lease', 'For Sub-Lease'])
+                        ->orWhere('type', PropertyTypeEnum::RENT);
                 });
             } else {
                 $this->model = $this->model->where('type', $filters['type']);
@@ -439,7 +455,7 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
     protected function browseListingPaginate(array $params, array $filters): LengthAwarePaginator|Paginator
     {
         $paginate = $params['paginate'] ?? [];
-        $perPage = max(1, (int) ($paginate['per_page'] ?? 12));
+        $perPage = max(1, (int) ($paginate['per_page'] ?? 10));
         $page = max(1, (int) ($paginate['current_paged'] ?? 1));
         $pageName = $paginate['page_name'] ?? 'page';
 
