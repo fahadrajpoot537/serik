@@ -169,6 +169,22 @@ $app = Application::configure(basePath: dirname(__DIR__))
             ->dailyAt('03:30')
             ->withoutOverlapping(10)
             ->appendOutputTo(storage_path('logs/treb-reconcile.log'));
+
+        $schedule->call($dispatchLow('serik:sync-seo-navigation', [
+            '--counts' => true,
+            '--neighborhoods' => true,
+        ]))
+            ->name('serik-sync-seo-navigation-dispatch')
+            ->dailyAt('04:15')
+            ->withoutOverlapping(30)
+            ->appendOutputTo(storage_path('logs/seo-navigation.log'));
+
+        // Keep anonymous homepage HTML cache warm (MISS is ~10s+).
+        $schedule->call($dispatchLow('serik:cache:warm-homepage', [], requireLightLoad: false))
+            ->name('serik-warm-homepage-dispatch')
+            ->everyTenMinutes()
+            ->withoutOverlapping(20)
+            ->appendOutputTo(storage_path('logs/homepage-cache.log'));
     })
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->prepend(\App\Http\Middleware\ForceCanonicalDomainMiddleware::class);
@@ -179,6 +195,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
         $middleware->appendToGroup('web', \App\Http\Middleware\RequestProfilerMiddleware::class);
         $middleware->prependToGroup('web', \App\Http\Middleware\UseRequestRootUrlInLocal::class);
         $middleware->prependToGroup('web', \App\Http\Middleware\DetectVisitorCityMiddleware::class);
+        $middleware->appendToGroup('web', \App\Http\Middleware\PropertyNoIndexHeaders::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

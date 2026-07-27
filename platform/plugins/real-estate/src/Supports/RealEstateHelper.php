@@ -259,8 +259,8 @@ class RealEstateHelper
 
         $filters['keyword'] = $request->input('k');
 
-        $isBrowseListing = $request->routeIs('public.properties', 'public.ajax.properties')
-            || $request->is('properties', 'properties/*');
+        $isBrowseListing = $request->routeIs('public.properties', 'public.ajax.properties', 'public.seo.ontario')
+            || $request->is('properties', 'properties/*', 'ontario', 'ontario/*');
 
         $params = array_merge([
             'paginate' => [

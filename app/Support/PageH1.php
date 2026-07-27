@@ -132,6 +132,10 @@ final class PageH1
             return self::fromMapSeoSlug($matches[1]);
         }
 
+        if (preg_match('#^ontario/(.+)$#', $path, $matches)) {
+            return self::fromMapSeoSlug($matches[1]);
+        }
+
         if (preg_match('#^(.+)-for-(sale|lease)(?:-in-.+)?$#', $path)) {
             return self::fromMapSeoSlug($path);
         }

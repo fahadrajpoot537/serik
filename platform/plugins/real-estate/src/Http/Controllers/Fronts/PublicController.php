@@ -188,6 +188,20 @@ class PublicController extends BaseController
             }
         }
 
+        $ajaxCacheKey = null;
+        if ($request->ajax() && ! $request->query('minimal')) {
+            $ajaxCacheKey = 'serik_props_ajax_html_v1:' . md5(json_encode($request->except(['_token', '_method'])));
+            $cachedAjax = \Illuminate\Support\Facades\Cache::get($ajaxCacheKey);
+            if (is_array($cachedAjax) && isset($cachedAjax['html'])) {
+                $response = $this->httpResponse()->setData($cachedAjax['html']);
+                if (! empty($cachedAjax['additional'])) {
+                    $response->setAdditional($cachedAjax['additional']);
+                }
+
+                return $response;
+            }
+        }
+
         $properties = RealEstateHelper::getPropertiesFilter((int) theme_option('number_of_properties_per_page') ?: 12);
 
         if (! \Illuminate\Support\Facades\Cache::has('serik_active_listing_count_v1')) {
@@ -215,16 +229,28 @@ class PublicController extends BaseController
                 $view = Theme::getThemeNamespace('views.real-estate.properties.index');
             }
 
-            $response = $this
-                ->httpResponse()
-                ->setData(view($view, compact('properties'))->render());
+            $html = view($view, compact('properties'))->render();
+            $additional = [];
 
             if ($properties instanceof \Illuminate\Contracts\Pagination\LengthAwarePaginator) {
-                $response->setAdditional([
+                $additional = [
                     'total' => $properties->total(),
                     'current_page' => $properties->currentPage(),
                     'last_page' => $properties->lastPage(),
-                ]);
+                ];
+            }
+
+            if ($ajaxCacheKey) {
+                \Illuminate\Support\Facades\Cache::put($ajaxCacheKey, [
+                    'html' => $html,
+                    'additional' => $additional,
+                ], 45);
+            }
+
+            $response = $this->httpResponse()->setData($html);
+
+            if ($additional !== []) {
+                $response->setAdditional($additional);
             }
 
             return $response;

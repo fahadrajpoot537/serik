@@ -258,13 +258,20 @@ class PropertySearchService
 
     /**
      * Resolve property IDs for a city without MySQL LIKE.
-     * Tries exact Meili `city` filter, then free-text search.
+     * Tries exact Meili `city` filter, then TREB district aliases
+     * (North York / Scarborough / Etobicoke), then geo radius, then free-text.
      *
-     * @return int[]|null  null = Meili unavailable
+     * @return int[]|null  null = Meili unavailable (and no district fallback)
      */
     public function searchCityIds(string $city, int $limit = 2000, array $opts = []): ?array
     {
         if (! $this->isAvailable()) {
+            // District / geo fallbacks still work without Meili.
+            $districtIds = $this->searchDistrictCityIds($city, $limit);
+            if ($districtIds !== null) {
+                return $districtIds;
+            }
+
             return null;
         }
 
@@ -289,7 +296,127 @@ class PropertySearchService
             }
         }
 
+        // Former Toronto municipalities (North York, etc.) live as district codes.
+        // Prefer districts only — geo radius overlaps neighboring GTA cities.
+        $districtIds = $this->searchDistrictCityIds($city, $limit);
+        if ($districtIds !== null && $districtIds !== []) {
+            return $districtIds;
+        }
+
+        $geoIds = $this->searchCityIdsByGeo($city, $limit);
+        if ($geoIds !== null && $geoIds !== []) {
+            return $geoIds;
+        }
+
+        // Free-text last — can match street names ("Northgate"); only for
+        // cities without district/geo coverage.
         return $this->searchIds($city, $opts);
+    }
+
+    /**
+     * Resolve IDs via TREB City district codes stored in amp_snapshot meta.
+     *
+     * @return int[]|null  null = no district mapping for this city
+     */
+    public function searchDistrictCityIds(string $city, int $limit = 5000): ?array
+    {
+        $city = trim($city);
+        if ($city === '') {
+            return null;
+        }
+
+        $map = (array) config('seo_navigation.treb_city_districts', []);
+        if ($map === []) {
+            return null;
+        }
+
+        $slug = \Illuminate\Support\Str::slug($city);
+        $districts = $map[$slug] ?? null;
+
+        if ($districts === null) {
+            foreach ($map as $key => $codes) {
+                if (strcasecmp(str_replace('-', ' ', (string) $key), $city) === 0) {
+                    $districts = $codes;
+                    break;
+                }
+            }
+        }
+
+        if (! is_array($districts) || $districts === []) {
+            return null;
+        }
+
+        $cacheKey = 'serik_district_ids_v1:' . $slug . ':' . $limit;
+
+        return Cache::remember($cacheKey, 1800, function () use ($districts, $limit) {
+            $districts = array_values(array_unique(array_map('strval', $districts)));
+            $placeholders = implode(',', array_fill(0, count($districts), '?'));
+
+            $ids = DB::table('meta_boxes as mb')
+                ->where('mb.meta_key', 'amp_snapshot')
+                ->where('mb.reference_type', Property::class)
+                ->whereRaw(
+                    'JSON_UNQUOTE(JSON_EXTRACT(mb.meta_value, "$.City")) IN (' . $placeholders . ')',
+                    $districts
+                )
+                ->orderByDesc('mb.reference_id')
+                ->limit(max(1, min($limit, 8000)))
+                ->pluck('mb.reference_id')
+                ->map(static fn ($id) => (int) $id)
+                ->unique()
+                ->values()
+                ->all();
+
+            return $ids;
+        });
+    }
+
+    /**
+     * Geo radius around a city lat/lng from the cities table.
+     *
+     * @return int[]|null
+     */
+    public function searchCityIdsByGeo(string $city, int $limit = 2000, float $radiusKm = 8.0): ?array
+    {
+        if (! $this->isAvailable()) {
+            return null;
+        }
+
+        $row = DB::table('cities')
+            ->where(function ($q) use ($city): void {
+                $q->where('name', $city)
+                    ->orWhere('slug', \Illuminate\Support\Str::slug($city));
+            })
+            ->whereNotNull('latitude')
+            ->whereNotNull('longitude')
+            ->first(['latitude', 'longitude']);
+
+        if (! $row) {
+            return null;
+        }
+
+        $lat = (float) $row->latitude;
+        $lng = (float) $row->longitude;
+        if ($lat === 0.0 && $lng === 0.0) {
+            return null;
+        }
+
+        try {
+            $res = $this->index()->search('', [
+                'limit' => max(1, min($limit, 5000)),
+                'filter' => '_geoRadius(' . $lat . ', ' . $lng . ', ' . (int) ($radiusKm * 1000) . ')',
+                'attributesToRetrieve' => ['id'],
+            ]);
+
+            return array_values(array_map(
+                static fn ($hit) => (int) $hit['id'],
+                $res->getHits()
+            ));
+        } catch (Throwable $e) {
+            report($e);
+
+            return null;
+        }
     }
 
     /**

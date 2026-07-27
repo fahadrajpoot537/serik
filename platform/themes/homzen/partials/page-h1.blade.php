@@ -10,6 +10,10 @@
         <div class="serik-page-h1-wrap serik-page-h1-wrap--compact">
             <h1 class="serik-page-h1">{{ $text }}</h1>
         </div>
+    @elseif ($variant === 'ontario-seo')
+        <div class="serik-page-h1-wrap serik-page-h1-wrap--ontario container-fluid px-3 px-lg-4 py-3">
+            <h1 class="serik-page-h1">{{ $text }}</h1>
+        </div>
     @else
         <div class="serik-page-h1-wrap container py-3">
             <h1 class="serik-page-h1">{{ $text }}</h1>
@@ -37,6 +41,14 @@
 
     .serik-page-h1-wrap--compact .serik-page-h1 {
         font-size: clamp(1.125rem, 2vw, 1.5rem);
+    }
+
+    .serik-page-h1-wrap--ontario {
+        border-bottom: 1px solid #e8ecf1;
+    }
+
+    .serik-page-h1-wrap--ontario .serik-page-h1 {
+        font-size: clamp(1.25rem, 2.2vw, 1.75rem);
     }
 
     .hs-map-page-h1 {

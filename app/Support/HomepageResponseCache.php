@@ -10,9 +10,9 @@ use Illuminate\Support\Facades\Cache;
  */
 final class HomepageResponseCache
 {
-    private const VERSION_KEY = 'homepage_response_cache_version_v2';
+    private const VERSION_KEY = 'homepage_response_cache_version_v3';
 
-    private const TTL_SECONDS = 300;
+    private const TTL_SECONDS = 1800;
 
     public static function version(): int
     {
@@ -22,6 +22,14 @@ final class HomepageResponseCache
     public static function bump(): void
     {
         Cache::forever(self::VERSION_KEY, self::version() + 1);
+    }
+
+    /**
+     * Soft bump used by MLS property writes — does NOT invalidate full-page HTML.
+     * Featured/fragment caches are bumped separately by the observer.
+     */
+    public static function bumpDataOnly(): void
+    {
         HomepageFeaturedCache::bump();
     }
 
@@ -65,22 +73,11 @@ final class HomepageResponseCache
 
     public static function cacheKey(Request $request): string
     {
-        $city = 'ontario';
-
-        try {
-            if (class_exists(\Theme\homzen\Supports\VisitorCityHelper::class)) {
-                $detected = \Theme\homzen\Supports\VisitorCityHelper::get();
-                if (is_string($detected) && $detected !== '') {
-                    $city = strtolower($detected);
-                }
-            }
-        } catch (\Throwable) {
-            // ignore
-        }
-
+        // Shared key for all anonymous visitors — visitor-city personalization
+        // loads via async SEO nav / featured fragments, not per-city full HTML.
         $locale = app()->getLocale();
 
-        return 'homepage_html_v2:' . self::version() . ':' . $locale . ':' . $city;
+        return 'homepage_html_v3:' . self::version() . ':' . $locale . ':shared';
     }
 
     public static function get(Request $request): ?string

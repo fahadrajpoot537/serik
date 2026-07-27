@@ -25,6 +25,7 @@ final class HomepageFragmentCache
     'blog-posts',
     'services',
     'location',
+    'agents',
   ];
 
   /** @var list<string> */

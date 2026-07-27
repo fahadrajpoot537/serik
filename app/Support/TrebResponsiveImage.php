@@ -61,9 +61,13 @@ final class TrebResponsiveImage
 
         $scheme = $parsed['scheme'] ?? null;
         $host = $parsed['host'] ?? null;
-        $base = ($scheme && $host)
-            ? $scheme . '://' . $host . $path
-            : $path;
+
+        if ($scheme && $host) {
+            $port = isset($parsed['port']) ? ':' . $parsed['port'] : '';
+            $base = $scheme . '://' . $host . $port . $path;
+        } else {
+            $base = $path;
+        }
 
         return $base . '?' . http_build_query($query);
     }

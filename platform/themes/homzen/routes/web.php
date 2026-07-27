@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\OntarioSeoLandingController;
 use App\Http\Controllers\AjaxShortcodeBatchController;
 use App\Support\PropertyUrl;
 use Botble\Base\Http\Middleware\RequiresJsonRequestMiddleware;
@@ -81,6 +82,13 @@ Route::middleware(['web', 'core'])->group(function (): void {
         return app()->handle($request);
 
     });
+
+    Route::match(['GET', 'POST'], '/ontario/{seo}', [OntarioSeoLandingController::class, 'show'])
+        ->where('seo', '[a-z0-9\-]+')
+        ->name('public.seo.ontario');
+
+    Route::get('/ajax/seo-city-navigation', \App\Http\Controllers\SeoCityNavigationController::class)
+        ->name('public.ajax.seo-city-navigation');
 });
 
 Route::middleware(['web', 'core', RequiresJsonRequestMiddleware::class, ShortcodePerformanceMiddleware::class])

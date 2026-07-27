@@ -8,7 +8,7 @@
 <div class="@if($property->isSoldHistory() && ! $canViewSold) blurred-content @endif">
     <a href="{{ $canViewSold ? $property->url : '#modalRegister' }}" 
        @if(! $canViewSold) data-bs-toggle="modal" @endif
-       class="images-group">
+       @class(['images-group', 'js-property-modal-link' => $canViewSold])>
         <div class="images-style">
             @include(Theme::getThemeNamespace('views.real-estate.partials.property-image'), [
                 'property' => $property,
@@ -47,7 +47,8 @@
             <div class="h7 text-capitalize fw-7">
                 <a href="{{ $canViewSold ? $property->url : '#modalRegister' }}" 
                    @if(! $canViewSold) data-bs-toggle="modal" @endif
-                   class="link line-clamp-1" title="{{ $property->display_name }}">{!! BaseHelper::clean($property->display_name) !!}</a>
+                   @class(['link', 'line-clamp-1', 'js-property-modal-link' => $canViewSold])
+                   title="{{ $property->display_name }}">{!! BaseHelper::clean($property->display_name) !!}</a>
             </div>
             @if($property->short_address)
                 <div class="desc">

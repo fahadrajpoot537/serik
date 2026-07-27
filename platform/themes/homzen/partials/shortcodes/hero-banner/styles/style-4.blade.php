@@ -3309,12 +3309,13 @@ position: absolute;
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 10050;
+    z-index: 10060;
     display: flex;
     background: #fff;
     border-top: 1px solid #e5e7eb;
     box-shadow: 0 -2px 12px rgba(0,0,0,.08);
     padding-bottom: env(safe-area-inset-bottom, 0);
+    pointer-events: auto;
 }
 
 .hs-view-bar-btn {
@@ -3351,10 +3352,17 @@ position: absolute;
 }
 
 @media (max-width: 991px) {
+    .map-housesigma.view-list {
+        overflow: hidden !important;
+    }
+
     .map-housesigma.view-list .map-mobile-view {
         display: flex !important;
         flex-direction: column !important;
         overflow: hidden !important;
+        /* Fixed viewport height so list body can scroll inside */
+        height: calc(100dvh - 60px - 52px - env(safe-area-inset-bottom, 0px)) !important;
+        max-height: calc(100dvh - 60px - 52px - env(safe-area-inset-bottom, 0px)) !important;
     }
 
     .map-housesigma.view-list .map-search-wrapper {
@@ -3367,36 +3375,67 @@ position: absolute;
         position: relative !important;
     }
 
+    /* Keep list hidden until user opens it (map is default) */
+    .map-housesigma:not(.view-list) .hs-mobile-list-panel {
+        display: none !important;
+    }
+
     .map-housesigma.view-list .hs-mobile-list-panel {
-        position: relative !important;
-        inset: auto !important;
+        position: absolute !important;
+        inset: 0 !important;
         display: flex !important;
         flex-direction: column !important;
-        flex: 1 1 auto !important;
-        min-height: 0 !important;
+        flex: none !important;
         width: 100% !important;
+        height: 100% !important;
         z-index: 12 !important;
         background: #fff !important;
         overflow: hidden !important;
     }
 
+    /* Circle click → full-screen list over map + filters (leave room for Map/List bar) */
+    .map-housesigma.view-list.hs-cluster-fullscreen-list .hs-mobile-list-panel {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: calc(58px + env(safe-area-inset-bottom, 0px)) !important;
+        width: 100% !important;
+        height: auto !important;
+        z-index: 10040 !important;
+        border-radius: 0 !important;
+        pointer-events: auto;
+    }
+
+    .map-housesigma.view-list.hs-cluster-fullscreen-list .hs-mobile-list-header {
+        padding-top: calc(10px + env(safe-area-inset-top, 0px)) !important;
+    }
+
     .map-housesigma.view-list .hs-mobile-list-header {
-        flex-shrink: 0;
+        flex: 0 0 auto !important;
     }
 
     .map-housesigma.view-list .hs-mobile-list-body {
-        flex: 1 1 auto !important;
+        flex: 1 1 0 !important;
+        height: 0 !important;
         min-height: 0 !important;
-        overflow-y: auto !important;
+        max-height: none !important;
+        overflow-y: scroll !important;
         overflow-x: hidden !important;
         -webkit-overflow-scrolling: touch !important;
         overscroll-behavior: contain !important;
         touch-action: pan-y !important;
-        padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)) !important;
+        padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)) !important;
+    }
+
+    .map-housesigma.view-list .hs-mobile-list-body .hs-list-item {
+        touch-action: pan-y !important;
     }
 
     .map-housesigma.view-list .hs-mobile-view-bar {
         flex-shrink: 0;
+        z-index: 10060 !important;
+        pointer-events: auto !important;
     }
 }
 
@@ -8461,47 +8500,215 @@ function mapMovedEnoughToRefetch() {
         handler(e);
     }
 
+    /**
+     * Cluster click UX (simple + predictable):
+     * - 2–15 → always open list
+     * - Larger circle → open list when next step would show stacked/individual pins
+     *   (same building, leaf cluster, or zoom past clustering)
+     * - Only zoom when there are real sub-circles across an area
+     * - Zoom never crosses clusterMaxZoom (that dumps overlapping pins)
+     */
+    const HS_CLUSTER_LIST_MAX = 15;
+    const HS_CLUSTER_LEAF_FETCH_MAX = 100;
+    const HS_CLUSTER_MAX_ZOOM = 15; // keep in sync with map source clusterMaxZoom
+    const HS_COLOCATED_DEG = 0.002; // ~200m — condo / tower stacks
+
+    function featureCoords(feature) {
+        const c = feature?.geometry?.coordinates;
+        if (!Array.isArray(c) || c.length < 2) return null;
+        const lng = Number(c[0]);
+        const lat = Number(c[1]);
+        if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
+        return [lng, lat];
+    }
+
+    function leavesAreColocated(leaves) {
+        const coords = (leaves || []).map(featureCoords).filter(Boolean);
+        if (coords.length <= 1) return true;
+
+        let minLng = coords[0][0];
+        let maxLng = coords[0][0];
+        let minLat = coords[0][1];
+        let maxLat = coords[0][1];
+
+        for (let i = 1; i < coords.length; i++) {
+            minLng = Math.min(minLng, coords[i][0]);
+            maxLng = Math.max(maxLng, coords[i][0]);
+            minLat = Math.min(minLat, coords[i][1]);
+            maxLat = Math.max(maxLat, coords[i][1]);
+        }
+
+        return (maxLng - minLng) <= HS_COLOCATED_DEG && (maxLat - minLat) <= HS_COLOCATED_DEG;
+    }
+
+    function isClusterFeature(feature) {
+        const p = feature?.properties || {};
+        return !!(p.cluster || p.cluster_id != null);
+    }
+
+    function childrenAreAllPoints(children) {
+        return !!(children?.length) && children.every((child) => !isClusterFeature(child));
+    }
+
+    function countChildClusters(children) {
+        return (children || []).filter(isClusterFeature).length;
+    }
+
+    function dedupeFeaturesById(features) {
+        const seen = new Set();
+        const out = [];
+        (features || []).forEach((f) => {
+            const id = String(
+                f?.properties?.id
+                || f?.properties?.external_id
+                || f?.properties?.ListingKey
+                || f?.id
+                || ''
+            );
+            const key = id || JSON.stringify(featureCoords(f));
+            if (!key || seen.has(key)) return;
+            seen.add(key);
+            out.push(f);
+        });
+        return out;
+    }
+
+    function openLeavesAsListOrPopup(leaves, clusterCoords) {
+        const unique = dedupeFeaturesById(leaves);
+        if (!unique.length) return;
+
+        if (unique.length === 1) {
+            if (typeof window.showPropertyMapPopup === 'function') {
+                window.showPropertyMapPopup(unique[0]);
+            } else {
+                openPropertyFromFeature(unique[0]);
+            }
+            return;
+        }
+
+        closeMapPropertySelection();
+        showClusterListInSidebar(unique, clusterCoords);
+    }
+
+    function fetchClusterLeaves(source, clusterId, limit, cb) {
+        const n = Math.max(2, Math.min(limit || HS_CLUSTER_LEAF_FETCH_MAX, HS_CLUSTER_LEAF_FETCH_MAX));
+        source.getClusterLeaves(clusterId, n, 0, function (err, leaves) {
+            cb(err, leaves || []);
+        });
+    }
+
+    function smoothZoomToCluster(clusterCoords, targetZoom) {
+        // Stay below clusterMaxZoom so MapLibre keeps circles (no pin soup).
+        const safeZoom = Math.min(Number(targetZoom), HS_CLUSTER_MAX_ZOOM - 0.35);
+        const currentZoom = map.getZoom();
+        if (!Number.isFinite(safeZoom) || safeZoom <= currentZoom + 0.08) {
+            return false;
+        }
+
+        runProgrammaticMapMove(() => {
+            map.easeTo({
+                center: clusterCoords,
+                zoom: safeZoom,
+                duration: 550,
+                essential: true,
+            });
+        });
+        return true;
+    }
+
     function handleClusterMarkerClick(e) {
         window.HsMapFetchCoordinator?.clearDebounce?.();
 
         const features = map.queryRenderedFeatures(e.point, {
-            layers: ['clusters']
+            layers: ['clusters'],
         });
-
         if (!features.length) return;
 
         const clusterFeature = features[0];
         const clusterId = clusterFeature.properties.cluster_id;
-        const pointCount = clusterFeature.properties.point_count;
+        const pointCount = Number(clusterFeature.properties.point_count) || 0;
         const clusterCoords = clusterFeature.geometry.coordinates.slice();
-
         const source = map.getSource('properties');
 
-        source.getClusterLeaves(clusterId, 50, 0, function (err, leaves) {
-            if (err || !leaves?.length) return;
+        if (!source || typeof source.getClusterLeaves !== 'function') {
+            return;
+        }
 
-            if (leaves.length === 1) {
-                if (typeof window.showPropertyMapPopup === 'function') {
-                    window.showPropertyMapPopup(leaves[0]);
-                } else {
-                    openPropertyFromFeature(leaves[0]);
-                }
+        const leafLimit = Math.min(Math.max(pointCount, 2), HS_CLUSTER_LEAF_FETCH_MAX);
+
+        fetchClusterLeaves(source, clusterId, leafLimit, function (leafErr, leaves) {
+            if (leafErr || !leaves.length) return;
+
+            const openList = function () {
+                openLeavesAsListOrPopup(leaves, clusterCoords);
+            };
+
+            // Small circles → list (user-friendly default).
+            if (leaves.length === 1 || pointCount <= HS_CLUSTER_LIST_MAX) {
+                openList();
                 return;
             }
 
-            closeMapPropertySelection();
-            showClusterListInSidebar(leaves, clusterCoords);
+            const afterMeta = function (children, expansionZoom) {
+                const childClusters = countChildClusters(children);
 
-            if (pointCount >= 20) {
-                source.getClusterExpansionZoom(clusterId, function (zoomErr, zoom) {
-                    if (zoomErr) return;
-                    runProgrammaticMapMove(() => {
-                        map.easeTo({
-                            center: clusterCoords,
-                            zoom: zoom,
-                        });
-                    });
+                // Next step is only individual markers → list (fixes 22/32 stacks).
+                if (childrenAreAllPoints(children) || childClusters === 0) {
+                    openList();
+                    return;
+                }
+
+                // Same building / tight area → list, never pin-stack.
+                if (leavesAreColocated(leaves)) {
+                    openList();
+                    return;
+                }
+
+                // Only one nested circle (32→32) → list.
+                if (childClusters <= 1) {
+                    openList();
+                    return;
+                }
+
+                // Expansion would uncluster → list.
+                if (!Number.isFinite(expansionZoom) || expansionZoom >= HS_CLUSTER_MAX_ZOOM - 0.2) {
+                    openList();
+                    return;
+                }
+
+                // Real geographic split into multiple circles → smooth zoom.
+                if (!smoothZoomToCluster(clusterCoords, expansionZoom)) {
+                    openList();
+                }
+            };
+
+            let children = null;
+            let expansionZoom = NaN;
+            let pending = 2;
+
+            const maybeDone = function () {
+                pending -= 1;
+                if (pending > 0) return;
+                afterMeta(children, expansionZoom);
+            };
+
+            if (typeof source.getClusterChildren === 'function') {
+                source.getClusterChildren(clusterId, function (err, kids) {
+                    children = err ? [] : (kids || []);
+                    maybeDone();
                 });
+            } else {
+                children = [];
+                maybeDone();
+            }
+
+            if (typeof source.getClusterExpansionZoom === 'function') {
+                source.getClusterExpansionZoom(clusterId, function (err, zoom) {
+                    expansionZoom = err ? NaN : Number(zoom);
+                    maybeDone();
+                });
+            } else {
+                maybeDone();
             }
         });
     }
@@ -8519,11 +8726,31 @@ function mapMovedEnoughToRefetch() {
     });
 
   function handleUnclusteredMarkerClick(e) {
-    if (typeof window.showPropertyMapPopup === 'function') {
-        window.showPropertyMapPopup(e.features[0]);
+    // Stacked pins at one building → open list instead of a single random pin.
+    const pad = 16;
+    const pt = e.point || { x: 0, y: 0 };
+    const bbox = [
+        [pt.x - pad, pt.y - pad],
+        [pt.x + pad, pt.y + pad],
+    ];
+    const hits = dedupeFeaturesById(
+        map.queryRenderedFeatures(bbox, { layers: ['unclustered-point'] })
+    );
+
+    if (hits.length > 1) {
+        const coords = featureCoords(hits[0]) || (e.lngLat ? [e.lngLat.lng, e.lngLat.lat] : null);
+        openLeavesAsListOrPopup(hits, coords);
         return;
     }
-    openPropertyFromFeature(e.features[0]);
+
+    const feature = hits[0] || e.features?.[0];
+    if (!feature) return;
+
+    if (typeof window.showPropertyMapPopup === 'function') {
+        window.showPropertyMapPopup(feature);
+        return;
+    }
+    openPropertyFromFeature(feature);
   }
 
   map.on('click', 'unclustered-point', function (e) {
@@ -9553,9 +9780,12 @@ function mapMovedEnoughToRefetch() {
             return;
         }
 
-        el.style.flex = '1 1 auto';
+        // Scroll only the list body — panel stays overflow:hidden (flex column).
+        el.style.flex = '1 1 0';
+        el.style.height = '0';
         el.style.minHeight = '0';
-        el.style.overflowY = 'auto';
+        el.style.maxHeight = 'none';
+        el.style.overflowY = 'scroll';
         el.style.overflowX = 'hidden';
         el.style.webkitOverflowScrolling = 'touch';
         el.style.overscrollBehavior = 'contain';
@@ -9566,8 +9796,35 @@ function mapMovedEnoughToRefetch() {
         if (window.innerWidth >= 992) {
             return;
         }
-        ensureMobileScrollContainer(document.getElementById('hsMobileListBody'));
-        ensureMobileScrollContainer(document.getElementById('hsMobileListPanel'));
+
+        const root = document.querySelector('.map-housesigma');
+        const isList = !!root?.classList.contains('view-list');
+        const panel = document.getElementById('hsMobileListPanel');
+
+        if (!panel) {
+            return;
+        }
+
+        // Never force the list visible on map view (this was opening list by default).
+        if (!isList) {
+            panel.style.display = 'none';
+            panel.style.position = '';
+            panel.style.inset = '';
+            panel.style.zIndex = '';
+            return;
+        }
+
+        panel.style.display = 'flex';
+        panel.style.flexDirection = 'column';
+        panel.style.overflow = 'hidden';
+        panel.style.minHeight = '0';
+
+        const body = document.getElementById('hsMobileListBody');
+        ensureMobileScrollContainer(body);
+
+        if (body) {
+            body.style.paddingBottom = 'calc(16px + env(safe-area-inset-bottom, 0px))';
+        }
     }
 
     window.setupMobileListScroll = setupMobileListScroll;
@@ -9939,9 +10196,14 @@ function mapMovedEnoughToRefetch() {
         if (window.innerWidth < 992 && document.querySelector('.map-housesigma')?.classList.contains('view-list')) {
             const root = document.querySelector('.map-housesigma');
             root?.classList.remove('view-list');
+            root?.classList.remove('hs-cluster-fullscreen-list');
             document.querySelectorAll('.hs-view-bar-btn').forEach((btn) => {
                 btn.classList.toggle('active', btn.dataset.hsView === 'map');
             });
+            const panel = document.getElementById('hsMobileListPanel');
+            if (panel) {
+                panel.style.display = 'none';
+            }
             setTimeout(() => window.hsMap?.resize?.(), 320);
         }
 
@@ -10329,7 +10591,17 @@ function mapMovedEnoughToRefetch() {
         setHsMapSelectedMarker(markerCoords);
 
         if (window.innerWidth < 992) {
+            document.querySelector('.map-housesigma')?.classList.add('hs-cluster-fullscreen-list');
             setHsViewMode('list');
+            requestAnimationFrame(() => {
+                if (typeof window.setupMobileListScroll === 'function') {
+                    window.setupMobileListScroll();
+                }
+                const body = document.getElementById('hsMobileListBody');
+                if (body) {
+                    body.scrollTop = 0;
+                }
+            });
         } else {
             setDesktopListOpen(true);
         }
@@ -10742,7 +11014,40 @@ function setHsViewMode(mode) {
     if (!root) return;
 
     const isList = mode === 'list';
+
+    // Returning to Map must fully dismiss cluster list state + fullscreen overlay.
+    if (!isList && window.innerWidth < 992) {
+        if (window._hsClusterListActive || window.HsMapInteractionState?.isClusterPanelOpen?.()) {
+            window._hsClusterListActive = false;
+            window.HsMapInteractionState?.closePanel?.();
+            window._hsLastClusterLeaves = [];
+            window._hsLastClusterCoords = null;
+            if (typeof clearHsMapSelectedMarker === 'function') {
+                clearHsMapSelectedMarker();
+            }
+        }
+        root.classList.remove('hs-cluster-fullscreen-list');
+        root.classList.remove('view-list');
+
+        const panel = document.getElementById('hsMobileListPanel');
+        if (panel) {
+            panel.style.display = 'none';
+            panel.style.position = '';
+            panel.style.inset = '';
+            panel.style.top = '';
+            panel.style.left = '';
+            panel.style.right = '';
+            panel.style.bottom = '';
+            panel.style.zIndex = '';
+            panel.style.height = '';
+            panel.style.width = '';
+        }
+    }
+
     root.classList.toggle('view-list', isList);
+    if (!isList) {
+        root.classList.remove('hs-cluster-fullscreen-list');
+    }
 
     document.querySelectorAll('.hs-view-bar-btn').forEach((btn) => {
         btn.classList.toggle('active', btn.dataset.hsView === mode);
@@ -10763,6 +11068,9 @@ function setHsViewMode(mode) {
         if (window._hsClusterListActive && window._hsLastClusterLeaves?.length) {
             renderMapListCards(window._hsLastClusterLeaves, { force: true, cluster: true });
         } else {
+            if (!window._hsClusterListActive) {
+                root.classList.remove('hs-cluster-fullscreen-list');
+            }
             renderMapListCards(window.lastMapFeatures || []);
         }
         requestAnimationFrame(() => {
@@ -10774,9 +11082,7 @@ function setHsViewMode(mode) {
         if (typeof window.setupMobileListScroll === 'function') {
             window.setupMobileListScroll();
         }
-    }
-
-    if (!isList && window.innerWidth < 992) {
+        setTimeout(() => window.hsMap?.resize?.(), 50);
         setTimeout(() => window.hsMap?.resize?.(), 320);
     }
 }
@@ -10836,21 +11142,33 @@ function toggleListSidebar() {
 
 function bindHsViewBarButtons() {
     document.querySelectorAll('.hs-view-bar-btn').forEach((btn) => {
-        if (btn.dataset.hsViewBound) return;
-        btn.dataset.hsViewBound = '1';
-        btn.addEventListener('click', () => {
-            setHsViewMode(btn.dataset.hsView || 'map');
+        if (btn.dataset.hsViewBound === '2') return;
+        // Rebind even if early boot already attached a weak handler.
+        btn.dataset.hsViewBound = '2';
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const mode = btn.dataset.hsView || 'map';
+            if (mode === 'map') {
+                if (typeof window.closeClusterListSidebar === 'function') {
+                    window.closeClusterListSidebar();
+                }
+                setHsViewMode('map');
+            } else {
+                setHsViewMode('list');
+            }
             setTimeout(() => window.hsMap?.resize?.(), 320);
         });
     });
 }
 
 function initHsViewMode() {
-    const view = new URLSearchParams(window.location.search).get('view');
-    if (view === 'list') {
-        if (window.innerWidth < 992) {
-            setHsViewMode('list');
-        } else {
+    // Mobile default is always Map — never auto-open list on load.
+    if (window.innerWidth < 992) {
+        setHsViewMode('map');
+    } else {
+        const view = new URLSearchParams(window.location.search).get('view');
+        if (view === 'list') {
             setDesktopListOpen(true);
         }
     }
@@ -11160,6 +11478,11 @@ function initSplitDateDropdowns() {
         if (!root) return;
         const isList = mode === 'list';
         root.classList.toggle('view-list', isList);
+        if (!isList) {
+            root.classList.remove('hs-cluster-fullscreen-list');
+            const panel = document.getElementById('hsMobileListPanel');
+            if (panel) panel.style.display = 'none';
+        }
         document.querySelectorAll('.hs-view-bar-btn').forEach((btn) => {
             btn.classList.toggle('active', btn.dataset.hsView === mode);
         });
@@ -11173,10 +11496,18 @@ function initSplitDateDropdowns() {
 
     function bindHsViewBarEarly() {
         document.querySelectorAll('.hs-view-bar-btn').forEach((btn) => {
-            if (btn.dataset.hsViewBound) return;
-            btn.dataset.hsViewBound = '1';
-            btn.addEventListener('click', () => {
+            if (btn.dataset.hsViewEarlyBound) return;
+            btn.dataset.hsViewEarlyBound = '1';
+            btn.addEventListener('click', (e) => {
+                // Prefer the later, stronger handler once map JS is ready.
+                if (btn.dataset.hsViewBound === '2') {
+                    return;
+                }
+                e.preventDefault();
                 const mode = btn.dataset.hsView || 'map';
+                if (mode === 'map' && typeof window.closeClusterListSidebar === 'function') {
+                    window.closeClusterListSidebar();
+                }
                 if (typeof window.setHsViewMode === 'function') {
                     window.setHsViewMode(mode);
                 } else {
@@ -11189,12 +11520,12 @@ function initSplitDateDropdowns() {
 
     function bootHsMobileView() {
         bindHsViewBarEarly();
-        const view = new URLSearchParams(window.location.search).get('view');
-        if (view === 'list' && window.innerWidth < 992) {
+        // Always start on Map for mobile (list only after circle click / List tab).
+        if (window.innerWidth < 992) {
             if (typeof window.setHsViewMode === 'function') {
-                window.setHsViewMode('list');
+                window.setHsViewMode('map');
             } else {
-                applyHsViewModeFallback('list');
+                applyHsViewModeFallback('map');
             }
         }
     }

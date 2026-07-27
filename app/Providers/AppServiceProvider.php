@@ -58,6 +58,10 @@ class AppServiceProvider extends ServiceProvider
         if (defined('BASE_ACTION_PUBLIC_RENDER_SINGLE')) {
             add_action(BASE_ACTION_PUBLIC_RENDER_SINGLE, function (string $screen, object $data): void {
                 SerikSeo::applyForModel($screen, $data);
+
+                if ($screen === PROPERTY_MODULE_SCREEN_NAME && $data instanceof \Botble\RealEstate\Models\Property) {
+                    \Botble\SeoHelper\Facades\SeoHelper::meta()->addMeta('robots', 'noindex, follow');
+                }
             }, 9999, 2);
         }
 

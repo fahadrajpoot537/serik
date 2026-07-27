@@ -56,9 +56,29 @@
 
 <input type="hidden" name="per_page" value="{{ request()->integer('per_page', 12) }}">
 <input type="hidden" name="type" value="sale">
+@if ($location = trim((string) request('location')))
+    <input type="hidden" name="location" value="{{ $location }}">
+@endif
+@if (filter_var(request('open_house'), FILTER_VALIDATE_BOOLEAN))
+    <input type="hidden" name="open_house" value="1">
+@endif
+@if (request('status') === 'sold')
+    <input type="hidden" name="status" value="sold">
+@endif
+@if ($community = trim((string) request('community')))
+    <input type="hidden" name="community" value="{{ $community }}">
+@endif
+@foreach ((array) request('home_types', []) as $persistedHomeType)
+    @if (! in_array($persistedHomeType, ['house', 'condo', 'townhouse'], true))
+        @continue
+    @endif
+    @if (! in_array($persistedHomeType, $homeTypes, true))
+        <input type="hidden" name="home_types[]" value="{{ $persistedHomeType }}">
+    @endif
+@endforeach
 
 <div class="serik-listing-toolbar sticky-top bg-white border-bottom">
-    <div class="container py-2 py-md-3">
+    <div class="container-fluid py-2 py-md-3">
         <ul class="nav-filters-menu serik-nav-filters list-unstyled d-flex flex-wrap align-items-center gap-2 mb-0">
             <li class="dropdown">
                 <button type="button" class="serik-filter-btn dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside">
@@ -151,9 +171,22 @@
                 </div>
             </li>
 
+            @php
+                $clearUrl = $actionUrl ?? url('/properties');
+                $clearQuery = [];
+                if (filter_var(request('open_house'), FILTER_VALIDATE_BOOLEAN)) {
+                    $clearQuery['open_house'] = 1;
+                }
+                if (request('status') === 'sold') {
+                    $clearQuery['status'] = 'sold';
+                }
+                if ($clearQuery !== []) {
+                    $clearUrl .= (str_contains($clearUrl, '?') ? '&' : '?') . http_build_query($clearQuery);
+                }
+            @endphp
             @if (request()->query())
                 <li>
-                    <a href="{{ $actionUrl ?? url('/properties') }}" class="serik-filter-btn serik-filter-btn--ghost reset-filter-btn">{{ __('Clear') }}</a>
+                    <a href="{{ $clearUrl }}" class="serik-filter-btn serik-filter-btn--ghost reset-filter-btn">{{ __('Clear') }}</a>
                 </li>
             @endif
 
@@ -185,7 +218,20 @@
 
         <p class="serik-listing-count mb-0 mt-2 pt-2 border-top">
             <strong id="serikListingCount">{{ $propertyCount !== null ? number_format($propertyCount) : '—' }}</strong>
-            <span id="serikListingCountLabel">{{ $activeChips !== [] ? __('homes match your filters') : __('homes for sale in Ontario') }}</span>
+            <span id="serikListingCountLabel">
+                @php
+                    $countPlace = trim((string) ($seoNavCommunity ?? request('community') ?? ''));
+                    if ($countPlace === '') {
+                        $countPlace = trim((string) ($seoNavLocation ?? request('location') ?? ''));
+                    }
+                    if ($countPlace === '') {
+                        $countPlace = 'Ontario';
+                    }
+                @endphp
+                {{ $activeChips !== []
+                    ? __('homes match your filters')
+                    : __('homes for sale in :place', ['place' => $countPlace]) }}
+            </span>
             <span class="serik-filter-loading ms-2 d-none" id="serikFilterLoading" aria-hidden="true">{{ __('Updating…') }}</span>
         </p>
     </div>
@@ -203,15 +249,25 @@
 .serik-properties-page .serik-properties-filters-section { padding-top: 0; background: #fff; }
 .serik-properties-page .flat-section-v5,
 .serik-properties-page .flat-recommended-v2 {
-    margin-top: 0;
-    padding-top: 28px;
+    margin-top: 0 !important;
+    padding-top: 20px;
     padding-bottom: 48px;
+}
+.serik-properties-page .serik-listing-toolbar .container-fluid {
+    padding-left: 1rem;
+    padding-right: 1rem;
+}
+@media (min-width: 992px) {
+    .serik-properties-page .serik-listing-toolbar .container-fluid {
+        padding-left: 1.5rem;
+        padding-right: 1.5rem;
+    }
 }
 @media (max-width: 991px) {
     .serik-properties-page .flat-section-v5,
     .serik-properties-page .flat-recommended-v2 {
-        margin-top: 0;
-        padding-top: 28px;
+        margin-top: 0 !important;
+        padding-top: 16px;
     }
 }
 .serik-properties-page [data-bb-toggle="data-listing"] {

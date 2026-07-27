@@ -14,4 +14,17 @@ class SerikSiteMapManager extends SiteMapManager
 
         return parent::add($url, $date, $priority, $sequence);
     }
+
+    public function addSitemap(string $url, ?string $date = null): self
+    {
+        $path = trim((string) parse_url($url, PHP_URL_PATH), '/');
+        $key = basename($path);
+
+        // Exclude monthly individual-property sitemap chunks.
+        if (preg_match('/^properties-\d{4}-\d{2}$/', $key)) {
+            return $this;
+        }
+
+        return parent::addSitemap($url, $date);
+    }
 }

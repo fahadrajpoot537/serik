@@ -81,8 +81,12 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
             'home_types' => null,
         ], $filters);
 
-        $isBrowseListing = request()->routeIs('public.properties', 'public.ajax.properties', 'public.ajax.properties.map')
-            || request()->is('properties', 'properties/*');
+        $isBrowseListing = request()->routeIs(
+            'public.properties',
+            'public.ajax.properties',
+            'public.ajax.properties.map',
+            'public.seo.ontario'
+        ) || request()->is('properties', 'properties/*', 'ontario', 'ontario/*');
 
         $orderBy = match ($filters['sort_by']) {
             'date_asc' => $isBrowseListing
@@ -125,12 +129,19 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
         ], $params);
 
         // Initialize the model with active residential properties
-        $this->model = $this->originalModel->active()->residential();
+        $wantSold = ($filters['status'] ?? request()->input('status')) === 'sold';
 
-        if (
-            request()->routeIs('public.properties', 'public.ajax.properties', 'public.ajax.properties.map')
-            || request()->is('properties', 'properties/*')
-        ) {
+        if ($wantSold) {
+            // Sold MLS rows are often status=draft (hidden from active browse).
+            $this->model = $this->originalModel
+                ->where('re_properties.moderation_status', ModerationStatusEnum::APPROVED)
+                ->residential();
+        } else {
+            $this->model = $this->originalModel->active()->residential();
+        }
+
+        // Active MLS browse only — sold SEO landings must skip mlsActive().
+        if ($isBrowseListing && ! $wantSold) {
             $this->model = $this->model->mlsActive();
         }
 
@@ -197,7 +208,39 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
             }
             $subtypes = array_values(array_unique($subtypes));
             if ($subtypes !== []) {
-                $this->model = $this->model->whereIn('PropertySubType', $subtypes);
+                // Province-wide house/condo/townhouse browse: prefer Meili ID set
+                // so MySQL avoids a slow subtype filesort across the whole MLS table.
+                $appliedMeili = false;
+                if (
+                    $isBrowseListing
+                    && empty($filters['location'])
+                    && empty($filters['city_id'])
+                    && empty($filters['city'])
+                    && empty($filters['keyword'])
+                ) {
+                    $search = app(\Botble\RealEstate\Services\PropertySearchService::class);
+                    $ids = $search->searchIds('', [
+                        'limit' => max(200, ((int) ($params['paginate']['per_page'] ?? 12)) * 20),
+                        'subtypes' => $subtypes,
+                        'statuses' => [
+                            'New',
+                            'Active',
+                            'Ext',
+                            'Extension',
+                            'Price Change',
+                            'Active Under Contract',
+                        ],
+                        'sort' => ['id:desc'],
+                    ]);
+                    if (is_array($ids) && $ids !== []) {
+                        $this->model = $this->model->whereIn('re_properties.id', $ids);
+                        $appliedMeili = true;
+                    }
+                }
+
+                if (! $appliedMeili) {
+                    $this->model = $this->model->whereIn('PropertySubType', $subtypes);
+                }
             }
         }
 
@@ -305,10 +348,18 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
                 ? trim($locationData[0])
                 : trim($filters['location']);
 
+            // open_house listings are often older IDs; Meili city caps (newest N)
+            // would drop them. City is applied inside the open_house filter instead.
+            $skipMeiliCity = filter_var($filters['open_house'] ?? false, FILTER_VALIDATE_BOOLEAN);
+
             $search = app(\Botble\RealEstate\Services\PropertySearchService::class);
-            if ($locationSearch !== '' && $search->constrainQueryToCity($this->model, $locationSearch, 5000, true)) {
-                // Meili city IDs applied (strict: empty city = no rows for filter browse).
-            } elseif ($locationSearch !== '' && RealEstateHelper::isEnabledZipCode()) {
+            if (
+                ! $skipMeiliCity
+                && $locationSearch !== ''
+                && $search->constrainQueryToCity($this->model, $locationSearch, 12000, true)
+            ) {
+                // Meili / district city IDs applied (strict: empty city = no rows).
+            } elseif (! $skipMeiliCity && $locationSearch !== '' && RealEstateHelper::isEnabledZipCode()) {
                 $this->model = $this->model->where('zip_code', $locationSearch);
             }
             // Meili down + no zip: leave unconstrained (do not blank the whole list).
@@ -385,7 +436,7 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
         return $this->advancedGet($params);
     }
 
-    protected function browseListingPaginate(array $params, array $filters): LengthAwarePaginator
+    protected function browseListingPaginate(array $params, array $filters): LengthAwarePaginator|Paginator
     {
         $paginate = $params['paginate'] ?? [];
         $perPage = max(1, (int) ($paginate['per_page'] ?? 12));
@@ -394,22 +445,51 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
 
         $query = $this->model;
 
-        if (! empty($params['select'])) {
-            $query = $query->select($params['select']);
+        // Lean columns for listing cards — avoid SELECT * on 90k+ MLS table.
+        $select = $params['select'] ?? ['*'];
+        if ($select === ['*'] || $select === ['re_properties.*']) {
+            $select = [
+                're_properties.id',
+                're_properties.name',
+                're_properties.location',
+                're_properties.images',
+                're_properties.image_val',
+                're_properties.price',
+                're_properties.currency_id',
+                're_properties.number_bedroom',
+                're_properties.number_bathroom',
+                're_properties.square',
+                're_properties.MlsStatus',
+                're_properties.TransactionType',
+                're_properties.PropertySubType',
+                're_properties.BedroomsBelowGrade',
+                're_properties.broker',
+                're_properties.external_id',
+                're_properties.unique_id',
+                're_properties.latitude',
+                're_properties.longitude',
+                're_properties.listing_contract_date',
+                're_properties.created_at',
+                're_properties.ClosePrice',
+                're_properties.status',
+                're_properties.moderation_status',
+                're_properties.is_featured',
+            ];
         }
+
+        $query = $query->select($select);
 
         if (! empty($params['with'])) {
             $query = $query->with($params['with']);
         }
 
         $query = $this->applyBeforeExecuteQuery($query);
-        $total = $this->resolveBrowseListingTotal($query, $filters);
 
+        // Skip COUNT(*) on the request path — it can take 10–20s on filtered MLS browse.
         $items = (clone $query)->forPage($page, $perPage)->get();
 
-        return new \Illuminate\Pagination\LengthAwarePaginator(
+        return new Paginator(
             $items,
-            $total,
             $perPage,
             $page,
             [

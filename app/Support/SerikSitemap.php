@@ -47,6 +47,11 @@ final class SerikSitemap
             return false;
         }
 
+        // Individual property detail pages — index city/listing pages only.
+        if (preg_match('#^properties/[^/?#]+$#', $lower)) {
+            return false;
+        }
+
         return true;
     }
 }
