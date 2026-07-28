@@ -216,25 +216,18 @@ document.addEventListener("DOMContentLoaded", function () {
 
 
 document.addEventListener("DOMContentLoaded", function () {
-
     setTimeout(function () {
-
-         const phoneInput = document.getElementById('register-phone');
-        if (!phoneInput) {
-            console.error("Phone input not found");
+        const phoneInput = document.getElementById('register-phone');
+        if (!phoneInput || typeof window.intlTelInput !== 'function') {
             return;
         }
 
-        const iti = window.intlTelInput(phoneInput, {
+        window.intlTelInput(phoneInput, {
             initialCountry: "ca",
             separateDialCode: true,
             utilsScript: "https://cdn.jsdelivr.net/npm/intl-tel-input@19.5.6/build/js/utils.js"
         });
-
-        console.log("intl-tel-input initialized", iti);
-
-    }, 300); // 👈 IMPORTANT for Botble
-
+    }, 300);
 });
 
 

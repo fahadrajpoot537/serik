@@ -183,7 +183,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     window.setTimeout(loadChatWidget, {{ $isSerikHomepage ? '12000' : '6000' }});
 })();
  </script>
- @if(! $isSerikHomepage && !request()->boolean('iframe'))
+ @if(! $isSerikHomepage && !request()->boolean('iframe') && ! app()->environment('local'))
  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
  @endif
    </body>

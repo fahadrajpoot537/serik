@@ -77,14 +77,15 @@
     .property-login-overlay-caption { color: #fff !important; font-size: 14px; line-height: 1.5; margin-bottom: 16px; }
     .property-login-overlay-caption a { color: #fff !important; font-weight: 600; text-decoration: underline; }
 
-    /* Equal-width columns on Ontario SEO / properties listing */
+    /* Ontario SEO / properties listing: 1 / 2 / 4 cards per row */
     .serik-properties-page .serik-prop-grid.row {
         --bs-gutter-x: 1.25rem;
         --bs-gutter-y: 1.25rem;
     }
+    .serik-properties-page .serik-prop-grid.row-cols-1 > .col,
     .serik-properties-page .serik-prop-grid > .col {
-        flex: 1 0 0%;
-        width: auto;
+        flex: 0 0 auto;
+        width: 100%;
         max-width: 100%;
     }
     @media (min-width: 576px) {

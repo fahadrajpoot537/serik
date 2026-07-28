@@ -3,28 +3,18 @@
 namespace Botble\Contact\Listeners;
 
 use App\Support\EmailRecipients;
-use App\Support\SerikQueue;
 use Botble\Base\Facades\EmailHandler;
 use Botble\Contact\Events\SentContactEvent;
 use Botble\Contact\Models\Contact;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
 
-class SendContactEmailListener implements ShouldQueue
+/**
+ * Sends contact notice + sender confirmation immediately (not via the high
+ * TREB import queue) so info@serik.ca gets the lead right away.
+ */
+class SendContactEmailListener
 {
-    use Queueable;
-
-  /**
-     * Laravel queues listeners via newInstanceWithoutConstructor(), so onQueue()
-     * in __construct() is never applied — viaQueue() is required.
-     */
-    public function viaQueue(): string
-    {
-        return SerikQueue::high();
-    }
-
     public function handle(SentContactEvent $event): void
     {
         $contact = $event->data;

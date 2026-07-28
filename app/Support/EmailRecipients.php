@@ -6,33 +6,42 @@ use Illuminate\Support\Arr;
 
 final class EmailRecipients
 {
+    public const CONTACT_FALLBACK = 'info@serik.ca';
+
     /**
      * Contact-form admin notice recipients from Admin → Contact settings.
-     * Returns null when unset so EmailHandler falls back to get_admin_email().
+     * Always includes info@serik.ca so office never misses a lead.
      */
-    public static function contactNoticeRecipients(): string|array|null
+    public static function contactNoticeRecipients(): string|array
     {
-        $receiverEmails = null;
+        $receiverEmails = [];
 
         if ($receiverEmailsSetting = setting('receiver_emails', '')) {
-            $receiverEmails = trim((string) $receiverEmailsSetting);
-        }
+            $receiverEmailsSetting = trim((string) $receiverEmailsSetting);
+            $decoded = json_decode($receiverEmailsSetting, true);
 
-        if ($receiverEmails) {
-            $receiverEmails = collect(json_decode($receiverEmails, true))
-                ->pluck('value')
-                ->all();
-        }
-
-        if (is_array($receiverEmails)) {
-            $receiverEmails = array_filter($receiverEmails);
-
-            if (count($receiverEmails) === 1) {
-                $receiverEmails = Arr::first($receiverEmails);
+            if (is_array($decoded)) {
+                $receiverEmails = collect($decoded)->pluck('value')->all();
             }
         }
 
-        return $receiverEmails ?: null;
+        if ($receiverEmails === []) {
+            $admin = get_admin_email();
+            $receiverEmails = $admin instanceof \Illuminate\Support\Collection
+                ? $admin->filter()->values()->all()
+                : array_filter((array) $admin);
+        }
+
+        $receiverEmails = array_values(array_unique(array_filter(array_map(
+            static fn ($email) => strtolower(trim((string) $email)),
+            $receiverEmails
+        ))));
+
+        if (! in_array(self::CONTACT_FALLBACK, $receiverEmails, true)) {
+            $receiverEmails[] = self::CONTACT_FALLBACK;
+        }
+
+        return count($receiverEmails) === 1 ? Arr::first($receiverEmails) : $receiverEmails;
     }
 
     /**

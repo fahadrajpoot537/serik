@@ -384,7 +384,7 @@ background:#e5e7eb;
     </div>
 </section>
 
-@include(Theme::getThemeNamespace('views.real-estate.single-layouts.partials.related-properties'), ['model' => $model])
+@include(Theme::getThemeNamespace('views.real-estate.single-layouts.partials.related-properties'), ['model' => $model, 'relatedProperties' => $relatedPropertiesPayload['relatedProperties'] ?? collect(), 'sectionTitle' => $relatedPropertiesPayload['sectionTitle'] ?? __('Similar Properties')])
 
 
 <script>

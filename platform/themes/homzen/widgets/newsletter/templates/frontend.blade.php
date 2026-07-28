@@ -11,12 +11,14 @@
         @endif
 
         {!! $form->renderForm() !!}
-        
+
+        @if(! app()->environment('local') && config('services.turnstile.site_key'))
          <x-core::form-group>
             <div class="cf-turnstile"
                  data-sitekey="{{ config('services.turnstile.site_key') }}">
             </div>
         </x-core::form-group>
+        @endif
     </div>
     
 </div>

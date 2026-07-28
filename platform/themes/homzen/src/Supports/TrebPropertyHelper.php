@@ -1805,6 +1805,16 @@ class TrebPropertyHelper
             return [];
         }
 
+        $unitCacheKey = 'treb_unit_records_v1_' . md5(json_encode([
+            $record['StreetNumber'] ?? null,
+            $record['StreetName'] ?? null,
+            $record['UnitNumber'] ?? null,
+        ]));
+        $cachedRows = Cache::get($unitCacheKey);
+        if (is_array($cachedRows)) {
+            return $cachedRows;
+        }
+
         $filter = implode(' and ', $filters);
 
         $select = implode(',', [
@@ -1850,7 +1860,7 @@ class TrebPropertyHelper
 
         $values = array_values($valuesByKey);
 
-        return array_values(array_filter($values, function (array $item) use ($unitNumber, $streetNumber, $record) {
+        $filtered = array_values(array_filter($values, function (array $item) use ($unitNumber, $streetNumber, $record) {
             $itemNumber = trim((string) ($item['StreetNumber'] ?? ''));
             if ($streetNumber !== '' && $itemNumber !== '' && $itemNumber !== $streetNumber) {
                 return false;
@@ -1870,6 +1880,10 @@ class TrebPropertyHelper
             // Freehold: only listings without a real unit number
             return $itemUnit === '' || ! self::isUnitToken($itemUnit);
         }));
+
+        Cache::put($unitCacheKey, $filtered, $filtered === [] ? 120 : 900);
+
+        return $filtered;
     }
 
     /**
@@ -2933,29 +2947,48 @@ class TrebPropertyHelper
                 ?: self::resolveFactRecordForDetail($listingKey, $local);
 
             if (! $record) {
+                Cache::put($cacheKey, [], 120);
+
                 return [];
             }
 
             $record = self::enrichRecordAddress($record);
             $rows = [];
+            $rowsByListing = [];
 
             if (self::canFetchRemoteAmp()) {
-                foreach (self::fetchUnitPropertyRecords($record) as $item) {
-                    $rows[] = self::propertyToHistoryRow($item);
+                $unitRecords = self::fetchUnitPropertyRecords($record);
+                foreach ($unitRecords as $item) {
+                    $row = self::propertyToHistoryRow($item);
+                    $id = strtoupper(trim((string) ($row['listing_id'] ?? '')));
+                    if ($id === '') {
+                        $rows[] = $row;
+                        continue;
+                    }
+                    $rowsByListing[$id] = isset($rowsByListing[$id])
+                        ? self::mergeHistoryRows($rowsByListing[$id], $row)
+                        : $row;
                 }
+                unset($unitRecords);
             }
 
-            foreach (self::fetchLocalDbHistory($record, $listingKey) as $row) {
-                $rows[] = $row;
-            }
-
-            $hasCurrent = false;
-            foreach ($rows as $row) {
-                if (strcasecmp((string) ($row['listing_id'] ?? ''), $listingKey) === 0) {
-                    $hasCurrent = true;
-                    break;
+            $localRows = self::fetchLocalDbHistory($record, $listingKey);
+            foreach ($localRows as $row) {
+                $id = strtoupper(trim((string) ($row['listing_id'] ?? '')));
+                if ($id === '') {
+                    $rows[] = $row;
+                    continue;
                 }
+                $rowsByListing[$id] = isset($rowsByListing[$id])
+                    ? self::mergeHistoryRows($rowsByListing[$id], $row)
+                    : $row;
             }
+            unset($localRows);
+
+            $normalizedListingKey = strtoupper($listingKey);
+            $hasCurrent = isset($rowsByListing[$normalizedListingKey]);
+            $rows = array_merge(array_values($rowsByListing), $rows);
+            unset($rowsByListing);
 
             if (! $hasCurrent) {
                 array_unshift($rows, self::propertyToHistoryRow($record));
@@ -2968,9 +3001,9 @@ class TrebPropertyHelper
 
             $rows = self::filterListingHistoryForViewer($rows, $authenticated);
 
-            if ($rows !== []) {
-                Cache::put($cacheKey, $rows, 1800);
-            }
+            Cache::put($cacheKey, $rows, $rows !== [] ? 1800 : 120);
+
+            unset($record);
 
             return $rows;
         } catch (\Throwable $e) {
@@ -2978,6 +3011,8 @@ class TrebPropertyHelper
                 report($e);
             } catch (\Throwable) {
             }
+
+            Cache::put($cacheKey, [], 120);
 
             return [];
         }

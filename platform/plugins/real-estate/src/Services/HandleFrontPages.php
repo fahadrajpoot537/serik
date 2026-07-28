@@ -2,6 +2,8 @@
 
 namespace Botble\RealEstate\Services;
 
+use App\Services\RealEstate\PropertyDetailPayloadService;
+use App\Services\RealEstate\RelatedPropertiesService;
 use Botble\Base\Supports\Helper;
 use Botble\Media\Facades\RvMedia;
 use Botble\RealEstate\Facades\RealEstateHelper;
@@ -35,7 +37,6 @@ class HandleFrontPages
 
         switch ($slug->reference_type) {
             case Property::class:
-
                 // Reviews load via AJAX — skip withCount/withAvg on the initial query.
                 // MLS sold/terminated rows are stored as status=draft (hidden from
                 // list indexes). Detail pages must still open them — otherwise
@@ -142,10 +143,16 @@ class HandleFrontPages
                     }
                 }
 
+                $propertyDetailBlocks = app(PropertyDetailPayloadService::class)->build(
+                    $property,
+                    (bool) $request->boolean('iframe')
+                );
+                $relatedPropertiesPayload = app(RelatedPropertiesService::class)->build($property);
+
                 return [
                     'view' => 'real-estate.property',
                     'default_view' => 'plugins/real-estate::themes.property',
-                    'data' => compact('property', 'images'),
+                    'data' => compact('property', 'images', 'propertyDetailBlocks', 'relatedPropertiesPayload'),
                     'slug' => $property->slug,
                 ];
 
@@ -221,10 +228,12 @@ class HandleFrontPages
                     }
                 }
 
+                $relatedPropertiesPayload = app(RelatedPropertiesService::class)->build($project);
+
                 return [
                     'view' => 'real-estate.project',
                     'default_view' => 'plugins/real-estate::themes.real-estate',
-                    'data' => compact('project', 'images', 'relatedProjects'),
+                    'data' => compact('project', 'images', 'relatedProjects', 'relatedPropertiesPayload'),
                     'slug' => $project->slug,
                 ];
 

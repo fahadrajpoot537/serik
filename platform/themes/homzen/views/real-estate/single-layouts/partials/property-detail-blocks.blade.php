@@ -1,132 +1,17 @@
 @php
-    use Theme\homzen\Supports\TrebPropertyHelper;
-
-    $model = $model ?? $property ?? null;
-    $listingKey = $model->external_id ?? '';
-    $isIframe = request()->boolean('iframe');
-    $isLocked = $model->isSoldHistory() && !(auth('account')->check() || auth()->check());
-
-    $localData = TrebPropertyHelper::dbRowToLocalArray($model);
-
-    $isAuthenticated = auth('account')->check() || auth()->check();
-
-    $factRecord = [];
-    $listingHistory = [];
-    $priceChanges = [];
-    $keyFacts = [];
-    $propertyDetails = [];
-    $rooms = [];
-    $displayName = $model->name ?? '';
-    $displayLocation = '';
-    $displayType = $model->PropertySubType ?? '';
-    $addedLabel = $model->created_at ?? null;
-    $bedroomsLabel = '';
-    $bathrooms = $localData['number_bathroom'] ?? null;
-    $garage = $localData['CoveredSpaces'] ?? null;
-
-    try {
-        $factRecord = $listingKey
-            ? TrebPropertyHelper::resolveFactRecordForDetail($listingKey, $localData)
-            : [];
-
-        $displayName = TrebPropertyHelper::formatDisplayAddress($factRecord) ?: ($model->name ?? '');
-        $displayLocation = TrebPropertyHelper::formatLocationLine($factRecord);
-        $displayType = $factRecord['PropertySubType'] ?? $model->PropertySubType ?? '';
-        // Modal/iframe: keep SSR lean — history/rooms/price-changes lazy-load via API.
-        if (! $isIframe && $listingKey) {
-            $listingHistory = TrebPropertyHelper::fetchListingHistoryForDetail($listingKey, $localData, $factRecord);
-            $priceChanges = (! $isLocked) ? TrebPropertyHelper::fetchPriceChanges($listingKey) : [];
-        } elseif ($listingKey && $factRecord !== []) {
-            $listingHistory = [[
-                'date_start' => TrebPropertyHelper::formatDateValue($factRecord['ListingContractDate'] ?? null) ?? '-',
-                'date_end' => '',
-                'price' => $factRecord['ListPrice'] ?? ($model->price ?? null),
-                'event' => $factRecord['MlsStatus'] ?? ($model->MlsStatus ?? 'Listed'),
-                'listing_id' => $listingKey,
-            ]];
-        }
-        $keyFacts = TrebPropertyHelper::buildKeyFacts($factRecord, $localData);
-        $propertyDetails = TrebPropertyHelper::buildPropertyDetails($factRecord, $localData);
-        // Rooms always lazy-loaded on tab click (avoids AMP round-trip on first paint).
-        $rooms = [];
-        $addedLabel = $factRecord['ListingContractDate'] ?? $factRecord['OriginalEntryTimestamp'] ?? $model->created_at ?? null;
-        $bedroomsLabel = TrebPropertyHelper::formatBedroomLabel($factRecord, $localData);
-        $bathrooms = $factRecord['BathroomsTotalInteger'] ?? $localData['number_bathroom'] ?? null;
-        $garage = $factRecord['CoveredSpaces'] ?? $localData['CoveredSpaces'] ?? null;
-    } catch (\Throwable $e) {
-        try {
-            report($e);
-        } catch (\Throwable) {
-        }
-    }
-
-    $hsShow = [TrebPropertyHelper::class, 'hasDisplayValue'];
-    $hsDetailShow = [TrebPropertyHelper::class, 'hasDetailFieldValue'];
-    $keyFactFields = [
-        'tax' => __('Tax'),
-        'property_type' => __('Property Type'),
-        'building_age' => __('Building Age'),
-        'size' => __('Size'),
-        'lot_size' => __('Lot Size'),
-        'parking' => __('Parking'),
-        'basement' => __('Basement'),
-        'listing_number' => __('Listing #'),
-        'data_source' => __('Data Source'),
-        'brokerage' => __('Listing Brokerage'),
-        'days_on_market' => __('Days on Market'),
-        'property_days_on_market' => __('Property Days on Market'),
-        'status_change' => __('Status Change'),
-        'listed_on' => __('Listed on'),
-        'updated_on' => __('Updated on'),
-    ];
-    $detailGroups = [
-        __('Property') => [
-            'property_type' => __('Property Type'),
-            'style' => __('Style'),
-            'fronting_on' => __('Fronting on'),
-            'community' => __('Community'),
-            'municipality' => __('Municipality'),
-        ],
-        __('Inside') => [
-            'bedrooms' => __('Bedrooms'),
-            'bathrooms' => __('Bathrooms'),
-            'basement_type' => __('Basement Type'),
-            'kitchens' => __('Kitchens'),
-            'rooms' => __('Rooms'),
-            'family_room' => __('Family Room'),
-            'fireplace' => __('Fireplace'),
-        ],
-        __('Utilities') => [
-            'water' => __('Water'),
-            'cooling' => __('Cooling'),
-            'heating_type' => __('Heating Type'),
-            'heating_fuel' => __('Heating Fuel'),
-        ],
-        __('Building') => [
-            'size' => __('Size'),
-            'structures' => __('Structures'),
-            'construction' => __('Construction'),
-        ],
-        __('Parking') => [
-            'driveway' => __('Driveway'),
-            'garage_type' => __('Garage Type'),
-            'garage' => __('Garage'),
-            'parking_places' => __('Parking Places'),
-            'parking_total' => __('Total Parking Space'),
-        ],
-        __('Highlights') => [
-            'property_features' => __('Property Features'),
-            'pets_allowed' => __('Pets Allowed'),
-        ],
-        __('Land') => [
-            'sewer' => __('Sewer'),
-            'frontage' => __('Frontage'),
-            'depth' => __('Depth'),
-            'lot_size' => __('Lot Size'),
-            'lot_size_code' => __('Lot Size Code'),
-            'cross_street' => __('Cross Street'),
-        ],
-    ];
+    $detail = $propertyDetailBlocks ?? [];
+    $listingKey = (string) ($detail['listingKey'] ?? '');
+    $isAuthenticated = (bool) ($detail['isAuthenticated'] ?? false);
+    $isLocked = (bool) ($detail['isLocked'] ?? false);
+    $displayName = (string) ($detail['displayName'] ?? '');
+    $displayLocation = (string) ($detail['displayLocation'] ?? '');
+    $displayType = (string) ($detail['displayType'] ?? '');
+    $listingHistory = (array) ($detail['listingHistory'] ?? []);
+    $priceChanges = (array) ($detail['priceChanges'] ?? []);
+    $keyFactRows = (array) ($detail['keyFactRows'] ?? []);
+    $detailGroupRows = (array) ($detail['detailGroupRows'] ?? []);
+    $rooms = (array) ($detail['rooms'] ?? []);
+    $listedLine = $detail['listedLine'] ?? null;
 @endphp
 
 <style>
@@ -424,46 +309,22 @@
             {{ __('Key facts for') }} {{ $displayName }}@if($displayLocation), {{ $displayLocation }}@endif
         </p>
         <div class="hs-key-facts">
-            @foreach ($keyFactFields as $key => $label)
-                @if ($hsShow($keyFacts[$key] ?? null))
-                    <div><span class="fact-label">{{ $label }}</span><span class="fact-value">{{ $keyFacts[$key] }}</span></div>
-                @endif
+            @foreach ($keyFactRows as $row)
+                <div><span class="fact-label">{{ $row['label'] }}</span><span class="fact-value">{{ $row['value'] }}</span></div>
             @endforeach
         </div>
     </div>
 
     <div class="hs-tab-panel" id="hs-details">
-        @if (!empty($propertyDetails['listed_line']))
-            <p class="section-subtitle">{{ $propertyDetails['listed_line'] }}</p>
+        @if (!empty($listedLine))
+            <p class="section-subtitle">{{ $listedLine }}</p>
         @endif
         <div class="hs-details-grid">
-            @foreach ($detailGroups as $groupTitle => $fields)
-                @php
-                    $visibleFields = [];
-                    foreach ($fields as $fieldKey => $fieldLabel) {
-                        if ($hsDetailShow($propertyDetails[$fieldKey] ?? null)) {
-                            $visibleFields[$fieldKey] = $fieldLabel;
-                        }
-                    }
-                    if ($groupTitle === __('Inside') && !empty($propertyDetails['bathrooms_details'])) {
-                        foreach ($propertyDetails['bathrooms_details'] as $detailLine) {
-                            $visibleFields['bath_detail_' . md5($detailLine)] = __('Bathrooms Detail');
-                        }
-                    }
-                @endphp
-                @if ($visibleFields !== [])
-                    <div class="hs-details-group-title">{{ $groupTitle }}</div>
-                    @foreach ($fields as $fieldKey => $fieldLabel)
-                        @if ($hsDetailShow($propertyDetails[$fieldKey] ?? null))
-                            <div><span class="fact-label">{{ $fieldLabel }}</span><span class="fact-value">{{ $propertyDetails[$fieldKey] }}</span></div>
-                        @endif
-                    @endforeach
-                    @if ($groupTitle === __('Inside') && !empty($propertyDetails['bathrooms_details']))
-                        @foreach ($propertyDetails['bathrooms_details'] as $detailLine)
-                            <div><span class="fact-label">{{ __('Bathrooms Detail') }}</span><span class="fact-value">{{ $detailLine }}</span></div>
-                        @endforeach
-                    @endif
-                @endif
+            @foreach ($detailGroupRows as $group)
+                <div class="hs-details-group-title">{{ $group['title'] }}</div>
+                @foreach ($group['rows'] as $row)
+                    <div><span class="fact-label">{{ $row['label'] }}</span><span class="fact-value">{{ $row['value'] }}</span></div>
+                @endforeach
             @endforeach
         </div>
     </div>
@@ -474,8 +335,8 @@
         @else
             <p class="section-subtitle">
                 {{ __('Room details for') }} {{ $displayName }}@if($displayLocation), {{ explode(' - ', $displayLocation)[0] }}@endif.
-                @if(!empty($propertyDetails['listed_line']))
-                    {{ $propertyDetails['listed_line'] }}
+                @if(!empty($listedLine))
+                    {{ $listedLine }}
                 @endif
             </p>
             <div class="hs-room-list">
@@ -483,11 +344,11 @@
                     <div class="hs-room-row">
                         <div class="hs-room-left">
                             <div class="hs-room-name">{{ $room['name'] }}</div>
-                            @if($hsShow($room['size'] ?? null))
+                            @if(! empty($room['size']) && $room['size'] !== '-')
                                 <div class="hs-room-size">{{ $room['size'] }}</div>
                             @endif
                         </div>
-                        @if($hsShow($room['level'] ?? null))
+                        @if(! empty($room['level']) && $room['level'] !== '-')
                             <div class="hs-room-level">{{ $room['level'] }}</div>
                         @endif
                     </div>

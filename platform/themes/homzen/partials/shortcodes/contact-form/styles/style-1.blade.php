@@ -68,7 +68,7 @@
                 node.innerText.includes("Send message successfully!")
             ) {
                 setTimeout(function () {
-                    window.location.href = "https://serik.ca/contact-thanks";
+                    window.location.href = "{{ url('/contact-thanks') }}";
                 }, 100);
             }
         });
