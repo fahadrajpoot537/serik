@@ -76,7 +76,7 @@ class OntarioSeoLandingController extends Controller
 
         // Cache SEO landings including common filter query params (fast repeat visits).
         $allowed = [
-            'open_house', 'status', 'community', 'home_types', 'page', 'bedroom', 'k',
+            'open_house', 'status', 'community', 'home_types', 'subtypes', 'page', 'bedroom', 'k',
             'type', 'per_page', 'min_price', 'max_price', 'bathroom', 'min_square', 'sort_by',
         ];
         foreach ($request->query() as $key => $value) {
@@ -85,6 +85,6 @@ class OntarioSeoLandingController extends Controller
             }
         }
 
-        return 'ontario_seo_html_v6' . $authPart . ':' . md5(strtolower($seo) . '|' . $request->getQueryString());
+        return 'ontario_seo_html_v7' . $authPart . ':' . md5(strtolower($seo) . '|' . $request->getQueryString());
     }
 }

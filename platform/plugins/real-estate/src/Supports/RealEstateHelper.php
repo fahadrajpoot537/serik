@@ -252,6 +252,8 @@ class RealEstateHelper
                 'features' => 'nullable|array',
                 'home_types' => 'nullable|array',
                 'home_types.*' => 'nullable|string|in:house,condo,townhouse',
+                'subtypes' => 'nullable|array',
+                'subtypes.*' => 'nullable|string|max:80',
             ]));
         } catch (Throwable) {
             $filters = [];
@@ -261,6 +263,14 @@ class RealEstateHelper
         $filters['status'] = $request->input('status');
         $filters['open_house'] = $request->boolean('open_house') ? 1 : null;
         $filters['community'] = $request->input('community');
+
+        // Allow comma-separated subtypes from query string as well.
+        if (empty($filters['subtypes']) && $request->filled('subtypes') && ! is_array($request->input('subtypes'))) {
+            $filters['subtypes'] = array_values(array_filter(array_map(
+                'trim',
+                explode(',', (string) $request->input('subtypes'))
+            )));
+        }
 
         $isBrowseListing = $request->routeIs('public.properties', 'public.ajax.properties', 'public.seo.ontario')
             || $request->is('properties', 'properties/*', 'ontario', 'ontario/*');

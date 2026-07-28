@@ -80,6 +80,7 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
             'sort_by' => null,
             'features' => null,
             'home_types' => null,
+            'subtypes' => null,
         ], $filters);
 
         $isBrowseListing = request()->routeIs(
@@ -258,6 +259,17 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
                 if (! $appliedMeili) {
                     $this->model = $this->model->whereIn('PropertySubType', $subtypes);
                 }
+            }
+        }
+
+        // Explicit MLS PropertySubType filter (Property Type dropdown).
+        if (! empty($filters['subtypes'])) {
+            $explicitSubtypes = array_values(array_unique(array_filter(array_map(
+                static fn ($v) => trim((string) $v),
+                (array) $filters['subtypes']
+            ))));
+            if ($explicitSubtypes !== [] && ! in_array('All', $explicitSubtypes, true)) {
+                $this->model = $this->model->whereIn('PropertySubType', $explicitSubtypes);
             }
         }
 
@@ -561,6 +573,7 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
             'location',
             'zip_code',
             'home_types',
+            'subtypes',
             'features',
             'category_ids',
             'locations',
@@ -605,6 +618,7 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
             'zip_code',
             'sort_by',
             'home_types',
+            'subtypes',
             'features',
             'category_ids',
             'locations',

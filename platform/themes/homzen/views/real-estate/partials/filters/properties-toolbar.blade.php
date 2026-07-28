@@ -6,6 +6,10 @@
     $minSquare = request()->input('min_square');
     $keyword = request()->input('k');
     $homeTypes = (array) request()->input('home_types', []);
+    $subtypes = array_values(array_filter(array_map('trim', (array) request()->input('subtypes', []))));
+    if ($subtypes === [] && request()->filled('subtypes') && ! is_array(request()->input('subtypes'))) {
+        $subtypes = array_values(array_filter(array_map('trim', explode(',', (string) request()->input('subtypes')))));
+    }
     $propertyCount = $propertyCount ?? null;
     $sortBy = request()->query('sort_by');
 
@@ -44,6 +48,25 @@
     }
     $typeLabel = $typeParts !== [] ? implode(', ', $typeParts) : __('Home Type');
 
+    $propertyTypeOptions = [
+        'Detached' => __('Detached'),
+        'Semi-Detached' => __('Semi-Detached'),
+        'Att/Row/Townhouse' => __('Townhouse'),
+        'Condo Townhouse' => __('Condo Townhouse'),
+        'Condo Apartment' => __('Condo Apartment'),
+        'Detached Condo' => __('Detached Condo'),
+        'Link' => __('Link'),
+    ];
+    $propertyTypeParts = [];
+    foreach ($propertyTypeOptions as $val => $lbl) {
+        if (in_array($val, $subtypes, true)) {
+            $propertyTypeParts[] = $lbl;
+        }
+    }
+    $propertyTypeLabel = $propertyTypeParts !== []
+        ? implode(', ', $propertyTypeParts)
+        : __('Property Type');
+
     $sortLabels = ['' => __('Newest')] + RealEstateHelper::getSortByList();
     $sortLabel = $sortLabels[$sortBy] ?? __('Newest');
 
@@ -56,6 +79,9 @@
     }
     foreach ($typeParts as $part) {
         $activeChips[] = ['key' => 'type', 'label' => $part];
+    }
+    foreach ($propertyTypeParts as $part) {
+        $activeChips[] = ['key' => 'subtype', 'label' => $part];
     }
     if ($bathroom) {
         $activeChips[] = ['key' => 'bathroom', 'label' => ((int) $bathroom) . '+ ' . __('Bath')];
@@ -142,6 +168,18 @@
                             <button type="button" @class(['serik-filter-pill serik-bed-preset', 'active' => (string) $bedroom === (string) $val]) data-bed="{{ $val }}">{{ $lbl }}</button>
                         @endforeach
                     </div>
+                </div>
+            </li>
+
+            <li class="dropdown">
+                <button type="button" class="serik-filter-btn dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" id="serikPropertyTypeChip">{{ $propertyTypeLabel }}</button>
+                <div class="dropdown-menu serik-filter-menu p-3" style="min-width: 220px;">
+                    @foreach ($propertyTypeOptions as $val => $lbl)
+                        <div class="form-check mb-2">
+                            <input class="form-check-input serik-subtype serik-instant-filter" type="checkbox" name="subtypes[]" value="{{ $val }}" id="subtype-{{ \Illuminate\Support\Str::slug($val) }}" @checked(in_array($val, $subtypes, true))>
+                            <label class="form-check-label" for="subtype-{{ \Illuminate\Support\Str::slug($val) }}">{{ $lbl }}</label>
+                        </div>
+                    @endforeach
                 </div>
             </li>
 
@@ -407,6 +445,11 @@ document.addEventListener('DOMContentLoaded', function () {
             if (label) chips.push(label.textContent.trim());
         });
 
+        form.querySelectorAll('.serik-subtype:checked').forEach((el) => {
+            const label = form.querySelector('label[for="' + el.id + '"]');
+            if (label) chips.push(label.textContent.trim());
+        });
+
         const bath = form.querySelector('select[name="bathroom"]')?.value;
         if (bath) chips.push(bath + '+ Bath');
 
@@ -437,6 +480,16 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (label) types.push(label.textContent.trim());
             });
             typeChip.textContent = types.length ? types.join(', ') : 'Home Type';
+        }
+
+        const propertyTypeChip = form.querySelector('#serikPropertyTypeChip');
+        if (propertyTypeChip) {
+            const types = [];
+            form.querySelectorAll('.serik-subtype:checked').forEach((el) => {
+                const label = form.querySelector('label[for="' + el.id + '"]');
+                if (label) types.push(label.textContent.trim());
+            });
+            propertyTypeChip.textContent = types.length ? types.join(', ') : 'Property Type';
         }
     };
 

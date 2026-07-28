@@ -4,7 +4,7 @@
     $layout ??= get_property_listing_page_layout();
 
     if (! isset($itemsPerRow)) {
-        $itemsPerRow = $itemLayout === 'grid' ? 3 : 2;
+        $itemsPerRow = $itemLayout === 'grid' ? 4 : 2;
         if (! in_array($layout, ['top-map', 'without-map'])) {
             $itemsPerRow = $itemLayout === 'grid' ? 2 : 1;
         }

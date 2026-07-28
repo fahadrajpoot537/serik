@@ -87,18 +87,18 @@
         width: auto;
         max-width: 100%;
     }
-    @media (min-width: 768px) {
-        .serik-properties-page .serik-prop-grid.row-cols-md-2 > .col {
+    @media (min-width: 576px) {
+        .serik-properties-page .serik-prop-grid.row-cols-sm-2 > .col {
             flex: 0 0 auto;
             width: 50%;
             max-width: 50%;
         }
     }
-    @media (min-width: 1200px) {
-        .serik-properties-page .serik-prop-grid.row-cols-xl-3 > .col {
+    @media (min-width: 992px) {
+        .serik-properties-page .serik-prop-grid.row-cols-lg-4 > .col {
             flex: 0 0 auto;
-            width: 33.333333%;
-            max-width: 33.333333%;
+            width: 25%;
+            max-width: 25%;
         }
     }
 </style>
