@@ -80,5 +80,29 @@ observer.observe(document.body, {
     childList: true,
     subtree: true
 });
+
+// Ensure contact reCAPTCHA token is in FormData (explicit grecaptcha.render).
+document.addEventListener('submit', function (e) {
+    const form = e.target;
+    if (!(form instanceof HTMLFormElement) || !form.classList.contains('contact-form')) {
+        return;
+    }
+    if (typeof grecaptcha === 'undefined' || window.contactRecaptchaWidgetId == null) {
+        return;
+    }
+    const token = grecaptcha.getResponse(window.contactRecaptchaWidgetId) || '';
+    let input = form.querySelector('textarea[name="g-recaptcha-response"], input[name="g-recaptcha-response"]');
+    if (!input) {
+        input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'g-recaptcha-response';
+        form.appendChild(input);
+    }
+    input.value = token;
+}, true);
+
+if (typeof window.initSerikRecaptcha === 'function') {
+    window.initSerikRecaptcha();
+}
 </script>
 

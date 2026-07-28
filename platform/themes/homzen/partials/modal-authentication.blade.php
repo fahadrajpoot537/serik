@@ -1035,15 +1035,37 @@
     const recaptchaSiteKey = @json(RecaptchaHelper::siteKey());
     let loginRecaptchaWidgetId = null;
     let registerRecaptchaWidgetId = null;
+    let contactRecaptchaWidgetId = null;
+    window.contactRecaptchaWidgetId = null;
 
     function initSerikRecaptcha() {
+        if (typeof grecaptcha === 'undefined' || !recaptchaSiteKey) {
+            return;
+        }
+
         const loginEl = document.getElementById('loginRecaptcha');
-        if (loginEl && loginRecaptchaWidgetId === null && typeof grecaptcha !== 'undefined') {
+        if (loginEl && loginRecaptchaWidgetId === null) {
             loginRecaptchaWidgetId = grecaptcha.render(loginEl, { sitekey: recaptchaSiteKey });
             setTimeout(syncAuthBodyHeight, 100);
         }
+
+        const contactEl = document.getElementById('contactRecaptcha');
+        if (contactEl && contactRecaptchaWidgetId === null) {
+            contactRecaptchaWidgetId = grecaptcha.render(contactEl, { sitekey: recaptchaSiteKey });
+            window.contactRecaptchaWidgetId = contactRecaptchaWidgetId;
+        }
     }
     window.initSerikRecaptcha = initSerikRecaptcha;
+
+    window.refreshRecaptcha = function () {
+        if (typeof grecaptcha === 'undefined') {
+            return;
+        }
+        if (contactRecaptchaWidgetId !== null) {
+            grecaptcha.reset(contactRecaptchaWidgetId);
+        }
+        resetAuthCaptcha();
+    };
 
     function ensureRegisterRecaptcha() {
         if (typeof grecaptcha === 'undefined') {

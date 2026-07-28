@@ -372,6 +372,8 @@ app()->booted(function (): void {
 
     if (is_plugin_active('contact')) {
         ContactForm::extend(function (ContactForm $form): void {
+            $siteKey = \Theme\homzen\Supports\RecaptchaHelper::siteKey();
+
             $form
                 ->setFormInputClass('form-control style-1')
                 ->modify(
@@ -382,6 +384,34 @@ app()->booted(function (): void {
                         'label' => __('Send Message'),
                     ]
                 );
+
+            // Same Google reCAPTCHA stack as login modal (RecaptchaHelper).
+            // Do NOT use Botble Captcha::display() — it loads a second api.js
+            // onload callback and breaks login verification site-wide.
+            if ($siteKey !== '' && ! $form->has('serik_contact_recaptcha')) {
+                $form->addBefore(
+                    'submit',
+                    'serik_contact_recaptcha',
+                    HtmlField::class,
+                    [
+                        'html' => '<div class="contact-form-group mb-3"><div id="contactRecaptcha"></div></div>',
+                    ]
+                );
+            }
+        });
+
+        add_filter('contact_request_rules', function (array $rules): array {
+            $rules['g-recaptcha-response'] = [
+                'required',
+                'string',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if (! \Theme\homzen\Supports\RecaptchaHelper::verify(is_string($value) ? $value : null)) {
+                        $fail(__('reCAPTCHA verification failed. Please try again.'));
+                    }
+                },
+            ];
+
+            return $rules;
         });
     }
 

@@ -14,11 +14,9 @@ return new class () extends Migration {
             $hasReceivers = is_array($decoded) && collect($decoded)->pluck('value')->filter()->isNotEmpty();
         }
 
-        $payload = [
-            'enable_captcha' => '1',
-            'captcha_type' => setting('captcha_type', 'v2') ?: 'v2',
-            'enable_recaptcha_botble_contact_forms_fronts_contact_form' => '1',
-        ];
+        // Do NOT enable Botble global captcha here — it breaks login by loading a
+        // second Google api.js onload. Contact captcha is wired via RecaptchaHelper.
+        $payload = [];
 
         if (! $hasReceivers) {
             $payload['receiver_emails'] = json_encode([
