@@ -112,11 +112,131 @@
 .serik-ontario-listing [data-bb-toggle="data-listing"] {
     margin-top: 8px;
 }
+/* Listing SEO nav accordion (AJAX-injected HTML) */
+@media (max-width: 767.98px) {
+    #serikSeoNavMount .seo-nav-row { row-gap: 0.65rem !important; margin: 0 !important; }
+    #serikSeoNavMount .seo-nav-col {
+        width: 100% !important;
+        max-width: 100% !important;
+        flex: 0 0 100% !important;
+    }
+    #serikSeoNavMount .seo-nav-title {
+        margin: 0 !important;
+        padding: 0 !important;
+        border-bottom: 0 !important;
+    }
+    #serikSeoNavMount .seo-nav-block {
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 10px !important;
+        background: #fff !important;
+        padding: 0.75rem 0.9rem !important;
+        height: auto !important;
+    }
+    #serikSeoNavMount .seo-nav-toggle {
+        display: flex !important;
+        width: 100% !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 0.75rem !important;
+        border: 0 !important;
+        background: transparent !important;
+        padding: 0 !important;
+        text-align: left !important;
+        color: inherit !important;
+        font: inherit !important;
+        font-weight: 700 !important;
+        cursor: pointer !important;
+    }
+    #serikSeoNavMount .seo-nav-title-static { display: none !important; }
+    #serikSeoNavMount .seo-nav-toggle__icon {
+        flex-shrink: 0 !important;
+        width: 1.5rem !important;
+        height: 1.5rem !important;
+        border-radius: 999px !important;
+        border: 1px solid #cbd5e1 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-size: 1.05rem !important;
+        line-height: 1 !important;
+        color: #0255a1 !important;
+        font-weight: 600 !important;
+        background: #fff !important;
+    }
+    #serikSeoNavMount .seo-nav-block.is-open .seo-nav-toggle__icon {
+        transform: rotate(45deg);
+        background: #e8f2fc !important;
+    }
+    #serikSeoNavMount .seo-nav-list {
+        display: none !important;
+        margin-top: 0.65rem !important;
+        padding-top: 0.55rem !important;
+        border-top: 1px solid #e8ecf1 !important;
+        max-height: none !important;
+        overflow: visible !important;
+    }
+    #serikSeoNavMount .seo-nav-block.is-open .seo-nav-list {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0.25rem !important;
+        max-height: none !important;
+        overflow: visible !important;
+    }
+}
+@media (min-width: 768px) {
+    #serikSeoNavMount .seo-nav-toggle { display: none !important; }
+    #serikSeoNavMount .seo-nav-title-static { display: block !important; }
+}
 </style>
 <script>
 (function () {
     var mount = document.getElementById('serikSeoNavMount');
     if (!mount || !mount.dataset.url) return;
+
+    function enhanceAccordion(root) {
+        if (!root) return;
+        root.querySelectorAll('.seo-nav-block').forEach(function (block, index) {
+            block.setAttribute('data-seo-nav-block', '');
+            var title = block.querySelector('.seo-nav-title');
+            var list = block.querySelector('.seo-nav-list');
+            if (!title || !list) return;
+            if (block.querySelector('[data-seo-nav-toggle]')) return;
+
+            var labelText = (title.textContent || '').replace(/\s+/g, ' ').trim();
+            var sectionId = list.id || ('seo-nav-listing-' + index);
+            list.id = sectionId;
+
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'seo-nav-toggle';
+            btn.setAttribute('data-seo-nav-toggle', '');
+            btn.setAttribute('aria-expanded', 'false');
+            btn.setAttribute('aria-controls', sectionId);
+            btn.innerHTML = '<span class="seo-nav-toggle__label"></span><span class="seo-nav-toggle__icon" aria-hidden="true">+</span>';
+            btn.querySelector('.seo-nav-toggle__label').textContent = labelText;
+
+            var staticTitle = document.createElement('span');
+            staticTitle.className = 'seo-nav-title-static';
+            staticTitle.textContent = labelText;
+
+            title.textContent = '';
+            title.appendChild(btn);
+            title.appendChild(staticTitle);
+        });
+    }
+
+    if (!window.__serikSeoNavAccordionBound) {
+        window.__serikSeoNavAccordionBound = true;
+        document.addEventListener('click', function (e) {
+            var btn = e.target.closest('[data-seo-nav-toggle]');
+            if (!btn) return;
+            var block = btn.closest('[data-seo-nav-block]');
+            if (!block) return;
+            e.preventDefault();
+            var open = block.classList.toggle('is-open');
+            btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        });
+    }
 
     var load = function () {
         var url = mount.dataset.url;
@@ -155,6 +275,7 @@
             .then(function (html) {
                 if (!html) return;
                 mount.innerHTML = html;
+                enhanceAccordion(mount);
                 mount.removeAttribute('aria-hidden');
             })
             .catch(function () {});

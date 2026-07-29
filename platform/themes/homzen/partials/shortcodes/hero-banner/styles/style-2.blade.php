@@ -243,14 +243,27 @@
         width:100%;
         max-width:100%;
         flex:none;
-        flex-direction:row;
-        gap:6px;
+        flex-direction:column !important;
+        gap:10px;
         padding-bottom:0;
+        align-items:stretch;
+    }
+
+    .cashback-calculator .calculator-buttons button,
+    .cashback-calculator .calculator-buttons a{
+        width:100% !important;
+        flex:none !important;
+        display:flex !important;
+        justify-content:center;
     }
 
     .cashback-calculator .calculator-buttons img{
-        height:50px;
-        min-height:50px;
+        width:100%;
+        max-width:100%;
+        height:auto;
+        min-height:48px;
+        max-height:56px;
+        object-fit:contain;
     }
 }
 

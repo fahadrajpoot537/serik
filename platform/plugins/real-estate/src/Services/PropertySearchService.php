@@ -136,7 +136,7 @@ class PropertySearchService
                 // attributes = smaller Meili response + faster serialization.
                 'attributesToRetrieve' => [
                     'id', 'name', 'external_id', 'price', 'close_price',
-                    'number_bedroom', 'number_bathroom', 'covered_spaces',
+                    'number_bedroom', 'number_bathroom', 'bedrooms_below', 'covered_spaces',
                     'square', 'broker', 'mls_status', 'transaction_type',
                     'created_ts', '_geo',
                 ],

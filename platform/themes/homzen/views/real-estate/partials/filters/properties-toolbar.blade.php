@@ -115,132 +115,127 @@
     @endif
 @endforeach
 
+@php
+    $clearUrl = $actionUrl ?? url('/properties');
+    $clearQuery = [];
+    if (filter_var(request('open_house'), FILTER_VALIDATE_BOOLEAN)) {
+        $clearQuery['open_house'] = 1;
+    }
+    if ($clearQuery !== []) {
+        $clearUrl .= (str_contains($clearUrl, '?') ? '&' : '?') . http_build_query($clearQuery);
+    }
+@endphp
+
 <div class="serik-listing-toolbar sticky-top bg-white border-bottom">
     <div class="container-fluid py-2 py-md-3">
-        <ul class="nav-filters-menu serik-nav-filters list-unstyled d-flex flex-wrap align-items-center gap-2 mb-0">
-            <li class="dropdown">
+        <div class="nav-filters-menu serik-nav-filters">
+            <div class="dropdown serik-filter-slot serik-filter-slot--tx">
                 <button type="button" class="serik-filter-btn dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" id="serikTxChip">
-                    {{ $txLabel }}
+                    <span class="serik-filter-btn__label">{{ $txLabel }}</span>
                 </button>
                 <div class="dropdown-menu serik-filter-menu p-2">
                     <button type="button" class="serik-filter-option serik-tx-option w-100 text-start @if (! $isLeaseFilter && ! $isSoldFilter) active @endif" data-tx="sale">{{ __('For Sale') }}</button>
                     <button type="button" class="serik-filter-option serik-tx-option w-100 text-start mt-1 @if ($isLeaseFilter) active @endif" data-tx="lease">{{ __('For Lease') }}</button>
                     <button type="button" class="serik-filter-option serik-tx-option w-100 text-start mt-1 @if ($isSoldFilter) active @endif" data-tx="sold">{{ __('Sold') }}</button>
                 </div>
-            </li>
+            </div>
 
-            <li class="dropdown">
-                <button type="button" class="serik-filter-btn dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" id="serikPriceChip">
-                    {{ $priceLabel }}
-                </button>
-                <div class="dropdown-menu serik-filter-menu p-3" style="min-width: 280px;">
-                    <div class="row g-2 mb-2">
-                        <div class="col-6">
-                            <label class="form-label small mb-1" for="price-min">{{ __('Min') }}</label>
-                            <input type="number" name="min_price" id="price-min" class="form-control form-control-sm serik-price-input" placeholder="{{ __('Min') }}" value="{{ $minPrice }}" min="0" step="10000">
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label small mb-1" for="price-max">{{ __('Max') }}</label>
-                            <input type="number" name="max_price" id="price-max" class="form-control form-control-sm serik-price-input" placeholder="{{ __('Max') }}" value="{{ $maxPrice }}" min="0" step="10000">
-                        </div>
-                    </div>
-                    <div class="d-flex flex-wrap gap-1 serik-price-presets mb-2">
-                        @foreach([
-                            ['', '', __('Any')],
-                            ['0', '500000', 'Under $500K'],
-                            ['500000', '1000000', '$500K–$1M'],
-                            ['1000000', '2000000', '$1M–$2M'],
-                            ['2000000', '', '$2M+'],
-                        ] as [$min, $max, $lbl])
-                            <button type="button" class="serik-filter-pill" data-min="{{ $min }}" data-max="{{ $max }}">{{ $lbl }}</button>
-                        @endforeach
-                    </div>
-                    <button type="button" class="btn btn-sm btn-primary w-100 serik-price-apply">{{ __('Apply Price') }}</button>
-                </div>
-            </li>
-
-            <li class="dropdown">
-                <button type="button" class="serik-filter-btn dropdown-toggle" data-bs-toggle="dropdown" id="serikBedChip">{{ $bedLabel }}</button>
-                <div class="dropdown-menu serik-filter-menu p-2">
-                    <input type="hidden" name="bedroom" id="serikBedInput" value="{{ $bedroom }}">
-                    <div class="d-flex flex-wrap gap-1 serik-bed-presets">
-                        @foreach(['' => __('Any'), '1' => '1+', '2' => '2+', '3' => '3+', '4' => '4+', '5' => '5+'] as $val => $lbl)
-                            <button type="button" @class(['serik-filter-pill serik-bed-preset', 'active' => (string) $bedroom === (string) $val]) data-bed="{{ $val }}">{{ $lbl }}</button>
-                        @endforeach
-                    </div>
-                </div>
-            </li>
-
-            <li class="dropdown">
-                <button type="button" class="serik-filter-btn dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" id="serikPropertyTypeChip">{{ $propertyTypeLabel }}</button>
-                <div class="dropdown-menu serik-filter-menu p-3" style="min-width: 220px;">
-                    @foreach ($propertyTypeOptions as $val => $lbl)
-                        <div class="form-check mb-2">
-                            <input class="form-check-input serik-subtype serik-instant-filter" type="checkbox" name="subtypes[]" value="{{ $val }}" id="subtype-{{ \Illuminate\Support\Str::slug($val) }}" @checked(in_array($val, $subtypes, true))>
-                            <label class="form-check-label" for="subtype-{{ \Illuminate\Support\Str::slug($val) }}">{{ $lbl }}</label>
-                        </div>
-                    @endforeach
-                </div>
-            </li>
-
-            <li class="dropdown">
-                <button type="button" class="serik-filter-btn dropdown-toggle" data-bs-toggle="dropdown" id="serikTypeChip">{{ $typeLabel }}</button>
-                <div class="dropdown-menu serik-filter-menu p-3" style="min-width: 200px;">
-                    @foreach(['house' => __('House'), 'condo' => __('Condo'), 'townhouse' => __('Townhouse')] as $val => $lbl)
-                        <div class="form-check mb-2">
-                            <input class="form-check-input serik-home-type serik-instant-filter" type="checkbox" name="home_types[]" value="{{ $val }}" id="ptype-{{ $val }}" @checked(in_array($val, $homeTypes, true))>
-                            <label class="form-check-label" for="ptype-{{ $val }}">{{ $lbl }}</label>
-                        </div>
-                    @endforeach
-                </div>
-            </li>
-
-            <li class="dropdown">
-                <button type="button" class="serik-filter-btn dropdown-toggle" data-bs-toggle="dropdown">{{ __('More') }}</button>
-                <div class="dropdown-menu serik-filter-menu p-3" style="min-width: 300px;">
-                    <div class="mb-2">
-                        <label class="form-label small mb-1" for="min_baths">{{ __('Bathrooms') }}</label>
-                        <select name="bathroom" id="min_baths" class="form-select form-select-sm serik-instant-filter">
-                            <option value="">{{ __('Any') }}</option>
-                            @foreach(range(1, 5) as $i)
-                                <option value="{{ $i }}" @selected((string) $bathroom === (string) $i)>{{ $i }}+</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label small mb-1" for="min_sqft">{{ __('Square Feet') }}</label>
-                        <select name="min_square" id="min_sqft" class="form-select form-select-sm serik-instant-filter">
-                            <option value="">{{ __('Any') }}</option>
-                            @foreach([500, 750, 1000, 1250, 1500, 1750, 2000, 2500, 3000, 3500] as $sq)
-                                <option value="{{ $sq }}" @selected((string) $minSquare === (string) $sq)>{{ number_format($sq) }}+ sq ft</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div>
-                        <label class="form-label small mb-1" for="attribute-terms">{{ __('Keywords') }}</label>
-                        <input type="text" name="k" id="attribute-terms" class="form-control form-control-sm serik-instant-filter-delay" placeholder="{{ __('City, address, MLS…') }}" value="{{ $keyword }}">
-                    </div>
-                </div>
-            </li>
-
-            @php
-                $clearUrl = $actionUrl ?? url('/properties');
-                $clearQuery = [];
-                if (filter_var(request('open_house'), FILTER_VALIDATE_BOOLEAN)) {
-                    $clearQuery['open_house'] = 1;
-                }
-                if ($clearQuery !== []) {
-                    $clearUrl .= (str_contains($clearUrl, '?') ? '&' : '?') . http_build_query($clearQuery);
-                }
-            @endphp
-            @if (request()->query())
-                <li>
-                    <a href="{{ $clearUrl }}" class="serik-filter-btn serik-filter-btn--ghost reset-filter-btn">{{ __('Clear') }}</a>
-                </li>
-            @endif
-
-            <li class="ms-md-auto d-flex flex-wrap align-items-center gap-2">
+            <div class="serik-advanced-fields" id="serikAdvancedFields">
                 <div class="dropdown">
+                    <button type="button" class="serik-filter-btn dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" id="serikPriceChip">
+                        {{ $priceLabel }}
+                    </button>
+                    <div class="dropdown-menu serik-filter-menu p-3" style="min-width: 280px;">
+                        <div class="row g-2 mb-2">
+                            <div class="col-6">
+                                <label class="form-label small mb-1" for="price-min">{{ __('Min') }}</label>
+                                <input type="number" name="min_price" id="price-min" class="form-control form-control-sm serik-price-input" placeholder="{{ __('Min') }}" value="{{ $minPrice }}" min="0" step="10000">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small mb-1" for="price-max">{{ __('Max') }}</label>
+                                <input type="number" name="max_price" id="price-max" class="form-control form-control-sm serik-price-input" placeholder="{{ __('Max') }}" value="{{ $maxPrice }}" min="0" step="10000">
+                            </div>
+                        </div>
+                        <div class="d-flex flex-wrap gap-1 serik-price-presets mb-2">
+                            @foreach([
+                                ['', '', __('Any')],
+                                ['0', '500000', 'Under $500K'],
+                                ['500000', '1000000', '$500K–$1M'],
+                                ['1000000', '2000000', '$1M–$2M'],
+                                ['2000000', '', '$2M+'],
+                            ] as [$min, $max, $lbl])
+                                <button type="button" class="serik-filter-pill" data-min="{{ $min }}" data-max="{{ $max }}">{{ $lbl }}</button>
+                            @endforeach
+                        </div>
+                        <button type="button" class="btn btn-sm btn-primary w-100 serik-price-apply">{{ __('Apply Price') }}</button>
+                    </div>
+                </div>
+
+                <div class="dropdown">
+                    <button type="button" class="serik-filter-btn dropdown-toggle" data-bs-toggle="dropdown" id="serikBedChip">{{ $bedLabel }}</button>
+                    <div class="dropdown-menu serik-filter-menu p-2">
+                        <input type="hidden" name="bedroom" id="serikBedInput" value="{{ $bedroom }}">
+                        <div class="d-flex flex-wrap gap-1 serik-bed-presets">
+                            @foreach(['' => __('Any'), '1' => '1+', '2' => '2+', '3' => '3+', '4' => '4+', '5' => '5+'] as $val => $lbl)
+                                <button type="button" @class(['serik-filter-pill serik-bed-preset', 'active' => (string) $bedroom === (string) $val]) data-bed="{{ $val }}">{{ $lbl }}</button>
+                            @endforeach
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dropdown">
+                    <button type="button" class="serik-filter-btn dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" id="serikPropertyTypeChip">{{ $propertyTypeLabel }}</button>
+                    <div class="dropdown-menu serik-filter-menu p-3" style="min-width: 220px;">
+                        @foreach ($propertyTypeOptions as $val => $lbl)
+                            <div class="form-check mb-2">
+                                <input class="form-check-input serik-subtype serik-instant-filter" type="checkbox" name="subtypes[]" value="{{ $val }}" id="subtype-{{ \Illuminate\Support\Str::slug($val) }}" @checked(in_array($val, $subtypes, true))>
+                                <label class="form-check-label" for="subtype-{{ \Illuminate\Support\Str::slug($val) }}">{{ $lbl }}</label>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+
+                <div class="dropdown">
+                    <button type="button" class="serik-filter-btn dropdown-toggle" data-bs-toggle="dropdown" id="serikTypeChip">{{ $typeLabel }}</button>
+                    <div class="dropdown-menu serik-filter-menu p-3" style="min-width: 200px;">
+                        @foreach(['house' => __('House'), 'condo' => __('Condo'), 'townhouse' => __('Townhouse')] as $val => $lbl)
+                            <div class="form-check mb-2">
+                                <input class="form-check-input serik-home-type serik-instant-filter" type="checkbox" name="home_types[]" value="{{ $val }}" id="ptype-{{ $val }}" @checked(in_array($val, $homeTypes, true))>
+                                <label class="form-check-label" for="ptype-{{ $val }}">{{ $lbl }}</label>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+
+                <div class="dropdown">
+                    <button type="button" class="serik-filter-btn dropdown-toggle" data-bs-toggle="dropdown">{{ __('More') }}</button>
+                    <div class="dropdown-menu serik-filter-menu p-3" style="min-width: 300px;">
+                        <div class="mb-2">
+                            <label class="form-label small mb-1" for="min_baths">{{ __('Bathrooms') }}</label>
+                            <select name="bathroom" id="min_baths" class="form-select form-select-sm serik-instant-filter">
+                                <option value="">{{ __('Any') }}</option>
+                                @foreach(range(1, 5) as $i)
+                                    <option value="{{ $i }}" @selected((string) $bathroom === (string) $i)>{{ $i }}+</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small mb-1" for="min_sqft">{{ __('Square Feet') }}</label>
+                            <select name="min_square" id="min_sqft" class="form-select form-select-sm serik-instant-filter">
+                                <option value="">{{ __('Any') }}</option>
+                                @foreach([500, 750, 1000, 1250, 1500, 1750, 2000, 2500, 3000, 3500] as $sq)
+                                    <option value="{{ $sq }}" @selected((string) $minSquare === (string) $sq)>{{ number_format($sq) }}+ sq ft</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label small mb-1" for="attribute-terms">{{ __('Keywords') }}</label>
+                            <input type="text" name="k" id="attribute-terms" class="form-control form-control-sm serik-instant-filter-delay" placeholder="{{ __('City, address, MLS…') }}" value="{{ $keyword }}">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dropdown serik-sort-slot">
                     <button type="button" class="serik-filter-btn dropdown-toggle" data-bs-toggle="dropdown">
                         <span class="text-muted small">{{ __('Sort') }}:</span> {{ $sortLabel }}
                     </button>
@@ -253,11 +248,21 @@
                         </select>
                     </div>
                 </div>
-                <a href="{{ url('/map') }}" class="serik-filter-btn serik-filter-btn--map">
-                    <x-core::icon name="ti ti-map-pin" class="me-1" />{{ __('Map Search') }}
-                </a>
-            </li>
-        </ul>
+            </div>
+
+            <button type="button" class="serik-filter-btn serik-advanced-toggle" id="serikAdvancedToggle" aria-expanded="false" aria-controls="serikAdvancedFields">
+                <span class="serik-filter-btn__label serik-filter-btn__label--full">{{ __('Advanced Filter') }}</span>
+                <span class="serik-filter-btn__label serik-filter-btn__label--short" aria-hidden="true">{{ __('Advanced') }}</span>
+            </button>
+
+            <a href="{{ url('/map') }}" class="serik-filter-btn serik-filter-btn--map serik-filter-slot serik-filter-slot--map">
+                <x-core::icon name="ti ti-map-pin" />
+                <span class="serik-filter-btn__label serik-filter-btn__label--full">{{ __('Map Search') }}</span>
+                <span class="serik-filter-btn__label serik-filter-btn__label--short" aria-hidden="true">{{ __('Map') }}</span>
+            </a>
+
+            <a href="{{ $clearUrl }}" class="serik-filter-btn serik-filter-btn--ghost reset-filter-btn serik-filter-slot serik-filter-slot--clear">{{ __('Clear') }}</a>
+        </div>
 
         <div class="serik-active-filters mt-2 @if ($activeChips === []) d-none @endif" id="serikActiveFilters">
             @foreach ($activeChips as $chip)
@@ -358,24 +363,61 @@
     top: calc(var(--serik-top-header-height, 0px) + var(--serik-main-header-height, 60px));
     z-index: 1030;
 }
-.serik-nav-filters { row-gap: 8px; }
-.serik-filter-btn {
-    border: 1px solid #d1d5db; border-radius: 8px; background: #fff;
-    padding: 8px 14px; font-size: 14px; font-weight: 600; color: #111827;
-    line-height: 1.2; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;
-    white-space: nowrap;
+.serik-nav-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
 }
-.serik-filter-btn:hover, .serik-filter-btn:focus { border-color: var(--primary-color, #0255a1); color: var(--primary-color, #0255a1); }
+.serik-filter-btn {
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: #fff;
+    padding: 8px 14px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #111827;
+    line-height: 1.2;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    white-space: nowrap;
+    box-sizing: border-box;
+}
+.serik-filter-btn:hover, .serik-filter-btn:focus {
+    border-color: var(--primary-color, #0255a1);
+    color: var(--primary-color, #0255a1);
+}
 .serik-filter-btn--ghost { font-weight: 500; color: #6b7280; }
-.serik-filter-btn--map { background: var(--primary-color, #0255a1); border-color: var(--primary-color, #0255a1); color: #fff !important; }
+.serik-filter-btn--map {
+    background: var(--primary-color, #0255a1);
+    border-color: var(--primary-color, #0255a1);
+    color: #fff !important;
+}
 .serik-filter-btn--map:hover { opacity: 0.92; color: #fff !important; }
-.serik-filter-menu { border-radius: 10px; box-shadow: 0 10px 32px rgba(15,23,42,.12); border: 1px solid #e5e7eb; }
+.serik-filter-btn__label--short { display: none; }
+.serik-filter-menu {
+    border-radius: 10px;
+    box-shadow: 0 10px 32px rgba(15,23,42,.12);
+    border: 1px solid #e5e7eb;
+    z-index: 1080;
+}
 .serik-filter-pill, .serik-filter-option {
-    border: 1px solid #e5e7eb; background: #f9fafb; border-radius: 8px;
-    padding: 6px 12px; font-size: 13px; font-weight: 500; cursor: pointer;
+    border: 1px solid #e5e7eb;
+    background: #f9fafb;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
 }
 .serik-filter-pill:hover, .serik-filter-pill.active, .serik-filter-option.active {
-    background: #e8f2fc; border-color: var(--primary-color, #0255a1); color: var(--primary-color, #0255a1);
+    background: #e8f2fc;
+    border-color: var(--primary-color, #0255a1);
+    color: var(--primary-color, #0255a1);
 }
 .serik-listing-count { font-size: 15px; color: #374151; }
 .serik-filter-loading { font-size: 13px; color: var(--primary-color, #0255a1); font-weight: 500; }
@@ -390,15 +432,206 @@
 .serik-properties-page .box-title-listing .nav-tab-filter { display: none !important; }
 .serik-properties-page [data-bb-toggle="data-listing"].is-loading { opacity: 0.55; pointer-events: none; transition: opacity 0.15s; }
 .serik-properties-page .loading-spinner { position: absolute; top: 40%; left: 50%; transform: translate(-50%,-50%); z-index: 5; }
-@media (max-width: 767px) {
-    .serik-nav-filters { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 4px; }
-    .serik-filter-btn { font-size: 13px; padding: 7px 12px; }
+
+.serik-advanced-fields {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+.serik-advanced-toggle {
+    display: none;
+}
+
+/* Desktop */
+@media (min-width: 768px) {
+    .serik-advanced-toggle {
+        display: none !important;
+    }
+    .serik-advanced-fields {
+        display: flex !important;
+        flex: 1 1 auto;
+    }
+    .serik-sort-slot {
+        margin-left: auto;
+    }
+    .serik-filter-slot--clear {
+        order: 15;
+    }
+    .serik-filter-slot--map {
+        order: 20;
+    }
+    .serik-mobile-map-fab { display: none !important; }
+}
+
+/* Mobile: row 1 = 4 equal buttons; advanced panel on row 2 only when open */
+@media (max-width: 767.98px) {
+    .serik-nav-filters {
+        display: grid !important;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-rows: auto auto;
+        gap: 6px !important;
+        align-items: stretch;
+    }
+    .serik-filter-slot--tx {
+        grid-column: 1;
+        grid-row: 1;
+        min-width: 0;
+    }
+    .serik-advanced-toggle {
+        display: inline-flex !important;
+        grid-column: 2;
+        grid-row: 1;
+        width: 100%;
+        min-width: 0;
+        font-size: 11px !important;
+        padding: 8px 4px !important;
+        white-space: normal;
+        text-align: center;
+        line-height: 1.15;
+    }
+    .serik-filter-slot--map {
+        grid-column: 3;
+        grid-row: 1;
+        min-width: 0;
+    }
+    .serik-filter-slot--clear {
+        grid-column: 4;
+        grid-row: 1;
+        min-width: 0;
+    }
+    .serik-filter-slot--tx .serik-filter-btn,
+    .serik-filter-slot--map,
+    .serik-filter-slot--clear {
+        width: 100% !important;
+        min-width: 0;
+        font-size: 11px !important;
+        padding: 8px 4px !important;
+        white-space: normal;
+        text-align: center;
+        line-height: 1.15;
+        justify-content: center;
+    }
+    .serik-filter-slot--tx .dropdown-toggle::after {
+        margin-left: 3px;
+    }
+    .serik-filter-btn__label--full { display: none !important; }
+    .serik-filter-btn__label--short { display: inline !important; }
+    .serik-filter-slot--map svg,
+    .serik-filter-slot--map .icon {
+        display: none !important;
+    }
+    .serik-advanced-fields {
+        display: none !important;
+        grid-column: 1 / -1;
+        grid-row: 2;
+        flex-direction: column !important;
+        flex-wrap: nowrap !important;
+        align-items: stretch !important;
+        gap: 8px !important;
+        margin: 0;
+        padding: 10px;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        background: #fff;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+        position: relative;
+        z-index: 5;
+    }
+    .serik-advanced-fields.is-open {
+        display: flex !important;
+    }
+    .serik-advanced-fields > .dropdown {
+        width: 100%;
+        position: relative;
+    }
+    .serik-advanced-fields > .dropdown > .serik-filter-btn {
+        width: 100%;
+        justify-content: space-between;
+    }
+    .serik-advanced-fields .dropdown-menu {
+        width: min(100vw - 2rem, 320px);
+        max-width: calc(100vw - 2rem);
+        position: absolute !important;
+        inset: auto auto auto 0 !important;
+        transform: none !important;
+    }
+    .serik-advanced-toggle.is-open {
+        border-color: var(--primary-color, #0255a1);
+        color: var(--primary-color, #0255a1);
+        background: #e8f2fc;
+    }
+    .serik-mobile-map-fab { display: none !important; }
+}
+
+/* Mobile pagination: compact 1 2 3 … next, stay on screen */
+@media (max-width: 767.98px) {
+    .serik-properties-page .serik-pagination-wrap,
+    .serik-properties-page .wd-navigation {
+        width: 100%;
+        max-width: 100%;
+        overflow: hidden;
+        display: flex;
+        justify-content: center;
+        padding: 0 4px;
+        box-sizing: border-box;
+    }
+    .serik-properties-page .flat-pagination {
+        display: flex !important;
+        flex-wrap: wrap;
+        justify-content: center;
+        align-items: center;
+        gap: 4px !important;
+        max-width: 100%;
+        margin: 0 auto;
+        padding: 0;
+        list-style: none;
+    }
+    .serik-properties-page .flat-pagination > li {
+        margin: 0 !important;
+        flex: 0 0 auto;
+    }
+    .serik-properties-page .flat-pagination .page-numbers {
+        width: 34px !important;
+        min-width: 34px !important;
+        height: 34px !important;
+        line-height: 34px !important;
+        font-size: 13px !important;
+        padding: 0 !important;
+    }
+    .serik-properties-page .flat-pagination .page-numbers--dots {
+        width: 22px !important;
+        min-width: 22px !important;
+        border: 0 !important;
+        background: transparent !important;
+        color: #6b7280 !important;
+        font-weight: 600 !important;
+    }
+    .serik-properties-page .flat-pagination .page-numbers svg {
+        width: 1.1rem !important;
+        height: 1.1rem !important;
+    }
+    .serik-properties-page .serik-pagination-meta {
+        font-size: 12px;
+        margin-bottom: 0.5rem !important;
+        padding: 0 8px;
+    }
 }
 </style>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const form = document.querySelector('.serik-properties-page .filter-form');
     if (!form) return;
+
+    const advancedToggle = document.getElementById('serikAdvancedToggle');
+    const advancedFields = document.getElementById('serikAdvancedFields');
+    if (advancedToggle && advancedFields) {
+        advancedToggle.addEventListener('click', function () {
+            const open = advancedFields.classList.toggle('is-open');
+            advancedToggle.classList.toggle('is-open', open);
+            advancedToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        });
+    }
 
     let debounceTimer = null;
     let filterXhr = null;

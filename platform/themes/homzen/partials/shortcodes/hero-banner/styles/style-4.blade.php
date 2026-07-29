@@ -3261,15 +3261,42 @@ position: absolute;
     color: var(--hs-primary);
     font-weight: 700;
     font-size: 16px;
+    line-height: 1.25;
+}
+
+.hs-list-card-stats {
+    font-size: 12px;
+    color: #374151;
+    margin-top: 3px;
+    line-height: 1.35;
 }
 
 .hs-list-card-addr {
-    font-size: 14px;
-    font-weight: 500;
-    margin: 4px 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: #111827;
+    margin: 4px 0 2px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    line-height: 1.35;
+}
+
+.hs-list-card-mls {
+    font-size: 11px;
+    color: #9ca3af;
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.hs-list-card-listed {
+    font-size: 11px;
+    color: #6b7280;
+    margin-top: 3px;
+    font-weight: 500;
+    line-height: 1.3;
 }
 
 .hs-list-card-meta {
@@ -3342,9 +3369,19 @@ position: absolute;
     color: var(--hs-primary);
 }
 
-.hs-view-bar-btn span:first-child {
+.hs-view-bar-btn span:first-child,
+.hs-view-bar-btn .hs-view-bar-icon {
     font-size: 18px;
     line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.hs-view-bar-btn .hs-view-bar-icon svg,
+.hs-view-bar-btn .hs-view-bar-icon .icon {
+    width: 20px;
+    height: 20px;
 }
 
 .map-housesigma.view-list .map-search-wrapper > .hs-map-stage,
@@ -3585,7 +3622,7 @@ position: absolute;
     .map-housesigma .maplibregl-ctrl-bottom-right,
     .map-housesigma .maplibregl-ctrl-top-right {
         top: auto !important;
-        bottom: 88px !important;
+        bottom: calc(120px + env(safe-area-inset-bottom, 0px)) !important;
         right: 10px !important;
         z-index: 6 !important;
     }
@@ -3799,10 +3836,14 @@ position: absolute;
         margin-bottom: 8px;
     }
 
-    .map-housesigma.hs-map-sheet-open .map-count-box,
+    .map-housesigma.hs-map-sheet-open .map-count-box {
+        bottom: calc(88px + min(52vh, 420px) * 0.35) !important;
+        transition: bottom 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+    }
+
     .map-housesigma.hs-map-sheet-open .maplibregl-ctrl-bottom-right,
     .map-housesigma.hs-map-sheet-open .maplibregl-ctrl-top-right {
-        bottom: calc(88px + min(52vh, 420px) * 0.35) !important;
+        bottom: calc(140px + env(safe-area-inset-bottom, 0px) + min(52vh, 420px) * 0.35) !important;
         transition: bottom 0.28s cubic-bezier(0.32, 0.72, 0, 1);
     }
 
@@ -3899,6 +3940,12 @@ position: absolute;
         line-height: 1.25;
     }
 
+    .map-housesigma .hs-mobile-list-body .hs-list-card-stats {
+        font-size: 12px;
+        color: #374151;
+        line-height: 1.35;
+    }
+
     .map-housesigma .hs-mobile-list-body .hs-list-card-addr {
         font-size: 13px;
         line-height: 1.35;
@@ -3906,6 +3953,16 @@ position: absolute;
         display: -webkit-box;
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
+    }
+
+    .map-housesigma .hs-mobile-list-body .hs-list-card-mls {
+        font-size: 11px;
+        color: #94a3b8;
+    }
+
+    .map-housesigma .hs-mobile-list-body .hs-list-card-listed {
+        font-size: 11px;
+        color: #64748b;
     }
 
     .map-housesigma .hs-mobile-list-body .hs-list-card-meta {
@@ -5031,11 +5088,11 @@ position: absolute;
 
     <div class="hs-mobile-view-bar d-lg-none" id="hsMobileViewBar">
         <button type="button" class="hs-view-bar-btn active" data-hs-view="map">
-            <span>&#128506;</span>
+            <span class="hs-view-bar-icon" aria-hidden="true"><x-core::icon name="ti ti-world" /></span>
             Map
         </button>
         <button type="button" class="hs-view-bar-btn" data-hs-view="list">
-            <span>&#9776;</span>
+            <span class="hs-view-bar-icon" aria-hidden="true"><x-core::icon name="ti ti-list" /></span>
             List
         </button>
     </div>
@@ -10580,8 +10637,17 @@ function mapMovedEnoughToRefetch() {
         const locked = mapBlurClass(itemStatus, props);
         const soldLocked = locked ? ' is-sold-locked' : '';
         const priceHtml = buildMapPriceHtml(props, itemStatus, locked);
+        const bedMain = props.bedrooms;
+        const bedBelow = Number(props.bedrooms_below || 0);
+        let bedsLabel = '';
+        if (bedMain !== null && bedMain !== undefined && bedMain !== '' && bedMain !== '-') {
+            bedsLabel = String(bedMain) + (bedBelow > 0 ? '+' + bedBelow : '');
+        }
         const areaText = props.area
-            ? String(props.area).split('-').map((n) => Number(n).toLocaleString()).join('-') + ' ft²'
+            ? String(props.area).split('-').map((n) => {
+                const num = Number(String(n).replace(/,/g, '').trim());
+                return Number.isFinite(num) && num > 0 ? num.toLocaleString() : String(n).trim();
+            }).filter(Boolean).join('-') + ' sq. ft.'
             : '—';
         const cardImage = (() => {
             if (isUsableMapImageUrl(props.image)) {
@@ -10589,6 +10655,9 @@ function mapMovedEnoughToRefetch() {
             }
             return mapListingCoverUrl(props);
         })();
+        const mlsFooter = [props.external_id ? ('MLS® ' + props.external_id) : '', props.agency || '']
+            .filter(Boolean)
+            .join(' · ');
 
         return `
             ${mapLoginGateHtml(itemStatus, props)}
@@ -10606,11 +10675,11 @@ function mapMovedEnoughToRefetch() {
                     </div>
                     <div class="hs-cluster-card-title">${escapeMapHtml(props.name || 'Property')}</div>
                     <div class="hs-cluster-card-meta">
-                        <span>🛏 ${escapeMapHtml(props.bedrooms ?? '-')}</span>
+                        ${bedsLabel !== '' ? `<span>🛏 ${escapeMapHtml(bedsLabel)}</span>` : ''}
                         <span>🛁 ${escapeMapHtml(props.bathrooms ?? '-')}</span>
                         <span>📐 ${escapeMapHtml(areaText)}</span>
                     </div>
-                    <div class="hs-cluster-card-footer">${escapeMapHtml(props.external_id || '')}${props.agency ? ' · ' + escapeMapHtml(props.agency) : ''}</div>
+                    <div class="hs-cluster-card-footer">${escapeMapHtml(mlsFooter)}</div>
                 </div>
             </article>
         `;
@@ -11048,11 +11117,34 @@ function buildHsListCardHtml(props, geometry) {
 
     const img = (!locked && (isUsableMapImageUrl(props.image) ? props.image : mapListingCoverUrl(props))) || '';
     const imageAlt = escapeMapHtml(buildMapImageAlt(props));
-    const meta = [
-        (props.bedrooms ?? '-') + ' bed',
-        (props.bathrooms ?? '-') + ' bath',
-    ];
-    if (props.area && !locked) meta.push(props.area + ' ft\u00B2');
+
+    const bedMain = props.bedrooms;
+    const bedBelow = Number(props.bedrooms_below || 0);
+    let bedsLabel = '';
+    if (bedMain !== null && bedMain !== undefined && bedMain !== '' && bedMain !== '-') {
+        bedsLabel = String(bedMain) + (bedBelow > 0 ? '+' + bedBelow : '') + ' bed';
+    }
+    const bathsLabel = (props.bathrooms !== null && props.bathrooms !== undefined && props.bathrooms !== '' && props.bathrooms !== '-')
+        ? (String(props.bathrooms) + ' bath')
+        : '';
+    let areaLabel = '';
+    if (!locked && props.area) {
+        areaLabel = String(props.area).split('-').map(function (n) {
+            const num = Number(String(n).replace(/,/g, '').trim());
+            return Number.isFinite(num) && num > 0 ? num.toLocaleString() : String(n).trim();
+        }).filter(Boolean).join('-') + ' sq. ft.';
+    }
+    const stats = [bedsLabel, bathsLabel, areaLabel].filter(Boolean).join(' ');
+
+    const address = locked ? 'Sold listing — login required' : (props.name || '');
+    const mlsParts = [];
+    if (!locked && props.external_id) {
+        mlsParts.push('MLS® ' + props.external_id);
+    }
+    if (!locked && props.agency) {
+        mlsParts.push(props.agency);
+    }
+    const listedLabel = !locked ? relativeListedLabel(props.date, 'Listed') : '';
 
     return '<div class="hs-list-item' + (locked ? ' sold-locked' : '') + '" data-id="' + (props.id || '') + '" role="button" tabindex="0">' +
         gate +
@@ -11062,8 +11154,10 @@ function buildHsListCardHtml(props, geometry) {
             : '<div class="hs-list-card-img hs-img-empty" style="width:100px;min-width:100px;height:76px;border-radius:8px;"><div class="hs-img-empty-fill"></div></div>') +
         '<div class="hs-list-card-body">' +
         '<div class="hs-list-card-price">' + priceHtml + '</div>' +
-        '<div class="hs-list-card-addr">' + (locked ? 'Sold listing — login required' : (props.name || '')) + '</div>' +
-        '<div class="hs-list-card-meta">' + meta.join(' \u00B7 ') + '</div>' +
+        (stats ? '<div class="hs-list-card-stats">' + escapeMapHtml(stats) + '</div>' : '') +
+        '<div class="hs-list-card-addr">' + escapeMapHtml(address) + '</div>' +
+        (mlsParts.length ? '<div class="hs-list-card-mls">' + escapeMapHtml(mlsParts.join(' · ')) + '</div>' : '') +
+        (listedLabel ? '<div class="hs-list-card-listed">' + escapeMapHtml(listedLabel) + '</div>' : '') +
         '</div></article></div>';
 }
 

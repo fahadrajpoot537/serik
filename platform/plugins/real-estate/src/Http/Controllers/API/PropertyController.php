@@ -5643,7 +5643,7 @@ class PropertyController extends BaseController
         // is unavailable. engine=mysql forces the MySQL path for A/B testing.
         if ($request->input('engine') !== 'mysql') {
             // v8: DB lat/lng on geometry + properties for exact pin placement.
-            $meiliCacheKey = 'map_meili_v8_' . md5(implode('|', [
+            $meiliCacheKey = 'map_meili_v9_' . md5(implode('|', [
                 round($south, 4), round($north, 4), round($west, 4), round($east, 4),
                 $this->mapFilterSignature($request),
             ]));
@@ -5669,8 +5669,8 @@ class PropertyController extends BaseController
             }
         }
 
-        // v26: include latitude/longitude on feature properties for exact pins.
-        $cacheKey = 'map_v26_' . md5(implode('|', [
+        // v27: list cards need bedrooms_below for "2+2 bed" display.
+        $cacheKey = 'map_v27_' . md5(implode('|', [
             round($south, 4), round($north, 4), round($west, 4), round($east, 4),
             $this->mapFilterSignature($request),
         ]));
@@ -5695,6 +5695,7 @@ class PropertyController extends BaseController
                     'price',
                     'number_bedroom',
                     'number_bathroom',
+                    'BedroomsBelowGrade',
                     'square',
                     'broker',
                     'image_val',
@@ -5989,6 +5990,7 @@ class PropertyController extends BaseController
                                 'price' => 0,
                                 'ClosePrice' => null,
                                 'bedrooms' => null,
+                                'bedrooms_below' => null,
                                 'bathrooms' => null,
                                 'basement' => null,
                                 'url' => '',
@@ -6026,6 +6028,7 @@ class PropertyController extends BaseController
                             'price' => $property->price,
                             'ClosePrice' => $property->ClosePrice,
                             'bedrooms' => $property->number_bedroom,
+                            'bedrooms_below' => (int) ($property->BedroomsBelowGrade ?? 0) ?: null,
                             'bathrooms' => $property->number_bathroom,
                             'garage' => $property->CoveredSpaces ?? null,
                             'parking' => $property->ParkingSpaces ?? null,
@@ -6205,8 +6208,8 @@ class PropertyController extends BaseController
             // Truncate long agency names — ListOfficeName can be 80+ chars and is
             // the biggest variable string in the GeoJSON payload.
             $agency = (string) ($h['broker'] ?? '');
-            if (mb_strlen($agency) > 40) {
-                $agency = mb_substr($agency, 0, 37) . '...';
+            if (mb_strlen($agency) > 80) {
+                $agency = mb_substr($agency, 0, 77) . '...';
             }
             $name = (string) ($h['name'] ?? '');
             if (mb_strlen($name) > 80) {
@@ -6233,6 +6236,7 @@ class PropertyController extends BaseController
                     'price' => $h['price'] ?? 0,
                     'ClosePrice' => $h['close_price'] ?? null,
                     'bedrooms' => $h['number_bedroom'] ?? null,
+                    'bedrooms_below' => $h['bedrooms_below'] ?? null,
                     'bathrooms' => $h['number_bathroom'] ?? null,
                     'garage' => $h['covered_spaces'] ?? null,
                     'area' => $h['square'] ?? null,
@@ -6262,7 +6266,7 @@ class PropertyController extends BaseController
                     ->whereNotNull('longitude')
                     ->where('latitude', '!=', 0)
                     ->where('longitude', '!=', 0)
-                    ->get(['id', 'latitude', 'longitude'])
+                    ->get(['id', 'latitude', 'longitude', 'BedroomsBelowGrade', 'broker', 'square', 'name'])
                     ->keyBy('id');
 
                 foreach ($features as &$feature) {
@@ -6276,6 +6280,20 @@ class PropertyController extends BaseController
                     $feature['geometry']['coordinates'] = [$lng, $lat];
                     $feature['properties']['latitude'] = $lat;
                     $feature['properties']['longitude'] = $lng;
+                    $below = (int) ($row->BedroomsBelowGrade ?? 0);
+                    $feature['properties']['bedrooms_below'] = $below > 0 ? $below : null;
+                    if (! empty($row->broker)) {
+                        $broker = (string) $row->broker;
+                        $feature['properties']['agency'] = mb_strlen($broker) > 80
+                            ? (mb_substr($broker, 0, 77) . '...')
+                            : $broker;
+                    }
+                    if ($row->square !== null && $row->square !== '') {
+                        $feature['properties']['area'] = $row->square;
+                    }
+                    if (! empty($row->name)) {
+                        $feature['properties']['name'] = (string) $row->name;
+                    }
                 }
                 unset($feature);
             }

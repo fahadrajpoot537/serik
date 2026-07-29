@@ -26,8 +26,6 @@
         }
         window.__serikAnalyticsLoaded = true;
 
-        injectScript('https://www.clarity.ms/tag/vo52awk0jq');
-
         !function (f, b, e, v, n, t, s) {
             if (f.fbq) return;
             n = f.fbq = function () {
@@ -73,8 +71,6 @@
 })();
 </script>
 @else
-<script type="text/javascript" async src="https://www.clarity.ms/tag/vo52awk0jq"></script>
-
 <script>
     !function (f, b, e, v, n, t, s) {
         if (f.fbq) return;

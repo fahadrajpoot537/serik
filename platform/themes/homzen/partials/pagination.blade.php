@@ -12,7 +12,7 @@
             @foreach ($elements as $element)
                 @if (is_string($element))
                     <li>
-                        <span class="page-numbers current">{{ $element }}</span>
+                        <span class="page-numbers page-numbers--dots" aria-hidden="true">{{ $element }}</span>
                     </li>
                 @endif
 

@@ -624,6 +624,7 @@ class Property extends BaseModel
 
             'number_bedroom' => (int) $this->number_bedroom,
             'number_bathroom' => (int) $this->number_bathroom,
+            'bedrooms_below' => (int) ($this->BedroomsBelowGrade ?? 0),
             'covered_spaces' => (int) $this->CoveredSpaces,
             'parking_spaces' => (int) $this->ParkingSpaces,
 

@@ -27,11 +27,11 @@
             'total' => number_format($properties->total()),
         ]) }}
     </p>
-    <div class="justify-content-center wd-navigation mt-2">
-        {{ $properties->withQueryString()->links(Theme::getThemeNamespace('partials.pagination')) }}
+    <div class="justify-content-center wd-navigation mt-2 serik-pagination-wrap">
+        {{ $properties->onEachSide(1)->withQueryString()->links(Theme::getThemeNamespace('partials.pagination')) }}
     </div>
 @elseif ($properties instanceof \Illuminate\Contracts\Pagination\Paginator && ($properties->hasMorePages() || $properties->currentPage() > 1))
-    <div class="justify-content-center wd-navigation mt-2">
-        {{ $properties->withQueryString()->links(Theme::getThemeNamespace('partials.pagination')) }}
+    <div class="justify-content-center wd-navigation mt-2 serik-pagination-wrap">
+        {{ $properties->onEachSide(1)->withQueryString()->links(Theme::getThemeNamespace('partials.pagination')) }}
     </div>
 @endif
