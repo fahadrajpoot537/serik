@@ -61,4 +61,21 @@ return [
         'delay_ms' => (int) env('GOOGLE_MAPS_GEOCODING_DELAY_MS', 50),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | GoHighLevel (LeadConnector)
+    |--------------------------------------------------------------------------
+    |
+    | Private Integration Token (PIT) + Location ID for upserting website leads
+    | from Contact Us and property Schedule Viewing / inquiry forms.
+    |
+    */
+    'gohighlevel' => [
+        'enabled' => (bool) env('GOHIGHLEVEL_ENABLED', true),
+        'api_token' => env('GOHIGHLEVEL_API_TOKEN'),
+        'location_id' => env('GOHIGHLEVEL_LOCATION_ID'),
+        'base_url' => env('GOHIGHLEVEL_BASE_URL', 'https://services.leadconnectorhq.com'),
+        'api_version' => env('GOHIGHLEVEL_API_VERSION', '2021-07-28'),
+    ],
+
 ];

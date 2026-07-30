@@ -102,6 +102,13 @@ class PublicController extends BaseController
 
             $consult = Consult::query()->create($data);
 
+            event(new \App\Events\ConsultSubmitted(
+                $consult,
+                is_string($subject) ? $subject : null,
+                is_string($link) ? $link : null,
+                'Property Inquiry — serik.ca'
+            ));
+
             $emailHandler = EmailHandler::setModule(REAL_ESTATE_MODULE_SCREEN_NAME)
                 ->setVariableValues([
                     'consult_name' => $consult->name,
