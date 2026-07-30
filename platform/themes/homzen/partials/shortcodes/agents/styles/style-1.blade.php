@@ -52,6 +52,27 @@ $accounts = $accounts->sortBy(function ($account) use ($order) {
         #about-agent.flat-agents .box-agent .box-img img {
             max-height: none;
         }
+
+        #about-agent .tf-sw-agents {
+            overflow: hidden;
+            padding-bottom: 4px;
+        }
+
+        #about-agent .tf-sw-agents .swiper-wrapper {
+            display: flex;
+            align-items: stretch;
+        }
+
+        #about-agent .tf-sw-agents .swiper-slide {
+            height: auto;
+            width: 82%;
+            max-width: 320px;
+            flex-shrink: 0;
+        }
+
+        #about-agent .tf-sw-agents .box-agent {
+            margin-right: 0 !important;
+        }
     }
 </style>
 <section id="about-agent" class="flat-section flat-agents" @style(["background-color: $shortcode->background_color" => $shortcode->background_color])>
@@ -70,7 +91,34 @@ $accounts = $accounts->sortBy(function ($account) use ($order) {
             
         @endif
          <br>
-        <div class="row row-cols-2 row-cols-sm-2 row-cols-md-4 row-cols-lg-4">
+        <div class="swiper tf-sw-agents d-md-none">
+            <div class="swiper-wrapper">
+                @foreach ($accounts as $account)
+                    <div class="swiper-slide">
+                        <div class="box-agent hover-img wow fadeIn" data-wow-delay=".2s" data-wow-duration="2000ms">
+                            <div class="box-img img-style mb-2">
+                                {{ RvMedia::image($account->avatar_url, $account->name, attributes: ['width' => 300, 'height' => 400, 'decoding' => 'async', 'loading' => 'lazy']) }}
+                                {!! Theme::partial('shortcodes.agents.partials.social-links', compact('account')) !!}
+                            </div>
+                            <div class="content">
+                                <div class="info">
+                                    @if (\Botble\RealEstate\Facades\RealEstateHelper::isDisabledPublicProfile())
+                                        <h6>{{ $account->name }} {!! $account->badge !!}</h6>
+                                    @else
+                                        <a href="{{ $account->url }}">
+                                            <h6 class="link">{{ $account->name }} {!! $account->badge !!}</h6>
+                                        </a>
+                                    @endif
+                                    {!! Theme::partial('shortcodes.agents.partials.info', compact('account')) !!}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        </div>
+
+        <div class="row row-cols-2 row-cols-sm-2 row-cols-md-4 row-cols-lg-4 d-none d-md-flex">
             @foreach ($accounts as $account)
                 <div class="box col">
                     <div class="box-agent hover-img wow fadeIn" data-wow-delay=".2s" data-wow-duration="2000ms">
@@ -114,4 +162,47 @@ hideButton();
 window.addEventListener("load", hideButton);
 setTimeout(hideButton, 500);
 setTimeout(hideButton, 1500);
+</script>
+
+<script>
+function initAgentsSwiper() {
+    if (typeof Swiper === 'undefined') return;
+    const el = document.querySelector('#about-agent .tf-sw-agents');
+    if (!el || el.dataset.swiperReady === '1') return;
+    if (!window.matchMedia('(max-width: 991px)').matches) return;
+
+    el.dataset.swiperReady = '1';
+
+    new Swiper(el, {
+        slidesPerView: 1.2,
+        spaceBetween: 12,
+        loop: true,
+        speed: 650,
+        autoplay: {
+            delay: 3000,
+            disableOnInteraction: false,
+        },
+    });
+}
+
+function bootAgentsSwiper(maxRetries = 12) {
+    let retries = 0;
+    const tick = function () {
+        initAgentsSwiper();
+        const el = document.querySelector('#about-agent .tf-sw-agents');
+        if (el && el.dataset.swiperReady === '1') return;
+        retries++;
+        if (retries < maxRetries) {
+            setTimeout(tick, 180);
+        }
+    };
+    tick();
+}
+
+window.addEventListener('DOMContentLoaded', function () {
+    bootAgentsSwiper();
+});
+window.addEventListener('load', function () {
+    bootAgentsSwiper(6);
+});
 </script>

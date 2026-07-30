@@ -11,7 +11,7 @@
     background: #fff;
     padding: 16px;
     border-radius: 10px;
-    
+    height: 100%;
     box-shadow: rgba(50, 50, 93, 0.25) 0px 50px 100px -20px, rgba(0, 0, 0, 0.3) 0px 30px 60px -30px, rgba(10, 37, 64, 0.35) 0px -2px 6px 0px inset;
     width: 100%;
 }
@@ -38,7 +38,21 @@
     text-decoration: none;
 }
 
-/* CRITICAL SWIPER FIX */
+@media (max-width: 767px) {
+    .city-swiper-section .city-swiper {
+        overflow: hidden;
+        padding: 4px 2px 24px;
+    }
+
+    .city-swiper-section .city-swiper .swiper-wrapper {
+        display: flex;
+        align-items: stretch;
+    }
+
+    .city-swiper-section .city-swiper .swiper-slide {
+        height: auto;
+    }
+}
 
 </style>
 
@@ -55,12 +69,12 @@
                         'brampton' => 'Brampton',
                         'mississauga' => 'Mississauga',
                         'toronto' => 'Toronto',
-                        'brampton' => 'Hamilton',
-                        'mississauga' => 'Kitchener',
-                        'toronto' => 'Ottawa',
-                         'brampton' => 'Vaughan',
-                        'mississauga' => 'Oakville',
-                        'toronto' => 'Milton',
+                        'hamilton' => 'Hamilton',
+                        'kitchener' => 'Kitchener',
+                        'ottawa' => 'Ottawa',
+                        'vaughan' => 'Vaughan',
+                        'oakville' => 'Oakville',
+                        'milton' => 'Milton',
                     ];
 
                     $types = [
@@ -116,8 +130,8 @@ function initLocationsSwiper() {
         const speed = parseInt(el.dataset.speed || 2500);
 
         new Swiper(el, {
-            slidesPerView: 1,
-            spaceBetween: 5,
+            slidesPerView: 1.14,
+            spaceBetween: 12,
             loop: true,
 
             autoplay: {
@@ -128,11 +142,8 @@ function initLocationsSwiper() {
             speed: 800,
 
             breakpoints: {
-                0: { slidesPerView: 2 },
-                576: { slidesPerView: 2 },
-                768: { slidesPerView: 2 },
-                992: { slidesPerView: 2 },
-                1200: { slidesPerView: 2 }
+                0: { slidesPerView: 1.14, spaceBetween: 12 },
+                576: { slidesPerView: 1.3, spaceBetween: 14 },
             }
         });
     });

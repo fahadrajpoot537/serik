@@ -23,7 +23,7 @@ class PushConsultLeadToGoHighLevel
             'property_name' => $event->propertyName,
             'property_url' => $event->propertyUrl,
             'source' => $event->sourceLabel,
-            'tags' => ['Website Lead', 'Property Inquiry', 'Schedule Viewing', 'Serik Realty'],
+            'tags' => ['Website Lead', 'Property Inquiry', 'Schedule Viewing', $event->sourceTag, 'Serik Realty'],
         ]);
     }
 }

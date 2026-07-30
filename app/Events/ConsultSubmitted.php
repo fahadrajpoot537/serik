@@ -16,6 +16,7 @@ class ConsultSubmitted
         public ?string $propertyName = null,
         public ?string $propertyUrl = null,
         public string $sourceLabel = 'Property Inquiry — serik.ca',
+        public string $sourceTag = 'Property Detail Inquiry',
     ) {
     }
 }

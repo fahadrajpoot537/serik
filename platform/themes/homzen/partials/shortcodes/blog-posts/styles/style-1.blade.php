@@ -1,11 +1,24 @@
 <style>
     .tf-sw-blog {
-    overflow: hidden;
-}
+        overflow: hidden;
+    }
 
-.tf-sw-blog .swiper-slide {
-    height: auto;
-}
+    .tf-sw-blog .swiper-slide {
+        height: auto;
+    }
+
+    @media (max-width: 991px) {
+        .tf-sw-blog .swiper-wrapper {
+            display: flex;
+            align-items: stretch;
+        }
+
+        .tf-sw-blog .swiper-slide {
+            width: 86%;
+            max-width: 340px;
+            flex-shrink: 0;
+        }
+    }
 </style>
 
 <section class="flat-section-v3 flat-latest-new" @style(["background-color: $shortcode->background_color" => $shortcode->background_color])>
@@ -25,52 +38,53 @@
         
       <br>
 
-              @include(Theme::getThemeNamespace('views.blog.partials.posts'))
+              @include(Theme::getThemeNamespace('views.blog.partials.posts'), ['carouselOnMobile' => true])
     </div>
 </section>
 
 
 <script>
-    function initBlogSwiper() {
+function initBlogSwiper() {
     if (typeof Swiper === 'undefined') return;
 
     const el = document.querySelector('.tf-sw-blog');
-    if (!el) return;
+    if (!el || el.dataset.swiperReady === '1') return;
+
+    const isMobile = window.matchMedia('(max-width: 991px)').matches;
+    if (!isMobile) return;
+
+    el.dataset.swiperReady = '1';
 
     new Swiper(el, {
-        slidesPerView: 3,
-        spaceBetween: 20,
+        slidesPerView: 1.12,
+        spaceBetween: 12,
         loop: true,
-
+        speed: 650,
         autoplay: {
-            delay: 3000,
+            delay: 3200,
             disableOnInteraction: false,
         },
-
-        speed: 800,
-
-        breakpoints: {
-            0: {
-                slidesPerView: 1,
-                spaceBetween: 10
-            },
-            576: {
-                slidesPerView: 1.5,
-                spaceBetween: 15
-            },
-            768: {
-                slidesPerView: 2,
-                spaceBetween: 20
-            },
-            992: {
-                slidesPerView: 3,
-                spaceBetween: 20
-            }
-        }
     });
 }
 
+function bootBlogSwiper(maxRetries = 12) {
+    let retries = 0;
+    const tick = function () {
+        initBlogSwiper();
+        const el = document.querySelector('.tf-sw-blog');
+        if (el && el.dataset.swiperReady === '1') return;
+        retries++;
+        if (retries < maxRetries) {
+            setTimeout(tick, 180);
+        }
+    };
+    tick();
+}
+
+window.addEventListener('DOMContentLoaded', function () {
+    bootBlogSwiper();
+});
 window.addEventListener('load', function () {
-    setTimeout(initBlogSwiper, 200);
+    bootBlogSwiper(6);
 });
 </script>

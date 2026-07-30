@@ -6,13 +6,24 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 
 /**
- * Versioned full-page HTML cache for GET / (anonymous, no query string).
+ * Versioned full-page HTML cache for GET / (anonymous).
  */
 final class HomepageResponseCache
 {
     private const VERSION_KEY = 'homepage_response_cache_version_v4';
 
     private const TTL_SECONDS = 7200;
+    private const TRACKING_QUERY_KEYS = [
+        'utm_source',
+        'utm_medium',
+        'utm_campaign',
+        'utm_term',
+        'utm_content',
+        'gclid',
+        'fbclid',
+        'msclkid',
+        'ttclid',
+    ];
 
     public static function version(): int
     {
@@ -58,7 +69,7 @@ final class HomepageResponseCache
             return false;
         }
 
-        if ($request->query->count() > 0) {
+        if (! self::hasOnlyTrackingQueryParams($request)) {
             return false;
         }
 
@@ -84,6 +95,22 @@ final class HomepageResponseCache
         }
 
         return is_plugin_active('real-estate') && auth('account')->check();
+    }
+
+    private static function hasOnlyTrackingQueryParams(Request $request): bool
+    {
+        $query = $request->query();
+        if ($query === []) {
+            return true;
+        }
+
+        foreach (array_keys($query) as $key) {
+            if (! in_array(strtolower((string) $key), self::TRACKING_QUERY_KEYS, true)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public static function cacheKey(Request $request): string

@@ -111,11 +111,18 @@ class ConsultController extends BaseController
 
             $consult = Consult::query()->create($data);
 
+            $referer = strtolower((string) $request->headers->get('referer', ''));
+            $sourceLabel = str_contains($referer, '/map')
+                ? 'Property Schedule / Inquiry (Map) — serik.ca'
+                : 'Property Schedule / Inquiry (Detail) — serik.ca';
+            $sourceTag = str_contains($referer, '/map') ? 'Map Inquiry Form' : 'Property Detail Inquiry Form';
+
             event(new \App\Events\ConsultSubmitted(
                 $consult,
                 is_string($subject) ? $subject : null,
                 is_string($link) ? $link : null,
-                'Property Inquiry — serik.ca'
+                $sourceLabel,
+                $sourceTag
             ));
 
             $emailHandler = EmailHandler::setModule(REAL_ESTATE_MODULE_SCREEN_NAME)

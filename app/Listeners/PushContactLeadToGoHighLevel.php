@@ -26,8 +26,8 @@ class PushContactLeadToGoHighLevel
             'phone' => (string) ($contact->phone ?? ''),
             'subject' => (string) ($contact->subject ?? ''),
             'message' => (string) ($contact->content ?? ''),
-            'source' => 'Contact Form — serik.ca',
-            'tags' => ['Website Lead', 'Contact Form', 'Serik Realty'],
+            'source' => 'Contact Us Form — serik.ca',
+            'tags' => ['Website Lead', 'Contact Us Form', 'Serik Realty'],
         ]);
     }
 }
