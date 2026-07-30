@@ -12,7 +12,7 @@ final class HomepageResponseCache
 {
     private const VERSION_KEY = 'homepage_response_cache_version_v4';
 
-    private const TTL_SECONDS = 3600;
+    private const TTL_SECONDS = 7200;
 
     public static function version(): int
     {
@@ -21,7 +21,22 @@ final class HomepageResponseCache
 
     public static function bump(): void
     {
-        Cache::forever(self::VERSION_KEY, self::version() + 1);
+        $locale = app()->getLocale();
+        $oldVersion = self::version();
+        $oldKey = 'homepage_html_v4:' . $oldVersion . ':' . $locale . ':shared';
+        $oldHtml = Cache::get($oldKey);
+
+        Cache::forever(self::VERSION_KEY, $oldVersion + 1);
+
+        // Keep serving the previous HTML under the new version key so a bump
+        // never forces a multi-second cold MISS (target ≤0.8s TTFB).
+        if (is_string($oldHtml) && $oldHtml !== '') {
+            Cache::put(
+                'homepage_html_v4:' . self::version() . ':' . $locale . ':shared',
+                $oldHtml,
+                self::TTL_SECONDS
+            );
+        }
     }
 
     /**

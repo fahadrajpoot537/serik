@@ -51,6 +51,45 @@ class PropertySearchService
     }
 
     /**
+     * Fast facet-style total for browse pagination (limit=0 Meili search).
+     *
+     * @return int|null null when Meili unavailable
+     */
+    public function searchEstimatedTotal(string $keyword, array $opts = []): ?int
+    {
+        if (! $this->isAvailable()) {
+            return null;
+        }
+
+        $cacheKey = 'serik_meili_total_v1:' . md5(mb_strtolower($keyword) . '|' . json_encode($opts));
+
+        return Cache::remember($cacheKey, 300, function () use ($keyword, $opts) {
+            try {
+                $params = [
+                    'limit' => 0,
+                    'offset' => 0,
+                    'attributesToRetrieve' => ['id'],
+                ];
+                $filters = $this->buildFilters($opts);
+                if ($filters !== '') {
+                    $params['filter'] = $filters;
+                }
+
+                $res = $this->index()->search($keyword, $params);
+                $hits = method_exists($res, 'getEstimatedTotalHits')
+                    ? $res->getEstimatedTotalHits()
+                    : ($res['estimatedTotalHits'] ?? $res['totalHits'] ?? null);
+
+                return $hits === null ? null : (int) $hits;
+            } catch (Throwable $e) {
+                report($e);
+
+                return null;
+            }
+        });
+    }
+
+    /**
      * Ordered listing IDs for the autocomplete / smart search box.
      *
      * @return int[]|null  null => Meilisearch unavailable (caller should fall back)
@@ -265,16 +304,6 @@ class PropertySearchService
      */
     public function searchCityIds(string $city, int $limit = 2000, array $opts = []): ?array
     {
-        if (! $this->isAvailable()) {
-            // District / geo fallbacks still work without Meili.
-            $districtIds = $this->searchDistrictCityIds($city, $limit);
-            if ($districtIds !== null) {
-                return $districtIds;
-            }
-
-            return null;
-        }
-
         $city = trim($city);
         if ($city === '') {
             return [];
@@ -285,32 +314,46 @@ class PropertySearchService
             return null;
         }
 
-        // Avoid residential_only here: Meili drops docs missing property_sub_type.
-        $opts = array_merge(['limit' => $limit], $opts);
-        unset($opts['residential_only']);
+        $cacheKey = 'serik_city_ids_v3:' . md5(mb_strtolower($city) . '|' . $limit . '|' . md5(json_encode($opts)));
 
-        foreach ([ucwords(strtolower($city)), $city] as $variant) {
-            $ids = $this->searchIds('', array_merge($opts, ['city' => $variant]));
-            if ($ids !== null && $ids !== []) {
-                return $ids;
+        return Cache::remember($cacheKey, 900, function () use ($city, $limit, $opts) {
+            if (! $this->isAvailable()) {
+                // District / geo fallbacks still work without Meili.
+                $districtIds = $this->searchDistrictCityIds($city, $limit);
+                if ($districtIds !== null) {
+                    return $districtIds;
+                }
+
+                return null;
             }
-        }
 
-        // Former Toronto municipalities (North York, etc.) live as district codes.
-        // Prefer districts only — geo radius overlaps neighboring GTA cities.
-        $districtIds = $this->searchDistrictCityIds($city, $limit);
-        if ($districtIds !== null && $districtIds !== []) {
-            return $districtIds;
-        }
+            // Avoid residential_only here: Meili drops docs missing property_sub_type.
+            $opts = array_merge(['limit' => $limit], $opts);
+            unset($opts['residential_only']);
 
-        $geoIds = $this->searchCityIdsByGeo($city, $limit);
-        if ($geoIds !== null && $geoIds !== []) {
-            return $geoIds;
-        }
+            foreach ([ucwords(strtolower($city)), $city] as $variant) {
+                $ids = $this->searchIds('', array_merge($opts, ['city' => $variant]));
+                if ($ids !== null && $ids !== []) {
+                    return $ids;
+                }
+            }
 
-        // Free-text last — can match street names ("Northgate"); only for
-        // cities without district/geo coverage.
-        return $this->searchIds($city, $opts);
+            // Former Toronto municipalities (North York, etc.) live as district codes.
+            // Prefer districts only — geo radius overlaps neighboring GTA cities.
+            $districtIds = $this->searchDistrictCityIds($city, $limit);
+            if ($districtIds !== null && $districtIds !== []) {
+                return $districtIds;
+            }
+
+            $geoIds = $this->searchCityIdsByGeo($city, $limit);
+            if ($geoIds !== null && $geoIds !== []) {
+                return $geoIds;
+            }
+
+            // Free-text last — can match street names ("Northgate"); only for
+            // cities without district/geo coverage.
+            return $this->searchIds($city, $opts);
+        });
     }
 
     /**
@@ -427,9 +470,9 @@ class PropertySearchService
      *                        the city filter so the page does not go blank.
      * @return bool true if a city constraint was applied
      */
-    public function constrainQueryToCity($query, string $city, int $limit = 2000, bool $strict = false): bool
+    public function constrainQueryToCity($query, string $city, int $limit = 2000, bool $strict = false, array $opts = []): bool
     {
-        $ids = $this->searchCityIds($city, $limit);
+        $ids = $this->searchCityIds($city, $limit, $opts);
         if ($ids === null) {
             return false;
         }
@@ -542,7 +585,7 @@ class PropertySearchService
         }
 
         $opts = [
-            'limit' => max(1, min($limit, 8000)),
+                'limit' => max(1, min($limit, 20000)),
             'residential_only' => true,
             'community' => $community,
         ];
@@ -668,7 +711,7 @@ class PropertySearchService
                 DB::raw('JSON_UNQUOTE(JSON_EXTRACT(mb.meta_value, "$.CityRegion")) as raw_region'),
                 DB::raw('JSON_UNQUOTE(JSON_EXTRACT(mb.meta_value, "$.City")) as raw_city'),
             ])
-            ->limit(max(1, min($limit, 8000)) * 2);
+            ->limit(max(1, min($limit, 20000)) * 2);
 
         if ($cityFilter !== '') {
             $cityLike = '%' . addcslashes(mb_strtolower($cityFilter), '%_\\') . '%';
@@ -793,7 +836,18 @@ class PropertySearchService
             }
         }
 
-        if (! empty($opts['transaction'])) {
+        if (! empty($opts['transactions']) && is_array($opts['transactions'])) {
+            $escaped = [];
+            foreach ($opts['transactions'] as $tx) {
+                $tx = trim((string) $tx);
+                if ($tx !== '') {
+                    $escaped[] = '"' . $this->escape($tx) . '"';
+                }
+            }
+            if ($escaped !== []) {
+                $filters[] = 'transaction_type IN [' . implode(', ', $escaped) . ']';
+            }
+        } elseif (! empty($opts['transaction'])) {
             $filters[] = 'transaction_type = "' . $this->escape($opts['transaction']) . '"';
         }
 

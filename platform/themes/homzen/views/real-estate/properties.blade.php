@@ -16,16 +16,7 @@
         : route('public.properties');
 
     if ($isOntarioSeo) {
-        $seoH1 = \App\Support\PageH1::resolve() ?: 'Properties for Sale in Ontario';
-        $community = trim((string) request('community', ''));
-        if ($community !== '') {
-            $cityLabel = trim((string) request('location', ''));
-            if ($cityLabel === '') {
-                $citySlug = \App\Support\SeoLandingUrl::parseCitySlugFromSeo((string) request()->route('seo', '')) ?: 'ontario';
-                $cityLabel = ucwords(str_replace('-', ' ', $citySlug));
-            }
-            $seoH1 = $community . ' Real Estate, ' . $cityLabel;
-        }
+        $seoH1 = \App\Support\PageH1::ontarioListingH1();
         Theme::set('pageH1', $seoH1);
         Theme::set('pageTitle', $seoH1);
         Theme::set('pageH1Variant', 'ontario-seo');

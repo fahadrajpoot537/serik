@@ -1928,7 +1928,9 @@ $(() => {
 
             const xhr = $.ajax({
                 url: $form.data('url') || $form.prop('action'),
-                type: 'POST',
+                // Ontario listing filters: GET so type=rent survives SEO defaults and
+                // avoids CSRF/session flakes that left users stuck on For Sale results.
+                type: isSerikProperties ? 'GET' : 'POST',
                 data: cleanedFormData.formData,
                 beforeSend: () => {
                     $dataListing.addClass('is-loading')

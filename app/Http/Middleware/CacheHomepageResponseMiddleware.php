@@ -20,14 +20,15 @@ class CacheHomepageResponseMiddleware
             return response($cached, 200, [
                 'Content-Type' => 'text/html; charset=UTF-8',
                 'X-Serik-Homepage-Cache' => 'HIT',
-                'Cache-Control' => 'private, max-age=60, stale-while-revalidate=300',
+                'Cache-Control' => 'private, max-age=120, stale-while-revalidate=600',
             ]);
         }
 
         $response = $next($request);
 
         if (
-            $response->getStatusCode() === 200
+            HomepageResponseCache::isCacheableRequest($request)
+            && $response->getStatusCode() === 200
             && str_contains((string) $response->headers->get('Content-Type'), 'text/html')
         ) {
             HomepageResponseCache::put($request, (string) $response->getContent());

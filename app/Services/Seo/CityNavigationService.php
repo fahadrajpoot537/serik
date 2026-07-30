@@ -37,7 +37,7 @@ final class CityNavigationService
             $slug = $city?->slug ?? 'ontario';
             $ttl = (int) config('seo_navigation.cache_ttl', 3600);
 
-            return Cache::remember("seo_nav:v8:home:{$slug}", $ttl, fn () => $this->buildHomeLayout($city));
+            return Cache::remember("seo_nav:v9:home:{$slug}", $ttl, fn () => $this->buildHomeLayout($city));
         }
 
         $city ??= $this->cityResolution->resolve()
@@ -47,7 +47,7 @@ final class CityNavigationService
         $communityKey = $community !== '' ? md5(mb_strtolower($community)) : 'none';
 
         return Cache::remember(
-            "seo_nav:v8:properties:{$slug}:{$communityKey}",
+            "seo_nav:v9:properties:{$slug}:{$communityKey}",
             $ttl,
             fn () => $this->buildPropertiesLayout($city, $community !== '' ? $community : null)
         );
@@ -115,11 +115,11 @@ final class CityNavigationService
             'current_city' => $ipCity,
             'sections' => [
                 [
-                    'title' => __('Active'),
+                    'title' => __('Active Properties'),
                     'links' => $this->activeOntarioCityLinks(),
                 ],
                 [
-                    'title' => __('Sold'),
+                    'title' => __('Sold Properties'),
                     'links' => $this->soldOntarioCityLinks(),
                 ],
                 [

@@ -3363,6 +3363,13 @@ position: absolute;
     font-size: 12px;
     font-weight: 600;
     color: #6b7280;
+    text-decoration: none;
+}
+
+.hs-view-bar-btn:hover,
+.hs-view-bar-btn:focus {
+    color: var(--hs-primary);
+    text-decoration: none;
 }
 
 .hs-view-bar-btn.active {
@@ -5087,6 +5094,10 @@ position: absolute;
     </div>
 
     <div class="hs-mobile-view-bar d-lg-none" id="hsMobileViewBar">
+        <a href="{{ url('/') }}" class="hs-view-bar-btn hs-view-bar-home" data-hs-view="home">
+            <span class="hs-view-bar-icon" aria-hidden="true"><x-core::icon name="ti ti-home" /></span>
+            Home
+        </a>
         <button type="button" class="hs-view-bar-btn active" data-hs-view="map">
             <span class="hs-view-bar-icon" aria-hidden="true"><x-core::icon name="ti ti-world" /></span>
             Map
@@ -6301,13 +6312,19 @@ async function showCityBoundary(cityName, fallbackCoords = null) {
     // ==============================
     ensureVisitorLocationReady().then((detector) => {
         if (detector && !detector.getSessionLocation()) {
-            detector.detectLocation({ preferCached: true, preferBrowser: false }).catch(() => {});
+            detector.detectLocation({ preferCached: true, preferBrowser: true }).catch(() => {});
         }
     });
     fetchServerVisitorLocation().then((location) => {
-        if (location && window.SerikVisitorLocation?.saveSessionLocation) {
-            window.SerikVisitorLocation.saveSessionLocation(location);
+        if (!location || !window.SerikVisitorLocation?.saveSessionLocation) {
+            return;
         }
+        const existing = window.SerikVisitorLocation.getSessionLocation?.();
+        // Never overwrite a granted browser GPS fix with IP approximate coords.
+        if (existing && existing.source === 'browser') {
+            return;
+        }
+        window.SerikVisitorLocation.saveSessionLocation(location);
     });
 
     const map = new maplibregl.Map({
@@ -6930,6 +6947,7 @@ if (urlLocation) {
         if (!mapLayersReady || !map?.getSource?.('properties')) {
             return;
         }
+        // force:true — init must always fetch; coordinator dedupe can skip otherwise.
         if (window.HsMapFetchCoordinator?.executeLoad) {
             window.HsMapFetchCoordinator.executeLoad(buildMapPropertiesRequest, { fromInit: true, force: true });
             return;
@@ -6987,6 +7005,8 @@ if (urlLocation) {
     } else if (urlPlace && urlLocation) {
         bootPlaceMapView();
     } else {
+        // Always load viewport pins immediately. Visitor centering (below) will
+        // force-refresh after flyTo — never leave the map empty waiting on GPS.
         requestAnimationFrame(() => runInitialPropertyLoad());
     }
 
@@ -7213,7 +7233,7 @@ document.querySelectorAll('input[name="date"], input[name="date-sold"], input[na
 
             if (selectedTransaction === 'For Lease') {
                 applyPriceConfig(LEASE_CONFIG);
-            } else {
+            } else if (selectedTransaction === 'For Sale') {
                 applyPriceConfig(SALE_CONFIG);
             }
 
@@ -7378,7 +7398,7 @@ function resetDropdown(dropdown) {
     const maxSlider = document.querySelector('.slider-max');
     const applyBtn = document.querySelector('.btn-apply');
     const PRICE_SALE_MAX = 5000000;
-    const PRICE_LEASE_MAX = 50000;
+    const PRICE_LEASE_MAX = 6500;
     const PRICE_NO_LIMIT = 500000000;
 
     if (!selectedMaxPrice || selectedMaxPrice === PRICE_NO_LIMIT) {
@@ -7396,21 +7416,20 @@ const SALE_CONFIG = {
 
 const LEASE_CONFIG = {
     min: 0,
-    max: 50000,
-    step: 500
+    max: 6500,
+    step: 100
 };
 
 
 
 function updatePriceScale(max) {
-    if (max === 50000) {
+    if (max === 6500 || max === 50000) {
         priceScale.innerHTML = `
             <span>$0</span>
-            <span>$10K</span>
-            <span>$20K</span>
-            <span>$30K</span>
-            <span>$40K</span>
-            <span>$50K</span>
+            <span>$1.5K</span>
+            <span>$3K</span>
+            <span>$4.5K</span>
+            <span>$6.5K</span>
         `;
     } else {
         priceScale.innerHTML = `
@@ -7821,8 +7840,10 @@ function resolveMapFlyZoom(detectedLocation) {
 
 function flyMapToDetectedLocation(detectedLocation) {
     const triggerLoad = () => {
-        const loader = window.loadProperties || (typeof loadProperties === 'function' ? loadProperties : null);
-        if (loader) {
+        // Must use window.loadProperties — buildMapPropertiesRequest lives inside
+        // the map load closure and is not in scope here.
+        const loader = window.loadProperties;
+        if (typeof loader === 'function') {
             loader({ fromInit: true, force: true });
         }
     };
@@ -7834,6 +7855,22 @@ function flyMapToDetectedLocation(detectedLocation) {
 
     if (detectedLocation.city) {
         seoCitySlug = slugify(detectedLocation.city);
+    }
+
+    if (detectedLocation.source === 'browser' && map && typeof maplibregl !== 'undefined') {
+        try {
+            if (window._hsUserLocationMarker) {
+                window._hsUserLocationMarker.remove();
+            }
+            const el = document.createElement('div');
+            el.className = 'hs-user-location-dot';
+            el.style.cssText = 'width:16px;height:16px;border-radius:50%;background:#1a73e8;border:2px solid #fff;box-shadow:0 0 0 6px rgba(26,115,232,.25);';
+            window._hsUserLocationMarker = new maplibregl.Marker({ element: el })
+                .setLngLat([detectedLocation.lng, detectedLocation.lat])
+                .addTo(map);
+        } catch (e) {
+            /* marker is optional */
+        }
     }
 
     const targetCenter = [detectedLocation.lng, detectedLocation.lat];
@@ -7900,13 +7937,11 @@ async function centerOnVisitorAreaNoLock() {
     const detector = window.SerikVisitorLocation;
 
     if (detector) {
-        location = detector.getSessionLocation();
-        if (!location) {
-            try {
-                location = await detector.detectLocation({ preferCached: false, preferBrowser: false });
-            } catch (e) {
-                console.warn('Visitor IP detection failed', e);
-            }
+        try {
+            // Prefer browser GPS after map is ready (permission prompt if needed).
+            location = await detector.detectLocation({ preferCached: false, preferBrowser: true });
+        } catch (e) {
+            console.warn('Visitor location detection failed', e);
         }
     }
 
@@ -7990,7 +8025,7 @@ async function setMapToUserLocation() {
         try {
             location = await detector.detectLocation({
                 preferCached: true,
-                preferBrowser: false,
+                preferBrowser: true,
             });
         } catch (e) {
             console.warn('Visitor location detection failed', e);
@@ -8600,7 +8635,7 @@ function mapMovedEnoughToRefetch() {
             return;
         }
 
-        if ((fromFilters || fromMapMove) && window.HsMapFetchCoordinator?.executeLoad) {
+        if ((fromFilters || fromMapMove || options.fromInit) && window.HsMapFetchCoordinator?.executeLoad) {
             window.HsMapFetchCoordinator.clearDebounce?.();
             window.HsMapFetchCoordinator.executeLoad(buildMapPropertiesRequest, options);
             return;
@@ -8615,6 +8650,7 @@ function mapMovedEnoughToRefetch() {
     }
 
     window.loadProperties = loadProperties;
+    window.buildMapPropertiesRequest = buildMapPropertiesRequest;
 
   
 
@@ -11367,15 +11403,19 @@ function bindHsViewBarButtons() {
         // Rebind even if early boot already attached a weak handler.
         btn.dataset.hsViewBound = '2';
         btn.addEventListener('click', (e) => {
+            const mode = btn.dataset.hsView || 'map';
+            if (mode === 'home') {
+                // Let the <a href="/"> navigate normally.
+                return;
+            }
             e.preventDefault();
             e.stopPropagation();
-            const mode = btn.dataset.hsView || 'map';
             if (mode === 'map') {
                 if (typeof window.closeClusterListSidebar === 'function') {
                     window.closeClusterListSidebar();
                 }
                 setHsViewMode('map');
-            } else {
+            } else if (mode === 'list') {
                 setHsViewMode('list');
             }
             setTimeout(() => window.hsMap?.resize?.(), 320);
@@ -11720,14 +11760,20 @@ function initSplitDateDropdowns() {
             if (btn.dataset.hsViewEarlyBound) return;
             btn.dataset.hsViewEarlyBound = '1';
             btn.addEventListener('click', (e) => {
+                const mode = btn.dataset.hsView || 'map';
+                if (mode === 'home') {
+                    return;
+                }
                 // Prefer the later, stronger handler once map JS is ready.
                 if (btn.dataset.hsViewBound === '2') {
                     return;
                 }
                 e.preventDefault();
-                const mode = btn.dataset.hsView || 'map';
                 if (mode === 'map' && typeof window.closeClusterListSidebar === 'function') {
                     window.closeClusterListSidebar();
+                }
+                if (mode !== 'map' && mode !== 'list') {
+                    return;
                 }
                 if (typeof window.setHsViewMode === 'function') {
                     window.setHsViewMode(mode);

@@ -401,7 +401,10 @@
         if (settings.preferCached) {
             const cached = getSessionLocation();
             if (cached) {
-                return Promise.resolve(cached);
+                // Do not reuse IP/default cache when the caller wants GPS.
+                if (!(settings.preferBrowser && cached.source !== 'browser')) {
+                    return Promise.resolve(cached);
+                }
             }
         }
 

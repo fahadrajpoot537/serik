@@ -203,10 +203,8 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
                         });
                 });
             } elseif (in_array($type, [PropertyTypeEnum::RENT, 'rent', 'lease'], true)) {
-                $this->model = $this->model->where(function (Builder $query): void {
-                    $query->whereIn('TransactionType', ['For Lease', 'For Sub-Lease'])
-                        ->orWhere('type', PropertyTypeEnum::RENT);
-                });
+                // MLS source of truth — do not OR Botble `type` (can leak For Sale rows).
+                $this->model = $this->model->whereIn('TransactionType', ['For Lease', 'For Sub-Lease']);
             } else {
                 $this->model = $this->model->where('type', $filters['type']);
             }
@@ -382,10 +380,55 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
             $skipMeiliCity = filter_var($filters['open_house'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
             $search = app(\Botble\RealEstate\Services\PropertySearchService::class);
+            $cityOpts = [
+                'statuses' => [
+                    'New',
+                    'Active',
+                    'Ext',
+                    'Extension',
+                    'Price Change',
+                    'Active Under Contract',
+                ],
+            ];
+            $typeForCity = (string) ($filters['type'] ?? '');
+            if (in_array($typeForCity, [PropertyTypeEnum::RENT, 'rent', 'lease'], true)) {
+                $cityOpts['transactions'] = ['For Lease', 'For Sub-Lease'];
+            } elseif ($typeForCity === PropertyTypeEnum::SALE || $typeForCity === 'sale') {
+                $cityOpts['transaction'] = 'For Sale';
+            }
+
+            $subtypeMap = [
+                'house' => ['Detached', 'Semi-Detached', 'Link', 'Rural Residential', 'Farm'],
+                'condo' => ['Condo Apartment', 'Condo Townhouse', 'Detached Condo', 'Leasehold Condo', 'Common Element Condo', 'Co-Ownership Apartment'],
+                'townhouse' => ['Att/Row/Townhouse', 'Condo Townhouse'],
+            ];
+            $meiliSubtypes = [];
+            foreach ((array) ($filters['home_types'] ?? []) as $homeType) {
+                if (isset($subtypeMap[$homeType])) {
+                    $meiliSubtypes = array_merge($meiliSubtypes, $subtypeMap[$homeType]);
+                }
+            }
+            $meiliSubtypes = array_values(array_unique($meiliSubtypes));
+            if ($meiliSubtypes !== []) {
+                $cityOpts['subtypes'] = $meiliSubtypes;
+            }
+            if (! empty($filters['subtypes']) && is_array($filters['subtypes'])) {
+                $cityOpts['subtypes'] = array_values(array_unique(array_merge(
+                    $cityOpts['subtypes'] ?? [],
+                    array_map('strval', $filters['subtypes'])
+                )));
+            }
+            if (isset($filters['min_price']) && (float) $filters['min_price'] > 0) {
+                $cityOpts['min_price'] = (float) $filters['min_price'];
+            }
+            if (isset($filters['max_price']) && (float) $filters['max_price'] > 0) {
+                $cityOpts['max_price'] = (float) $filters['max_price'];
+            }
+
             if (
                 ! $skipMeiliCity
                 && $locationSearch !== ''
-                && $search->constrainQueryToCity($this->model, $locationSearch, 12000, true)
+                && $search->constrainQueryToCity($this->model, $locationSearch, 20000, true, $cityOpts)
             ) {
                 // Meili / district city IDs applied (strict: empty city = no rows).
             } elseif (! $skipMeiliCity && $locationSearch !== '' && RealEstateHelper::isEnabledZipCode()) {
@@ -542,9 +585,90 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
 
         $cacheKey = 'serik_browse_count:' . md5(json_encode($this->browseListingCountSignature($filters)));
 
-        return (int) Cache::remember($cacheKey, 300, function () use ($query) {
+        return (int) Cache::remember($cacheKey, 300, function () use ($query, $filters) {
+            $meiliTotal = $this->estimateBrowseTotalViaMeili($filters);
+            if ($meiliTotal !== null) {
+                return $meiliTotal;
+            }
+
             return (clone $query)->toBase()->count('re_properties.id');
         });
+    }
+
+    /**
+     * Prefer Meilisearch estimatedTotalHits for city browse counts — avoids MySQL
+     * COUNT over a 10k–20k whereIn id list (often 10–30s on cold local DBs).
+     */
+    protected function estimateBrowseTotalViaMeili(array $filters): ?int
+    {
+        if (! empty($filters['open_house']) || ($filters['status'] ?? '') === 'sold') {
+            return null;
+        }
+
+        $location = trim((string) ($filters['location'] ?? ''));
+        if ($location === '') {
+            return null;
+        }
+
+        $parts = explode(',', $location);
+        $city = trim($parts[0]);
+        if ($city === '' || strcasecmp($city, 'ontario') === 0) {
+            return null;
+        }
+
+        $opts = [
+            'city' => $city,
+            'statuses' => [
+                'New',
+                'Active',
+                'Ext',
+                'Extension',
+                'Price Change',
+                'Active Under Contract',
+            ],
+        ];
+
+        $type = (string) ($filters['type'] ?? '');
+        if (in_array($type, [PropertyTypeEnum::RENT, 'rent', 'lease'], true)) {
+            $opts['transactions'] = ['For Lease', 'For Sub-Lease'];
+        } elseif ($type === PropertyTypeEnum::SALE || $type === 'sale') {
+            $opts['transaction'] = 'For Sale';
+        }
+
+        $subtypeMap = [
+            'house' => ['Detached', 'Semi-Detached', 'Link', 'Rural Residential', 'Farm'],
+            'condo' => ['Condo Apartment', 'Condo Townhouse', 'Detached Condo', 'Leasehold Condo', 'Common Element Condo', 'Co-Ownership Apartment'],
+            'townhouse' => ['Att/Row/Townhouse', 'Condo Townhouse'],
+        ];
+        $subtypes = [];
+        foreach ((array) ($filters['home_types'] ?? []) as $homeType) {
+            if (isset($subtypeMap[$homeType])) {
+                $subtypes = array_merge($subtypes, $subtypeMap[$homeType]);
+            }
+        }
+        if (! empty($filters['subtypes']) && is_array($filters['subtypes'])) {
+            $subtypes = array_merge($subtypes, array_map('strval', $filters['subtypes']));
+        }
+        $subtypes = array_values(array_unique($subtypes));
+        if ($subtypes !== []) {
+            $opts['subtypes'] = $subtypes;
+        }
+
+        if (isset($filters['min_price']) && (float) $filters['min_price'] > 0) {
+            $opts['min_price'] = (float) $filters['min_price'];
+        }
+        if (isset($filters['max_price']) && (float) $filters['max_price'] > 0) {
+            $opts['max_price'] = (float) $filters['max_price'];
+        }
+        if (! empty($filters['bedroom'])) {
+            $opts['min_bedrooms'] = (int) $filters['bedroom'];
+        }
+        if (! empty($filters['bathroom'])) {
+            $opts['min_bathrooms'] = (int) $filters['bathroom'];
+        }
+
+        return app(\Botble\RealEstate\Services\PropertySearchService::class)
+            ->searchEstimatedTotal('', $opts);
     }
 
     protected function browseListingHasFilters(array $filters): bool

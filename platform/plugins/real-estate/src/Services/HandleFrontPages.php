@@ -117,9 +117,11 @@ class HandleFrontPages
                     ->add(trans('plugins/real-estate::real-estate.properties'), route('public.properties'))
                     ->add($property->name);
 
-                Helper::handleViewCount($property, 'viewed_property');
+                if (! $request->boolean('iframe')) {
+                    Helper::handleViewCount($property, 'viewed_property');
+                }
 
-                if (auth('account')->check()) {
+                if (auth('account')->check() && ! $request->boolean('iframe')) {
                     $listingKey = (string) ($property->external_id ?: $property->slugable?->key ?: $property->getKey());
 
                     PropertyVisit::recordForAccount(
@@ -130,7 +132,9 @@ class HandleFrontPages
                     );
                 }
 
-                do_action(BASE_ACTION_PUBLIC_RENDER_SINGLE, PROPERTY_MODULE_SCREEN_NAME, $property);
+                if (! $request->boolean('iframe')) {
+                    do_action(BASE_ACTION_PUBLIC_RENDER_SINGLE, PROPERTY_MODULE_SCREEN_NAME, $property);
+                }
 
                 if (function_exists('admin_bar')) {
                     admin_bar()->registerLink(trans('plugins/real-estate::real-estate.edit_property'), route('property.edit', $property->id));
@@ -147,7 +151,14 @@ class HandleFrontPages
                     $property,
                     (bool) $request->boolean('iframe')
                 );
-                $relatedPropertiesPayload = app(RelatedPropertiesService::class)->build($property);
+
+                // Map/modal iframe must stay fast — skip related Meili/SQL work.
+                $relatedPropertiesPayload = $request->boolean('iframe')
+                    ? [
+                        'relatedProperties' => collect(),
+                        'sectionTitle' => '',
+                    ]
+                    : app(RelatedPropertiesService::class)->build($property);
 
                 return [
                     'view' => 'real-estate.property',

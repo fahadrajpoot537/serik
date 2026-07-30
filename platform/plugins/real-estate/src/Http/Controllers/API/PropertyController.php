@@ -5643,7 +5643,7 @@ class PropertyController extends BaseController
         // is unavailable. engine=mysql forces the MySQL path for A/B testing.
         if ($request->input('engine') !== 'mysql') {
             // v8: DB lat/lng on geometry + properties for exact pin placement.
-            $meiliCacheKey = 'map_meili_v9_' . md5(implode('|', [
+            $meiliCacheKey = 'map_meili_v10_' . md5(implode('|', [
                 round($south, 4), round($north, 4), round($west, 4), round($east, 4),
                 $this->mapFilterSignature($request),
             ]));
@@ -5670,7 +5670,7 @@ class PropertyController extends BaseController
         }
 
         // v27: list cards need bedrooms_below for "2+2 bed" display.
-        $cacheKey = 'map_v27_' . md5(implode('|', [
+        $cacheKey = 'map_v28_' . md5(implode('|', [
             round($south, 4), round($north, 4), round($west, 4), round($east, 4),
             $this->mapFilterSignature($request),
         ]));
@@ -5793,7 +5793,11 @@ class PropertyController extends BaseController
             // --- Transaction (skip for sold/de-listed — MlsStatus is authoritative) ---
             $transaction = $request->input('transaction');
             if (! empty($transaction) && $transaction !== 'null' && ! $isSoldOrDelistedFilter) {
-                $query->where('TransactionType', $transaction);
+                if ($transaction === 'For Lease') {
+                    $query->whereIn('TransactionType', ['For Lease', 'For Sub-Lease']);
+                } else {
+                    $query->where('TransactionType', $transaction);
+                }
             }
 
             // --- Price ---
@@ -6122,12 +6126,18 @@ class PropertyController extends BaseController
             'residential_only' => true,
             'city' => $city ?: null,
             'community' => $community !== '' ? $community : null,
-            'transaction' => (! empty($transaction) && $transaction !== 'null') ? $transaction : null,
             'min_price' => (float) $request->input('min_price', 0),
             'max_price' => (float) $request->input('max_price', 0),
             'min_bedrooms' => str_contains((string) $request->input('bedrooms'), '+') ? (int) $request->input('bedrooms') : 0,
             'min_bathrooms' => str_contains((string) $request->input('bathrooms'), '+') ? (int) $request->input('bathrooms') : 0,
         ];
+        if (! empty($transaction) && $transaction !== 'null') {
+            if ($transaction === 'For Lease') {
+                $opts['transactions'] = ['For Lease', 'For Sub-Lease'];
+            } else {
+                $opts['transaction'] = $transaction;
+            }
+        }
 
         $subtypeValues = $this->expandMapSubtypeValues($subtypes);
         if ($subtypeValues !== []) {

@@ -18,14 +18,7 @@
     $seoNavLocation = trim((string) (request('location') ?: ''));
     $seoListingTitle = null;
     if (request()->routeIs('public.seo.ontario')) {
-        $seoListingTitle = \App\Support\PageH1::resolve()
-            ?: ('Houses for Sale in ' . ($seoNavLocation !== '' ? $seoNavLocation : ucwords(str_replace('-', ' ', $seoNavCitySlug))));
-        if ($seoNavCommunity !== '') {
-            $cityLabel = $seoNavLocation !== ''
-                ? $seoNavLocation
-                : ucwords(str_replace('-', ' ', $seoNavCitySlug));
-            $seoListingTitle = $seoNavCommunity . ' Real Estate, ' . $cityLabel;
-        }
+        $seoListingTitle = \App\Support\PageH1::ontarioListingH1();
     }
 @endphp
 

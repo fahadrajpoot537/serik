@@ -231,33 +231,35 @@ app()->booted(function (): void {
     if (is_plugin_active('real-estate')) {
         add_filter('theme_front_footer_content', function (?string $html): ?string {
             if (RealEstateHelper::isLoginEnabled() && theme_option('use_modal_for_authentication', true)) {
-                $loginForm = LoginForm::create()
-                    ->setFormOption('has_wrapper', 'no');
-
-                $registerForm = null;
-
-                if (RealEstateHelper::isRegisterEnabled()) {
-                    $registerForm = RegisterForm::create()
-                        ->columns()
-                        ->when(! setting('real_estate_hide_username_in_registration_page', false), function (RegisterForm $form): void {
-                            $form->modify('phone', PhoneNumberField::class, ['colspan' => 2]);
-                        })
-                        ->modify('agree_terms_and_policy', OnOffCheckboxField::class, ['colspan' => 2])
-                        ->modify('login', HtmlField::class, [
-                            'colspan' => 2,
-                            'html' => sprintf(
-                                '<div class="mt-3">%s <a href="#" data-bs-toggle="modal" data-bs-target="#modalLogin" data-bs-dismiss="modal" class="text-decoration-underline">%s</a></div>',
-                                __('Already have an account?'),
-                                __('Login')
-                            ),
-                        ])
+                $html .= \Illuminate\Support\Facades\Cache::remember('serik_auth_modal_html_v1', 3600, function () {
+                    $loginForm = LoginForm::create()
                         ->setFormOption('has_wrapper', 'no');
-                }
 
-                $html .= Theme::partial(
-                    'modal-authentication',
-                    compact('loginForm', 'registerForm')
-                );
+                    $registerForm = null;
+
+                    if (RealEstateHelper::isRegisterEnabled()) {
+                        $registerForm = RegisterForm::create()
+                            ->columns()
+                            ->when(! setting('real_estate_hide_username_in_registration_page', false), function (RegisterForm $form): void {
+                                $form->modify('phone', PhoneNumberField::class, ['colspan' => 2]);
+                            })
+                            ->modify('agree_terms_and_policy', OnOffCheckboxField::class, ['colspan' => 2])
+                            ->modify('login', HtmlField::class, [
+                                'colspan' => 2,
+                                'html' => sprintf(
+                                    '<div class="mt-3">%s <a href="#" data-bs-toggle="modal" data-bs-target="#modalLogin" data-bs-dismiss="modal" class="text-decoration-underline">%s</a></div>',
+                                    __('Already have an account?'),
+                                    __('Login')
+                                ),
+                            ])
+                            ->setFormOption('has_wrapper', 'no');
+                    }
+
+                    return Theme::partial(
+                        'modal-authentication',
+                        compact('loginForm', 'registerForm')
+                    );
+                });
             }
 
             if (theme_option('enabled_back_to_top', 'yes') === 'yes') {

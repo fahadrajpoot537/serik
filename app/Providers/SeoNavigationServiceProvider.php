@@ -52,7 +52,7 @@ class SeoNavigationServiceProvider extends ServiceProvider
             }
 
             $search = app(PropertySearchService::class);
-            $ids = $search->searchCommunityIds($community, $city !== '' ? $city : null, 5000);
+            $ids = $search->searchCommunityIds($community, $city !== '' ? $city : null, 15000);
 
             if ($ids === []) {
                 return $query->whereRaw('0 = 1');

@@ -32,7 +32,29 @@
         $priceLabel = ($minPrice ? '$' . number_format((int) $minPrice) : '$0')
             . ' – '
             . ($maxPrice ? '$' . number_format((int) $maxPrice) : __('Max'));
+    } elseif ($isLeaseFilter) {
+        // Default lease range shown in UI; applied on TX switch / first filter submit.
+        $minPrice = $minPrice ?: '0';
+        $maxPrice = $maxPrice ?: '6500';
+        $priceLabel = '$0 – $6,500';
     }
+
+    $priceStep = $isLeaseFilter ? 100 : 10000;
+    $pricePresets = $isLeaseFilter
+        ? [
+            ['', '', __('Any')],
+            ['0', '1500', 'Under $1.5K'],
+            ['1500', '3000', '$1.5K–$3K'],
+            ['3000', '4500', '$3K–$4.5K'],
+            ['4500', '6500', '$4.5K–$6.5K'],
+        ]
+        : [
+            ['', '', __('Any')],
+            ['0', '500000', 'Under $500K'],
+            ['500000', '1000000', '$500K–$1M'],
+            ['1000000', '2000000', '$1M–$2M'],
+            ['2000000', '', '$2M+'],
+        ];
 
     $bedLabel = $bedroom ? ((int) $bedroom) . '+ ' . __('Bed') : __('Any Bed');
 
@@ -149,21 +171,15 @@
                         <div class="row g-2 mb-2">
                             <div class="col-6">
                                 <label class="form-label small mb-1" for="price-min">{{ __('Min') }}</label>
-                                <input type="number" name="min_price" id="price-min" class="form-control form-control-sm serik-price-input" placeholder="{{ __('Min') }}" value="{{ $minPrice }}" min="0" step="10000">
+                                <input type="number" name="min_price" id="price-min" class="form-control form-control-sm serik-price-input" placeholder="{{ __('Min') }}" value="{{ $minPrice }}" min="0" step="{{ $priceStep }}">
                             </div>
                             <div class="col-6">
                                 <label class="form-label small mb-1" for="price-max">{{ __('Max') }}</label>
-                                <input type="number" name="max_price" id="price-max" class="form-control form-control-sm serik-price-input" placeholder="{{ __('Max') }}" value="{{ $maxPrice }}" min="0" step="10000">
+                                <input type="number" name="max_price" id="price-max" class="form-control form-control-sm serik-price-input" placeholder="{{ __('Max') }}" value="{{ $maxPrice }}" min="0" step="{{ $priceStep }}">
                             </div>
                         </div>
                         <div class="d-flex flex-wrap gap-1 serik-price-presets mb-2">
-                            @foreach([
-                                ['', '', __('Any')],
-                                ['0', '500000', 'Under $500K'],
-                                ['500000', '1000000', '$500K–$1M'],
-                                ['1000000', '2000000', '$1M–$2M'],
-                                ['2000000', '', '$2M+'],
-                            ] as [$min, $max, $lbl])
+                            @foreach($pricePresets as [$min, $max, $lbl])
                                 <button type="button" class="serik-filter-pill" data-min="{{ $min }}" data-max="{{ $max }}">{{ $lbl }}</button>
                             @endforeach
                         </div>
@@ -564,16 +580,16 @@
     .serik-mobile-map-fab { display: none !important; }
 }
 
-/* Mobile pagination: compact 1 2 3 … next, stay on screen */
+/* Mobile pagination: 1 2 3 4 … 48 49 Last — wrap, never clip */
 @media (max-width: 767.98px) {
     .serik-properties-page .serik-pagination-wrap,
     .serik-properties-page .wd-navigation {
         width: 100%;
         max-width: 100%;
-        overflow: hidden;
+        overflow: visible;
         display: flex;
         justify-content: center;
-        padding: 0 4px;
+        padding: 0 2px;
         box-sizing: border-box;
     }
     .serik-properties-page .flat-pagination {
@@ -581,40 +597,42 @@
         flex-wrap: wrap;
         justify-content: center;
         align-items: center;
-        gap: 4px !important;
+        gap: 3px !important;
         max-width: 100%;
         margin: 0 auto;
         padding: 0;
         list-style: none;
+        row-gap: 6px !important;
     }
     .serik-properties-page .flat-pagination > li {
         margin: 0 !important;
         flex: 0 0 auto;
     }
     .serik-properties-page .flat-pagination .page-numbers {
-        width: 34px !important;
-        min-width: 34px !important;
-        height: 34px !important;
-        line-height: 34px !important;
-        font-size: 13px !important;
+        width: 30px !important;
+        min-width: 30px !important;
+        height: 30px !important;
+        line-height: 30px !important;
+        font-size: 12px !important;
         padding: 0 !important;
     }
     .serik-properties-page .flat-pagination .page-numbers--dots {
-        width: 22px !important;
-        min-width: 22px !important;
+        width: 18px !important;
+        min-width: 18px !important;
         border: 0 !important;
         background: transparent !important;
         color: #6b7280 !important;
         font-weight: 600 !important;
     }
     .serik-properties-page .flat-pagination .page-numbers svg {
-        width: 1.1rem !important;
-        height: 1.1rem !important;
+        width: 1rem !important;
+        height: 1rem !important;
     }
-    .serik-properties-page .serik-pagination-meta {
-        font-size: 12px;
-        margin-bottom: 0.5rem !important;
-        padding: 0 8px;
+    .serik-properties-page .flat-pagination .page-numbers--last {
+        width: auto !important;
+        min-width: 40px !important;
+        padding: 0 8px !important;
+        font-size: 11px !important;
     }
 }
 </style>
@@ -787,11 +805,75 @@ document.addEventListener('DOMContentLoaded', function () {
                     statusInput.value = '';
                     statusInput.disabled = true;
                 }
+                // Reset sale-incompatible price state to lease defaults.
+                const min = form.querySelector('input[name="min_price"]');
+                const max = form.querySelector('input[name="max_price"]');
+                if (min) { min.value = '0'; min.step = '100'; }
+                if (max) { max.value = '6500'; max.step = '100'; }
+                const priceChip = form.querySelector('#serikPriceChip');
+                if (priceChip) priceChip.textContent = '$0 – $6,500';
+                const presets = form.querySelector('.serik-price-presets');
+                if (presets) {
+                    presets.innerHTML = [
+                        ['', '', 'Any'],
+                        ['0', '1500', 'Under $1.5K'],
+                        ['1500', '3000', '$1.5K–$3K'],
+                        ['3000', '4500', '$3K–$4.5K'],
+                        ['4500', '6500', '$4.5K–$6.5K'],
+                    ].map(([a, b, lbl]) => `<button type="button" class="serik-filter-pill" data-min="${a}" data-max="${b}">${lbl}</button>`).join('');
+                    presets.querySelectorAll('.serik-filter-pill').forEach((pill) => {
+                        pill.addEventListener('click', () => {
+                            const minEl = form.querySelector('input[name="min_price"]');
+                            const maxEl = form.querySelector('input[name="max_price"]');
+                            if (minEl) minEl.value = pill.dataset.min || '';
+                            if (maxEl) maxEl.value = pill.dataset.max || '';
+                            const chip = form.querySelector('#serikPriceChip');
+                            if (chip) {
+                                const minV = minEl?.value ? '$' + Number(minEl.value).toLocaleString() : '$0';
+                                const maxV = maxEl?.value ? '$' + Number(maxEl.value).toLocaleString() : 'Max';
+                                chip.textContent = (!minEl?.value && !maxEl?.value) ? 'Any Price' : (minV + ' – ' + maxV);
+                            }
+                            submitFilters();
+                        });
+                    });
+                }
             } else {
                 if (typeInput) typeInput.value = 'sale';
                 if (statusInput) {
                     statusInput.value = '';
                     statusInput.disabled = true;
+                }
+                // Restore sale defaults (clear lease $0–$6500 range).
+                const min = form.querySelector('input[name="min_price"]');
+                const max = form.querySelector('input[name="max_price"]');
+                if (min) { min.value = ''; min.step = '10000'; }
+                if (max) { max.value = ''; max.step = '10000'; }
+                const priceChip = form.querySelector('#serikPriceChip');
+                if (priceChip) priceChip.textContent = 'Any Price';
+                const presets = form.querySelector('.serik-price-presets');
+                if (presets) {
+                    presets.innerHTML = [
+                        ['', '', 'Any'],
+                        ['0', '500000', 'Under $500K'],
+                        ['500000', '1000000', '$500K–$1M'],
+                        ['1000000', '2000000', '$1M–$2M'],
+                        ['2000000', '', '$2M+'],
+                    ].map(([a, b, lbl]) => `<button type="button" class="serik-filter-pill" data-min="${a}" data-max="${b}">${lbl}</button>`).join('');
+                    presets.querySelectorAll('.serik-filter-pill').forEach((pill) => {
+                        pill.addEventListener('click', () => {
+                            const minEl = form.querySelector('input[name="min_price"]');
+                            const maxEl = form.querySelector('input[name="max_price"]');
+                            if (minEl) minEl.value = pill.dataset.min || '';
+                            if (maxEl) maxEl.value = pill.dataset.max || '';
+                            const chip = form.querySelector('#serikPriceChip');
+                            if (chip) {
+                                const minV = minEl?.value ? '$' + Number(minEl.value).toLocaleString() : '$0';
+                                const maxV = maxEl?.value ? '$' + Number(maxEl.value).toLocaleString() : 'Max';
+                                chip.textContent = (!minEl?.value && !maxEl?.value) ? 'Any Price' : (minV + ' – ' + maxV);
+                            }
+                            submitFilters();
+                        });
+                    });
                 }
             }
 

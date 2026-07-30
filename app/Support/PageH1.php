@@ -191,11 +191,54 @@ final class PageH1
         $type = self::formatPropertyTypeSlug($typeSlug);
         $city = self::formatCitySlug($citySlug);
 
-        if (strtolower($citySlug) === 'ontario') {
-            return "{$type} for {$listingType} in Ontario";
+        // Consistent pattern: "{Place} {Type} for {Sale|Lease}"
+        return "{$city} {$type} for {$listingType}";
+    }
+
+    /**
+     * Ontario SEO landing / community listing H1 (and matching page title).
+     */
+    public static function ontarioListingH1(?Request $request = null): string
+    {
+        $request ??= request();
+        $seo = trim((string) $request->route('seo', ''), '/');
+        $base = $seo !== '' ? (self::fromMapSeoSlug($seo) ?? 'Ontario Houses for Sale') : 'Ontario Houses for Sale';
+        $community = trim((string) $request->input('community', ''));
+        $isSold = $request->input('status') === 'sold' || $request->boolean('sold');
+        $isLease = in_array(strtolower((string) $request->input('type', '')), ['rent', 'lease'], true)
+            || str_contains(strtolower($seo), '-for-lease');
+
+        $typeLabel = 'Houses';
+        if (preg_match('#-(townhouses|townhouse)-for-#', $seo)) {
+            $typeLabel = 'Townhouses';
+        } elseif (preg_match('#-(condos|condo|apartments|apartment)-for-#', $seo)) {
+            $typeLabel = 'Condos';
+        } elseif (preg_match('#-(detached-houses|detached)-for-#', $seo)) {
+            $typeLabel = 'Detached Houses';
+        } elseif (preg_match('#-(semi-detached-houses|semi-detached)-for-#', $seo)) {
+            $typeLabel = 'Semi-Detached Houses';
         }
 
-        return "{$type} for {$listingType} in {$city}";
+        if ($community !== '') {
+            if ($isSold) {
+                return "{$community} Sold {$typeLabel}";
+            }
+
+            return $isLease
+                ? "{$community} {$typeLabel} for Lease"
+                : "{$community} {$typeLabel} for Sale";
+        }
+
+        if ($isSold) {
+            // Rewrite "Toronto Houses for Sale" → "Toronto Sold Houses"
+            if (preg_match('/^(.+?)\s+(Houses|Townhouses|Condos|Detached Houses|Semi-Detached Houses)\s+for\s+(Sale|Lease)$/i', $base, $m)) {
+                return "{$m[1]} Sold {$m[2]}";
+            }
+
+            return $base;
+        }
+
+        return $base;
     }
 
     private static function formatPropertyTypeSlug(string $slug): string

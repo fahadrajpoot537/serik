@@ -170,7 +170,13 @@ class PublicController extends BaseController
 
     public function getProperties(Request $request)
     {
-        SeoHelper::setTitle(trans('plugins/real-estate::real-estate.properties'));
+        if ($request->routeIs('public.seo.ontario')) {
+            $h1 = \App\Support\PageH1::ontarioListingH1($request);
+            SeoHelper::setTitle($h1);
+            SeoHelper::openGraph()->setTitle($h1);
+        } else {
+            SeoHelper::setTitle(trans('plugins/real-estate::real-estate.properties'));
+        }
 
         Theme::addBodyAttributes(['id' => 'page-properties']);
 
@@ -190,7 +196,7 @@ class PublicController extends BaseController
 
         $ajaxCacheKey = null;
         if ($request->ajax() && ! $request->query('minimal')) {
-            $ajaxCacheKey = 'serik_props_ajax_html_v4:' . md5(json_encode($request->except(['_token', '_method'])));
+            $ajaxCacheKey = 'serik_props_ajax_html_v5:' . md5(json_encode($request->except(['_token', '_method'])));
             $cachedAjax = \Illuminate\Support\Facades\Cache::get($ajaxCacheKey);
             if (is_array($cachedAjax) && isset($cachedAjax['html'])) {
                 $response = $this->httpResponse()->setData($cachedAjax['html']);
