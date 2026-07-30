@@ -48,14 +48,14 @@ $accounts = $accounts->sortBy(function ($account) use ($order) {
         }
     }
 
-    @media (max-width: 767px) {
+    @media (max-width: 991px) {
         #about-agent.flat-agents .box-agent .box-img img {
             max-height: none;
         }
 
         #about-agent .tf-sw-agents {
-            overflow: hidden;
-            padding-bottom: 4px;
+            overflow: visible;
+            padding: 0 4px 8px;
         }
 
         #about-agent .tf-sw-agents .swiper-wrapper {
@@ -65,13 +65,13 @@ $accounts = $accounts->sortBy(function ($account) use ($order) {
 
         #about-agent .tf-sw-agents .swiper-slide {
             height: auto;
-            width: 82%;
-            max-width: 320px;
-            flex-shrink: 0;
+            box-sizing: border-box;
+            padding-right: 16px;
         }
 
         #about-agent .tf-sw-agents .box-agent {
-            margin-right: 0 !important;
+            width: 100%;
+            margin: 0 !important;
         }
     }
 </style>
@@ -174,8 +174,8 @@ function initAgentsSwiper() {
     el.dataset.swiperReady = '1';
 
     new Swiper(el, {
-        slidesPerView: 1.2,
-        spaceBetween: 12,
+        slidesPerView: 1.15,
+        spaceBetween: 0,
         loop: true,
         speed: 650,
         autoplay: {

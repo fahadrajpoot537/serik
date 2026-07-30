@@ -35,19 +35,20 @@ final class HomepageResponseCache
         $locale = app()->getLocale();
         $oldVersion = self::version();
         $oldKey = 'homepage_html_v4:' . $oldVersion . ':' . $locale . ':shared';
-        $oldHtml = Cache::get($oldKey);
 
         Cache::forever(self::VERSION_KEY, $oldVersion + 1);
 
-        // Keep serving the previous HTML under the new version key so a bump
-        // never forces a multi-second cold MISS (target ≤0.8s TTFB).
-        if (is_string($oldHtml) && $oldHtml !== '') {
-            Cache::put(
-                'homepage_html_v4:' . self::version() . ':' . $locale . ':shared',
-                $oldHtml,
-                self::TTL_SECONDS
-            );
-        }
+        // Drop both keys so the next request regenerates fresh HTML.
+        // Copying stale HTML was serving broken property hrefs (homepage "/").
+        Cache::forget($oldKey);
+        Cache::forget('homepage_html_v4:' . self::version() . ':' . $locale . ':shared');
+    }
+
+    public static function forget(): void
+    {
+        $locale = app()->getLocale();
+        $version = self::version();
+        Cache::forget('homepage_html_v4:' . $version . ':' . $locale . ':shared');
     }
 
     /**
@@ -62,6 +63,12 @@ final class HomepageResponseCache
     public static function isCacheableRequest(Request $request): bool
     {
         if ($request->method() !== 'GET') {
+            return false;
+        }
+
+        // Safety guard: never allow full-page homepage HTML cache on non-root URLs.
+        // This prevents accidental homepage responses on property/detail routes.
+        if ($request->getPathInfo() !== '/') {
             return false;
         }
 

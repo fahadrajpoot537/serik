@@ -1,6 +1,6 @@
 <style>
     .tf-sw-blog {
-        overflow: hidden;
+        overflow: visible;
     }
 
     .tf-sw-blog .swiper-slide {
@@ -8,15 +8,23 @@
     }
 
     @media (max-width: 991px) {
+        .tf-sw-blog {
+            padding: 0 4px 8px;
+        }
+
         .tf-sw-blog .swiper-wrapper {
             display: flex;
             align-items: stretch;
         }
 
         .tf-sw-blog .swiper-slide {
-            width: 86%;
-            max-width: 340px;
-            flex-shrink: 0;
+            box-sizing: border-box;
+            padding-right: 16px;
+        }
+
+        .tf-sw-blog .flat-blog-item {
+            width: 100%;
+            margin: 0 !important;
         }
     }
 </style>
@@ -57,7 +65,7 @@ function initBlogSwiper() {
 
     new Swiper(el, {
         slidesPerView: 1.12,
-        spaceBetween: 12,
+        spaceBetween: 0,
         loop: true,
         speed: 650,
         autoplay: {

@@ -10,7 +10,7 @@
             display: flex;
             flex-wrap: nowrap;
             overflow-x: auto;
-            gap: 14px;
+            gap: 0;
             padding-bottom: 8px;
             scroll-snap-type: x mandatory;
             -webkit-overflow-scrolling: touch;
@@ -20,20 +20,21 @@
             display: none;
         }
 
-        .prop-box {
+        .flat-recommended .prop-box {
             flex: 0 0 72%;
             max-width: 72%;
             scroll-snap-align: start;
-            padding-left: 0;
-            padding-right: 0;
+            padding-left: 0 !important;
+            padding-right: 16px !important;
+            box-sizing: border-box;
         }
 
-        .prop-box:first-child {
+        .flat-recommended .prop-box:first-child {
             margin-left: 4px;
         }
 
-        .prop-box:last-child {
-            margin-right: 4px;
+        .flat-recommended .prop-box:last-child {
+            padding-right: 4px !important;
         }
     }
 

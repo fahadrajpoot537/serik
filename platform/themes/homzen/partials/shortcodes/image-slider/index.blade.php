@@ -40,8 +40,8 @@
 
 @media (max-width: 767px) {
     .city-swiper-section .city-swiper {
-        overflow: hidden;
-        padding: 4px 2px 24px;
+        overflow: visible;
+        padding: 4px 4px 28px;
     }
 
     .city-swiper-section .city-swiper .swiper-wrapper {
@@ -51,6 +51,12 @@
 
     .city-swiper-section .city-swiper .swiper-slide {
         height: auto;
+        box-sizing: border-box;
+        padding-right: 14px;
+    }
+
+    .city-swiper-section .city-card {
+        margin: 0;
     }
 }
 
@@ -130,8 +136,8 @@ function initLocationsSwiper() {
         const speed = parseInt(el.dataset.speed || 2500);
 
         new Swiper(el, {
-            slidesPerView: 1.14,
-            spaceBetween: 12,
+            slidesPerView: 1.2,
+            spaceBetween: 0,
             loop: true,
 
             autoplay: {
@@ -142,8 +148,8 @@ function initLocationsSwiper() {
             speed: 800,
 
             breakpoints: {
-                0: { slidesPerView: 1.14, spaceBetween: 12 },
-                576: { slidesPerView: 1.3, spaceBetween: 14 },
+                0: { slidesPerView: 1.2, spaceBetween: 0 },
+                576: { slidesPerView: 1.4, spaceBetween: 0 },
             }
         });
     });
