@@ -262,6 +262,33 @@
   background: var(--hp-surface) !important;
 }
 
+/* View All: avoid float/negative-margin overlap with section title (esp. mobile) */
+#page-home .flat-categories .btn-view.button-prop {
+  float: none !important;
+  margin-top: 0 !important;
+}
+
+@media (max-width: 768px) {
+  #page-home .flat-categories .btn-view.button-prop {
+    display: inline-flex !important;
+    float: none !important;
+    margin: 0.65rem 0 0 !important;
+    position: static !important;
+  }
+}
+
+@media (min-width: 769px) {
+  #page-home .flat-categories > .container {
+    position: relative;
+  }
+
+  #page-home .flat-categories .btn-view.button-prop {
+    position: absolute;
+    right: clamp(16px, 2.5vw, 40px);
+    top: 0.35rem;
+  }
+}
+
 #page-home .flat-categories .homeya-categories {
   background: var(--hp-white) !important;
   border: var(--hp-border);

@@ -14,6 +14,14 @@
     .button-prop {
       display:none;
     }
+
+    /* Categories "View All" must stay usable without overlapping the title */
+    #page-home .flat-categories .btn-view.button-prop {
+      display: inline-flex !important;
+      float: none !important;
+      margin: 0.65rem 0 0 !important;
+      position: static !important;
+    }
 }
 
 #page-home .section-title {

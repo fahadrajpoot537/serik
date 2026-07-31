@@ -123,6 +123,33 @@
                 y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
             })(window, document, "clarity", "script", "xu00ale4yi");
         </script>
+        <!--Start of Tawk.to Script-->
+        <script type="text/javascript">
+        var Tawk_API=Tawk_API||{}, Tawk_LoadStart=new Date();
+        Tawk_API.customStyle = {
+            visibility: {
+                desktop: {
+                    position: 'bl',
+                    xOffset: 20,
+                    yOffset: 20
+                },
+                mobile: {
+                    position: 'bl',
+                    xOffset: 12,
+                    yOffset: 70
+                }
+            }
+        };
+        (function(){
+        var s1=document.createElement("script"),s0=document.getElementsByTagName("script")[0];
+        s1.async=true;
+        s1.src='https://embed.tawk.to/6a6d0ff4f9ea531d4e9995a8/1jut0cl8v';
+        s1.charset='UTF-8';
+        s1.setAttribute('crossorigin','*');
+        s0.parentNode.insertBefore(s1,s0);
+        })();
+        </script>
+        <!--End of Tawk.to Script-->
     </head>
 
     <body {!! Theme::bodyAttributes() !!}>

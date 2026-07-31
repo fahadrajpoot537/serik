@@ -2955,7 +2955,7 @@ position: absolute;
 }
 
 #hsMobileSheetsRoot .hs-m-sheet.open {
-    z-index: 1000003;
+    z-index: 1000015;
 }
 
     .mobile-overlay {
@@ -3386,7 +3386,8 @@ position: absolute;
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 10060;
+    /* Above closed filter sheets (they sit at ~1e6); open sheets still cover via higher z + pointer-events */
+    z-index: 1000010;
     display: flex;
     background: #fff;
     border-top: 1px solid #e5e7eb;
@@ -3528,7 +3529,7 @@ position: absolute;
 
     .map-housesigma.view-list .hs-mobile-view-bar {
         flex-shrink: 0;
-        z-index: 10060 !important;
+        z-index: 1000010 !important;
         pointer-events: auto !important;
     }
 }
@@ -4236,10 +4237,16 @@ position: absolute;
         display: flex;
         flex-direction: column;
         box-shadow: 0 -8px 30px rgba(0,0,0,0.15);
+        /* Closed sheets must not steal taps from the Home/Map/List bar */
+        pointer-events: none;
+        visibility: hidden;
     }
 
     .hs-m-sheet.open {
         transform: translateY(0);
+        pointer-events: auto;
+        visibility: visible;
+        z-index: 1000015;
     }
 
     .hs-m-sheet-header {
@@ -9178,6 +9185,18 @@ function mapMovedEnoughToRefetch() {
     function handleClusterMarkerClick(e) {
         window.HsMapFetchCoordinator?.clearDebounce?.();
 
+        // Price badge wins over cluster circle when both sit under the same tap
+        // (common on mobile fat-finger hits). Never open the list for a pin tap.
+        const pinsUnderFinger = map.queryRenderedFeatures(e.point, {
+            layers: ['unclustered-point', 'unclustered-exact-dot'],
+        });
+        if (pinsUnderFinger.length) {
+            return;
+        }
+        if (Date.now() - lastUnclusteredHandledTs < 350) {
+            return;
+        }
+
         const features = map.queryRenderedFeatures(e.point, {
             layers: ['clusters'],
         });
@@ -9372,23 +9391,33 @@ function mapMovedEnoughToRefetch() {
     }
     if (!underCursor.length) return;
 
-    // Same-building stack (·N pin) → sidebar with every unit.
+    // Same-building stack (·N pin) → sidebar with every unit (desktop + explicit ·N only).
+    // On mobile, individual price badges must always open the detail popup — never the list.
     const clicked = pickClosestPinToClick(underCursor, pt) || underCursor[0];
+    const isMobilePinTap = window.innerWidth < 992
+        || e.originalEvent?.type === 'touchend'
+        || e.originalEvent?.pointerType === 'touch';
     const stackKey = String(clicked?.properties?.id ?? '');
     const stacked = stackKey && window._hsColocatedStacks
         ? window._hsColocatedStacks[stackKey]
         : null;
-    if (Array.isArray(stacked) && stacked.length > 1) {
+    const explicitStackCount = Number(clicked?.properties?.stack_count) || 0;
+    if (
+        !isMobilePinTap
+        && explicitStackCount > 1
+        && Array.isArray(stacked)
+        && stacked.length > 1
+    ) {
         const coords = featureCoords(clicked) || (e.lngLat ? [e.lngLat.lng, e.lngLat.lat] : null);
         openLeavesAsListOrPopup(stacked, coords);
         return;
     }
 
     // Multiple symbols under the exact cursor:
-    // - true stack (anchors ~same pixel) → sidebar
-    // - separate nearby tags whose labels briefly overlap → open the closest pin
+    // - desktop true stack (anchors ~same pixel) → sidebar
+    // - mobile / separate nearby tags → always open the closest individual pin popup
     if (underCursor.length > 1) {
-        if (anchorsAreStacked(underCursor)) {
+        if (!isMobilePinTap && anchorsAreStacked(underCursor)) {
             const unique = expandColocatedMarkerStacks(underCursor);
             const coords = featureCoords(clicked) || (e.lngLat ? [e.lngLat.lng, e.lngLat.lat] : null);
             openLeavesAsListOrPopup(unique, coords);
@@ -9398,6 +9427,7 @@ function mapMovedEnoughToRefetch() {
         return;
     }
 
+    // Mobile ·N pin: open the primary listing popup (list is only via cluster / List tab).
     openSinglePinPopup(clicked);
   }
 
@@ -12144,13 +12174,23 @@ function bindHsViewBarButtons() {
             e.preventDefault();
             e.stopPropagation();
             if (mode === 'map') {
+                // Clear any stuck filter overlay/sheet that can block the bar.
+                if (typeof closeMobileSheets === 'function') {
+                    closeMobileSheets();
+                } else if (typeof closeMobileSheetsGlobal === 'function') {
+                    closeMobileSheetsGlobal();
+                }
                 if (typeof window.closeClusterListSidebar === 'function') {
                     window.closeClusterListSidebar();
+                }
+                if (typeof window.closeHsMapCenterPanel === 'function') {
+                    window.closeHsMapCenterPanel();
                 }
                 setHsViewMode('map');
             } else if (mode === 'list') {
                 setHsViewMode('list');
             }
+            setTimeout(() => window.hsMap?.resize?.(), 50);
             setTimeout(() => window.hsMap?.resize?.(), 320);
         });
     });
@@ -12525,8 +12565,13 @@ function initSplitDateDropdowns() {
                     return;
                 }
                 e.preventDefault();
-                if (mode === 'map' && typeof window.closeClusterListSidebar === 'function') {
-                    window.closeClusterListSidebar();
+                if (mode === 'map') {
+                    if (typeof closeMobileSheetsGlobal === 'function') {
+                        closeMobileSheetsGlobal();
+                    }
+                    if (typeof window.closeClusterListSidebar === 'function') {
+                        window.closeClusterListSidebar();
+                    }
                 }
                 if (mode !== 'map' && mode !== 'list') {
                     return;
@@ -12536,6 +12581,7 @@ function initSplitDateDropdowns() {
                 } else {
                     applyHsViewModeFallback(mode);
                 }
+                setTimeout(() => window.hsMap?.resize?.(), 50);
                 setTimeout(() => window.hsMap?.resize?.(), 320);
             });
         });
