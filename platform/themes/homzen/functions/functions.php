@@ -263,7 +263,15 @@ app()->booted(function (): void {
             }
 
             if (theme_option('enabled_back_to_top', 'yes') === 'yes') {
-                $html .= Theme::partial('go-to-top');
+                $mapPath = trim(strtolower((string) request()->path()), '/');
+                $isMapSearchPage = request()->is('map')
+                    || request()->is('*/map')
+                    || str_ends_with($mapPath, '/map');
+
+                // Map search has its own chrome; the global progress circle flashes on entry.
+                if (! $isMapSearchPage) {
+                    $html .= Theme::partial('go-to-top');
+                }
             }
 
             return $html;

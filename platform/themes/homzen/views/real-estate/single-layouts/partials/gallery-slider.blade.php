@@ -108,6 +108,34 @@
     font-size: 14px;
     cursor: pointer;
     z-index: 2;
+    /* Pulsing side shadows so the control reads as a tappable button */
+    animation: hsSeeAllShadowPulse 1.7s ease-in-out infinite;
+    will-change: box-shadow;
+}
+
+@keyframes hsSeeAllShadowPulse {
+    0%, 100% {
+        box-shadow:
+            -12px 0 16px rgba(0, 0, 0, 0.28),
+            12px 0 16px rgba(0, 0, 0, 0.28),
+            0 4px 10px rgba(0, 0, 0, 0.18);
+    }
+    50% {
+        box-shadow:
+            -22px 0 28px rgba(0, 0, 0, 0.48),
+            22px 0 28px rgba(0, 0, 0, 0.48),
+            0 6px 14px rgba(0, 0, 0, 0.28);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .see-all-btn {
+        animation: none;
+        box-shadow:
+            -12px 0 16px rgba(0, 0, 0, 0.28),
+            12px 0 16px rgba(0, 0, 0, 0.28),
+            0 4px 10px rgba(0, 0, 0, 0.18);
+    }
 }
 
 @media (max-width: 992px) {

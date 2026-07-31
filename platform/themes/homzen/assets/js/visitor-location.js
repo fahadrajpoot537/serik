@@ -109,6 +109,11 @@
             return;
         }
 
+        // Never persist the Toronto placeholder — it poisons map initial center.
+        if (location.source === 'default' || location.source === 'unavailable') {
+            return;
+        }
+
         const payload = {
             lat: roundCoord(location.lat),
             lng: roundCoord(location.lng),
@@ -138,6 +143,11 @@
 
             const location = JSON.parse(raw);
             if (!location || !Number.isFinite(location.lat) || !Number.isFinite(location.lng)) {
+                return null;
+            }
+
+            if (location.source === 'default' || location.source === 'unavailable') {
+                sessionStorage.removeItem(SESSION_KEY);
                 return null;
             }
 
@@ -352,7 +362,7 @@
                 return response.ok ? response.json() : null;
             })
             .then(function (data) {
-                if (!data) {
+                if (!data || data.available === false || data.source === 'unavailable' || data.source === 'default') {
                     return null;
                 }
 
@@ -382,10 +392,7 @@
                 return serverLocation;
             }
 
-            if (isLocalHost()) {
-                return detectFromIpInfo();
-            }
-
+            // Server unavailable (localhost / failed providers) — use public IP APIs.
             return detectFromIpApi().then(function (location) {
                 return location || detectFromIpInfo();
             });
@@ -414,7 +421,9 @@
 
         detectPromise = new Promise(function (resolve) {
             function finish(location) {
-                saveSessionLocation(location);
+                if (location && location.source !== 'default' && location.source !== 'unavailable') {
+                    saveSessionLocation(location);
+                }
                 detectPromise = null;
                 resolve(location);
             }
@@ -426,7 +435,9 @@
                         return;
                     }
 
-                    finish(Object.assign({}, ONTARIO_DEFAULT));
+                    // Return default for callers, but do not cache it.
+                    resolve(Object.assign({}, ONTARIO_DEFAULT));
+                    detectPromise = null;
                 });
             }
 

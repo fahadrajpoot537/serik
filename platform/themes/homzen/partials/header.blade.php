@@ -992,10 +992,16 @@ function headerSlugify(text) {
         .replace(/--+/g, '-');
 }
 
-function buildHeaderCityMapUrl(cityName) {
+function buildHeaderCityMapUrl(cityName, lat, lng) {
     const citySlug = headerSlugify(cityName);
     const tx = selectedFilters.transaction === 'For Lease' ? 'lease' : 'sale';
-    return `${SITE_BASE}/on/houses-for-${tx}-in-${citySlug}/map`;
+    let url = `${SITE_BASE}/on/houses-for-${tx}-in-${citySlug}/map`;
+    const nLat = Number(lat);
+    const nLng = Number(lng);
+    if (Number.isFinite(nLat) && Number.isFinite(nLng) && !(nLat === 0 && nLng === 0)) {
+        url += `?lat=${nLat}&lng=${nLng}`;
+    }
+    return url;
 }
 
 function buildHeaderCitySuggestionsHtml(keyword) {
@@ -1122,20 +1128,41 @@ function buildHeaderLocationSuggestionsHtml(keyword, communities) {
 
 function buildHeaderCommunityMapUrl(community) {
     const isPlace = community.source === 'place';
-    let url = `${SITE_BASE}/map?lat=${community.lat}&lng=${community.lng}`;
+    let nLat = Number(community.lat);
+    let nLng = Number(community.lng);
+    let hasCoords = Number.isFinite(nLat) && Number.isFinite(nLng) && !(nLat === 0 && nLng === 0);
+
+    // If community has no pin coords, fall back to its city center so map never opens in Toronto.
+    if (!hasCoords && community.city) {
+        const cityKey = Object.keys(headerCityCoordinates).find((key) =>
+            normalizeHeaderCity(key) === normalizeHeaderCity(community.city)
+            || normalizeHeaderCity(formatHeaderCityLabel(key)) === normalizeHeaderCity(community.city)
+        );
+        const cityCoords = cityKey ? headerCityCoordinates[cityKey] : null;
+        if (cityCoords) {
+            nLat = cityCoords.lat;
+            nLng = cityCoords.lng;
+            hasCoords = true;
+        }
+    }
+
     if (isPlace) {
-        url += `&place=${encodeURIComponent(community.name)}`;
+        let url = `${SITE_BASE}/map?place=${encodeURIComponent(community.name)}`;
         if (community.city) {
             url += `&city=${encodeURIComponent(community.city)}`;
         }
+        if (hasCoords) {
+            url += `&lat=${nLat}&lng=${nLng}`;
+        }
         return url;
     }
-    url = `${SITE_BASE}/map?community=${encodeURIComponent(community.name)}`;
+
+    let url = `${SITE_BASE}/map?community=${encodeURIComponent(community.name)}`;
     if (community.city) {
         url += `&city=${encodeURIComponent(community.city)}`;
     }
-    if (community.lat && community.lng) {
-        url += `&lat=${community.lat}&lng=${community.lng}`;
+    if (hasCoords) {
+        url += `&lat=${nLat}&lng=${nLng}`;
     }
     return url;
 }
@@ -1316,7 +1343,7 @@ dropdown.addEventListener('click', function (e) {
     input.value = cityName;
     dropdown.style.display = 'none';
     loader.style.display = 'none';
-    window.location.href = buildHeaderCityMapUrl(cityName);
+    window.location.href = buildHeaderCityMapUrl(cityName, item.dataset.lat, item.dataset.lng);
 });
 
 dropdown.addEventListener('keydown', function (e) {

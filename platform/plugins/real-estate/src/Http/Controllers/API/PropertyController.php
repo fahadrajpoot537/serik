@@ -5643,11 +5643,13 @@ class PropertyController extends BaseController
         // Falls back to MySQL for complex sold/date/subtype filters, or when Meili
         // is unavailable. engine=mysql forces the MySQL path for A/B testing.
         if ($request->input('engine') !== 'mysql') {
-            // v12: real DB slugs on Meili map features (synthetic urls caused
-            // iframe redirects that dropped iframe=1 and looked "stuck" on prior pin).
-            $meiliCacheKey = 'map_meili_v12_' . md5(implode('|', [
+            // v14: enforce DB MlsStatus against Active/Sold/Delisted filter so
+            // stale Meili hits cannot leak Sold pins onto Active map (and vice versa).
+            $meiliAuth = (auth('account')->check() || auth()->check()) ? '1' : '0';
+            $meiliCacheKey = 'map_meili_v14_' . md5(implode('|', [
                 round($south, 4), round($north, 4), round($west, 4), round($east, 4),
                 $this->mapFilterSignature($request),
+                'a=' . $meiliAuth,
             ]));
             // Cache the fully-encoded payload (JSON + gzip bytes), not the raw
             // array, so warm requests skip json_encode + gzencode entirely and
@@ -6134,7 +6136,7 @@ class PropertyController extends BaseController
             'min_bedrooms' => str_contains((string) $request->input('bedrooms'), '+') ? (int) $request->input('bedrooms') : 0,
             'min_bathrooms' => str_contains((string) $request->input('bathrooms'), '+') ? (int) $request->input('bathrooms') : 0,
         ];
-        if (! empty($transaction) && $transaction !== 'null') {
+        if (! empty($transaction) && $transaction !== 'null' && ! $isSoldOrDelistedFilter) {
             if ($transaction === 'For Lease') {
                 $opts['transactions'] = ['For Lease', 'For Sub-Lease'];
             } else {
@@ -6261,8 +6263,9 @@ class PropertyController extends BaseController
             ];
         }
 
-        // Prefer live DB coordinates over possibly-stale Meili `_geo` so pins
-        // sit on the exact stored latitude/longitude.
+        // Prefer live DB coordinates + MlsStatus over possibly-stale Meili
+        // `_geo` / mls_status. Enforce the active request's status filter against
+        // DB so Active never shows Sold pins (and Sold never shows Active).
         if ($features !== []) {
             $ids = [];
             foreach ($features as $feature) {
@@ -6273,13 +6276,29 @@ class PropertyController extends BaseController
             }
             $ids = array_values(array_unique($ids));
             if ($ids !== []) {
+                $canViewSold = auth('account')->check() || auth()->check();
+                $requestedStatuses = array_values(array_filter(array_map('strval', $opts['statuses'] ?? [])));
+                $excludeStatuses = array_values(array_filter(array_map('strval', $opts['exclude_statuses'] ?? [])));
                 $coordRows = DB::table('re_properties')
                     ->whereIn('id', $ids)
                     ->whereNotNull('latitude')
                     ->whereNotNull('longitude')
                     ->where('latitude', '!=', 0)
                     ->where('longitude', '!=', 0)
-                    ->get(['id', 'latitude', 'longitude', 'BedroomsBelowGrade', 'broker', 'square', 'name'])
+                    ->get([
+                        'id',
+                        'latitude',
+                        'longitude',
+                        'BedroomsBelowGrade',
+                        'broker',
+                        'square',
+                        'name',
+                        'MlsStatus',
+                        'TransactionType',
+                        'price',
+                        'ClosePrice',
+                        'external_id',
+                    ])
                     ->keyBy('id');
 
                 $slugMap = DB::table('slugs')
@@ -6288,12 +6307,30 @@ class PropertyController extends BaseController
                     ->pluck('key', 'reference_id')
                     ->all();
 
-                foreach ($features as &$feature) {
+                $synced = [];
+                foreach ($features as $feature) {
                     $id = (int) ($feature['properties']['id'] ?? 0);
                     $row = $coordRows->get($id);
                     if (! $row) {
+                        $synced[] = $feature;
                         continue;
                     }
+
+                    $dbMls = trim((string) ($row->MlsStatus ?? ''));
+                    $isSoldHistory = TrebPropertyHelper::isSoldHistoryMlsStatus($dbMls);
+
+                    // Hard filter against live DB status (Meili can be stale).
+                    if ($requestedStatuses !== [] && $dbMls !== '' && ! in_array($dbMls, $requestedStatuses, true)) {
+                        continue;
+                    }
+                    if ($excludeStatuses !== [] && $dbMls !== '' && in_array($dbMls, $excludeStatuses, true)) {
+                        continue;
+                    }
+                    // Active browse without explicit statuses: still hide sold/leased.
+                    if ($requestedStatuses === [] && $excludeStatuses === [] && $isSoldHistory) {
+                        continue;
+                    }
+
                     $lat = (float) $row->latitude;
                     $lng = (float) $row->longitude;
                     $feature['geometry']['coordinates'] = [$lng, $lat];
@@ -6316,8 +6353,54 @@ class PropertyController extends BaseController
                     if (! empty($slugMap[$id])) {
                         $feature['properties']['url'] = (string) $slugMap[$id];
                     }
+
+                    if ($dbMls !== '') {
+                        $feature['properties']['mls_status'] = $dbMls;
+                        $feature['properties']['transaction'] = $dbMls === 'New'
+                            ? (((string) ($row->TransactionType ?? '') === 'For Lease') ? 'For Lease' : 'For Sale')
+                            : $dbMls;
+                    }
+
+                    if ($isSoldHistory && ! $canViewSold) {
+                        // Keep ClosePrice for the sold pin label; strip identity fields.
+                        $closePrice = $row->ClosePrice !== null ? $row->ClosePrice : ($feature['properties']['ClosePrice'] ?? null);
+                        $feature['properties'] = [
+                            'id' => $id,
+                            'name' => 'Sold Listing',
+                            'external_id' => '',
+                            'transaction' => $dbMls,
+                            'mls_status' => $dbMls,
+                            'latitude' => $lat,
+                            'longitude' => $lng,
+                            'image' => 'https://serik.ca/storage/avatars/1.jpg',
+                            'price' => 0,
+                            'ClosePrice' => $closePrice,
+                            'bedrooms' => null,
+                            'bedrooms_below' => null,
+                            'bathrooms' => null,
+                            'basement' => null,
+                            'url' => '',
+                            'date' => null,
+                            'area' => null,
+                            'agency' => '',
+                            'requires_login' => 1,
+                        ];
+                    } else {
+                        if ($row->price !== null) {
+                            $feature['properties']['price'] = $row->price;
+                        }
+                        if ($row->ClosePrice !== null) {
+                            $feature['properties']['ClosePrice'] = $row->ClosePrice;
+                        }
+                        if (! empty($row->external_id)) {
+                            $feature['properties']['external_id'] = (string) $row->external_id;
+                        }
+                        $feature['properties']['requires_login'] = 0;
+                    }
+
+                    $synced[] = $feature;
                 }
-                unset($feature);
+                $features = $synced;
             }
         }
 

@@ -1597,30 +1597,67 @@ $(() => {
 
     $('[data-bb-toggle="detail-map"]').each((index, element) => {
         const $element = $(element)
+        const el = element
 
-        const map = L.map($element.prop('id'), {
-            attributionControl: false,
-            scrollWheelZoom: true, // Disable scroll wheel zoom completely
-            dragging: !L.Browser.mobile, // Disable dragging on mobile only
-            touchZoom: true, // Keep pinch zoom enabled on mobile
-        }).setView($element.data('center'), 14)
+        if (typeof L === 'undefined') {
+            // Leaflet missing — fall back to Google embed so location still shows.
+            try {
+                const center = $element.data('center')
+                const lat = Array.isArray(center) ? center[0] : null
+                const lng = Array.isArray(center) ? center[1] : null
+                if (lat != null && lng != null) {
+                    const iframe = document.createElement('iframe')
+                    iframe.className = 'property-detail-map-embed'
+                    iframe.title = 'Property location'
+                    iframe.width = '100%'
+                    iframe.style.minHeight = '400px'
+                    iframe.style.border = '0'
+                    iframe.style.borderRadius = '12px'
+                    iframe.loading = 'lazy'
+                    iframe.referrerPolicy = 'no-referrer-when-downgrade'
+                    iframe.allowFullscreen = true
+                    iframe.src = 'https://maps.google.com/maps?q=' + encodeURIComponent(lat + ',' + lng) + '&z=15&output=embed'
+                    el.replaceWith(iframe)
+                }
+            } catch (e) {}
+            return
+        }
 
-        L.tileLayer($element.data('tile-layer'), {
-            maxZoom: $element.data('max-zoom') || 22,
-        }).addTo(map)
+        if (el._leaflet_id) {
+            return
+        }
 
-        L.marker($element.data('center'), {
-            icon: L.divIcon({
-                iconSize: L.point(50, 50),
-                className: 'map-marker-home',
-            }),
-        })
-            .addTo(map)
-            .bindPopup($('#map-popup-content').html())
-            .openPopup()
+        try {
+            const map = L.map(el, {
+                attributionControl: false,
+                scrollWheelZoom: true,
+                dragging: !L.Browser.mobile,
+                touchZoom: true,
+            }).setView($element.data('center'), 14)
 
-        if (typeof Theme.lazyLoadInstance !== 'undefined') {
-            Theme.lazyLoadInstance.update()
+            L.tileLayer($element.data('tile-layer'), {
+                maxZoom: $element.data('max-zoom') || 22,
+            }).addTo(map)
+
+            L.marker($element.data('center'), {
+                icon: L.divIcon({
+                    iconSize: L.point(50, 50),
+                    className: 'map-marker-home',
+                }),
+            })
+                .addTo(map)
+                .bindPopup($('#map-popup-content').html())
+                .openPopup()
+
+            setTimeout(() => {
+                try { map.invalidateSize() } catch (e) {}
+            }, 200)
+
+            if (typeof Theme.lazyLoadInstance !== 'undefined') {
+                Theme.lazyLoadInstance.update()
+            }
+        } catch (e) {
+            console.warn('Property detail map failed to init', e)
         }
     })
 

@@ -12,6 +12,16 @@
     min-height:0;
 }
 
+/* Map search: remove theme scroll progress / go-to-top circle (flashes on entry). */
+body:has(.map-housesigma) .progress-wrap,
+.map-housesigma ~ .progress-wrap,
+.progress-wrap {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
 .map-housesigma #map {
     background: #f4f2ef;
 }
@@ -2321,6 +2331,31 @@ zoom:0.75;
     border-radius: 16px;
     cursor: pointer;
     z-index: 3;
+    animation: hsSeeAllShadowPulse 1.7s ease-in-out infinite;
+    will-change: box-shadow;
+}
+@keyframes hsSeeAllShadowPulse {
+    0%, 100% {
+        box-shadow:
+            -10px 0 14px rgba(0, 0, 0, 0.28),
+            10px 0 14px rgba(0, 0, 0, 0.28),
+            0 3px 8px rgba(0, 0, 0, 0.18);
+    }
+    50% {
+        box-shadow:
+            -18px 0 24px rgba(0, 0, 0, 0.5),
+            18px 0 24px rgba(0, 0, 0, 0.5),
+            0 5px 12px rgba(0, 0, 0, 0.28);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .hs-map-see-all-photos {
+        animation: none;
+        box-shadow:
+            -10px 0 14px rgba(0, 0, 0, 0.28),
+            10px 0 14px rgba(0, 0, 0, 0.28),
+            0 3px 8px rgba(0, 0, 0, 0.18);
+    }
 }
 .hs-map-gallery-thumbs {
     display: flex;
@@ -4416,6 +4451,20 @@ position: absolute;
     }
 }
 </style>
+<script>
+(function () {
+    function removeMapProgressWrap() {
+        document.querySelectorAll('.progress-wrap').forEach(function (el) {
+            el.remove();
+        });
+    }
+    removeMapProgressWrap();
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', removeMapProgressWrap);
+    }
+    window.addEventListener('load', removeMapProgressWrap);
+})();
+</script>
 
 @php
     $serikRequestPath = trim(strtolower(request()->path()), '/');
@@ -5288,13 +5337,117 @@ const HS_CLUSTER_RADIUS = 28;
 /** Cluster click: ≤ this count opens the list; larger circles zoom in. */
 const HS_CLUSTER_LIST_MAX = 15;
 
-function resolveInitialMapView() {
-    const cached = window.SerikVisitorLocation?.getSessionLocation?.();
-    if (cached && Number.isFinite(cached.lat) && Number.isFinite(cached.lng)) {
+// Capture search navigation BEFORE any async visitor/IP logic can override it.
+window.__hsMapNavIntent = (function captureMapNavIntent() {
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const lat = parseFloat(params.get('lat'));
+        const lng = parseFloat(params.get('lng'));
+        const hasCoords = Number.isFinite(lat)
+            && Number.isFinite(lng)
+            && Math.abs(lat) <= 90
+            && Math.abs(lng) <= 180
+            && !(lat === 0 && lng === 0);
+
         return {
-            center: [cached.lng, cached.lat],
+            community: String(params.get('community') || '').trim(),
+            place: String(params.get('place') || '').trim(),
+            city: String(params.get('city') || '').trim(),
+            lat: hasCoords ? lat : null,
+            lng: hasCoords ? lng : null,
+            hasCoords: hasCoords,
+        };
+    } catch (e) {
+        return { community: '', place: '', city: '', lat: null, lng: null, hasCoords: false };
+    }
+})();
+
+function resolveInitialMapView() {
+    const intent = window.__hsMapNavIntent || {};
+
+    // 1) Explicit search navigation coords win (community / place / shared links).
+    if (intent.hasCoords) {
+        return {
+            center: [intent.lng, intent.lat],
             zoom: HS_MAP_DEFAULT_ZOOM,
         };
+    }
+
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const lat = parseFloat(params.get('lat'));
+        const lng = parseFloat(params.get('lng'));
+        if (
+            Number.isFinite(lat)
+            && Number.isFinite(lng)
+            && Math.abs(lat) <= 90
+            && Math.abs(lng) <= 180
+            && !(lat === 0 && lng === 0)
+        ) {
+            return {
+                center: [lng, lat],
+                zoom: HS_MAP_DEFAULT_ZOOM,
+            };
+        }
+    } catch (e) {}
+
+    // 1b) Community/place with city but no pin coords → open on that city, not Toronto.
+    if ((intent.community || intent.place) && intent.city) {
+        try {
+            const key = typeof normalizeCity === 'function'
+                ? normalizeCity(intent.city)
+                : String(intent.city).toLowerCase().replace(/\s+/g, '');
+            const coords = (typeof cityCoordinatesNormalized !== 'undefined' && cityCoordinatesNormalized[key])
+                || (typeof cityCoordinates !== 'undefined' && (cityCoordinates[intent.city] || cityCoordinates[key]))
+                || null;
+            if (coords && Number.isFinite(coords.lat) && Number.isFinite(coords.lng)) {
+                return {
+                    center: [coords.lng, coords.lat],
+                    zoom: HS_MAP_DEFAULT_ZOOM,
+                };
+            }
+        } catch (e) {}
+    }
+
+    // 2) SEO city path e.g. /on/houses-for-sale-in-brampton/map
+    try {
+        const pathCity = (typeof getFiltersFromPath === 'function'
+            ? (getFiltersFromPath().city || '')
+            : ''
+        ).trim();
+        if (pathCity && pathCity.toLowerCase() !== 'ontario') {
+            const key = typeof normalizeCity === 'function'
+                ? normalizeCity(pathCity)
+                : pathCity.toLowerCase().replace(/\s+/g, '');
+            const coords = (typeof cityCoordinatesNormalized !== 'undefined' && cityCoordinatesNormalized[key])
+                || (typeof cityCoordinates !== 'undefined' && (cityCoordinates[pathCity] || cityCoordinates[key]))
+                || null;
+            if (coords && Number.isFinite(coords.lat) && Number.isFinite(coords.lng)) {
+                return {
+                    center: [coords.lng, coords.lat],
+                    zoom: HS_MAP_DEFAULT_ZOOM,
+                };
+            }
+        }
+    } catch (e) {}
+
+    // 3) Real visitor location only — never reuse fake Toronto "default" cache.
+    //    Also skip visitor cache when the user explicitly searched a community/place.
+    if (!(intent.community || intent.place || intent.hasCoords)) {
+        const cached = window.SerikVisitorLocation?.getSessionLocation?.();
+        if (
+            cached
+            && Number.isFinite(cached.lat)
+            && Number.isFinite(cached.lng)
+            && cached.source
+            && cached.source !== 'default'
+            && cached.source !== 'unavailable'
+        ) {
+            return {
+                center: [cached.lng, cached.lat],
+                zoom: HS_MAP_DEFAULT_ZOOM,
+            };
+        }
     }
 
     return {
@@ -5332,6 +5485,11 @@ function fetchServerVisitorLocation() {
 }
 
 function shouldUseIpMapCenter(urlCommunity) {
+    const intent = window.__hsMapNavIntent || {};
+    if (intent.hasCoords || intent.community || intent.place) {
+        return false;
+    }
+
     if (getLatLngFromUrl()) {
         return false;
     }
@@ -5587,35 +5745,55 @@ document.addEventListener("DOMContentLoaded", function () {
     };
 
     window.isMapSoldListing = function (status, props) {
-        // Strict allowlist only. Do not use requires_login / substring "sold"
-        // (MapLibre has corrupted those and blocked For Sale opens).
-        const raw = String(
-            (props && props.mls_status)
-            || status
-            || ''
-        ).trim();
-        if (!raw) {
-            return false;
-        }
-        const normalized = raw.toLowerCase();
+        // HARD RULE: login is ONLY for Sold/Leased history.
+        // For Sale / For Lease / Active / Delisted must NEVER trigger login on map.
+        props = props || {};
 
-        // Anything that is clearly an active browse status is never login-gated.
+        const tx = String(props.transaction || '').trim().toLowerCase();
         if (
-            normalized === 'for sale'
-            || normalized === 'for lease'
-            || normalized === 'for sub-lease'
-            || normalized === 'new'
-            || normalized === 'active'
-            || normalized === 'price change'
-            || normalized === 'extension'
-            || normalized === 'ext'
-            || normalized === 'previous status'
-            || normalized === 'active under contract'
+            tx === 'for sale'
+            || tx === 'for lease'
+            || tx === 'for sub-lease'
         ) {
             return false;
         }
 
-        return MAP_SOLD_STATUSES.some((s) => s.toLowerCase() === normalized);
+        const raw = String(
+            props.mls_status
+            || status
+            || ''
+        ).trim().toLowerCase();
+
+        // Active browse + delisted statuses are never login-gated.
+        if (
+            raw === 'for sale'
+            || raw === 'for lease'
+            || raw === 'for sub-lease'
+            || raw === 'new'
+            || raw === 'active'
+            || raw === 'price change'
+            || raw === 'extension'
+            || raw === 'ext'
+            || raw === 'previous status'
+            || raw === 'active under contract'
+            || raw === 'expired'
+            || raw === 'terminated'
+            || raw === 'suspended'
+            || raw === 'deal fell through'
+            || raw === 'cancelled'
+            || raw === 'withdrawn'
+        ) {
+            return false;
+        }
+
+        // Explicit sold/leased MlsStatus always counts — even if requires_login
+        // was wrongly left as 0 on a Meili pin.
+        if (raw && MAP_SOLD_STATUSES.some((s) => s.toLowerCase() === raw)) {
+            return true;
+        }
+
+        // No sold status → never lock from requires_login alone.
+        return false;
     };
 
     window.mapListingStatus = function (props) {
@@ -5625,6 +5803,7 @@ document.addEventListener("DOMContentLoaded", function () {
     };
 
     window.mapLoginGateHtml = function (status, props) {
+        // Sold-only. Never show login CTA for For Sale / Delisted.
         if (isMapUserLoggedIn || !isMapSoldListing(status, props)) {
             return '';
         }
@@ -6218,6 +6397,24 @@ async function showCityBoundary(cityName, fallbackCoords = null) {
             return Promise.resolve(null);
         }
 
+        const cityFallback = () => {
+            const city = String(cityName || '').trim();
+            if (!city) {
+                return null;
+            }
+            const key = typeof normalizeCity === 'function'
+                ? normalizeCity(city)
+                : city.toLowerCase().replace(/\s+/g, '');
+            const coords = cityCoordinatesNormalized?.[key]
+                || cityCoordinates?.[city]
+                || cityCoordinates?.[key]
+                || null;
+            if (coords && Number.isFinite(coords.lat) && Number.isFinite(coords.lng)) {
+                return { lat: Number(coords.lat), lng: Number(coords.lng) };
+            }
+            return null;
+        };
+
         const url = `/api/v1/community-suggestions?keyword=${encodeURIComponent(name)}&limit=8`;
 
         return fetch(url, {
@@ -6241,13 +6438,15 @@ async function showCityBoundary(cityName, fallbackCoords = null) {
                     match = (rows || []).find((row) => String(row?.name || '').toLowerCase() === name.toLowerCase());
                 }
 
-                if (!match || match.lat == null || match.lng == null) {
-                    return null;
+                if (match && match.lat != null && match.lng != null
+                    && Number.isFinite(Number(match.lat)) && Number.isFinite(Number(match.lng))
+                    && !(Number(match.lat) === 0 && Number(match.lng) === 0)) {
+                    return { lat: Number(match.lat), lng: Number(match.lng) };
                 }
 
-                return { lat: Number(match.lat), lng: Number(match.lng) };
+                return cityFallback();
             })
-            .catch(() => null);
+            .catch(() => cityFallback());
     }
 
     function flyMapToCommunityCoords(lat, lng, onArrived) {
@@ -6384,6 +6583,10 @@ async function showCityBoundary(cityName, fallbackCoords = null) {
     });
     fetchServerVisitorLocation().then((location) => {
         if (!location || !window.SerikVisitorLocation?.saveSessionLocation) {
+            return;
+        }
+        // Never persist the Toronto placeholder as a real visitor fix.
+        if (location.source === 'default' || location.source === 'unavailable' || location.available === false) {
             return;
         }
         const existing = window.SerikVisitorLocation.getSessionLocation?.();
@@ -6871,20 +7074,34 @@ const cityKey = normalizeCity(cityFromUrlRaw);
     
     
     
-    const urlLocation = getLatLngFromUrl();
-    const urlCommunity = new URLSearchParams(window.location.search).get('community');
-    const urlCommunityCity = new URLSearchParams(window.location.search).get('city');
-    const urlPlace = new URLSearchParams(window.location.search).get('place');
+    const urlLocation = getLatLngFromUrl() || (
+        window.__hsMapNavIntent?.hasCoords
+            ? { lat: window.__hsMapNavIntent.lat, lng: window.__hsMapNavIntent.lng }
+            : null
+    );
+    const urlCommunity = new URLSearchParams(window.location.search).get('community')
+        || window.__hsMapNavIntent?.community
+        || '';
+    const urlCommunityCity = new URLSearchParams(window.location.search).get('city')
+        || window.__hsMapNavIntent?.city
+        || '';
+    const urlPlace = new URLSearchParams(window.location.search).get('place')
+        || window.__hsMapNavIntent?.place
+        || '';
 
 if (urlLocation) {
     const { lat, lng } = urlLocation;
 
+    try {
+        map.jumpTo({ center: [lng, lat], zoom: HS_MAP_DEFAULT_ZOOM });
+    } catch (e) {
+        map.setCenter([lng, lat]);
+        map.setZoom(HS_MAP_DEFAULT_ZOOM);
+    }
+
     const marker = new maplibregl.Marker({ color: "#0255a1" })
         .setLngLat([lng, lat])
         .addTo(map);
-
-    map.setCenter([lng, lat]);
-    map.setZoom(HS_MAP_DEFAULT_ZOOM);
 
     if (urlCommunity) {
         applyCommunityMapState(urlCommunity, urlCommunityCity || '');
@@ -7088,8 +7305,20 @@ if (urlLocation) {
 
     if (urlCommunity) {
         bootCommunityMapView();
-    } else if (urlPlace && urlLocation) {
-        bootPlaceMapView();
+    } else if (urlPlace) {
+        if (urlLocation) {
+            bootPlaceMapView();
+        } else {
+            // Place without coords: still try city center, never fall back to IP/Toronto.
+            applyCommunityMapState('', urlCommunityCity || '');
+            const cityKey = normalizeCity(urlCommunityCity || '');
+            const cityCoords = cityCoordinatesNormalized?.[cityKey] || null;
+            if (cityCoords) {
+                flyMapToCommunityCoords(cityCoords.lat, cityCoords.lng, () => runInitialPropertyLoad());
+            } else {
+                requestAnimationFrame(() => runInitialPropertyLoad());
+            }
+        }
     } else {
         // Always load viewport pins immediately. Visitor centering (below) will
         // force-refresh after flyTo — never leave the map empty waiting on GPS.
@@ -8043,10 +8272,24 @@ async function centerOnVisitorAreaNoLock() {
         }
     }
 
+    if (
+        location
+        && (location.source === 'default' || location.source === 'unavailable')
+    ) {
+        location = null;
+    }
+
     if (!location) {
         try {
             const serverLocation = await fetchServerVisitorLocation();
-            if (serverLocation && Number.isFinite(Number(serverLocation.lat)) && Number.isFinite(Number(serverLocation.lng))) {
+            if (
+                serverLocation
+                && serverLocation.source !== 'default'
+                && serverLocation.source !== 'unavailable'
+                && serverLocation.available !== false
+                && Number.isFinite(Number(serverLocation.lat))
+                && Number.isFinite(Number(serverLocation.lng))
+            ) {
                 location = {
                     lat: Number(serverLocation.lat),
                     lng: Number(serverLocation.lng),
@@ -8061,7 +8304,7 @@ async function centerOnVisitorAreaNoLock() {
         }
     }
 
-    if (location && Number.isFinite(location.lat) && Number.isFinite(location.lng)) {
+    if (location && Number.isFinite(location.lat) && Number.isFinite(location.lng) && location.source !== 'default') {
         if (location.city) {
             seoCitySlug = slugify(location.city);
         }
@@ -8618,6 +8861,10 @@ function mapMovedEnoughToRefetch() {
     }
 
     function normalizeMapTransactionFilter() {
+        // Sold / De-listed: MlsStatus is authoritative (match MySQL map path).
+        if (typeof isSoldOrDelistedStatus === 'function' && isSoldOrDelistedStatus()) {
+            return '';
+        }
         const tx = (selectedTransaction || '').trim();
         if (selectedCommunity && !communityEnforceTransaction) {
             return '';
@@ -8758,7 +9005,17 @@ function mapMovedEnoughToRefetch() {
 
     let lastClusterPointerTs = 0;
     let lastUnclusteredPointerTs = 0;
+    let lastUnclusteredHandledTs = 0;
+    let lastUnclusteredHandledX = 0;
+    let lastUnclusteredHandledY = 0;
     let hsMapSuppressBackgroundClickUntil = 0;
+
+    // Only true stacks (pins on top of each other) open the sidebar.
+    // Nearby-but-separate tags (e.g. $649.9K above $559.9K) open the clicked pin's popup.
+    const HS_MARKER_STACK_PX = 12;
+    const HS_MARKER_STACK_PX2 = HS_MARKER_STACK_PX * HS_MARKER_STACK_PX;
+    // Price pin tip is at the lat/lng; label body sits ~18px above the tip.
+    const HS_MARKER_BODY_OFFSET_Y = 18;
 
     function markHsMapSelectionOpened() {
         hsMapSuppressBackgroundClickUntil = Date.now() + 900;
@@ -9017,42 +9274,131 @@ function mapMovedEnoughToRefetch() {
         runMarkerSelectionHandler(e, handleClusterMarkerClick);
     });
 
-  function handleUnclusteredMarkerClick(e) {
-    // Stacked pins at one building → open list instead of a single random pin.
-    const pad = 22;
-    const pt = e.point || { x: 0, y: 0 };
-    const bbox = [
-        [pt.x - pad, pt.y - pad],
-        [pt.x + pad, pt.y + pad],
-    ];
-    const hits = dedupeFeaturesById(
-        map.queryRenderedFeatures(bbox, { layers: ['unclustered-point', 'unclustered-exact-dot'] })
+  function expandColocatedMarkerStacks(features) {
+    const out = [];
+    (features || []).forEach((f) => {
+        const stackKey = String(f?.properties?.id ?? '');
+        const stacked = stackKey && window._hsColocatedStacks
+            ? window._hsColocatedStacks[stackKey]
+            : null;
+        if (Array.isArray(stacked) && stacked.length) {
+            stacked.forEach((s) => out.push(s));
+        } else {
+            out.push(f);
+        }
+    });
+    return dedupeFeaturesById(out);
+  }
+
+  function pinBodyScreenPoint(coords) {
+    const tip = map.project(coords);
+    return { x: tip.x, y: tip.y - HS_MARKER_BODY_OFFSET_Y };
+  }
+
+  function screenDist2(a, b) {
+    const dx = a.x - b.x;
+    const dy = a.y - b.y;
+    return dx * dx + dy * dy;
+  }
+
+  function anchorsAreStacked(features) {
+    const pts = [];
+    (features || []).forEach((f) => {
+        const c = featureCoords(f);
+        if (c) pts.push(map.project(c));
+    });
+    if (pts.length <= 1) return true;
+    for (let i = 0; i < pts.length; i++) {
+        for (let j = i + 1; j < pts.length; j++) {
+            if (screenDist2(pts[i], pts[j]) > HS_MARKER_STACK_PX2) {
+                return false;
+            }
+        }
+    }
+    return true;
+  }
+
+  function pickClosestPinToClick(features, pt) {
+    let best = null;
+    let bestDist = Infinity;
+    (features || []).forEach((f) => {
+        const c = featureCoords(f);
+        if (!c) return;
+        const d = screenDist2(pinBodyScreenPoint(c), pt);
+        if (d < bestDist) {
+            bestDist = d;
+            best = f;
+        }
+    });
+    return best || features?.[0] || null;
+  }
+
+  function queryPinsUnderCursor(pt) {
+    // Exact point only — do NOT pull in neighboring separate tags.
+    return dedupeFeaturesById(
+        map.queryRenderedFeatures(pt, { layers: ['unclustered-point', 'unclustered-exact-dot'] })
     );
+  }
 
-    if (hits.length > 1) {
-        const coords = featureCoords(hits[0]) || (e.lngLat ? [e.lngLat.lng, e.lngLat.lat] : null);
-        openLeavesAsListOrPopup(hits, coords);
-        return;
-    }
-
-    const feature = hits[0] || e.features?.[0];
+  function openSinglePinPopup(feature) {
     if (!feature) return;
-
-    const stackKey = String(feature.properties?.id ?? '');
-    const stacked = stackKey && window._hsColocatedStacks
-        ? window._hsColocatedStacks[stackKey]
-        : null;
-    if (Array.isArray(stacked) && stacked.length > 1) {
-        const coords = featureCoords(feature) || (e.lngLat ? [e.lngLat.lng, e.lngLat.lat] : null);
-        openLeavesAsListOrPopup(stacked, coords);
-        return;
-    }
-
     if (typeof window.showPropertyMapPopup === 'function') {
         window.showPropertyMapPopup(feature);
         return;
     }
     openPropertyFromFeature(feature);
+  }
+
+  function handleUnclusteredMarkerClick(e) {
+    const pt = e.point || { x: 0, y: 0 };
+
+    // Same pointer event hits both price-pin + exact-dot layers — handle once.
+    const now = Date.now();
+    if (
+        now - lastUnclusteredHandledTs < 50
+        && Math.abs(pt.x - lastUnclusteredHandledX) < 2
+        && Math.abs(pt.y - lastUnclusteredHandledY) < 2
+    ) {
+        return;
+    }
+    lastUnclusteredHandledTs = now;
+    lastUnclusteredHandledX = pt.x;
+    lastUnclusteredHandledY = pt.y;
+
+    // Prefer the symbol MapLibre actually hit; fall back to exact-point query.
+    let underCursor = dedupeFeaturesById(e.features || []);
+    if (!underCursor.length) {
+        underCursor = queryPinsUnderCursor(pt);
+    }
+    if (!underCursor.length) return;
+
+    // Same-building stack (·N pin) → sidebar with every unit.
+    const clicked = pickClosestPinToClick(underCursor, pt) || underCursor[0];
+    const stackKey = String(clicked?.properties?.id ?? '');
+    const stacked = stackKey && window._hsColocatedStacks
+        ? window._hsColocatedStacks[stackKey]
+        : null;
+    if (Array.isArray(stacked) && stacked.length > 1) {
+        const coords = featureCoords(clicked) || (e.lngLat ? [e.lngLat.lng, e.lngLat.lat] : null);
+        openLeavesAsListOrPopup(stacked, coords);
+        return;
+    }
+
+    // Multiple symbols under the exact cursor:
+    // - true stack (anchors ~same pixel) → sidebar
+    // - separate nearby tags whose labels briefly overlap → open the closest pin
+    if (underCursor.length > 1) {
+        if (anchorsAreStacked(underCursor)) {
+            const unique = expandColocatedMarkerStacks(underCursor);
+            const coords = featureCoords(clicked) || (e.lngLat ? [e.lngLat.lng, e.lngLat.lat] : null);
+            openLeavesAsListOrPopup(unique, coords);
+            return;
+        }
+        openSinglePinPopup(clicked);
+        return;
+    }
+
+    openSinglePinPopup(clicked);
   }
 
   map.on('click', 'unclustered-point', function (e) {
@@ -9270,6 +9616,17 @@ function mapMovedEnoughToRefetch() {
     const currentView = new URLSearchParams(window.location.search).get('view');
     if (currentView === 'list') {
         params.set('view', 'list');
+    }
+
+    // Keep community / place navigation context so refresh + back stay on target.
+    if (selectedCommunity) {
+        params.set('community', selectedCommunity);
+    } else if (window.__hsMapNavIntent?.place) {
+        params.set('place', window.__hsMapNavIntent.place);
+    }
+    if (window.__hsMapNavIntent?.hasCoords) {
+        params.set('lat', String(window.__hsMapNavIntent.lat));
+        params.set('lng', String(window.__hsMapNavIntent.lng));
     }
 
     // =========================
@@ -10829,8 +11186,19 @@ function mapMovedEnoughToRefetch() {
         // Prefer original GeoJSON props — queryRenderedFeatures may stringify booleans.
         props = hydrateMapFeatureProps(props);
 
-        // Do NOT openAuthModal here. Sold pages render Confirm Login in the iframe.
-        // Premature JS gating wrongly blocked For Sale when MapLibre props were incomplete.
+        // Sold/Leased only: open login modal on map click (board rule).
+        // For Sale / Delisted never hit this path (isMapSoldListing === false).
+        const status = mapListingStatus(props);
+        if (
+            !isMapUserLoggedIn
+            && typeof isMapSoldListing === 'function'
+            && isMapSoldListing(status, props)
+        ) {
+            if (typeof openAuthModal === 'function') {
+                openAuthModal('login');
+            }
+            return;
+        }
 
         const extId = String(props.external_id || '').trim();
         let slug = String(props.url || '').trim();
@@ -11212,7 +11580,8 @@ function mapMovedEnoughToRefetch() {
     window.hydrateMapThumbnailsForFeatures = hydrateMapThumbnailsForFeatures;
     
 document.addEventListener('click', function (e) {
-    const btn = e.target.closest('.js-map-auth-open, .map-sold-login-gate');
+    // Explicit Sold login CTA only — never open auth from a generic wrapper click.
+    const btn = e.target.closest('.js-map-auth-open');
 
     if (btn) {
         e.preventDefault();
@@ -11661,6 +12030,7 @@ function onHsListCardClick(e) {
     const item = e.target.closest('.hs-list-item');
     if (!item) return;
 
+    // Explicit "Login to View Sold Property" button only.
     if (e.target.closest('.js-map-auth-open')) {
         return;
     }
@@ -11669,19 +12039,11 @@ function onHsListCardClick(e) {
     const feature = hsMapListFeatures.find((f) => String(f.properties.id) === String(id));
     if (!feature) return;
 
-    const status = mapListingStatus(feature.properties);
-    if (mapBlurClass(status, feature.properties)) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (typeof openAuthModal === 'function') {
-            openAuthModal('login');
-        }
-        return;
-    }
-
     e.preventDefault();
     e.stopPropagation();
 
+    // Sold/Leased → login modal. For Sale / Delisted → property detail.
+    // openPropertyDetailModal enforces the same sold-only gate.
     if (typeof window.setHsMapSelectedMarker === 'function') {
         window.setHsMapSelectedMarker(feature);
     }
@@ -12330,26 +12692,21 @@ document.addEventListener('click', function (e) {
         return;
     }
 
-    if (e.target.closest('.js-map-auth-open, .map-sold-login-gate, .hs-map-popup-gallery, .hs-map-consult-form, .hs-map-tab-btn, .hs-map-gallery-nav, .hs-map-gallery-thumbs img, .map-popup-details-btn, .hs-cluster-list-item')) {
+    if (e.target.closest('.js-map-auth-open, .hs-map-popup-gallery, .hs-map-consult-form, .hs-map-tab-btn, .hs-map-gallery-nav, .hs-map-gallery-thumbs img, .map-popup-details-btn, .hs-cluster-list-item')) {
         return;
     }
 
     if (property.classList.contains('blurred-content')) {
         e.preventDefault();
         e.stopPropagation();
-        if (typeof openAuthModal === 'function') {
-            openAuthModal('login');
-        }
+        // Do not auto-open auth here. For Sale must never hit login.
+        // Sold cards use the explicit .js-map-auth-open button / iframe gate.
         return;
     }
 
     if (!property.dataset.url || property.dataset.url === '/properties/' || property.dataset.url === '/properties/undefined') {
         e.preventDefault();
         e.stopPropagation();
-        // Missing URL on sold-locked cards — only then ask for login.
-        if (property.classList.contains('blurred-content') && typeof openAuthModal === 'function') {
-            openAuthModal('login');
-        }
         return;
     }
 

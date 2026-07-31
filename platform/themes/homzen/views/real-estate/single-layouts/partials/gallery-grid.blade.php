@@ -15,6 +15,36 @@
 
 @include(Theme::getThemeNamespace('partials.property-photo-lightbox'))
 
+<style>
+.hs-see-all-photos-btn {
+    animation: hsSeeAllShadowPulse 1.7s ease-in-out infinite;
+    will-change: box-shadow;
+}
+@keyframes hsSeeAllShadowPulse {
+    0%, 100% {
+        box-shadow:
+            -12px 0 16px rgba(0, 0, 0, 0.28),
+            12px 0 16px rgba(0, 0, 0, 0.28),
+            0 4px 10px rgba(0, 0, 0, 0.18);
+    }
+    50% {
+        box-shadow:
+            -22px 0 28px rgba(0, 0, 0, 0.48),
+            22px 0 28px rgba(0, 0, 0, 0.48),
+            0 6px 14px rgba(0, 0, 0, 0.28);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .hs-see-all-photos-btn {
+        animation: none;
+        box-shadow:
+            -12px 0 16px rgba(0, 0, 0, 0.28),
+            12px 0 16px rgba(0, 0, 0, 0.28),
+            0 4px 10px rgba(0, 0, 0, 0.18);
+    }
+}
+</style>
+
 @if (! empty($galleryImages))
     <section class="flat-gallery-single" id="propertyGalleryGrid" data-images='@json($galleryImages)'>
         @foreach($galleryImages as $image)
@@ -22,7 +52,7 @@
                 <div class="item1 box-img">
                     <img src="{{ $image }}" alt="{{ $model->name }}" class="img-fluid w-100" loading="eager" onerror="this.src='{{ RvMedia::getDefaultImage() }}'">
                     <div class="box-btn">
-                        <button type="button" class="tf-btn primary js-property-gallery-open-all">
+                        <button type="button" class="tf-btn primary js-property-gallery-open-all hs-see-all-photos-btn">
                             {{ __('View All Photos (:count)', ['count' => count($galleryImages)]) }}
                         </button>
                     </div>

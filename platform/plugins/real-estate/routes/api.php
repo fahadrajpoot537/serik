@@ -114,15 +114,33 @@ Route::group([
         Route::get('geocode-community', 'PropertyController@geocodeCommunity');
         Route::get('visitor-location', function (\Illuminate\Http\Request $request) {
             $ip = (string) $request->ip();
-            $default = \App\Support\VisitorIpLocation::defaultPayload();
+
+            // Prefer real client IP behind CDN/proxy when available.
+            foreach (['CF-Connecting-IP', 'True-Client-IP', 'X-Real-IP'] as $header) {
+                $candidate = trim((string) $request->header($header, ''));
+                if (filter_var($candidate, FILTER_VALIDATE_IP)) {
+                    $ip = $candidate;
+                    break;
+                }
+            }
 
             if ($ip === '' || in_array($ip, ['127.0.0.1', '::1'], true)) {
-                return response()->json($default);
+                return response()->json([
+                    'available' => false,
+                    'source' => 'unavailable',
+                ]);
             }
 
             $payload = \App\Support\VisitorIpLocation::resolveFromIp($ip);
 
-            return response()->json($payload ?: $default);
+            if (! $payload) {
+                return response()->json([
+                    'available' => false,
+                    'source' => 'unavailable',
+                ]);
+            }
+
+            return response()->json($payload);
         });
     });
 

@@ -81,14 +81,20 @@
 
 <script>
    document.addEventListener("DOMContentLoaded", function () {
-    const iframe = document.querySelector("iframe");
+    const iframe = document.querySelector(".single-property-map iframe, .property-detail-map-embed, iframe[src*='maps.google']");
+    if (!iframe) {
+        return;
+    }
 
     iframe.addEventListener("load", function () {
-        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-        const el = iframeDoc.getElementById("lc_text-widget");
-
-        if (el) {
-            el.style.display = "none";
+        try {
+            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+            const el = iframeDoc.getElementById("lc_text-widget");
+            if (el) {
+                el.style.display = "none";
+            }
+        } catch (e) {
+            // Cross-origin map embeds cannot be inspected — ignore.
         }
     });
 });

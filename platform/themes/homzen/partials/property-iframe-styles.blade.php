@@ -132,9 +132,14 @@
     }
 
     #map,
-    [data-bb-toggle="detail-map"] {
+    #property-detail-map,
+    [data-bb-toggle="detail-map"],
+    .property-detail-map-embed {
         display: block !important;
         min-height: 320px;
+        width: 100%;
+        border: 0;
+        border-radius: 12px;
     }
 </style>
 <script>
@@ -316,9 +321,10 @@
             });
         })();
 
-        // Ensure detail map initializes inside the modal iframe after Leaflet loads.
+        // Detail map in iframe now uses Google embed (Leaflet intentionally skipped).
+        // Keep a no-op resize helper for any leftover Leaflet containers.
         function refreshDetailMap() {
-            const mapEl = document.getElementById('map');
+            const mapEl = document.querySelector('[data-bb-toggle="detail-map"], #property-detail-map, #map');
             if (!mapEl || typeof L === 'undefined') {
                 return;
             }
@@ -326,30 +332,7 @@
                 try {
                     window.dispatchEvent(new Event('resize'));
                 } catch (e) {}
-                return;
             }
-            if (!mapEl.dataset.center) {
-                return;
-            }
-            let center = mapEl.dataset.center;
-            try {
-                center = JSON.parse(center);
-            } catch (e) {}
-            const map = L.map(mapEl, {
-                attributionControl: false,
-                scrollWheelZoom: true,
-                dragging: !L.Browser.mobile,
-                touchZoom: true,
-            }).setView(center, 14);
-            L.tileLayer(mapEl.dataset.tileLayer || '', {
-                maxZoom: mapEl.dataset.maxZoom || 22,
-            }).addTo(map);
-            L.marker(center, {
-                icon: L.divIcon({
-                    iconSize: L.point(50, 50),
-                    className: 'map-marker-home',
-                }),
-            }).addTo(map);
         }
 
         window.addEventListener('load', function () {
