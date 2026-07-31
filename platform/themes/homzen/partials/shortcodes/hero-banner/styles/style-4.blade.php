@@ -5552,7 +5552,8 @@ document.addEventListener("DOMContentLoaded", function () {
             .catch(() => {});
     }
 
-    // MapLibre queryRenderedFeatures can stringify booleans ("false" is truthy in JS).
+    // MapLibre queryRenderedFeatures can stringify / drop flags. NEVER trust
+    // requires_login alone for gating — only explicit sold MlsStatus values.
     window.mapFlagTrue = function (value) {
         return value === true || value === 1 || value === '1' || value === 'true';
     };
@@ -5586,22 +5587,41 @@ document.addEventListener("DOMContentLoaded", function () {
     };
 
     window.isMapSoldListing = function (status, props) {
-        if (props && window.mapFlagTrue(props.requires_login)) {
-            return true;
-        }
-        // Prefer real MlsStatus — "transaction" is often a display label like "For Sale".
-        const raw = (props && props.mls_status) ? props.mls_status : status;
-        if (!raw) return false;
-        const normalized = String(raw).trim().toLowerCase();
-        if (normalized === 'for sale' || normalized === 'for lease' || normalized === 'for sub-lease') {
+        // Strict allowlist only. Do not use requires_login / substring "sold"
+        // (MapLibre has corrupted those and blocked For Sale opens).
+        const raw = String(
+            (props && props.mls_status)
+            || status
+            || ''
+        ).trim();
+        if (!raw) {
             return false;
         }
+        const normalized = raw.toLowerCase();
+
+        // Anything that is clearly an active browse status is never login-gated.
+        if (
+            normalized === 'for sale'
+            || normalized === 'for lease'
+            || normalized === 'for sub-lease'
+            || normalized === 'new'
+            || normalized === 'active'
+            || normalized === 'price change'
+            || normalized === 'extension'
+            || normalized === 'ext'
+            || normalized === 'previous status'
+            || normalized === 'active under contract'
+        ) {
+            return false;
+        }
+
         return MAP_SOLD_STATUSES.some((s) => s.toLowerCase() === normalized);
     };
 
     window.mapListingStatus = function (props) {
         if (!props) return '';
-        return props.mls_status || props.transaction || '';
+        // Prefer MlsStatus; never treat display transaction as sold signal.
+        return props.mls_status || '';
     };
 
     window.mapLoginGateHtml = function (status, props) {
@@ -10809,13 +10829,8 @@ function mapMovedEnoughToRefetch() {
         // Prefer original GeoJSON props — queryRenderedFeatures may stringify booleans.
         props = hydrateMapFeatureProps(props);
 
-        const status = mapListingStatus(props);
-        if (!isMapUserLoggedIn && isMapSoldListing(status, props)) {
-            if (typeof openAuthModal === 'function') {
-                openAuthModal('login');
-            }
-            return;
-        }
+        // Do NOT openAuthModal here. Sold pages render Confirm Login in the iframe.
+        // Premature JS gating wrongly blocked For Sale when MapLibre props were incomplete.
 
         const extId = String(props.external_id || '').trim();
         let slug = String(props.url || '').trim();
@@ -10825,8 +10840,19 @@ function mapMovedEnoughToRefetch() {
         slug = slug.replace(/^\/+/, '').split('?')[0];
 
         if (!slug || slug === 'undefined') {
+            // Last resort: open by listing key via ingest URL path if we have external_id.
             if (extId) {
-                fetch(`/api/v1/add-single-property/${encodeURIComponent(extId)}`).catch(() => {});
+                fetch(`/api/v1/add-single-property/${encodeURIComponent(extId)}`)
+                    .then((r) => (r.ok ? r.json() : null))
+                    .then((data) => {
+                        const nextSlug = data?.slug || data?.data?.slug || '';
+                        if (nextSlug) {
+                            openPropertyDetailUrl(
+                                serikCanonicalOrigin() + '/properties/' + String(nextSlug).replace(/^\/+/, '') + '?iframe=1&lk=' + encodeURIComponent(extId.toUpperCase())
+                            );
+                        }
+                    })
+                    .catch(() => {});
             }
             return;
         }
@@ -10998,13 +11024,6 @@ function mapMovedEnoughToRefetch() {
 
         const props = hydrateMapFeatureProps(feature.properties);
         feature = Object.assign({}, feature, { properties: props });
-        const status = mapListingStatus(props);
-        if (!isMapUserLoggedIn && isMapSoldListing(status, props)) {
-            if (typeof openAuthModal === 'function') {
-                openAuthModal('login');
-            }
-            return;
-        }
 
         if (window._hsPinPopup) {
             try { window._hsPinPopup.remove(); } catch (e) {}
@@ -11020,6 +11039,7 @@ function mapMovedEnoughToRefetch() {
         easeMapToFeature(feature, { duration: 420 });
 
         // Direct property detail popup (iframe modal) — no MapLibre pin card.
+        // Sold login is enforced inside the property page iframe, not here.
         openPropertyDetailModal(props);
     }
 
@@ -11032,12 +11052,6 @@ function mapMovedEnoughToRefetch() {
         const props = hydrateMapFeatureProps(propsRaw);
         feature = Object.assign({}, feature, { properties: props });
         const status = mapListingStatus(props);
-        if (!isMapUserLoggedIn && isMapSoldListing(status, props)) {
-            if (typeof openAuthModal === 'function') {
-                openAuthModal('login');
-            }
-            return null;
-        }
 
         closeClusterListSidebar();
         if (typeof closePropertyDetailModal === 'function') {
@@ -11363,13 +11377,14 @@ document.addEventListener('click', function (e) {
 function showPopupFromSearchItem(item) {
     const lat = parseFloat(item.dataset.lat);
     const lng = parseFloat(item.dataset.lng);
+    const mlsStatus = item.dataset.mlsStatus || item.dataset.mls_status || '';
     const popupProps = {
         id: item.dataset.id || '',
         external_id: item.dataset.external_id || '',
         url: item.dataset.slug || '',
         image: item.dataset.image || '',
         transaction: item.dataset.transaction || '',
-        mls_status: item.dataset.transaction || '',
+        mls_status: mlsStatus || item.dataset.transaction || '',
         price: item.dataset.price || 0,
         date: item.dataset.date || '',
         name: item.dataset.name || '',
@@ -12844,6 +12859,7 @@ function loadResults(keyword, reset = false){
 
 function buildMapSearchResultDataAttrs(item, listingStatus) {
     const esc = (value) => mapEscapeHtml(value);
+    const mlsStatus = item.MlsStatus ?? '';
 
     return `data-lat="${item.lat}"
                 data-lng="${item.lng}"
@@ -12852,6 +12868,7 @@ function buildMapSearchResultDataAttrs(item, listingStatus) {
                 data-slug="${esc(item.URL || '')}"
                 data-image="${esc(item.MediaURL || '')}"
                 data-transaction="${esc(listingStatus)}"
+                data-mls-status="${esc(mlsStatus)}"
                 data-price="${esc(item.ListPrice ?? '')}"
                 data-name="${esc(item.UnparsedAddress || '')}"
                 data-bedrooms="${esc(item.BedroomsTotal ?? 0)}"
@@ -12892,6 +12909,11 @@ function renderSmartSearchResults(keyword, reset, cityHTML, data, isMlsKey) {
         const listingStatus = item.MlsStatus === 'New'
             ? (item.TransactionType === 'For Sale' ? 'For Sale' : 'For Lease')
             : (item.MlsStatus ?? '');
+        const gateProps = {
+            mls_status: item.MlsStatus || '',
+            transaction: listingStatus,
+            requires_login: false,
+        };
 
         if (isChineseText(item.UnparsedAddress ?? '') || isChineseText(item.PropertySubType ?? '')) {
             return;
@@ -12907,8 +12929,8 @@ function renderSmartSearchResults(keyword, reset, cityHTML, data, isMlsKey) {
         `;
 
    listingsHTML += `
-             ${mapLoginGateHtml(listingStatus)}
-                <div class="listing-item ${mapBlurClass(listingStatus)}" style="width: 100%"
+             ${mapLoginGateHtml(item.MlsStatus, gateProps)}
+                <div class="listing-item ${mapBlurClass(item.MlsStatus, gateProps)}" style="width: 100%"
                 ${buildMapSearchResultDataAttrs(item, listingStatus)}
                  data-parking="${mapEscapeHtml(garageCount)}"
                 >
