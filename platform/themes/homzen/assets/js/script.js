@@ -1932,6 +1932,8 @@ $(() => {
                 // avoids CSRF/session flakes that left users stuck on For Sale results.
                 type: isSerikProperties ? 'GET' : 'POST',
                 data: cleanedFormData.formData,
+                dataType: 'json',
+                headers: { Accept: 'application/json' },
                 beforeSend: () => {
                     $dataListing.addClass('is-loading')
                     $dataListing.find('.loading-spinner').remove()

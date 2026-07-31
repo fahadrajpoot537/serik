@@ -5,7 +5,6 @@ namespace App\Services\RealEstate;
 use Botble\RealEstate\Enums\ModerationStatusEnum;
 use Botble\RealEstate\Models\Project;
 use Botble\RealEstate\Models\Property;
-use Botble\RealEstate\Services\PropertySearchService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -15,124 +14,197 @@ class RelatedPropertiesService
 {
     public function build(Model $model): array
     {
+        try {
+            return $this->buildInternal($model);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return [
+                'relatedProperties' => collect(),
+                'sectionTitle' => $this->buildSectionTitle($model),
+            ];
+        }
+    }
+
+    protected function buildInternal(Model $model): array
+    {
         $isProject = $model instanceof Project;
         $soldStatuses = ['Sold', 'Sold Conditional', 'Sold Conditional Escape', 'Leased', 'Leased Conditional'];
-        $cacheKey = 'serik_related_props_v3_' . $model->getKey() . '_' . ($isProject ? 'project' : 'property');
+        // v6: match by city name — MLS rows almost never have city_id populated.
+        $cacheKey = 'serik_related_props_v6_' . $model->getKey() . '_' . ($isProject ? 'project' : 'property');
 
-        $relatedProperties = Cache::remember($cacheKey, 300, function () use ($model, $isProject, $soldStatuses): Collection {
-            $limit = max(3, (int) theme_option('number_of_related_properties', 8));
-
-            if ($isProject) {
-                return Property::query()
-                    ->where('project_id', $model->getKey())
-                    ->where('moderation_status', ModerationStatusEnum::APPROVED)
-                    ->orderByDesc('id')
-                    ->take($limit)
-                    ->with([
-                        'slugable:id,key,prefix,reference_id',
-                        'currency:id,is_default,exchange_rate,symbol,title,is_prefix_symbol,decimals',
-                    ])
-                    ->get();
-            }
-
-            $cityName = $this->resolveCityName($model);
-            $beds = (int) ($model->number_bedroom ?? 0);
-            $baths = (int) ($model->number_bathroom ?? 0);
-            $isSoldListing = in_array((string) ($model->MlsStatus ?? ''), $soldStatuses, true)
-                || (float) ($model->ClosePrice ?? 0) > 0;
-            $subtype = trim((string) ($model->PropertySubType ?? ''));
-
-            $with = [
-                'slugable:id,key,prefix,reference_id',
-                'currency:id,is_default,exchange_rate,symbol,title,is_prefix_symbol,decimals',
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached) && array_key_exists('ids', $cached) && $cached['ids'] !== []) {
+            return [
+                'relatedProperties' => $this->hydrateByIds($cached['ids'] ?? []),
+                'sectionTitle' => (string) ($cached['sectionTitle'] ?? $this->buildSectionTitle($model)),
             ];
+        }
 
-            $buildBase = static function () use ($model, $isSoldListing, $soldStatuses, $cityName) {
-                $query = Property::query()
-                    ->active()
-                    ->residential()
-                    ->where('id', '!=', $model->id);
+        $payload = $this->computeFast($model, $isProject, $soldStatuses);
+        Cache::put($cacheKey, [
+            'ids' => $payload['relatedProperties']->pluck('id')->all(),
+            'sectionTitle' => $payload['sectionTitle'],
+        ], 600);
 
-                if ($isSoldListing) {
-                    $query->where(function ($q) use ($soldStatuses) {
-                        $q->whereIn('MlsStatus', $soldStatuses)
-                            ->orWhere('ClosePrice', '>', 0);
-                    });
-                } else {
-                    $query->mlsActive();
-                }
+        return $payload;
+    }
 
-                if (! empty($model->city_id)) {
-                    $query->where('city_id', $model->city_id);
-                } elseif ($cityName !== '') {
-                    $applied = app(PropertySearchService::class)
-                        ->constrainQueryToCity($query, $cityName, 2500, false);
+    /**
+     * @param  array<int, int|string>  $ids
+     */
+    protected function hydrateByIds(array $ids): Collection
+    {
+        $ids = array_values(array_filter(array_map('intval', $ids)));
+        if ($ids === []) {
+            return collect();
+        }
 
-                    if (! $applied) {
-                        $query->where(function ($q) use ($cityName) {
-                            $q->where('location', 'like', '%' . $cityName . '%')
-                                ->orWhere('name', 'like', '%' . $cityName . '%');
-                        });
-                    }
-                }
+        $with = [
+            'slugable:id,key,prefix,reference_id',
+            'currency:id,is_default,exchange_rate,symbol,title,is_prefix_symbol,decimals',
+        ];
 
-                return $query;
-            };
+        $rows = Property::query()
+            ->whereIn('id', $ids)
+            ->with($with)
+            ->get()
+            ->keyBy('id');
 
-            $attempts = [
-                static function ($query) use ($beds, $baths, $subtype) {
-                    if ($beds > 0) {
-                        $query->where('number_bedroom', $beds);
-                    }
-                    if ($baths > 0) {
-                        $query->where('number_bathroom', $baths);
-                    }
-                    if ($subtype !== '') {
-                        $query->where('PropertySubType', $subtype);
-                    }
+        return collect($ids)
+            ->map(fn ($id) => $rows->get($id))
+            ->filter()
+            ->values();
+    }
 
-                    return $query;
-                },
-                static function ($query) use ($beds, $baths) {
-                    if ($beds > 0) {
-                        $query->where('number_bedroom', $beds);
-                    }
-                    if ($baths > 0) {
-                        $query->where('number_bathroom', $baths);
-                    }
+    protected function computeFast(Model $model, bool $isProject, array $soldStatuses): array
+    {
+        $limit = max(3, min(8, (int) theme_option('number_of_related_properties', 8)));
+        $sectionTitle = $this->buildSectionTitle($model);
 
-                    return $query;
-                },
-                static function ($query) use ($beds) {
-                    if ($beds > 0) {
-                        $query->where('number_bedroom', $beds);
-                    }
+        if ($isProject) {
+            $related = Property::query()
+                ->where('project_id', $model->getKey())
+                ->where('moderation_status', ModerationStatusEnum::APPROVED)
+                ->orderByDesc('id')
+                ->take($limit)
+                ->with([
+                    'slugable:id,key,prefix,reference_id',
+                    'currency:id,is_default,exchange_rate,symbol,title,is_prefix_symbol,decimals',
+                ])
+                ->get();
 
-                    return $query;
-                },
-                static fn ($query) => $query,
+            return [
+                'relatedProperties' => $related,
+                'sectionTitle' => $sectionTitle,
             ];
+        }
 
-            $results = collect();
-            foreach ($attempts as $applyFilters) {
-                $results = $applyFilters($buildBase())
-                    ->orderByDesc('id')
-                    ->take($limit)
-                    ->with($with)
-                    ->get();
+        $cityName = $this->resolveCityName($model);
+        $beds = (int) ($model->number_bedroom ?? 0);
+        $baths = (int) ($model->number_bathroom ?? 0);
+        $isSoldListing = in_array((string) ($model->MlsStatus ?? ''), $soldStatuses, true)
+            || (float) ($model->ClosePrice ?? 0) > 0;
+        $subtype = trim((string) ($model->PropertySubType ?? ''));
 
-                if ($results->count() >= min(3, $limit)) {
-                    break;
-                }
+        $with = [
+            'slugable:id,key,prefix,reference_id',
+            'currency:id,is_default,exchange_rate,symbol,title,is_prefix_symbol,decimals',
+        ];
+
+        // beds/baths in SQL + LIKE city is multi-second on MLS volume.
+        // Fetch city(+subtype) fast, then prefer matching beds/baths in PHP.
+        $attempts = [
+            [$cityName, $subtype],
+            [$cityName, ''],
+        ];
+
+        $pool = collect();
+        foreach ($attempts as [$city, $type]) {
+            $pool = $this->runScopedQuery(
+                (int) $model->id,
+                (string) $city,
+                $isSoldListing,
+                $soldStatuses,
+                (string) $type,
+                $limit * 3,
+                $with
+            );
+
+            if ($pool->count() >= min(3, $limit)) {
+                break;
             }
+        }
 
-            return $results;
-        });
+        $related = $pool
+            ->sortByDesc(function ($property) use ($beds, $baths, $subtype) {
+                $score = 0;
+                if ($subtype !== '' && trim((string) ($property->PropertySubType ?? '')) === $subtype) {
+                    $score += 4;
+                }
+                if ($beds > 0 && (int) ($property->number_bedroom ?? 0) === $beds) {
+                    $score += 2;
+                }
+                if ($baths > 0 && (int) ($property->number_bathroom ?? 0) === $baths) {
+                    $score += 1;
+                }
+
+                return $score * 1_000_000_000 + (int) $property->id;
+            })
+            ->take($limit)
+            ->values();
 
         return [
-            'relatedProperties' => $relatedProperties,
-            'sectionTitle' => $this->buildSectionTitle($model),
+            'relatedProperties' => $related,
+            'sectionTitle' => $sectionTitle,
         ];
+    }
+
+    /**
+     * @param  array<int, string>  $soldStatuses
+     * @param  array<int, string>  $with
+     */
+    protected function runScopedQuery(
+        int $excludeId,
+        string $cityName,
+        bool $isSoldListing,
+        array $soldStatuses,
+        string $subtype,
+        int $limit,
+        array $with
+    ): Collection {
+        $query = Property::query()
+            ->where('id', '!=', $excludeId)
+            ->where('moderation_status', ModerationStatusEnum::APPROVED)
+            ->residential();
+
+        if ($isSoldListing) {
+            $query->where(function ($q) use ($soldStatuses) {
+                $q->whereIn('MlsStatus', $soldStatuses)
+                    ->orWhere('ClosePrice', '>', 0);
+            });
+        } else {
+            $query->mlsActive();
+        }
+
+        // MLS imports leave city_id null — match ", City, ON" in the display name.
+        if ($cityName !== '') {
+            $needle = '%, ' . $cityName . ', ON%';
+            $query->where(function ($q) use ($needle, $cityName) {
+                $q->where('name', 'like', $needle)
+                    ->orWhere('location', 'like', '%' . $cityName . '%');
+            });
+        }
+
+        if ($subtype !== '') {
+            $query->where('PropertySubType', $subtype);
+        }
+
+        return $query
+            ->orderByDesc('id')
+            ->take($limit)
+            ->with($with)
+            ->get();
     }
 
     protected function resolveCityName(Model $model): string
@@ -181,4 +253,3 @@ class RelatedPropertiesService
         return $isSoldListing ? __('Similar Sold Listings') : __('Similar Properties');
     }
 }
-

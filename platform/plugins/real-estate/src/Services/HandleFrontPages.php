@@ -64,7 +64,12 @@ class HandleFrontPages
                                     ->where('external_id', '!=', '');
                             });
                     })
-                    ->with(RealEstateHelper::getPropertyRelationsQuery())
+                    ->with(array_merge(RealEstateHelper::getPropertyRelationsQuery(), [
+                        'features',
+                        'facilities',
+                        'customFields',
+                        'author',
+                    ]))
                     ->first();
 
                 if (! $property) {
@@ -141,7 +146,8 @@ class HandleFrontPages
                 }
 
                 $images = [];
-                if (! empty($property->images) && is_array($property->images)) {
+                // MLS galleries use SerikMediaUrl / TREB proxy — skip expensive RvMedia loops.
+                if (empty($property->external_id) && ! empty($property->images) && is_array($property->images)) {
                     foreach ($property->images as $image) {
                         $images[] = RvMedia::getImageUrl($image, null, false, RvMedia::getDefaultImage());
                     }
@@ -152,13 +158,25 @@ class HandleFrontPages
                     (bool) $request->boolean('iframe')
                 );
 
-                // Map/modal iframe must stay fast — skip related Meili/SQL work.
-                $relatedPropertiesPayload = $request->boolean('iframe')
-                    ? [
+                // Map iframe: defer similar listings so the modal opens fast.
+                // Full page: build immediately (cached after first hit).
+                if ($request->boolean('iframe')) {
+                    $relatedPropertiesPayload = [
                         'relatedProperties' => collect(),
-                        'sectionTitle' => '',
-                    ]
-                    : app(RelatedPropertiesService::class)->build($property);
+                        'sectionTitle' => __('Similar Properties'),
+                        'deferPropertyId' => (int) $property->getKey(),
+                    ];
+
+                    $propertyId = (int) $property->getKey();
+                    dispatch(static function () use ($propertyId): void {
+                        $model = \Botble\RealEstate\Models\Property::query()->find($propertyId);
+                        if ($model) {
+                            app(\App\Services\RealEstate\RelatedPropertiesService::class)->build($model);
+                        }
+                    })->afterResponse();
+                } else {
+                    $relatedPropertiesPayload = app(RelatedPropertiesService::class)->build($property);
+                }
 
                 return [
                     'view' => 'real-estate.property',

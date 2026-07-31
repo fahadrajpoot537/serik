@@ -20,7 +20,8 @@ class CacheHomepageResponseMiddleware
             return response($cached, 200, [
                 'Content-Type' => 'text/html; charset=UTF-8',
                 'X-Serik-Homepage-Cache' => 'HIT',
-                'Cache-Control' => 'private, max-age=120, stale-while-revalidate=600',
+                'Cache-Control' => 'private, no-cache, must-revalidate',
+                'Vary' => 'Cookie',
             ]);
         }
 
@@ -33,6 +34,8 @@ class CacheHomepageResponseMiddleware
         ) {
             HomepageResponseCache::put($request, (string) $response->getContent());
             $response->headers->set('X-Serik-Homepage-Cache', 'MISS');
+            $response->headers->set('Cache-Control', 'private, no-cache, must-revalidate');
+            $response->headers->set('Vary', 'Cookie');
         }
 
         return $response;

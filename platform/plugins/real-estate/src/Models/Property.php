@@ -354,7 +354,9 @@ class Property extends BaseModel
             }
 
             if ($this->image) {
-                return RvMedia::getImageUrl($this->image, 'medium-rectangle', false, RvMedia::getDefaultImage());
+                $url = RvMedia::getImageUrl($this->image, 'medium-rectangle', false, RvMedia::getDefaultImage());
+
+                return \App\Support\CmsWebp::preferWebpUrl($url) ?? $url;
             }
 
             if (class_exists(\Theme\homzen\Supports\TrebPropertyHelper::class) && $this->external_id) {

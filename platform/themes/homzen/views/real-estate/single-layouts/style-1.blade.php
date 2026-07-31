@@ -133,15 +133,31 @@
   }
 
   .flat-property-detail .single-property-element {
-    padding-bottom: 24px;
-    margin-bottom: 24px;
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+  }
+
+  .header-property-detail {
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  .header-property-detail .content-top {
+    margin-bottom: 0 !important;
+    gap: 4px !important;
   }
 
   .single-property-overview,
   .single-property-desc {
     padding-left: 0 !important;
     padding-right: 0 !important;
+    padding-top: 0 !important;
+    margin-top: 0 !important;
     overflow: visible !important;
+  }
+
+  .single-property-overview .info-box1 {
+    margin-top: 0 !important;
   }
 }
 

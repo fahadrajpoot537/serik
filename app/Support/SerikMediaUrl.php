@@ -148,8 +148,10 @@ final class SerikMediaUrl
             return CanonicalUrl::normalize(asset($path));
         }
 
-        // Laravel public disk relative path (Botble media)
-        return CanonicalUrl::normalize(asset('storage/' . $path));
+        // Laravel public disk relative path (Botble media) — prefer WebP for CMS uploads.
+        $public = CanonicalUrl::normalize(asset('storage/' . $path));
+
+        return CmsWebp::preferWebpUrl($public) ?? $public;
     }
 
     public static function normalizeExternalUrl(string $url, ?string $fallback = null): string
@@ -302,13 +304,19 @@ final class SerikMediaUrl
 
             if ($size !== null && $size !== '' && class_exists(\Botble\Media\Facades\RvMedia::class)) {
                 try {
-                    return \Botble\Media\Facades\RvMedia::getImageUrl($candidate, $size);
+                    $url = \Botble\Media\Facades\RvMedia::getImageUrl($candidate, $size);
+
+                    return CmsWebp::preferWebpUrl($url) ?? $url;
                 } catch (\Throwable) {
-                    return self::toPublic($candidate, $fallback);
+                    $url = self::toPublic($candidate, $fallback);
+
+                    return CmsWebp::preferWebpUrl($url) ?? $url;
                 }
             }
 
-            return self::toPublic($candidate, $fallback);
+            $url = self::toPublic($candidate, $fallback);
+
+            return CmsWebp::preferWebpUrl($url) ?? $url;
         }
 
         return $fallback ?? self::placeholder();

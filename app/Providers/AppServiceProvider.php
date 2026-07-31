@@ -9,6 +9,7 @@ use App\Support\SerikLogging;
 use App\Support\TrustBadgeImageAlt;
 use Illuminate\Foundation\Application;
 use Illuminate\Queue\Events\JobFailed;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\HtmlString;
@@ -54,6 +55,35 @@ class AppServiceProvider extends ServiceProvider
         self::ensureWritableLoggingOrFallback();
 
         CanonicalUrl::forceApplicationUrl();
+
+        $this->registerAccountAuthCookieMarker();
+
+        // New CMS uploads → WebP (TREB images use a separate proxy; untouched).
+        try {
+            if (! Cache::get('serik_media_webp_enabled_v1') && ! (bool) setting('media_convert_image_to_webp', false)) {
+                setting()->set(['media_convert_image_to_webp' => '1'])->save();
+                Cache::forever('serik_media_webp_enabled_v1', 1);
+            }
+        } catch (\Throwable) {
+            // Settings table may be unavailable during early install/migrate.
+        }
+
+        add_filter('core_media_image', function ($html, $url = null) {
+            if (! is_string($html) || $html === '' || ! is_string($url) || $url === '') {
+                return $html;
+            }
+
+            if (\App\Support\CmsWebp::isTrebPath($url)) {
+                return $html;
+            }
+
+            $webp = \App\Support\CmsWebp::preferWebpUrl($url);
+            if (! is_string($webp) || $webp === '' || $webp === $url) {
+                return $html;
+            }
+
+            return str_replace($url, $webp, $html);
+        }, 20, 2);
 
         if (defined('BASE_ACTION_PUBLIC_RENDER_SINGLE')) {
             add_action(BASE_ACTION_PUBLIC_RENDER_SINGLE, function (string $screen, object $data): void {
@@ -295,6 +325,74 @@ class AppServiceProvider extends ServiceProvider
                 return \App\Support\MenuUrl::resolve($url);
             }, 1200);
         }
+
+        // Homepage can be served from anonymous HTML cache; if the browser still
+        // shows Login while the session is authenticated, reload once.
+        add_filter(THEME_FRONT_FOOTER, static function (?string $html): ?string {
+            if (! \App\Support\SerikHomepage::isHomepageRequest()) {
+                return $html;
+            }
+
+            $script = <<<'HTML'
+<script>
+(function () {
+    if (window.__serikHomeAuthSync) return;
+    window.__serikHomeAuthSync = true;
+    if (!document.querySelector('.js-auth-open-login, .js-auth-open-register')) return;
+    if (sessionStorage.getItem('serik_home_auth_reloaded') === '1') return;
+    fetch('/api/v1/auth/session-status', {
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+    }).then(function (r) { return r.ok ? r.json() : null; }).then(function (data) {
+        if (!data || !data.logged_in) {
+            sessionStorage.removeItem('serik_home_auth_reloaded');
+            return;
+        }
+        sessionStorage.setItem('serik_home_auth_reloaded', '1');
+        window.location.reload();
+    }).catch(function () {});
+})();
+</script>
+HTML;
+
+            return ($html ?? '') . $script;
+        }, 1500);
+    }
+
+    /**
+     * Lightweight cookie so EarlyHomepageCacheMiddleware can skip guest HTML
+     * without waiting for StartSession (session login has no remember_* cookie).
+     */
+    protected function registerAccountAuthCookieMarker(): void
+    {
+        Event::listen(\Illuminate\Auth\Events\Login::class, static function ($event): void {
+            if (($event->guard ?? '') !== 'account') {
+                return;
+            }
+
+            cookie()->queue(cookie(
+                'serik_acct',
+                '1',
+                60 * 24 * 45,
+                '/',
+                null,
+                (bool) config('session.secure', false),
+                true,
+                false,
+                config('session.same_site', 'lax')
+            ));
+        });
+
+        Event::listen(\Illuminate\Auth\Events\Logout::class, static function ($event): void {
+            if (($event->guard ?? '') !== 'account') {
+                return;
+            }
+
+            cookie()->queue(cookie()->forget('serik_acct'));
+            if (function_exists('session') && session()->isStarted()) {
+                session()->forget('serik_home_auth_reloaded');
+            }
+        });
     }
 
     protected static function ensureWritableLoggingOrFallback(): void

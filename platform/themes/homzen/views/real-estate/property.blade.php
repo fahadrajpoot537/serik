@@ -15,10 +15,11 @@
         Theme::asset()->container('footer')->usePath()->add('fancybox', 'plugins/fancybox/jquery.fancybox.min.js');
     }
 
-    // Leaflet needed for detail map on both full page and modal iframe.
-    Theme::asset()->usePath()->add('leaflet', 'plugins/leaflet/leaflet.css');
-    Theme::asset()->container('footer')->usePath()->add('leaflet', 'plugins/leaflet/leaflet.js');
-
+    // Leaflet only on full detail page — iframe modal skips map libs for faster open.
+    if (! $isIframe) {
+        Theme::asset()->usePath()->add('leaflet', 'plugins/leaflet/leaflet.css');
+        Theme::asset()->container('footer')->usePath()->add('leaflet', 'plugins/leaflet/leaflet.js');
+    }
     $style = theme_option('real_estate_property_detail_layout', 1);
     $style = in_array($style, range(1, 4)) ? $style : 1;
     Theme::set('pageTitle', $property->name);

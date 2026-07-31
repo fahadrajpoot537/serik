@@ -280,16 +280,17 @@
     }
 
     const listingKey = gallery.dataset.listingKey || '';
-    const currentCount = getGalleryImages().length;
-    if (!listingKey || currentCount > 1) {
+    if (!listingKey) {
         return;
     }
+
+    const currentCount = getGalleryImages().length;
 
     fetch('/api/v1/getPropertyImages/' + encodeURIComponent(listingKey))
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
             const images = data && Array.isArray(data.images) ? data.images.filter(Boolean) : [];
-            if (images.length <= 1) {
+            if (images.length <= currentCount) {
                 return;
             }
 

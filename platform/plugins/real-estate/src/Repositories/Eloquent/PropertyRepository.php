@@ -424,11 +424,25 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
             if (isset($filters['max_price']) && (float) $filters['max_price'] > 0) {
                 $cityOpts['max_price'] = (float) $filters['max_price'];
             }
+            // Push bed/bath into Meili so city ID sets stay small (avoids 20k whereIn + slow MySQL).
+            $minBed = (int) ($filters['bedroom'] ?? $filters['min_bedroom'] ?? 0);
+            if ($minBed > 0) {
+                $cityOpts['min_bedrooms'] = $minBed;
+            }
+            $minBath = (int) ($filters['bathroom'] ?? $filters['min_bathroom'] ?? 0);
+            if ($minBath > 0) {
+                $cityOpts['min_bathrooms'] = $minBath;
+            }
+
+            // Page-aware Meili window — default landings need newest IDs, not 20k.
+            $page = max(1, (int) request()->input('page', 1));
+            $perPage = max(12, (int) request()->input('per_page', 12));
+            $meiliCityLimit = min(8000, max(800, ($page * $perPage) + 1500));
 
             if (
                 ! $skipMeiliCity
                 && $locationSearch !== ''
-                && $search->constrainQueryToCity($this->model, $locationSearch, 20000, true, $cityOpts)
+                && $search->constrainQueryToCity($this->model, $locationSearch, $meiliCityLimit, true, $cityOpts)
             ) {
                 // Meili / district city IDs applied (strict: empty city = no rows).
             } elseif (! $skipMeiliCity && $locationSearch !== '' && RealEstateHelper::isEnabledZipCode()) {

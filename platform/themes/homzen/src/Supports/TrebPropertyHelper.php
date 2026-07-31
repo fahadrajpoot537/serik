@@ -952,11 +952,8 @@ class TrebPropertyHelper
             }
 
             $cacheKeys = [
-                'treb_images_v5_' . $normalizedKey,
-                'treb_images_v4_' . $normalizedKey,
-                'treb_images_v3_' . $normalizedKey,
-                'treb_property_images_' . $normalizedKey,
-                'treb_property_images_' . $listingKey,
+                'treb_images_v6_' . $normalizedKey,
+                'treb_property_images_v6_' . $normalizedKey,
             ];
 
             foreach ($cacheKeys as $cacheKey) {
@@ -977,7 +974,7 @@ class TrebPropertyHelper
                 return \App\Support\SerikMediaUrl::mapListingGalleryUrls($normalizedKey, $imageVal, []);
             }
 
-            // Single lightweight AMP Media call — always fetch when cache is cold.
+            // Paginated AMP Media call — always fetch when cache is cold.
             $images = self::fetchMediaImagesFromAmp($normalizedKey);
 
             if ($images === [] && $normalizedKey !== $listingKey) {
@@ -987,8 +984,8 @@ class TrebPropertyHelper
             if ($images !== []) {
                 $photos = \App\Support\TrebMediaFilter::filterPhotoUrls($images);
                 if ($photos !== []) {
-                    Cache::put('treb_images_v5_' . $normalizedKey, $photos, 3600);
-                    Cache::put('treb_property_images_' . $normalizedKey, $photos, 86400);
+                    Cache::put('treb_images_v6_' . $normalizedKey, $photos, 3600);
+                    Cache::put('treb_property_images_v6_' . $normalizedKey, $photos, 86400);
 
                     return $photos;
                 }
@@ -1017,11 +1014,8 @@ class TrebPropertyHelper
 
         if (! $fresh) {
             $cacheKeys = [
-                'treb_images_v5_' . $normalizedKey,
-                'treb_images_v4_' . $normalizedKey,
-                'treb_images_v3_' . $normalizedKey,
-                'treb_property_images_' . $normalizedKey,
-                'treb_property_images_' . $listingKey,
+                'treb_images_v6_' . $normalizedKey,
+                'treb_property_images_v6_' . $normalizedKey,
             ];
 
             foreach ($cacheKeys as $cacheKey) {
@@ -1031,7 +1025,7 @@ class TrebPropertyHelper
                 }
 
                 $filtered = self::filterPersistenceImageUrls($cached);
-                // Stale caches often hold a single cover URL — always refetch AMP for gallery.
+                // Stale single-cover caches should still trigger AMP refetch.
                 if (count($filtered) >= 2) {
                     return $filtered;
                 }
@@ -1047,8 +1041,8 @@ class TrebPropertyHelper
             if ($images !== []) {
                 $photos = \App\Support\TrebMediaFilter::filterPhotoUrls($images);
                 if ($photos !== []) {
-                    Cache::put('treb_images_v5_' . $normalizedKey, $photos, 3600);
-                    Cache::put('treb_property_images_' . $normalizedKey, $photos, 86400);
+                    Cache::put('treb_images_v6_' . $normalizedKey, $photos, 3600);
+                    Cache::put('treb_property_images_v6_' . $normalizedKey, $photos, 86400);
 
                     return $photos;
                 }
@@ -1093,20 +1087,15 @@ class TrebPropertyHelper
     }
 
     /**
+     * Fetch all photo MediaURLs from AMP for a listing.
+     * Prefers LargestNoWatermark per Order and paginates so galleries are not truncated.
+     *
      * @return array<int, string>
      */
     protected static function fetchMediaImagesFromAmp(string $listingKey): array
     {
-        $url = 'https://query.ampre.ca/odata/Media?'
-            . '%24filter=ResourceRecordKey%20eq%20%27' . $listingKey . '%27'
-            . '&%24top=50'
-            . '&%24select=MediaURL,ImageSizeDescription,Order,MediaCategory,MediaType,ResourceName'
-            . '&%24orderby=Order';
-
-        $payload = self::ampGet($url);
-        $items = $payload['value'] ?? [];
-
-        if (empty($items)) {
+        $listingKey = trim($listingKey);
+        if ($listingKey === '') {
             return [];
         }
 
@@ -1118,26 +1107,53 @@ class TrebPropertyHelper
         ];
 
         $byOrder = [];
+        $pageSize = 100;
+        $maxPages = 50; // safety only — not a photo cap (50 pages × 100 media rows)
+        $skip = 0;
 
-        foreach ($items as $media) {
-            if (! is_array($media) || ! \App\Support\TrebMediaFilter::isPhotoAmpMedia($media)) {
-                continue;
+        for ($page = 0; $page < $maxPages; $page++) {
+            // Match historical AMP encoding (listing keys are alphanumeric).
+            $url = 'https://query.ampre.ca/odata/Media?'
+                . '%24filter=ResourceRecordKey%20eq%20%27' . $listingKey . '%27'
+                . '&%24top=' . $pageSize
+                . '&%24skip=' . $skip
+                . '&%24select=MediaURL,ImageSizeDescription,Order,MediaCategory,MediaType,ResourceName'
+                . '&%24orderby=Order';
+
+            $payload = self::ampGet($url, 12);
+            $items = $payload['value'] ?? [];
+
+            if (! is_array($items) || $items === []) {
+                break;
             }
 
-            if (empty($media['MediaURL'])) {
-                continue;
+            foreach ($items as $media) {
+                if (! is_array($media) || ! \App\Support\TrebMediaFilter::isPhotoAmpMedia($media)) {
+                    continue;
+                }
+
+                if (empty($media['MediaURL'])) {
+                    continue;
+                }
+
+                $order = (int) ($media['Order'] ?? count($byOrder));
+                $size = (string) ($media['ImageSizeDescription'] ?? '');
+                $rank = $sizePriority[$size] ?? 4;
+
+                // Prefer LargestNoWatermark; keep lesser sizes only when larger is missing.
+                if (! isset($byOrder[$order]) || $rank < $byOrder[$order]['rank']) {
+                    $byOrder[$order] = [
+                        'url' => $media['MediaURL'],
+                        'rank' => $rank,
+                    ];
+                }
             }
 
-            $order = (int) ($media['Order'] ?? count($byOrder));
-            $size = (string) ($media['ImageSizeDescription'] ?? '');
-            $rank = $sizePriority[$size] ?? 4;
-
-            if (! isset($byOrder[$order]) || $rank < $byOrder[$order]['rank']) {
-                $byOrder[$order] = [
-                    'url' => $media['MediaURL'],
-                    'rank' => $rank,
-                ];
+            if (count($items) < $pageSize) {
+                break;
             }
+
+            $skip += $pageSize;
         }
 
         ksort($byOrder);

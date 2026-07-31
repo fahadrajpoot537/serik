@@ -190,6 +190,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
         $middleware->prepend(\App\Http\Middleware\ForceCanonicalDomainMiddleware::class);
         $middleware->prepend(\App\Http\Middleware\BlockSensitivePathsMiddleware::class);
         $middleware->prepend(\App\Http\Middleware\WagesMaintenanceMiddleware::class);
+        $middleware->prepend(\App\Http\Middleware\EarlyHomepageCacheMiddleware::class);
         $middleware->appendToGroup('web', \App\Http\Middleware\CacheHomepageResponseMiddleware::class);
         $middleware->appendToGroup('web', \App\Http\Middleware\GeoBlockMiddleware::class);
         $middleware->appendToGroup('web', \App\Http\Middleware\RequestProfilerMiddleware::class);

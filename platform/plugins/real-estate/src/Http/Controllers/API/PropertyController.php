@@ -24,6 +24,7 @@ use Illuminate\Support\Facades\Cache;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Theme\homzen\Supports\TrebPropertyHelper;
+use Botble\Theme\Facades\Theme;
 
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Schema;
@@ -5642,8 +5643,8 @@ class PropertyController extends BaseController
         // Falls back to MySQL for complex sold/date/subtype filters, or when Meili
         // is unavailable. engine=mysql forces the MySQL path for A/B testing.
         if ($request->input('engine') !== 'mysql') {
-            // v8: DB lat/lng on geometry + properties for exact pin placement.
-            $meiliCacheKey = 'map_meili_v10_' . md5(implode('|', [
+            // v11: requires_login as 0/1 (MapLibre stringifies booleans; "false" is truthy).
+            $meiliCacheKey = 'map_meili_v11_' . md5(implode('|', [
                 round($south, 4), round($north, 4), round($west, 4), round($east, 4),
                 $this->mapFilterSignature($request),
             ]));
@@ -5669,8 +5670,8 @@ class PropertyController extends BaseController
             }
         }
 
-        // v27: list cards need bedrooms_below for "2+2 bed" display.
-        $cacheKey = 'map_v28_' . md5(implode('|', [
+        // v29: requires_login as 0/1 for MapLibre-safe sold gating.
+        $cacheKey = 'map_v29_' . md5(implode('|', [
             round($south, 4), round($north, 4), round($west, 4), round($east, 4),
             $this->mapFilterSignature($request),
         ]));
@@ -6001,7 +6002,7 @@ class PropertyController extends BaseController
                                 'date' => null,
                                 'area' => null,
                                 'agency' => '',
-                                'requires_login' => true,
+                                'requires_login' => 1,
                             ],
                         ];
                     }
@@ -6042,7 +6043,8 @@ class PropertyController extends BaseController
                             'date' => $displayDate ? date('Y-m-d', strtotime((string) $displayDate)) : null,
                             'area' => $property->square,
                             'agency' => $property->broker,
-                            'requires_login' => false,
+                            // Use 0/1 — MapLibre may stringify booleans; "false" is truthy in JS.
+                            'requires_login' => 0,
                         ]
                     ];
                 })->toArray()
@@ -6253,7 +6255,7 @@ class PropertyController extends BaseController
                     'agency' => $agency,
                     'date' => isset($h['created_ts']) ? date('Y-m-d', (int) $h['created_ts']) : null,
                     'url' => Str::slug($h['name'] ?? 'property') . '-' . strtolower((string) ($h['external_id'] ?? '')),
-                    'requires_login' => false,
+                    'requires_login' => 0,
                 ],
             ];
         }
@@ -6594,6 +6596,60 @@ class PropertyController extends BaseController
         return response()->json($bundle);
     }
 
+    public function getRelatedProperties($propertyId)
+    {
+        $property = Property::query()->find((int) $propertyId);
+
+        if (! $property) {
+            return response()->json([
+                'success' => false,
+                'count' => 0,
+                'html' => '',
+                'sectionTitle' => '',
+            ], 404);
+        }
+
+        if (
+            \Theme\homzen\Supports\TrebPropertyHelper::isCommercialSubType($property->PropertySubType ?? null)
+        ) {
+            return response()->json([
+                'success' => false,
+                'count' => 0,
+                'html' => '',
+                'sectionTitle' => '',
+            ], 404);
+        }
+
+        $payload = app(\App\Services\RealEstate\RelatedPropertiesService::class)->build($property);
+        $related = $payload['relatedProperties'] ?? collect();
+        $sectionTitle = (string) ($payload['sectionTitle'] ?? __('Similar Properties'));
+
+        if ($related->isEmpty()) {
+            return response()->json([
+                'success' => true,
+                'count' => 0,
+                'html' => '',
+                'sectionTitle' => $sectionTitle,
+            ]);
+        }
+
+        $slidesHtml = '';
+        foreach ($related as $item) {
+            $slidesHtml .= '<div class="swiper-slide">'
+                . view(Theme::getThemeNamespace('views.real-estate.properties.item-grid'), [
+                    'property' => $item,
+                    'class' => 'style-2',
+                ])->render()
+                . '</div>';
+        }
+
+        return response()->json([
+            'success' => true,
+            'count' => $related->count(),
+            'html' => $slidesHtml,
+            'sectionTitle' => $sectionTitle,
+        ]);
+    }
 
     public function getPropertyImages($listingKey)
     {

@@ -293,14 +293,14 @@ final class TrebImageStore
      * @param  array<int, string>  $sources  URLs or disk-relative paths
      * @return array<int, string>
      */
-    public function persistGallery(string $listingKey, array $sources, int $max = 25): array
+    public function persistGallery(string $listingKey, array $sources, ?int $max = null): array
     {
         $sources = \App\Support\TrebMediaFilter::filterPhotoUrls(array_values(array_filter($sources)));
         $stored = [];
         $photoIndex = 0;
 
         foreach ($sources as $source) {
-            if ($photoIndex >= $max) {
+            if ($max !== null && $photoIndex >= $max) {
                 break;
             }
 

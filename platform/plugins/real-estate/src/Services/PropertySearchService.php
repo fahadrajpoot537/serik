@@ -314,46 +314,64 @@ class PropertySearchService
             return null;
         }
 
-        $cacheKey = 'serik_city_ids_v3:' . md5(mb_strtolower($city) . '|' . $limit . '|' . md5(json_encode($opts)));
+        $cacheKey = 'serik_city_ids_v4:' . md5(mb_strtolower($city) . '|' . $limit . '|' . md5(json_encode($opts)));
 
-        return Cache::remember($cacheKey, 900, function () use ($city, $limit, $opts) {
-            if (! $this->isAvailable()) {
-                // District / geo fallbacks still work without Meili.
-                $districtIds = $this->searchDistrictCityIds($city, $limit);
-                if ($districtIds !== null) {
-                    return $districtIds;
-                }
+        // Never cache null — a temporary Meili outage would pin "no city filter"
+        // for 15 minutes and force multi-second MySQL full scans on every filter click.
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached)) {
+            return $cached;
+        }
 
-                return null;
-            }
+        $ids = $this->resolveCityIdsUncached($city, $limit, $opts);
+        if (is_array($ids)) {
+            Cache::put($cacheKey, $ids, 900);
+        }
 
-            // Avoid residential_only here: Meili drops docs missing property_sub_type.
-            $opts = array_merge(['limit' => $limit], $opts);
-            unset($opts['residential_only']);
+        return $ids;
+    }
 
-            foreach ([ucwords(strtolower($city)), $city] as $variant) {
-                $ids = $this->searchIds('', array_merge($opts, ['city' => $variant]));
-                if ($ids !== null && $ids !== []) {
-                    return $ids;
-                }
-            }
-
-            // Former Toronto municipalities (North York, etc.) live as district codes.
-            // Prefer districts only — geo radius overlaps neighboring GTA cities.
+    /**
+     * @return int[]|null
+     */
+    protected function resolveCityIdsUncached(string $city, int $limit, array $opts): ?array
+    {
+        if (! $this->isAvailable()) {
+            // District / geo fallbacks still work without Meili.
             $districtIds = $this->searchDistrictCityIds($city, $limit);
-            if ($districtIds !== null && $districtIds !== []) {
+            if ($districtIds !== null) {
                 return $districtIds;
             }
 
-            $geoIds = $this->searchCityIdsByGeo($city, $limit);
-            if ($geoIds !== null && $geoIds !== []) {
-                return $geoIds;
-            }
+            return null;
+        }
 
-            // Free-text last — can match street names ("Northgate"); only for
-            // cities without district/geo coverage.
-            return $this->searchIds($city, $opts);
-        });
+        // Avoid residential_only here: Meili drops docs missing property_sub_type.
+        $opts = array_merge(['limit' => $limit], $opts);
+        unset($opts['residential_only']);
+
+        foreach ([ucwords(strtolower($city)), $city] as $variant) {
+            $found = $this->searchIds('', array_merge($opts, ['city' => $variant]));
+            if ($found !== null && $found !== []) {
+                return $found;
+            }
+        }
+
+        // Former Toronto municipalities (North York, etc.) live as district codes.
+        // Prefer districts only — geo radius overlaps neighboring GTA cities.
+        $districtIds = $this->searchDistrictCityIds($city, $limit);
+        if ($districtIds !== null && $districtIds !== []) {
+            return $districtIds;
+        }
+
+        $geoIds = $this->searchCityIdsByGeo($city, $limit);
+        if ($geoIds !== null && $geoIds !== []) {
+            return $geoIds;
+        }
+
+        // Free-text last — can match street names ("Northgate"); only for
+        // cities without district/geo coverage.
+        return $this->searchIds($city, $opts);
     }
 
     /**
@@ -474,7 +492,9 @@ class PropertySearchService
     {
         $ids = $this->searchCityIds($city, $limit, $opts);
         if ($ids === null) {
-            return false;
+            // Meili down / empty index: still pin the city via address fragment so
+            // filters never scan every Ontario listing (15–30s cold MySQL).
+            return $this->constrainQueryToCityViaLocation($query, $city, $strict);
         }
 
         if ($ids === []) {
@@ -488,6 +508,26 @@ class PropertySearchService
         }
 
         $query->whereIn('id', $ids);
+
+        return true;
+    }
+
+    /**
+     * MySQL fallback when Meilisearch cannot resolve city IDs.
+     * MLS addresses are stored as "…, {City}, ON {postal}".
+     */
+    public function constrainQueryToCityViaLocation($query, string $city, bool $strict = false): bool
+    {
+        $city = trim($city);
+        if ($city === '' || strcasecmp($city, 'ontario') === 0 || strcasecmp($city, 'on') === 0) {
+            return false;
+        }
+
+        // Escape LIKE wildcards in city names (e.g. odd punctuation).
+        $safe = addcslashes($city, '%_\\');
+        $pattern = '%, ' . $safe . ', ON%';
+
+        $query->where('location', 'like', $pattern);
 
         return true;
     }

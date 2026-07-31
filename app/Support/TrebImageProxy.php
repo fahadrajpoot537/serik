@@ -92,6 +92,8 @@ final class TrebImageProxy
 
         // Cache-only check — never hit AMP from a hot path (map API, list cards).
         foreach ([
+            'treb_images_v6_' . $listingKey,
+            'treb_property_images_v6_' . $listingKey,
             'treb_images_v5_' . $listingKey,
             'treb_property_images_' . $listingKey,
         ] as $cacheKey) {

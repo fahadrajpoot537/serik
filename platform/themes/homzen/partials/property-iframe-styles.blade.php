@@ -71,6 +71,55 @@
             position: static !important;
             top: auto !important;
         }
+
+        .property-page-nav {
+            top: 0 !important;
+        }
+
+        section.flat-property-detail {
+            padding-top: 0 !important;
+            padding-bottom: 8px !important;
+        }
+
+        .flat-property-detail .container {
+            padding-left: 10px !important;
+            padding-right: 10px !important;
+        }
+
+        .header-property-detail {
+            margin: 0 !important;
+            padding: 6px 0 0 !important;
+        }
+
+        .header-property-detail .content-top {
+            gap: 4px !important;
+            margin-bottom: 0 !important;
+        }
+
+        .header-property-detail .title {
+            margin-bottom: 0 !important;
+        }
+
+        .single-property-overview,
+        .single-property-element {
+            margin-top: 0 !important;
+            padding-top: 0 !important;
+            margin-bottom: 10px !important;
+            padding-bottom: 10px !important;
+        }
+
+        .single-property-overview .info-box1 {
+            margin-top: 0 !important;
+            padding-top: 6px !important;
+            padding-bottom: 6px !important;
+        }
+
+        .flat-property-detail .widget-box,
+        .flat-property-detail .box,
+        .flat-property-detail .single-property-desc {
+            margin-top: 8px !important;
+            margin-bottom: 10px !important;
+        }
     }
 
     section.flat-property-detail ~ .flat-latest-property {
@@ -101,12 +150,75 @@
     // Signal as soon as this script runs (before full DOMContentLoaded).
     notifyParentReady();
 
+    function hydrateDeferredRelated() {
+        const section = document.getElementById('similarProperties');
+        const propertyId = section?.dataset?.relatedDefer;
+        if (!section || !propertyId) {
+            return;
+        }
+
+        fetch('/api/v1/related-properties/' + encodeURIComponent(propertyId), {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((data) => {
+                if (!data || !data.success || !data.html) {
+                    section.remove();
+                    return;
+                }
+
+                const titleEl = section.querySelector('.section-title');
+                if (titleEl && data.sectionTitle) {
+                    titleEl.textContent = data.sectionTitle;
+                }
+
+                const status = section.querySelector('.hs-related-defer-status');
+                if (status) {
+                    status.remove();
+                }
+
+                const swiperRoot = section.querySelector('.swiper.tf-latest-property');
+                const wrapper = swiperRoot?.querySelector('.swiper-wrapper');
+                if (!swiperRoot || !wrapper) {
+                    section.remove();
+                    return;
+                }
+
+                wrapper.innerHTML = data.html;
+                swiperRoot.hidden = false;
+                section.classList.remove('is-loading');
+                section.removeAttribute('aria-busy');
+                section.removeAttribute('data-related-defer');
+
+                if (window.Swiper && !swiperRoot.swiper) {
+                    try {
+                        new Swiper(swiperRoot, {
+                            slidesPerView: 1.15,
+                            spaceBetween: 16,
+                            loop: data.count > 2,
+                            breakpoints: {
+                                576: { slidesPerView: 2, spaceBetween: 20 },
+                                992: { slidesPerView: 3, spaceBetween: 30 },
+                            },
+                        });
+                    } catch (e) {}
+                }
+
+                notifyParentReady();
+            })
+            .catch(() => {
+                section.remove();
+            });
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         const gallery = document.getElementById('galleryContainer');
         if (gallery) {
             gallery.style.display = 'block';
         }
         notifyParentReady();
+        hydrateDeferredRelated();
 
         (function initIframeFormPin() {
             const mq = window.matchMedia('(min-width: 768px)');

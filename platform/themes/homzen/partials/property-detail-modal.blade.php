@@ -79,6 +79,23 @@ html.hs-property-modal-open .serik-mobile-map-fab {
         max-height: 96vh;
     }
 }
+@media (max-width: 767px) {
+    .property-modal .modal-content {
+        top: 0;
+        left: 0;
+        right: 0;
+        transform: none;
+        width: 100%;
+        max-width: none;
+        height: 100%;
+        border-radius: 0;
+    }
+    .property-modal .close-modal {
+        right: 10px;
+        top: 6px;
+        font-size: 26px;
+    }
+}
 </style>
 @endonce
 

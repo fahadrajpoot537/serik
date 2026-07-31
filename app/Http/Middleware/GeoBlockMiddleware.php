@@ -94,6 +94,7 @@ class GeoBlockMiddleware
             'api/v1/map-properties',
             'api/v1/map-thumbnails',
             'api/v1/map-property-bundle',
+            'api/v1/related-properties',
             'api/v1/smart-search',
             'api/v1/community-suggestions',
             'api/v1/community-index',

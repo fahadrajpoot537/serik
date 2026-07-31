@@ -104,6 +104,22 @@ final class HomepageResponseCache
         return is_plugin_active('real-estate') && auth('account')->check();
     }
 
+    public static function hasOnlyTrackingQuery(Request $request): bool
+    {
+        return self::hasOnlyTrackingQueryParams($request);
+    }
+
+    /**
+     * Shared anonymous homepage HTML — no session/auth required.
+     */
+    public static function getSharedHtml(): ?string
+    {
+        $locale = app()->getLocale();
+        $cached = Cache::get('homepage_html_v4:' . self::version() . ':' . $locale . ':shared');
+
+        return is_string($cached) && $cached !== '' ? $cached : null;
+    }
+
     private static function hasOnlyTrackingQueryParams(Request $request): bool
     {
         $query = $request->query();

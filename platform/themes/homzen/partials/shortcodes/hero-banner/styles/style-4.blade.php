@@ -3244,6 +3244,16 @@ position: absolute;
     background: #f8fafc;
 }
 
+.hs-list-item.is-map-hover .hs-list-card,
+.hs-list-item.is-map-selected .hs-list-card {
+    background: #eef5fc;
+    box-shadow: inset 3px 0 0 #0255a1;
+}
+
+.hs-list-item.is-map-selected .hs-list-card {
+    background: #e3effb;
+}
+
 .hs-list-card img {
     width: 100px;
     min-width: 100px;
@@ -5542,19 +5552,48 @@ document.addEventListener("DOMContentLoaded", function () {
             .catch(() => {});
     }
 
+    // MapLibre queryRenderedFeatures can stringify booleans ("false" is truthy in JS).
+    window.mapFlagTrue = function (value) {
+        return value === true || value === 1 || value === '1' || value === 'true';
+    };
+
+    window.hydrateMapFeatureProps = function (props) {
+        if (!props) return props;
+        const id = props.id;
+        const ext = props.external_id;
+        const pool = window.lastMapFeatures || [];
+        let full = null;
+        if (id != null && id !== '') {
+            full = pool.find((f) => String(f?.properties?.id) === String(id));
+        }
+        if (!full && ext) {
+            full = pool.find((f) => String(f?.properties?.external_id || '').toUpperCase() === String(ext).toUpperCase());
+        }
+        const merged = full?.properties ? Object.assign({}, full.properties, props) : Object.assign({}, props);
+        // Normalize MapLibre-stringified booleans.
+        if (Object.prototype.hasOwnProperty.call(merged, 'requires_login')) {
+            merged.requires_login = window.mapFlagTrue(merged.requires_login);
+        }
+        return merged;
+    };
+
     window.isMapSoldListing = function (status, props) {
-        if (props && props.requires_login) {
+        if (props && window.mapFlagTrue(props.requires_login)) {
             return true;
         }
-        if (!status) return false;
-        const normalized = String(status).trim().toLowerCase();
-        return MAP_SOLD_STATUSES.some((s) => s.toLowerCase() === normalized)
-            || normalized.includes('sold')
-            || normalized === 'leased';
+        // Prefer real MlsStatus — "transaction" is often a display label like "For Sale".
+        const raw = (props && props.mls_status) ? props.mls_status : status;
+        if (!raw) return false;
+        const normalized = String(raw).trim().toLowerCase();
+        if (normalized === 'for sale' || normalized === 'for lease' || normalized === 'for sub-lease') {
+            return false;
+        }
+        return MAP_SOLD_STATUSES.some((s) => s.toLowerCase() === normalized);
     };
 
     window.mapListingStatus = function (props) {
-        return (props && (props.mls_status || props.transaction)) || '';
+        if (!props) return '';
+        return props.mls_status || props.transaction || '';
     };
 
     window.mapLoginGateHtml = function (status, props) {
@@ -6924,6 +6963,25 @@ if (urlLocation) {
         },
     });
 
+    map.addSource('hs-hovered-marker', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+    });
+
+    map.addLayer({
+        id: 'hs-hovered-marker-halo',
+        type: 'circle',
+        source: 'hs-hovered-marker',
+        paint: {
+            'circle-color': '#f59e0b',
+            'circle-radius': 18,
+            'circle-opacity': 0.22,
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#f59e0b',
+            'circle-stroke-opacity': 0.9,
+        },
+    });
+
     mapLayersReady = true;
 
     applyPathFiltersFromUrl();
@@ -7115,18 +7173,30 @@ map.on('mouseenter', 'unclustered-point', (e) => {
     if (e.features?.[0] && typeof prefetchMapBundlesForFeatures === 'function') {
         prefetchMapBundlesForFeatures([e.features[0]], 1);
     }
+    if (e.features?.[0] && typeof syncMapListHoverFromFeature === 'function') {
+        syncMapListHoverFromFeature(e.features[0], { fromMarker: true });
+    }
 });
 map.on('mouseenter', 'unclustered-exact-dot', (e) => {
     map.getCanvas().style.cursor = 'pointer';
     if (e.features?.[0] && typeof prefetchMapBundlesForFeatures === 'function') {
         prefetchMapBundlesForFeatures([e.features[0]], 1);
     }
+    if (e.features?.[0] && typeof syncMapListHoverFromFeature === 'function') {
+        syncMapListHoverFromFeature(e.features[0], { fromMarker: true });
+    }
 });
 map.on('mouseleave', 'unclustered-point', () => {
     map.getCanvas().style.cursor = '';
+    if (typeof clearMapListHover === 'function') {
+        clearMapListHover({ keepSelected: true });
+    }
 });
 map.on('mouseleave', 'unclustered-exact-dot', () => {
     map.getCanvas().style.cursor = '';
+    if (typeof clearMapListHover === 'function') {
+        clearMapListHover({ keepSelected: true });
+    }
 });
 
     // ==============================
@@ -9632,7 +9702,7 @@ function mapMovedEnoughToRefetch() {
                 <div class="hs-map-tab-panel" data-map-panel="facts">${buildMapKeyFactsHtml(keyFacts, displayName, displayLocation, displayType, listingId, brokerage)}</div>
                 <div class="hs-map-tab-panel" data-map-panel="details">${buildMapDetailsGridHtml(propertyDetails)}</div>
                 <div class="hs-map-tab-panel" data-map-panel="rooms">${buildMapRoomsTableHtml(rooms)}</div>
-                <div style="color:#e63946;font-size:14px;margin:16px 0 8px;font-weight:600;">Coop Commission: upto 2.5%</div>
+                <div style="color:#e63946;font-size:14px;margin:16px 0 8px;font-weight:600;">Coop Commission: 2.5%</div>
                 <div class="property-popup-footer" style="margin-top:8px;font-size:12px;color:#6c757d;">${escapeMapHtml(listingId)}${brokerage ? ' , ' + escapeMapHtml(brokerage) : ''}</div>
             `;
 
@@ -10217,6 +10287,58 @@ function mapMovedEnoughToRefetch() {
         setHsMapSelectedMarker(null);
     }
 
+    function setHsMapHoveredMarker(featureOrCoords) {
+        const source = map?.getSource?.('hs-hovered-marker');
+        if (!source) {
+            return;
+        }
+
+        let coordinates = null;
+        if (Array.isArray(featureOrCoords)) {
+            coordinates = featureOrCoords;
+        } else if (featureOrCoords?.geometry?.coordinates) {
+            coordinates = featureOrCoords.geometry.coordinates;
+        }
+
+        if (!coordinates) {
+            source.setData({ type: 'FeatureCollection', features: [] });
+            return;
+        }
+
+        source.setData({
+            type: 'FeatureCollection',
+            features: [{
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: coordinates.slice() },
+                properties: {},
+            }],
+        });
+    }
+
+    function clearHsMapHoveredMarker() {
+        setHsMapHoveredMarker(null);
+    }
+
+    function easeMapToFeature(feature, options) {
+        if (!map || !feature?.geometry?.coordinates) {
+            return;
+        }
+        const coords = feature.geometry.coordinates;
+        const opts = options || {};
+        map.easeTo({
+            center: coords.slice(),
+            duration: opts.duration != null ? opts.duration : 480,
+            offset: opts.offset || [0, -36],
+            essential: true,
+        });
+    }
+
+    window.setHsMapHoveredMarker = setHsMapHoveredMarker;
+    window.clearHsMapHoveredMarker = clearHsMapHoveredMarker;
+    window.setHsMapSelectedMarker = setHsMapSelectedMarker;
+    window.clearHsMapSelectedMarker = clearHsMapSelectedMarker;
+    window.easeMapToFeature = easeMapToFeature;
+
     function ensureHsMapCenterPanel() {
         const panel = document.getElementById('hsMapCenterPanel');
         const body = document.getElementById('hsMapCenterPanelBody');
@@ -10453,6 +10575,16 @@ function mapMovedEnoughToRefetch() {
     function closeMapPropertySelection() {
         closeClusterListSidebar();
         closeHsMapCenterPanel();
+        if (window._hsPinPopup) {
+            try { window._hsPinPopup.remove(); } catch (e) {}
+            window._hsPinPopup = null;
+        }
+        if (typeof clearHsMapSelectedMarker === 'function') {
+            clearHsMapSelectedMarker();
+        }
+        if (typeof clearHsMapHoveredMarker === 'function') {
+            clearHsMapHoveredMarker();
+        }
     }
 
     window.closeHsMapCenterPanel = closeHsMapCenterPanel;
@@ -10469,36 +10601,56 @@ function mapMovedEnoughToRefetch() {
 
     function closeActiveMapPopup() {
         closeHsMapCenterPanel();
+        if (window._hsPinPopup) {
+            try { window._hsPinPopup.remove(); } catch (e) {}
+            window._hsPinPopup = null;
+        }
     }
 
     function prefetchMapBundlesForFeatures(features, limit = 3) {
         window._hsBundlePrefetch = window._hsBundlePrefetch || new Set();
+        window._hsIframePrefetch = window._hsIframePrefetch || new Set();
         (features || []).slice(0, limit).forEach((feature) => {
-            const extId = feature?.properties?.external_id;
-            if (!extId) return;
+            const props = feature?.properties || {};
+            const extId = props.external_id;
+            if (extId) {
+                const cacheKey = String(extId).toUpperCase();
+                if (!window.hsMapDetailCache?.has(cacheKey) && !window._hsBundlePrefetch.has(cacheKey)) {
+                    window._hsBundlePrefetch.add(cacheKey);
+                    fetch(`/api/v1/map-property-bundle/${encodeURIComponent(extId)}`, {
+                        credentials: 'same-origin',
+                        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    })
+                        .then((r) => (r.ok ? r.json() : null))
+                        .then((bundle) => {
+                            if (!bundle || bundle.success === false) return;
+                            if (!window.hsMapDetailCache.has(cacheKey)) {
+                                window.hsMapDetailCache.set(cacheKey, bundle);
+                            }
+                        })
+                        .catch(() => {})
+                        .finally(() => window._hsBundlePrefetch.delete(cacheKey));
+                }
+            }
 
-            const cacheKey = String(extId).toUpperCase();
-            if (window.hsMapDetailCache?.has(cacheKey) || window._hsBundlePrefetch.has(cacheKey)) return;
-
-            window._hsBundlePrefetch.add(cacheKey);
-            fetch(`/api/v1/map-property-bundle/${encodeURIComponent(extId)}`, {
-                credentials: 'same-origin',
-                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-            })
-                .then((r) => (r.ok ? r.json() : null))
-                .then((bundle) => {
-                    if (!bundle || bundle.success === false) return;
-                    if (!window.hsMapDetailCache.has(cacheKey)) {
-                        window.hsMapDetailCache.set(cacheKey, bundle);
-                    }
-                })
-                .catch(() => {})
-                .finally(() => window._hsBundlePrefetch.delete(cacheKey));
+            const slug = props.url ? String(props.url).replace(/^\/+/, '') : '';
+            if (slug && slug !== 'undefined' && window._hsIframePrefetch.size < 8) {
+                const iframeUrl = (typeof serikCanonicalOrigin === 'function' ? serikCanonicalOrigin() : window.location.origin)
+                    + '/properties/' + slug + '?iframe=1';
+                if (!window._hsIframePrefetch.has(iframeUrl)) {
+                    window._hsIframePrefetch.add(iframeUrl);
+                    const link = document.createElement('link');
+                    link.rel = 'prefetch';
+                    link.as = 'document';
+                    link.href = iframeUrl;
+                    document.head.appendChild(link);
+                }
+            }
         });
     }
 
     function enrichMapPopup(popup, props, status) {
-        if (!props.external_id || props.requires_login) return;
+        if (!props.external_id || window.mapFlagTrue(props.requires_login)) return;
 
         const cacheKey = String(props.external_id).toUpperCase();
         const listingKey = encodeURIComponent(props.external_id);
@@ -10574,6 +10726,9 @@ function mapMovedEnoughToRefetch() {
     function openPropertyDetailModal(props) {
         if (!props) return;
 
+        // Prefer original GeoJSON props — queryRenderedFeatures may stringify booleans.
+        props = hydrateMapFeatureProps(props);
+
         const status = mapListingStatus(props);
         if (!isMapUserLoggedIn && isMapSoldListing(status, props)) {
             if (typeof openAuthModal === 'function') {
@@ -10638,19 +10793,37 @@ function mapMovedEnoughToRefetch() {
         if (!props?.external_id) return;
 
         const cacheKey = String(props.external_id).toUpperCase();
-        if (window.hsMapDetailCache.has(cacheKey) || window._hsBundlePrefetch.has(cacheKey)) return;
+        if (window.hsMapDetailCache.has(cacheKey) || window._hsBundlePrefetch.has(cacheKey)) {
+            // still prefetch iframe HTML below
+        } else {
+            window._hsBundlePrefetch.add(cacheKey);
+            fetch(`/api/v1/map-property-bundle/${encodeURIComponent(props.external_id)}`)
+                .then((r) => (r.ok ? r.json() : null))
+                .then((bundle) => {
+                    if (!bundle || bundle.success === false) return;
+                    if (!window.hsMapDetailCache.has(cacheKey)) {
+                        window.hsMapDetailCache.set(cacheKey, bundle);
+                    }
+                })
+                .catch(() => {})
+                .finally(() => window._hsBundlePrefetch.delete(cacheKey));
+        }
 
-        window._hsBundlePrefetch.add(cacheKey);
-        fetch(`/api/v1/map-property-bundle/${encodeURIComponent(props.external_id)}`)
-            .then((r) => (r.ok ? r.json() : null))
-            .then((bundle) => {
-                if (!bundle || bundle.success === false) return;
-                if (!window.hsMapDetailCache.has(cacheKey)) {
-                    window.hsMapDetailCache.set(cacheKey, bundle);
-                }
-            })
-            .catch(() => {})
-            .finally(() => window._hsBundlePrefetch.delete(cacheKey));
+        // Prefetch detail iframe so the modal opens with warm browser cache.
+        const slug = props.url ? String(props.url).replace(/^\/+/, '') : '';
+        if (slug && slug !== 'undefined') {
+            const iframeUrl = (typeof serikCanonicalOrigin === 'function' ? serikCanonicalOrigin() : window.location.origin)
+                + '/properties/' + slug + '?iframe=1';
+            window._hsIframePrefetch = window._hsIframePrefetch || new Set();
+            if (!window._hsIframePrefetch.has(iframeUrl) && window._hsIframePrefetch.size < 8) {
+                window._hsIframePrefetch.add(iframeUrl);
+                const link = document.createElement('link');
+                link.rel = 'prefetch';
+                link.as = 'document';
+                link.href = iframeUrl;
+                document.head.appendChild(link);
+            }
+        }
     }
 
     document.addEventListener('mouseover', function (e) {
@@ -10726,16 +10899,41 @@ function mapMovedEnoughToRefetch() {
             return;
         }
 
+        const props = hydrateMapFeatureProps(feature.properties);
+        feature = Object.assign({}, feature, { properties: props });
+        const status = mapListingStatus(props);
+        if (!isMapUserLoggedIn && isMapSoldListing(status, props)) {
+            if (typeof openAuthModal === 'function') {
+                openAuthModal('login');
+            }
+            return;
+        }
+
+        if (window._hsPinPopup) {
+            try { window._hsPinPopup.remove(); } catch (e) {}
+            window._hsPinPopup = null;
+        }
+
         closeHsMapCenterPanel();
-        openPropertyDetailModal(feature.properties);
+        setHsMapSelectedMarker(feature);
+        clearHsMapHoveredMarker();
+        if (typeof highlightMapListItem === 'function') {
+            highlightMapListItem(props.id, { selected: true, scroll: true });
+        }
+        easeMapToFeature(feature, { duration: 420 });
+
+        // Direct property detail popup (iframe modal) — no MapLibre pin card.
+        openPropertyDetailModal(props);
     }
 
     function openHsMapPropertyPanel(feature) {
-        const props = feature?.properties;
-        if (!props) {
+        const propsRaw = feature?.properties;
+        if (!propsRaw) {
             return null;
         }
 
+        const props = hydrateMapFeatureProps(propsRaw);
+        feature = Object.assign({}, feature, { properties: props });
         const status = mapListingStatus(props);
         if (!isMapUserLoggedIn && isMapSoldListing(status, props)) {
             if (typeof openAuthModal === 'function') {
@@ -10787,7 +10985,7 @@ function mapMovedEnoughToRefetch() {
         window._hsActiveMapPopupProps = props;
         window._hsActiveMapPopupStatus = status;
 
-        if (!cachedBundle && props.external_id && !props.requires_login) {
+        if (!cachedBundle && props.external_id && !window.mapFlagTrue(props.requires_login)) {
             enrichMapPopup(adapter, props, status);
         }
 
@@ -11372,12 +11570,73 @@ function onHsListCardClick(e) {
     e.preventDefault();
     e.stopPropagation();
 
-    if (typeof window.openPropertyDetailModal === 'function') {
+    if (typeof window.setHsMapSelectedMarker === 'function') {
+        window.setHsMapSelectedMarker(feature);
+    }
+    if (typeof highlightMapListItem === 'function') {
+        highlightMapListItem(id, { selected: true, scroll: false });
+    }
+    if (typeof window.easeMapToFeature === 'function') {
+        window.easeMapToFeature(feature, { duration: 480 });
+    }
+
+    if (typeof window.showPropertyMapPopup === 'function') {
+        window.showPropertyMapPopup(feature);
+    } else if (typeof window.openPropertyDetailModal === 'function') {
         window.openPropertyDetailModal(feature.properties);
     } else if (typeof window.openPropertyFromList === 'function') {
         window.openPropertyFromList(feature);
     }
 }
+
+function highlightMapListItem(id, options) {
+    options = options || {};
+    const idStr = String(id ?? '');
+    document.querySelectorAll('.hs-list-item.is-map-hover').forEach((el) => {
+        el.classList.remove('is-map-hover');
+    });
+    if (options.selected) {
+        document.querySelectorAll('.hs-list-item.is-map-selected').forEach((el) => {
+            el.classList.remove('is-map-selected');
+        });
+    }
+
+    if (!idStr) {
+        return;
+    }
+
+    const matches = document.querySelectorAll('.hs-list-item[data-id="' + idStr.replace(/"/g, '') + '"]');
+    matches.forEach((el) => {
+        el.classList.add(options.selected ? 'is-map-selected' : 'is-map-hover');
+        if (options.scroll && typeof el.scrollIntoView === 'function') {
+            el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+    });
+}
+
+function syncMapListHoverFromFeature(feature, options) {
+    if (!feature?.properties) return;
+    const id = feature.properties.id;
+    highlightMapListItem(id, { selected: false, scroll: !(options && options.fromMarker) });
+    if (typeof setHsMapHoveredMarker === 'function') {
+        setHsMapHoveredMarker(feature);
+    }
+}
+
+function clearMapListHover(options) {
+    document.querySelectorAll('.hs-list-item.is-map-hover').forEach((el) => {
+        el.classList.remove('is-map-hover');
+    });
+    if (!(options && options.keepSelected) && typeof clearHsMapHoveredMarker === 'function') {
+        clearHsMapHoveredMarker();
+    } else if (typeof clearHsMapHoveredMarker === 'function') {
+        clearHsMapHoveredMarker();
+    }
+}
+
+window.highlightMapListItem = highlightMapListItem;
+window.syncMapListHoverFromFeature = syncMapListHoverFromFeature;
+window.clearMapListHover = clearMapListHover;
 
 function onHsListCardKeydown(e) {
     if (e.key !== 'Enter' && e.key !== ' ') {
@@ -11450,6 +11709,29 @@ function initHsViewMode() {
     document.getElementById('hsMobileListBody')?.addEventListener('click', onHsListCardClick);
     document.getElementById('hsListSidebarBody')?.addEventListener('keydown', onHsListCardKeydown);
     document.getElementById('hsMobileListBody')?.addEventListener('keydown', onHsListCardKeydown);
+
+    let hsListHoverTimer = null;
+    const onListHover = (e) => {
+        const item = e.target.closest('.hs-list-item');
+        if (!item) return;
+        const id = item.dataset.id;
+        const feature = (hsMapListFeatures || []).find((f) => String(f.properties?.id) === String(id))
+            || (window.lastMapFeatures || []).find((f) => String(f.properties?.id) === String(id));
+        if (!feature) return;
+        if (hsListHoverTimer) clearTimeout(hsListHoverTimer);
+        hsListHoverTimer = setTimeout(() => {
+            syncMapListHoverFromFeature(feature, { fromMarker: false });
+        }, 40);
+    };
+    const onListLeave = (e) => {
+        if (e.relatedTarget && e.currentTarget.contains(e.relatedTarget)) return;
+        if (hsListHoverTimer) clearTimeout(hsListHoverTimer);
+        clearMapListHover({ keepSelected: true });
+    };
+    document.getElementById('hsListSidebarBody')?.addEventListener('mouseover', onListHover);
+    document.getElementById('hsMobileListBody')?.addEventListener('mouseover', onListHover);
+    document.getElementById('hsListSidebarBody')?.addEventListener('mouseleave', onListLeave);
+    document.getElementById('hsMobileListBody')?.addEventListener('mouseleave', onListLeave);
 
     window.addEventListener('resize', () => {
         if (typeof window.setupMobileListScroll === 'function') {
@@ -11952,7 +12234,8 @@ document.addEventListener('click', function (e) {
     if (!property.dataset.url || property.dataset.url === '/properties/' || property.dataset.url === '/properties/undefined') {
         e.preventDefault();
         e.stopPropagation();
-        if (typeof openAuthModal === 'function') {
+        // Missing URL on sold-locked cards — only then ask for login.
+        if (property.classList.contains('blurred-content') && typeof openAuthModal === 'function') {
             openAuthModal('login');
         }
         return;

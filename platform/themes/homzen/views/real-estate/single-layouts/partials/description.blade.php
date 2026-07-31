@@ -1,11 +1,18 @@
 
 <style>
 .header-property-detail {
-    margin-bottom: 8px;
+    margin-bottom: 0;
     padding-bottom: 0;
 }
-.single-property-overview .info-box1 {
+.header-property-detail .content-top {
+    margin-bottom: 0;
+}
+.single-property-overview {
     margin-top: 0;
+    padding-top: 0;
+}
+.single-property-overview .info-box1 {
+    margin-top: 0 !important;
     padding-top: 8px;
 }
 
@@ -310,7 +317,7 @@ View::share('cityName', $city);
     
   
     
-          <div class="row row-cols-xs-3 row-cols-sm-3 row-cols-lg-3 g-3 g-lg-4 info-box info-box1" style="border-top:2px solid gray;border-bottom:4px solid gray;padding:10px 0px;border-radius:0px; ">
+          <div class="row row-cols-xs-3 row-cols-sm-3 row-cols-lg-3 g-3 g-lg-4 info-box info-box1" style="border-top:none;border-bottom:4px solid gray;padding:8px 0;border-radius:0;margin-top:0;">
               
             @if (($model->number_bedroom ?? null))
                 <div class="col item">

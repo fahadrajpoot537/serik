@@ -187,7 +187,7 @@ class BaseHttpResponse extends Response implements Responsable
 
     public function toResponse($request): JsonResponse|RedirectResponse
     {
-        if ($request->expectsJson()) {
+        if ($request->expectsJson() || $request->ajax()) {
             $data = [
                 'error' => $this->error,
                 'data' => $this->data,
