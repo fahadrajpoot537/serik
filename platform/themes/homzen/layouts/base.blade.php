@@ -123,20 +123,20 @@
                 y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
             })(window, document, "clarity", "script", "xu00ale4yi");
         </script>
-        <!--Start of Tawk.to Script-->
+        <!--Start of Tawk.to Script (bottom-right)-->
         <script type="text/javascript">
         var Tawk_API=Tawk_API||{}, Tawk_LoadStart=new Date();
         Tawk_API.customStyle = {
             visibility: {
                 desktop: {
-                    position: 'bl',
-                    xOffset: 20,
-                    yOffset: 20
+                    position: 'br',
+                    xOffset: '20px',
+                    yOffset: '20px'
                 },
                 mobile: {
-                    position: 'bl',
-                    xOffset: 12,
-                    yOffset: 70
+                    position: 'br',
+                    xOffset: '12px',
+                    yOffset: '70px'
                 }
             }
         };
@@ -149,6 +149,24 @@
         s0.parentNode.insertBefore(s1,s0);
         })();
         </script>
+        <style>
+            /* Keep Tawk.to bubble on the right */
+            iframe[title="chat widget"],
+            iframe[title="chat widget"][style],
+            div.widget-visible {
+                right: 20px !important;
+                left: auto !important;
+            }
+            @media (max-width: 768px) {
+                iframe[title="chat widget"],
+                iframe[title="chat widget"][style],
+                div.widget-visible {
+                    right: 12px !important;
+                    left: auto !important;
+                    bottom: 70px !important;
+                }
+            }
+        </style>
         <!--End of Tawk.to Script-->
     </head>
 
@@ -179,6 +197,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         @if(!request()->boolean('iframe'))
             @include(Theme::getThemeNamespace('partials.visitor-city-detect'))
         @endif
+        {{-- LeadConnector chat temporarily disabled (Tawk.to is active) --}}
+        @if(false)
    @if(!request()->has('iframe'))
    <div id="chat-widget-mobile"></div>
  @endif
@@ -239,6 +259,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     window.setTimeout(loadChatWidget, {{ $isSerikHomepage ? '12000' : '6000' }});
 })();
  </script>
+        @endif
  @if(! $isSerikHomepage && !request()->boolean('iframe') && ! app()->environment('local'))
  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
  @endif
