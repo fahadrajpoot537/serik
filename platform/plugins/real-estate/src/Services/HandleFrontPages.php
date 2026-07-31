@@ -97,7 +97,17 @@ class HandleFrontPages
                 }
 
                 if ($property->slugable && $property->slugable->key !== $slug->key) {
-                    return redirect()->to($property->url);
+                    $target = $property->url;
+                    if ($request->boolean('iframe')) {
+                        $separator = str_contains($target, '?') ? '&' : '?';
+                        $target .= $separator . 'iframe=1';
+                        $lk = trim((string) $request->query('lk', ''));
+                        if ($lk !== '') {
+                            $target .= '&lk=' . rawurlencode($lk);
+                        }
+                    }
+
+                    return redirect()->to($target);
                 }
 
                 $description = (string) ($property->description ?? '');
@@ -158,22 +168,15 @@ class HandleFrontPages
                     (bool) $request->boolean('iframe')
                 );
 
-                // Map iframe: defer similar listings so the modal opens fast.
-                // Full page: build immediately (cached after first hit).
+                // Map iframe: skip similar listings entirely on first paint (hydrate via API).
+                // Also skip the after-response warm — rapid pin switching was queueing
+                // many related builds and making modal opens feel stuck/slow.
                 if ($request->boolean('iframe')) {
                     $relatedPropertiesPayload = [
                         'relatedProperties' => collect(),
                         'sectionTitle' => __('Similar Properties'),
                         'deferPropertyId' => (int) $property->getKey(),
                     ];
-
-                    $propertyId = (int) $property->getKey();
-                    dispatch(static function () use ($propertyId): void {
-                        $model = \Botble\RealEstate\Models\Property::query()->find($propertyId);
-                        if ($model) {
-                            app(\App\Services\RealEstate\RelatedPropertiesService::class)->build($model);
-                        }
-                    })->afterResponse();
                 } else {
                     $relatedPropertiesPayload = app(RelatedPropertiesService::class)->build($property);
                 }

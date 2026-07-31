@@ -5569,8 +5569,16 @@ document.addEventListener("DOMContentLoaded", function () {
         if (!full && ext) {
             full = pool.find((f) => String(f?.properties?.external_id || '').toUpperCase() === String(ext).toUpperCase());
         }
-        const merged = full?.properties ? Object.assign({}, full.properties, props) : Object.assign({}, props);
-        // Normalize MapLibre-stringified booleans.
+
+        // Prefer lastMapFeatures (authoritative GeoJSON). MapLibre queryRenderedFeatures
+        // can return incomplete/stringified props and must not overwrite url/id.
+        let merged;
+        if (full?.properties) {
+            merged = Object.assign({}, props, full.properties);
+        } else {
+            merged = Object.assign({}, props);
+        }
+
         if (Object.prototype.hasOwnProperty.call(merged, 'requires_login')) {
             merged.requires_login = window.mapFlagTrue(merged.requires_login);
         }
@@ -9920,6 +9928,7 @@ function mapMovedEnoughToRefetch() {
         let isOpen = false;
         let savedScrollY = 0;
         let loaderTimeoutId = null;
+        let openSeq = 0;
 
         function getElements() {
             return {
@@ -9940,7 +9949,7 @@ function mapMovedEnoughToRefetch() {
             loaderTimeoutId = setTimeout(() => {
                 hidePropertyIframeLoader();
                 loaderTimeoutId = null;
-            }, 4000);
+            }, 8000);
         }
 
         function applyBodyLock() {
@@ -9975,12 +9984,56 @@ function mapMovedEnoughToRefetch() {
             window.scrollTo(0, scrollY);
         }
 
+        function normalizeDetailUrl(url) {
+            try {
+                const u = new URL(url, window.location.origin);
+                u.searchParams.set('iframe', '1');
+                return u.toString();
+            } catch (e) {
+                if (!url) return '';
+                return url + (url.includes('?') ? '&' : '?') + 'iframe=1';
+            }
+        }
+
+        function bindIframeLoad(iframe, seq) {
+            iframe.onload = function () {
+                if (seq !== openSeq) {
+                    return;
+                }
+                const src = String(iframe.getAttribute('src') || iframe.src || '');
+                if (!src || src === 'about:blank' || src.endsWith('about:blank')) {
+                    return;
+                }
+                PropertyDetailModalManager.onContentSettled();
+                hidePropertyIframeLoader();
+                schedulePropertyIframeScrollFix(iframe);
+            };
+            iframe.onerror = function () {
+                if (seq !== openSeq) {
+                    return;
+                }
+                PropertyDetailModalManager.onContentSettled();
+                hidePropertyIframeLoader();
+            };
+        }
+
+        function assignIframeSrc(iframe, url, seq) {
+            if (seq !== openSeq) {
+                return;
+            }
+            bindIframeLoad(iframe, seq);
+            iframe.dataset.hsLoadedUrl = url;
+            iframe.setAttribute('fetchpriority', 'high');
+            iframe.src = url;
+        }
+
         function open(url) {
             const { modal, iframe } = getElements();
             if (!modal || !iframe || !url) {
                 return false;
             }
 
+            url = normalizeDetailUrl(url);
             ensurePropertyModalOnBody();
 
             if (!isOpen) {
@@ -9993,8 +10046,10 @@ function mapMovedEnoughToRefetch() {
             modal.setAttribute('aria-hidden', 'false');
             modal.classList.add('is-open');
 
-            const alreadyLoaded = iframe.dataset.hsLoadedUrl === url
-                && iframe.contentDocument?.body?.childElementCount > 0;
+            const prev = iframe.dataset.hsLoadedUrl || '';
+            const alreadyLoaded = prev === url
+                && iframe.contentDocument?.body?.childElementCount > 0
+                && !String(iframe.src || '').includes('about:blank');
 
             if (alreadyLoaded) {
                 hidePropertyIframeLoader();
@@ -10002,16 +10057,31 @@ function mapMovedEnoughToRefetch() {
                 return true;
             }
 
+            const seq = ++openSeq;
             showPropertyIframeLoader();
             scheduleLoaderFallback();
-            bindPropertyIframeLoad(iframe);
-            iframe.dataset.hsLoadedUrl = url;
-            iframe.src = url;
+
+            // Switching listings: blank first so Property A never stays painted
+            // while Property B is still loading (browser often keeps old document).
+            if (prev && prev !== url) {
+                try {
+                    iframe.onload = null;
+                    iframe.onerror = null;
+                    iframe.removeAttribute('src');
+                    iframe.src = 'about:blank';
+                    delete iframe.dataset.hsLoadedUrl;
+                } catch (e) {}
+                setTimeout(() => assignIframeSrc(iframe, url, seq), 0);
+                return true;
+            }
+
+            assignIframeSrc(iframe, url, seq);
             return true;
         }
 
         function close() {
             const { modal, iframe } = getElements();
+            openSeq += 1;
             clearLoaderTimeout();
             hidePropertyIframeLoader();
 
@@ -10019,6 +10089,15 @@ function mapMovedEnoughToRefetch() {
                 modal.style.display = 'none';
                 modal.setAttribute('aria-hidden', 'true');
                 modal.classList.remove('is-open');
+            }
+
+            if (iframe) {
+                try {
+                    iframe.onload = null;
+                    iframe.onerror = null;
+                    iframe.src = 'about:blank';
+                    delete iframe.dataset.hsLoadedUrl;
+                } catch (e) {}
             }
 
             if (!isOpen) {
@@ -10033,6 +10112,7 @@ function mapMovedEnoughToRefetch() {
 
         function onContentSettled() {
             clearLoaderTimeout();
+            hidePropertyIframeLoader();
         }
 
         function isModalOpen() {
@@ -10737,20 +10817,37 @@ function mapMovedEnoughToRefetch() {
             return;
         }
 
-        const slug = props.url || '';
+        const extId = String(props.external_id || '').trim();
+        let slug = String(props.url || '').trim();
+        if (slug.includes('/properties/')) {
+            slug = slug.split('/properties/').pop() || slug;
+        }
+        slug = slug.replace(/^\/+/, '').split('?')[0];
+
         if (!slug || slug === 'undefined') {
-            const extId = String(props.external_id || '').trim();
             if (extId) {
                 fetch(`/api/v1/add-single-property/${encodeURIComponent(extId)}`).catch(() => {});
             }
             return;
         }
 
-        let url = '/properties/' + String(slug).replace(/^\/+/, '');
+        let url = '/properties/' + slug;
         if (!url.startsWith('http')) {
             url = serikCanonicalOrigin() + url;
         }
-        url += (url.includes('?') ? '&' : '?') + 'iframe=1';
+        try {
+            const u = new URL(url, window.location.origin);
+            u.searchParams.set('iframe', '1');
+            if (extId) {
+                u.searchParams.set('lk', extId.toUpperCase());
+            }
+            url = u.toString();
+        } catch (e) {
+            url += (url.includes('?') ? '&' : '?') + 'iframe=1';
+            if (extId) {
+                url += '&lk=' + encodeURIComponent(extId.toUpperCase());
+            }
+        }
 
         closeActiveMapPopup();
 

@@ -5643,8 +5643,9 @@ class PropertyController extends BaseController
         // Falls back to MySQL for complex sold/date/subtype filters, or when Meili
         // is unavailable. engine=mysql forces the MySQL path for A/B testing.
         if ($request->input('engine') !== 'mysql') {
-            // v11: requires_login as 0/1 (MapLibre stringifies booleans; "false" is truthy).
-            $meiliCacheKey = 'map_meili_v11_' . md5(implode('|', [
+            // v12: real DB slugs on Meili map features (synthetic urls caused
+            // iframe redirects that dropped iframe=1 and looked "stuck" on prior pin).
+            $meiliCacheKey = 'map_meili_v12_' . md5(implode('|', [
                 round($south, 4), round($north, 4), round($west, 4), round($east, 4),
                 $this->mapFilterSignature($request),
             ]));
@@ -6281,6 +6282,12 @@ class PropertyController extends BaseController
                     ->get(['id', 'latitude', 'longitude', 'BedroomsBelowGrade', 'broker', 'square', 'name'])
                     ->keyBy('id');
 
+                $slugMap = DB::table('slugs')
+                    ->where('reference_type', Property::class)
+                    ->whereIn('reference_id', $ids)
+                    ->pluck('key', 'reference_id')
+                    ->all();
+
                 foreach ($features as &$feature) {
                     $id = (int) ($feature['properties']['id'] ?? 0);
                     $row = $coordRows->get($id);
@@ -6305,6 +6312,9 @@ class PropertyController extends BaseController
                     }
                     if (! empty($row->name)) {
                         $feature['properties']['name'] = (string) $row->name;
+                    }
+                    if (! empty($slugMap[$id])) {
+                        $feature['properties']['url'] = (string) $slugMap[$id];
                     }
                 }
                 unset($feature);

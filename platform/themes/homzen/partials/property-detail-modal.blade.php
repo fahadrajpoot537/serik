@@ -147,6 +147,7 @@ html.hs-property-modal-open .serik-mobile-map-fab {
         var isOpen = false;
         var savedScrollY = 0;
         var loaderTimeoutId = null;
+        var openSeq = 0;
 
         var mapLock = window.HsMapInteractionLock || {
             lock: function () {},
@@ -158,6 +159,16 @@ html.hs-property-modal-open .serik-mobile-map-fab {
                 var modal = document.getElementById('propertyModal');
                 var iframe = document.getElementById('propertyFrame');
                 if (!modal || !iframe || !url) return false;
+
+                try {
+                    var parsed = new URL(url, window.location.origin);
+                    parsed.searchParams.set('iframe', '1');
+                    url = parsed.toString();
+                } catch (err) {
+                    if (url.indexOf('iframe=1') === -1) {
+                        url = url + (url.indexOf('?') >= 0 ? '&' : '?') + 'iframe=1';
+                    }
+                }
 
                 ensureOnBody();
 
@@ -183,31 +194,51 @@ html.hs-property-modal-open .serik-mobile-map-fab {
                 modal.setAttribute('aria-hidden', 'false');
                 modal.classList.add('is-open');
 
-                if (iframe.dataset.hsLoadedUrl === url && iframe.contentDocument && iframe.contentDocument.body && iframe.contentDocument.body.childElementCount > 0) {
+                var prev = iframe.dataset.hsLoadedUrl || '';
+                if (prev === url && iframe.contentDocument && iframe.contentDocument.body && iframe.contentDocument.body.childElementCount > 0) {
                     hideLoader();
                     return true;
                 }
 
                 showLoader();
                 if (loaderTimeoutId) clearTimeout(loaderTimeoutId);
-                loaderTimeoutId = setTimeout(hideLoader, 4000);
+                loaderTimeoutId = setTimeout(hideLoader, 8000);
 
-                iframe.onload = function () {
-                    if (loaderTimeoutId) clearTimeout(loaderTimeoutId);
-                    hideLoader();
-                };
-                iframe.onerror = function () {
-                    if (loaderTimeoutId) clearTimeout(loaderTimeoutId);
-                    hideLoader();
-                };
+                var seq = ++openSeq;
+                function assignSrc() {
+                    if (seq !== openSeq) return;
+                    iframe.onload = function () {
+                        if (seq !== openSeq) return;
+                        var src = String(iframe.getAttribute('src') || iframe.src || '');
+                        if (!src || src.indexOf('about:blank') >= 0) return;
+                        if (loaderTimeoutId) clearTimeout(loaderTimeoutId);
+                        hideLoader();
+                    };
+                    iframe.onerror = function () {
+                        if (seq !== openSeq) return;
+                        if (loaderTimeoutId) clearTimeout(loaderTimeoutId);
+                        hideLoader();
+                    };
+                    iframe.dataset.hsLoadedUrl = url;
+                    iframe.setAttribute('fetchpriority', 'high');
+                    iframe.src = url;
+                }
 
-                iframe.dataset.hsLoadedUrl = url;
-                iframe.setAttribute('fetchpriority', 'high');
-                iframe.src = url;
+                if (prev && prev !== url) {
+                    try {
+                        iframe.onload = null;
+                        iframe.src = 'about:blank';
+                        delete iframe.dataset.hsLoadedUrl;
+                    } catch (e2) {}
+                    setTimeout(assignSrc, 0);
+                } else {
+                    assignSrc();
+                }
                 return true;
             },
             close: function () {
                 var modal = document.getElementById('propertyModal');
+                openSeq += 1;
                 if (loaderTimeoutId) clearTimeout(loaderTimeoutId);
                 hideLoader();
 
@@ -219,8 +250,11 @@ html.hs-property-modal-open .serik-mobile-map-fab {
 
                 var iframe = document.getElementById('propertyFrame');
                 if (iframe) {
-                    iframe.src = 'about:blank';
-                    delete iframe.dataset.hsLoadedUrl;
+                    try {
+                        iframe.onload = null;
+                        iframe.src = 'about:blank';
+                        delete iframe.dataset.hsLoadedUrl;
+                    } catch (e3) {}
                 }
 
                 if (!isOpen) {
