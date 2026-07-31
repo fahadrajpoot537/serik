@@ -145,9 +145,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
         {!! Theme::footer() !!}
 
-        @if(! \App\Support\SerikHomepage::isHomepageRequest())
-            @include(Theme::getThemeNamespace('partials.deferred-analytics'))
-        @endif
+        {{-- Always load analytics: homepage uses deferred path inside the partial --}}
+        @include(Theme::getThemeNamespace('partials.deferred-analytics'))
+        @include(Theme::getThemeNamespace('partials.ads-contact-conversion'))
 
         @if(!request()->boolean('iframe'))
             @include(Theme::getThemeNamespace('partials.visitor-city-detect'))

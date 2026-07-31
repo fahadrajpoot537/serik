@@ -1911,6 +1911,9 @@ $(() => {
                     if (!error) {
                         $form[0].reset()
                         Theme.showSuccess(message)
+                        if (typeof window.serikTrackAdsContactConversion === 'function') {
+                            window.serikTrackAdsContactConversion()
+                        }
                     } else {
                         Theme.showError(message)
                     }

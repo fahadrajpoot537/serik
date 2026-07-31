@@ -12603,6 +12603,10 @@ document.addEventListener('submit', function (e) {
                     msgEl.textContent = data?.message || 'Thank you! We will contact you shortly.';
                     msgEl.classList.add('success');
                     form.reset();
+                    // Google Ads: fire only on successful consult response (not validation errors).
+                    if (ok && !(data && data.error) && typeof window.serikTrackAdsContactConversion === 'function') {
+                        window.serikTrackAdsContactConversion();
+                    }
                 } else {
                     msgEl.textContent = data?.message || 'Could not send inquiry. Please try again.';
                     msgEl.classList.add('error');
