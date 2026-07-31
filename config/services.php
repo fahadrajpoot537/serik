@@ -67,7 +67,7 @@ return [
     |--------------------------------------------------------------------------
     |
     | Private Integration Token (PIT) + Location ID for upserting website leads
-    | from Contact Us and property Schedule Viewing / inquiry forms.
+    | from Contact Us, property inquiry forms, and new account registrations.
     |
     */
     'gohighlevel' => [

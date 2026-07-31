@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
- * Push website leads to GoHighLevel (LeadConnector) Contacts API.
+ * Push website leads / registrations to GoHighLevel (LeadConnector) Contacts API.
  */
 class GoHighLevelLeadService
 {
@@ -47,6 +47,8 @@ class GoHighLevelLeadService
     /**
      * @param  array{
      *   name?: string|null,
+     *   first_name?: string|null,
+     *   last_name?: string|null,
      *   email?: string|null,
      *   phone?: string|null,
      *   message?: string|null,
@@ -54,7 +56,8 @@ class GoHighLevelLeadService
      *   property_name?: string|null,
      *   property_url?: string|null,
      *   source?: string|null,
-     *   tags?: list<string>|null
+     *   tags?: list<string>|null,
+     *   skip_note?: bool|null
      * }  $lead
      * @return array<string, mixed>|null
      */
@@ -67,6 +70,8 @@ class GoHighLevelLeadService
         $email = trim((string) ($lead['email'] ?? ''));
         $phone = trim((string) ($lead['phone'] ?? ''));
         $name = trim((string) ($lead['name'] ?? ''));
+        $firstName = trim((string) ($lead['first_name'] ?? ''));
+        $lastName = trim((string) ($lead['last_name'] ?? ''));
 
         if ($email === '' && $phone === '') {
             Log::info('GoHighLevel skip: lead has no email or phone');
@@ -74,7 +79,13 @@ class GoHighLevelLeadService
             return null;
         }
 
-        [$firstName, $lastName] = $this->splitName($name);
+        if ($firstName === '' && $lastName === '') {
+            [$firstName, $lastName] = $this->splitName($name);
+        }
+
+        if ($name === '') {
+            $name = trim($firstName . ' ' . $lastName);
+        }
 
         $tags = array_values(array_unique(array_filter(array_map(
             static fn ($t) => trim((string) $t),
@@ -113,7 +124,7 @@ class GoHighLevelLeadService
         $data = $response->json();
         $contactId = data_get($data, 'contact.id');
 
-        if (is_string($contactId) && $contactId !== '') {
+        if (is_string($contactId) && $contactId !== '' && empty($lead['skip_note'])) {
             $this->addNote($contactId, $this->buildNoteBody($lead));
         }
 
