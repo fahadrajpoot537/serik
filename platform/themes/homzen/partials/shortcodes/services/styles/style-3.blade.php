@@ -12,13 +12,26 @@
     transform:translate(-50%,-50%);
     width:80px;
     height:80px;
-    background:rgba(0,0,0,.1);
+    background:rgba(2, 85, 161, .88);
     border-radius:50%;
     display:flex;
     align-items:center;
     justify-content:center;
     color:#fff;
     font-size:24px;
+    box-shadow: 0 8px 28px rgba(2, 85, 161, 0.35);
+}
+
+#page-home .flat-service-v2 .box-left p {
+    text-align: left !important;
+    max-width: 36rem;
+    line-height: 1.7;
+    color: #5b6573;
+}
+
+#page-home .flat-service-v2 .banner-video {
+    border-radius: 14px;
+    overflow: hidden;
 }
 </style>
 

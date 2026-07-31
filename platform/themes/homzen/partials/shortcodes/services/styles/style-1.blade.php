@@ -34,8 +34,17 @@
 
 /* Optional hover effect */
 .box-service.hover-btn-view:hover {
-    transform: translateY(-5px);
-    transition: 0.3s;
+    transform: translateY(-4px);
+    transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+#page-home .tf-sw-services .box-service.hover-btn-view {
+    background: #fff;
+    border: 1px solid rgba(22, 30, 45, 0.08);
+    border-radius: 14px;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 24px rgba(16, 24, 40, 0.06);
+    padding: 1.25rem 1rem;
+    min-height: auto;
 }
 
 /* Responsive adjustments */

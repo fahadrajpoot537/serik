@@ -48,6 +48,19 @@
                     overflow-x: hidden;
                     touch-action: pan-y; /* allow only vertical gestures */
                 }
+
+                /* Horizontal carousels must still receive swipe gestures */
+                .swiper,
+                .tf-sw-blog,
+                .tf-sw-locations,
+                .tf-sw-services,
+                .tf-sw-agents,
+                .tf-sw-categories,
+                .tf-sw-testimonial,
+                .city-swiper,
+                .serik-blog-m {
+                    touch-action: pan-x pan-y;
+                }
             }
 
             .flat-section, .flat-section-v2, .flat-section-v3 {
@@ -77,6 +90,14 @@
                 margin-left: auto;
                 margin-right: auto;
             }
+
+            #page-home .flat-section,
+            #page-home .flat-section-v2,
+            #page-home .flat-section-v3,
+            #page-home .flat-section-v4 {
+                padding-top: clamp(2.5rem, 5vw, 5rem);
+                padding-bottom: clamp(2.5rem, 5vw, 5rem);
+            }
 @php
     $isSerikHomepage = \App\Support\SerikHomepage::isHomepageRequest();
 @endphp
@@ -85,6 +106,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" rel="stylesheet">
+<link rel="stylesheet" href="{{ Theme::asset()->url('css/homepage-premium.css') }}?v={{ get_cms_version() }}-hp6">
 @else
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">

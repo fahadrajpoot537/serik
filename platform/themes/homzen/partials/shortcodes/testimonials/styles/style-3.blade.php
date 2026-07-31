@@ -1,3 +1,12 @@
+<style>
+#page-home .flat-testimonial-v2 .box-title {
+    margin-bottom: 1.5rem;
+}
+#page-home .flat-testimonial-v2 .box-tes-item.style-1 {
+    border-radius: 14px;
+    border: 1px solid rgba(22, 30, 45, 0.08);
+}
+</style>
 <section
     class="flat-section-v2 flat-testimonial-v2 wow fadeInUpSmall"
     data-wow-delay=".2s"

@@ -15,6 +15,14 @@
       display:none;
     }
 }
+
+#page-home .section-title {
+    letter-spacing: -0.02em;
+}
+
+#page-home .btn-view.button-prop {
+    transition: color 0.25s cubic-bezier(0.22, 1, 0.36, 1), gap 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
 </style>
 
 @if($pageTitle || $shortcode->subtitle)

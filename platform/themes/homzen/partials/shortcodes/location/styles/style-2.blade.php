@@ -1,64 +1,68 @@
 <style>
-.grid-location{
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 20px;
+/* Location carousel: compact cards, 5 visible on desktop */
+.flat-location-v2 .tf-sw-locations {
+    overflow: hidden;
+    width: 100%;
 }
 
-/* Tablet */
-@media (max-width: 991px){
-    .grid-location{
-        grid-template-columns: repeat(3, 1fr);
-    }
+.flat-location-v2 .tf-sw-locations .swiper-slide {
+    height: auto;
+    box-sizing: border-box;
 }
 
-/* Mobile (2 per row) */
-@media (max-width: 576px){
-    .grid-location{
-        grid-template-columns: repeat(2, 1fr);
-    }
+.flat-location-v2 .box-location-v2 {
+    display: block;
+    width: 100%;
 }
 
-/* Location cards: shorter height, proportional width */
-.flat-location-v2 .box-location-v2 .box-img{
-    width:100%;
-    aspect-ratio:4 / 3;
-    max-height:none !important;
-    overflow:hidden;
-    border-radius:12px;
+.flat-location-v2 .box-location-v2 .box-img {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    max-height: 140px !important;
+    overflow: hidden;
+    border-radius: 14px;
+    border: 1px solid rgba(22, 30, 45, 0.08);
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 24px rgba(16, 24, 40, 0.06);
+    background: #f3f4f6;
 }
 
-.flat-location-v2 .box-location-v2 .box-img img{
-    width:100%;
-    height:100%;
-    object-fit:cover;
+.flat-location-v2 .box-location-v2 .box-img img {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: cover;
+    display: block;
 }
 
-.flat-location-v2 .box-location-v2 .content{
-    padding-top:10px;
+.flat-location-v2 .box-location-v2 .content {
+    padding-top: 8px;
 }
 
-.flat-location-v2 .box-location-v2 .content .link{
-    font-size:15px !important;
-    line-height:1.35;
-    margin:0;
-}
-
-@media (max-width: 767px) {
-    .flat-location-v2 .box-location-v2 .content .link{
-        font-size:13px !important;
-    }
-}
-.tf-sw-locations {
+.flat-location-v2 .box-location-v2 .content .link {
+    font-size: 14px !important;
+    line-height: 1.35;
+    margin: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
 }
 
-.tf-sw-locations .swiper-wrapper {
-    display: flex;
+@media (min-width: 992px) {
+    .flat-location-v2 .box-location-v2 .box-img {
+        max-height: 160px !important;
+    }
 }
 
-.tf-sw-locations .swiper-slide {
-    flex-shrink: 0;
+@media (max-width: 767px) {
+    .flat-location-v2 .box-location-v2 .box-img {
+        max-height: 120px !important;
+    }
+
+    .flat-location-v2 .box-location-v2 .content .link {
+        font-size: 12px !important;
+    }
 }
 </style>
 
@@ -120,35 +124,52 @@ $locations = $locations->sortBy(function ($location) use ($order) {
 
 
 <script>
- function initLocationsSwiper() {
+function initOntarioLocationsSwiper() {
     if (typeof Swiper === 'undefined') return;
 
-    const el = document.querySelector('.tf-sw-locations');
-    if (!el) return;
+    const el = document.querySelector('.flat-location-v2 .tf-sw-locations');
+    if (!el || el.dataset.swiperReady === '1' || el.swiper) return;
+
+    el.dataset.swiperReady = '1';
 
     new Swiper(el, {
-        slidesPerView: 4,
-        spaceBetween: 20,
+        slidesPerView: 5,
+        spaceBetween: 16,
         loop: true,
-
+        watchOverflow: true,
+        speed: 800,
         autoplay: {
             delay: 2500,
             disableOnInteraction: false,
         },
-
-        speed: 800,
-
         breakpoints: {
             0: { slidesPerView: 2, spaceBetween: 10 },
-            576: { slidesPerView: 2, spaceBetween: 15 },
-            768: { slidesPerView: 2, spaceBetween: 20 },
-            992: { slidesPerView: 3, spaceBetween: 20 },
-            1200: { slidesPerView: 4, spaceBetween: 20 }
+            480: { slidesPerView: 2.3, spaceBetween: 12 },
+            576: { slidesPerView: 3, spaceBetween: 12 },
+            768: { slidesPerView: 3.5, spaceBetween: 14 },
+            992: { slidesPerView: 4, spaceBetween: 16 },
+            1200: { slidesPerView: 5, spaceBetween: 16 }
         }
     });
 }
 
-// run safely multiple times (fixes Laravel rendering issues)
-setTimeout(initLocationsSwiper, 300);
-setTimeout(initLocationsSwiper, 1000);
+function bootOntarioLocationsSwiper(maxRetries) {
+    var retries = 0;
+    var limit = maxRetries || 12;
+    var tick = function () {
+        initOntarioLocationsSwiper();
+        var el = document.querySelector('.flat-location-v2 .tf-sw-locations');
+        if (el && (el.dataset.swiperReady === '1' || el.swiper)) return;
+        retries++;
+        if (retries < limit) setTimeout(tick, 180);
+    };
+    tick();
+}
+
+window.addEventListener('DOMContentLoaded', function () {
+    bootOntarioLocationsSwiper();
+});
+window.addEventListener('load', function () {
+    bootOntarioLocationsSwiper(6);
+});
 </script>

@@ -13,9 +13,11 @@ $accounts = $accounts->sortBy(function ($account) use ($order) {
 
     #about-agent.flat-agents .box-agent .box-img {
         overflow: hidden;
-        border-radius: 12px;
+        border-radius: 14px;
         background: #f8fafc;
         line-height: 0;
+        border: 1px solid rgba(22, 30, 45, 0.08);
+        box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 24px rgba(16, 24, 40, 0.06);
     }
 
     #about-agent.flat-agents .box-agent .box-img img {
@@ -30,6 +32,8 @@ $accounts = $accounts->sortBy(function ($account) use ($order) {
         font-size: 15px;
         line-height: 1.35;
         margin-bottom: 4px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
     }
 
     #about-agent.flat-agents .box-agent .list-info {

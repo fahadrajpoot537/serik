@@ -3,13 +3,14 @@
     .cashback-calculator{
     margin-top:-20px;
     z-index:200;
-    background:#f3f3f3;
+    background:#f7f8fa;
     padding:30px 0;
 }
 
 .calculator-box{
-    box-shadow:5px 5px 15px 2px #ccc;
-    border-radius:12px;
+    box-shadow:0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 24px rgba(16, 24, 40, 0.06);
+    border:1px solid rgba(22, 30, 45, 0.08);
+    border-radius:14px;
     padding:16px 18px;
     background:#fff;
 }
@@ -27,9 +28,10 @@
 
 .calculator-result{
     padding:10px;
-    box-shadow:5px 5px 15px 2px #ccc;
+    box-shadow:0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 24px rgba(16, 24, 40, 0.06);
+    border:1px solid rgba(22, 30, 45, 0.08);
     display:none;
-    border-radius:12px;
+    border-radius:14px;
     margin-top:20px;
     max-width:400px;
 }

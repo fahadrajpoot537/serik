@@ -3,7 +3,15 @@
     .main-heading-cat{
         zoom:0.8;
     }
-} 
+}
+#page-home .flat-categories .homeya-categories {
+    box-shadow: none;
+    background-color: #fff !important;
+    padding: 1.15rem 1rem 1rem !important;
+}
+#page-home .flat-categories .homeya-categories .content {
+    zoom: 1 !important;
+}
 </style>
 
 
@@ -50,12 +58,11 @@ $propertySubTypes = \App\Support\RealEstateCountCache::propertySubTypeCounts($al
 
     <a href="{{ $seoUrl }}"
        class="homeya-categories"
-       title="{{ $category->PropertySubType }}"
-       style="box-shadow:0 4px 8px rgba(0,0,0,0.2),0 6px 20px rgba(0,0,0,0.19);background-color:#ffeaeb;padding:15px 12px 12px;">
+       title="{{ $category->PropertySubType }}">
 
-        <div class="content text-center" style="zoom:0.6;">
+        <div class="content text-center">
 
-            <h6 class="main-heading-cat" style="height:60px;">
+            <h6 class="main-heading-cat">
 
                 {{ $category->PropertySubType === 'Att/Row/Townhouse'
                     ? 'Freehold Townhouse'
@@ -63,7 +70,7 @@ $propertySubTypes = \App\Support\RealEstateCountCache::propertySubTypeCounts($al
 
             </h6>
 
-            <p class="mt-4 text-variant-1" style="height:35px;">
+            <p class="mt-4 text-variant-1">
 
                 @if ($category->total == 1)
                     1 Property

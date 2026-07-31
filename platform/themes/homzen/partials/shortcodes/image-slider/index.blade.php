@@ -10,9 +10,10 @@
 .city-card {
     background: #fff;
     padding: 16px;
-    border-radius: 10px;
+    border-radius: 14px;
     height: 100%;
-    box-shadow: rgba(50, 50, 93, 0.25) 0px 50px 100px -20px, rgba(0, 0, 0, 0.3) 0px 30px 60px -30px, rgba(10, 37, 64, 0.35) 0px -2px 6px 0px inset;
+    border: 1px solid rgba(22, 30, 45, 0.08);
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 24px rgba(16, 24, 40, 0.06);
     width: 100%;
 }
 
@@ -64,8 +65,7 @@
 
 <section class="flat-section-v4 city-swiper-section">
     <div class="container">
- <h3 style="    font-size: 22px;
-    font-weight: 800;">Homes for Sale in Popular Cities</h3>
+ <h3 class="section-title" style="font-size: 22px; font-weight: 700; letter-spacing: -0.02em;">Homes for Sale in Popular Cities</h3>
         <div class="swiper city-swiper" data-speed="1500">
             <div class="swiper-wrapper">
                
@@ -125,28 +125,24 @@
 
 
 <script>
-function initLocationsSwiper() {
+function initCitySwiperCards() {
     if (typeof Swiper === 'undefined') return;
 
     document.querySelectorAll('.city-swiper').forEach((el) => {
+        if (el.swiper || el.dataset.swiperReady === '1') return;
+        el.dataset.swiperReady = '1';
 
-        // prevent double init
-        if (el.swiper) return;
-
-        const speed = parseInt(el.dataset.speed || 2500);
+        const speed = parseInt(el.dataset.speed || 2500, 10);
 
         new Swiper(el, {
             slidesPerView: 1.2,
             spaceBetween: 0,
             loop: true,
-
             autoplay: {
                 delay: speed,
                 disableOnInteraction: false,
             },
-
             speed: 800,
-
             breakpoints: {
                 0: { slidesPerView: 1.2, spaceBetween: 0 },
                 576: { slidesPerView: 1.4, spaceBetween: 0 },
@@ -155,7 +151,23 @@ function initLocationsSwiper() {
     });
 }
 
-// safer init (Laravel / AJAX friendly)
-setTimeout(initLocationsSwiper, 300);
-setTimeout(initLocationsSwiper, 1000);
+function bootCitySwiperCards(maxRetries) {
+    var retries = 0;
+    var limit = maxRetries || 12;
+    var tick = function () {
+        initCitySwiperCards();
+        var pending = document.querySelector('.city-swiper:not([data-swiper-ready="1"])');
+        if (!pending) return;
+        retries++;
+        if (retries < limit) setTimeout(tick, 180);
+    };
+    tick();
+}
+
+window.addEventListener('DOMContentLoaded', function () {
+    bootCitySwiperCards();
+});
+window.addEventListener('load', function () {
+    bootCitySwiperCards(6);
+});
 </script>
