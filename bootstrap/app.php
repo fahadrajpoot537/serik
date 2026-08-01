@@ -191,8 +191,9 @@ $app = Application::configure(basePath: dirname(__DIR__))
         $middleware->prepend(\App\Http\Middleware\BlockSensitivePathsMiddleware::class);
         $middleware->prepend(\App\Http\Middleware\WagesMaintenanceMiddleware::class);
         $middleware->prepend(\App\Http\Middleware\EarlyHomepageCacheMiddleware::class);
+        // Must run BEFORE EarlyHomepageCache so blocked countries never get a cache HIT.
+        $middleware->prepend(\App\Http\Middleware\GeoBlockMiddleware::class);
         $middleware->appendToGroup('web', \App\Http\Middleware\CacheHomepageResponseMiddleware::class);
-        $middleware->appendToGroup('web', \App\Http\Middleware\GeoBlockMiddleware::class);
         $middleware->appendToGroup('web', \App\Http\Middleware\RequestProfilerMiddleware::class);
         $middleware->prependToGroup('web', \App\Http\Middleware\UseRequestRootUrlInLocal::class);
         $middleware->prependToGroup('web', \App\Http\Middleware\DetectVisitorCityMiddleware::class);

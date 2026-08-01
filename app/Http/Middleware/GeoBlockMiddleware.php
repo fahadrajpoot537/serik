@@ -2,10 +2,9 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\VisitorCountry;
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
 use Symfony\Component\HttpFoundation\Response;
 
 class GeoBlockMiddleware
@@ -21,64 +20,37 @@ class GeoBlockMiddleware
             return $next($request);
         }
 
-        $ip = $request->ip();
+        $ip = VisitorCountry::clientIp($request);
 
-        if ($this->isLocalOrPrivateIp($ip) || $this->isWhitelistedIp($ip)) {
+        if (VisitorCountry::isLocalOrPrivateIp($ip) || $this->isWhitelistedIp($ip)) {
             return $next($request);
         }
 
-        $country = $request->header('CF-IPCountry') ?: ($request->server('HTTP_CF_IPCOUNTRY') ?: null);
+        $country = VisitorCountry::resolve($request);
+        $allowed = array_map('strtoupper', (array) config('serik.geo_block.allowed_countries', ['US', 'CA', 'PK']));
 
-        if (! $country) {
-            $country = Cache::remember('geoip_country_' . $ip, 86400, function () use ($ip) {
-                try {
-                    $response = Http::timeout(1)->get('http://ip-api.com/json/' . $ip);
-                    if ($response->successful() && $response->json('status') === 'success') {
-                        return strtoupper((string) $response->json('countryCode'));
-                    }
-                } catch (\Throwable) {
-                    // continue
-                }
-
-                try {
-                    $response = Http::timeout(1)->get('https://ipapi.co/' . $ip . '/json/');
-                    if ($response->successful()) {
-                        return strtoupper((string) $response->json('country_code'));
-                    }
-                } catch (\Throwable) {
-                    // continue
-                }
-
-                // Fail-open so API outages do not lock the whole site.
-                return 'CA';
-            });
-        }
-
-        $country = strtoupper((string) $country);
-
-        if (in_array($country, ['XX', 'T1', ''], true)) {
-            return $next($request);
-        }
-
-        $allowed = config('serik.geo_block.allowed_countries', ['US', 'CA', 'PK']);
-        $allowed = array_map('strtoupper', (array) $allowed);
-
-        if (! in_array($country, $allowed, true)) {
-            if ($request->expectsJson() || $request->is('api/*') || $request->ajax()) {
-                return response()->json([
-                    'message' => 'This website is currently available only in Canada, the United States, and Pakistan.',
-                    'country' => $country,
-                ], 403);
-            }
-
-            return response()
-                ->view('serik.geo-restricted', [
-                    'country' => $country,
-                ], 403)
-                ->header('Cache-Control', 'no-store, no-cache, must-revalidate');
+        // Unknown country after lookup: fail closed (do not invent CA).
+        if ($country === null || $country === '' || ! in_array($country, $allowed, true)) {
+            return $this->deny($request, $country ?: 'UNKNOWN');
         }
 
         return $next($request);
+    }
+
+    protected function deny(Request $request, string $country): Response
+    {
+        if ($request->expectsJson() || $request->is('api/*') || $request->ajax()) {
+            return response()->json([
+                'message' => 'This website is currently available only in Canada, the United States, and Pakistan.',
+                'country' => $country,
+            ], 403);
+        }
+
+        return response()
+            ->view('serik.geo-restricted', [
+                'country' => $country,
+            ], 403)
+            ->header('Cache-Control', 'no-store, no-cache, must-revalidate');
     }
 
     protected function shouldBypass(Request $request): bool
@@ -120,12 +92,18 @@ class GeoBlockMiddleware
             'api/v1/property-rooms',
             'api/v1/auth/session-status',
             'api/v1/listings-count',
+            'clear-serik-cache.php',
         ]);
 
         foreach ($bypassPrefixes as $prefix) {
             if ($path === $prefix || str_starts_with($path, $prefix . '/')) {
                 return true;
             }
+        }
+
+        // Public asset files under /storage (logos, uploads) — not property API.
+        if (str_starts_with($path, 'storage/') && ! str_starts_with($path, 'storage/properties/treb')) {
+            return true;
         }
 
         return false;
@@ -181,30 +159,5 @@ class GeoBlockMiddleware
         $whitelist = config('serik.geo_block.bypass_ips', []);
 
         return in_array($ip, (array) $whitelist, true);
-    }
-
-    protected function isLocalOrPrivateIp(?string $ip): bool
-    {
-        if (empty($ip) || $ip === '127.0.0.1' || $ip === '::1') {
-            return true;
-        }
-
-        $ipParts = explode('.', $ip);
-        if (count($ipParts) === 4) {
-            $first = (int) $ipParts[0];
-            $second = (int) $ipParts[1];
-
-            if ($first === 10) {
-                return true;
-            }
-            if ($first === 172 && $second >= 16 && $second <= 31) {
-                return true;
-            }
-            if ($first === 192 && $second === 168) {
-                return true;
-            }
-        }
-
-        return false;
     }
 }
