@@ -60,11 +60,22 @@ class GeoBlockMiddleware
             return $next($request);
         }
 
-        $allowed = config('serik.geo_block.allowed_countries', ['US', 'CA']);
+        $allowed = config('serik.geo_block.allowed_countries', ['US', 'CA', 'PK']);
         $allowed = array_map('strtoupper', (array) $allowed);
 
         if (! in_array($country, $allowed, true)) {
-            abort(403, 'Access denied: Website is only accessible from allowed countries (' . implode(', ', $allowed) . '). Your country: ' . $country);
+            if ($request->expectsJson() || $request->is('api/*') || $request->ajax()) {
+                return response()->json([
+                    'message' => 'This website is currently available only in Canada, the United States, and Pakistan.',
+                    'country' => $country,
+                ], 403);
+            }
+
+            return response()
+                ->view('serik.geo-restricted', [
+                    'country' => $country,
+                ], 403)
+                ->header('Cache-Control', 'no-store, no-cache, must-revalidate');
         }
 
         return $next($request);

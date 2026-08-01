@@ -47,6 +47,7 @@ final class VisitorIpLocation
                             'lat' => round($lat, 6),
                             'lng' => round($lng, 6),
                             'city' => trim((string) $response->json('city')),
+                            'country' => strtoupper($country ?: 'CA'),
                             'source' => 'ip',
                             'accuracy' => 'ip',
                         ];
@@ -70,6 +71,7 @@ final class VisitorIpLocation
                             'lat' => round($lat, 6),
                             'lng' => round($lng, 6),
                             'city' => trim((string) $response->json('city')),
+                            'country' => strtoupper($country ?: 'CA'),
                             'source' => 'ip',
                             'accuracy' => 'ip',
                         ];

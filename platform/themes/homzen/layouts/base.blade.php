@@ -116,6 +116,18 @@
 
         @stack('header')
         {!! Theme::header() !!}
+        @php
+            $serikFaviconPath = theme_option('favicon');
+            $serikFaviconUrl = $serikFaviconPath
+                ? RvMedia::getImageUrl($serikFaviconPath)
+                : asset('favicon.ico');
+            $serikFaviconType = theme_option('favicon_type', 'image/png');
+        @endphp
+        {{-- Extra favicon / mobile icons (Theme::header already emits the primary favicon when set) --}}
+        <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
+        <link rel="icon" type="{{ $serikFaviconType }}" href="{{ $serikFaviconUrl }}">
+        <link rel="apple-touch-icon" href="{{ $serikFaviconUrl }}">
+        <link rel="apple-touch-icon" sizes="180x180" href="{{ $serikFaviconUrl }}">
         <script type="text/javascript">
             (function(c,l,a,r,i,t,y){
                 c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};

@@ -8,8 +8,9 @@
     const COOKIE_CITY = 'serik_visitor_city';
     const LS_CITY = 'serik_visitor_city';
     const SESSION_KEY = 'serik_visitor_location';
+    const SESSION_COUNTRY_KEY = 'serik_visitor_country';
     const CITY_COOKIE_DAYS = 30;
-    const SESSION_TTL_MS = 30 * 60 * 1000;
+    // Keep for one browser tab session (sessionStorage). No mid-session re-prompt.
 
     const ONTARIO_BOUNDS = { south: 41.6, north: 56.9, west: -95.2, east: -74.0 };
     const ONTARIO_DEFAULT = {
@@ -118,6 +119,7 @@
             lat: roundCoord(location.lat),
             lng: roundCoord(location.lng),
             city: location.city ? String(location.city).trim() : null,
+            country: location.country ? String(location.country).trim().toUpperCase() : null,
             source: location.source || 'unknown',
             accuracy: location.accuracy || null,
             ts: Date.now(),
@@ -125,12 +127,28 @@
 
         try {
             sessionStorage.setItem(SESSION_KEY, JSON.stringify(payload));
+            if (payload.country) {
+                sessionStorage.setItem(SESSION_COUNTRY_KEY, payload.country);
+            }
         } catch (e) {
             // ignore storage errors
         }
 
         if (payload.city) {
             saveCity(payload.city);
+        }
+    }
+
+    function getSessionCountry() {
+        try {
+            const cached = sessionStorage.getItem(SESSION_COUNTRY_KEY);
+            if (cached) {
+                return String(cached).trim().toUpperCase();
+            }
+            const location = getSessionLocation();
+            return location && location.country ? String(location.country).toUpperCase() : null;
+        } catch (e) {
+            return null;
         }
     }
 
@@ -151,15 +169,11 @@
                 return null;
             }
 
-            if (Date.now() - Number(location.ts || 0) > SESSION_TTL_MS) {
-                sessionStorage.removeItem(SESSION_KEY);
-                return null;
-            }
-
             return {
                 lat: roundCoord(location.lat),
                 lng: roundCoord(location.lng),
                 city: location.city || null,
+                country: location.country || null,
                 source: location.source || 'cache',
                 accuracy: location.accuracy || null,
             };
@@ -308,6 +322,7 @@
                         lat: lat,
                         lng: lng,
                         city: data.city ? String(data.city).trim() : null,
+                        country: data.country ? String(data.country).trim().toUpperCase() : 'CA',
                         source: 'ip',
                         accuracy: 'ip',
                     };
@@ -337,6 +352,7 @@
                     lat: lat,
                     lng: lng,
                     city: city,
+                    country: data.country_code ? String(data.country_code).trim().toUpperCase() : 'CA',
                     source: 'ip',
                     accuracy: 'ip',
                 };
@@ -377,6 +393,7 @@
                     lat: lat,
                     lng: lng,
                     city: data.city ? String(data.city).trim() : null,
+                    country: data.country ? String(data.country).trim().toUpperCase() : null,
                     source: data.source || 'ip',
                     accuracy: data.accuracy || 'ip',
                 };
@@ -487,6 +504,7 @@
         detectCityInBackground: detectCityInBackground,
         getVisitorCity: getVisitorCity,
         getSessionLocation: getSessionLocation,
+        getSessionCountry: getSessionCountry,
         saveSessionLocation: saveSessionLocation,
         hasStoredCity: hasStoredCity,
         isInOntarioBounds: isInOntarioBounds,

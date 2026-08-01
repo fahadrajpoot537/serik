@@ -107,7 +107,7 @@ return [
         'enabled' => filter_var(env('GEO_BLOCK_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
         'allowed_countries' => array_values(array_filter(array_map(
             'trim',
-            explode(',', (string) env('GEO_BLOCK_ALLOWED_COUNTRIES', 'US,CA'))
+            explode(',', (string) env('GEO_BLOCK_ALLOWED_COUNTRIES', 'US,CA,PK'))
         ))),
         'bypass_ips' => array_values(array_filter(array_map(
             'trim',

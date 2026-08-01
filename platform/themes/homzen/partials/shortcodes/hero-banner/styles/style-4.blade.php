@@ -5491,6 +5491,30 @@ function fetchServerVisitorLocation() {
         .catch(() => null);
 }
 
+// URL helpers must live at script scope — shouldUseIpMapCenter / resolveInitialMapView
+// run outside (or close over) the DOMContentLoaded callback and cannot see nested defs.
+function getCityFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const city = params.get('city') || '';
+
+    if (!city) {
+        return '';
+    }
+
+    return decodeURIComponent(city.replace(/\+/g, ' ')).trim();
+}
+
+function getLatLngFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+
+    const lat = parseFloat(params.get('lat'));
+    const lng = parseFloat(params.get('lng'));
+
+    if (isNaN(lat) || isNaN(lng)) return null;
+
+    return { lat, lng };
+}
+
 function shouldUseIpMapCenter(urlCommunity) {
     const intent = window.__hsMapNavIntent || {};
     if (intent.hasCoords || intent.community || intent.place) {
@@ -8098,17 +8122,6 @@ document.querySelector('.clear-btn-main').addEventListener('click', function () 
 
 
 
-function getCityFromUrl() {
-    const params = new URLSearchParams(window.location.search);
-    const city = params.get('city') || '';
-
-    if (!city) {
-        return '';
-    }
-
-    return decodeURIComponent(city.replace(/\+/g, ' ')).trim();
-}
-
 function isBareMapPath() {
     const path = window.location.pathname.toLowerCase().replace(/\/$/, '');
 
@@ -8275,7 +8288,7 @@ async function centerOnVisitorAreaNoLock() {
             // Prefer browser GPS after map is ready (permission prompt if needed).
             location = await detector.detectLocation({ preferCached: false, preferBrowser: true });
         } catch (e) {
-            console.warn('Visitor location detection failed', e);
+            // silent — keep default map behavior
         }
     }
 
@@ -8301,13 +8314,14 @@ async function centerOnVisitorAreaNoLock() {
                     lat: Number(serverLocation.lat),
                     lng: Number(serverLocation.lng),
                     city: serverLocation.city || null,
+                    country: serverLocation.country || null,
                     source: serverLocation.source || 'ip',
                     accuracy: serverLocation.accuracy || 'ip',
                 };
                 detector?.saveSessionLocation?.(location);
             }
         } catch (e) {
-            console.warn('Server visitor location failed', e);
+            // silent — keep default map behavior
         }
     }
 
@@ -8376,7 +8390,7 @@ async function setMapToUserLocation() {
                 preferBrowser: true,
             });
         } catch (e) {
-            console.warn('Visitor location detection failed', e);
+            // silent — keep default map behavior
         }
     }
 
@@ -8388,13 +8402,14 @@ async function setMapToUserLocation() {
                     lat: Number(serverLocation.lat),
                     lng: Number(serverLocation.lng),
                     city: serverLocation.city || null,
+                    country: serverLocation.country || null,
                     source: serverLocation.source || 'ip',
                     accuracy: serverLocation.accuracy || 'ip',
                 };
                 detector?.saveSessionLocation?.(location);
             }
         } catch (e) {
-            console.warn('Server visitor location failed', e);
+            // silent — keep default map behavior
         }
     }
 
@@ -8441,19 +8456,6 @@ function getSubtypesFromUrl() {
     // Split by comma in case multiple subtypes are passed
     return subtypes.split(',').map(s => s.trim());
 }
-
-
-function getLatLngFromUrl() {
-    const params = new URLSearchParams(window.location.search);
-
-    const lat = parseFloat(params.get('lat'));
-    const lng = parseFloat(params.get('lng'));
-
-    if (isNaN(lat) || isNaN(lng)) return null;
-
-    return { lat, lng };
-}
-
 
 
 function getTransactionFromUrl() {
