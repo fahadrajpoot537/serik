@@ -1,602 +1,198 @@
-<style>
-    
-    .cashback-calculator{
-    margin-top:-20px;
-    z-index:200;
-    background:#f7f8fa;
-    padding:30px 0;
-}
-
-.calculator-box{
-    box-shadow:0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 24px rgba(16, 24, 40, 0.06);
-    border:1px solid rgba(22, 30, 45, 0.08);
-    border-radius:14px;
-    padding:16px 18px;
-    background:#fff;
-}
-
-
-.primary-outline{
-    background:#fff;
-    border:1px solid #ddd;
-    color:#333;
-}
-
-.primary-outline:hover{
-    background:#f5f5f5;
-}
-
-.calculator-result{
-    padding:10px;
-    box-shadow:0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 24px rgba(16, 24, 40, 0.06);
-    border:1px solid rgba(22, 30, 45, 0.08);
-    display:none;
-    border-radius:14px;
-    margin-top:20px;
-    max-width:400px;
-}
-
-
-
-.calculator-buttons{
-    display:flex;
-    gap:8px;
-    align-items:center;
-    flex-shrink:0;
-}
-
-.calculator-buttons .tf-btn{
-    flex:1;                 /* all buttons equal width */
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    padding:5px 3px;
-    text-align:center;
-    height:50px;
-}
-
-.calculator-buttons .tf-btn:last-child{
-    flex:1.2;
-    padding:0;
-    border:none;
-    background:none;
-}
-
-/* Image fit */
-.calculator-buttons .tf-btn:last-child img{
-    width:100%;
-    height:100%;
-    object-fit:contain;
-}
-
-
-
-/* Desktop: field + buttons in one row */
-.cashback-calculator .wd-find-select.calculator-box{
-    display:flex;
-    flex-direction:row;
-    align-items:flex-end;
-    gap:12px;
-}
-
-.cashback-calculator .wd-find-select .inner-group{
-    flex:1 1 46%;
-    min-width:160px;
-    max-width:46%;
-    padding:0 !important;
-    display:block !important;
-}
-
-.cashback-calculator .wd-find-select .form-style,
-.cashback-calculator .wd-find-select .form-group-1{
-    width:100%;
-    border-inline-end:none !important;
-    margin:0;
-}
-
-.cashback-calculator .wd-find-select .form-style label,
-.cashback-calculator .wd-find-select .form-group-1 label{
-    display:block;
-    margin-bottom:6px;
-    font-size:13px;
-    font-weight:600;
-    color:#334155;
-    line-height:1.2;
-}
-
-.cashback-calculator .wd-find-select .position-relative{
-    width:100%;
-}
-
-.cashback-calculator .wd-find-select .form-control#amount{
-    display:block;
-    width:100% !important;
-    min-width:0;
-    min-height:50px;
-    height:50px;
-    padding:12px 14px !important;
-    padding-inline-end:14px !important;
-    border:1px solid #cbd5e1 !important;
-    border-radius:8px;
-    background:#fff !important;
-    font-size:15px !important;
-    font-weight:600 !important;
-    line-height:1.35 !important;
-    color:#0f172a !important;
-    box-sizing:border-box;
-    overflow:hidden;
-    text-overflow:ellipsis;
-    white-space:nowrap;
-}
-
-.cashback-calculator .wd-find-select .form-control#amount:focus{
-    border-color:#0255a1 !important;
-    outline:none;
-    box-shadow:0 0 0 3px rgba(2,85,161,0.12);
-    white-space:normal;
-}
-
-.cashback-calculator .wd-find-select .form-control#amount::placeholder{
-    color:#64748b !important;
-    opacity:1 !important;
-    font-size:14px !important;
-    font-weight:500 !important;
-}
-
-.cashback-calculator .calculator-buttons{
-    flex:0 0 54%;
-    max-width:54%;
-    width:54%;
-    min-width:0;
-    padding-bottom:2px;
-    align-items:stretch;
-}
-
-.cashback-calculator .calculator-buttons button,
-.cashback-calculator .calculator-buttons a{
-    flex:1 1 0;
-    min-width:0;
-    min-height:54px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-}
-
-.cashback-calculator .calculator-buttons img{
-    display:block;
-    width:100%;
-    height:54px;
-    min-height:54px;
-    object-fit:contain;
-    object-position:center;
-}
-
-@media (min-width: 992px) {
-    .cashback-calculator .wd-find-select .inner-group{
-        flex:1 1 38%;
-        max-width:38%;
-    }
-
-    .cashback-calculator .calculator-buttons{
-        flex:0 0 62%;
-        max-width:62%;
-        width:62%;
-        gap:10px;
-    }
-
-    .cashback-calculator .calculator-buttons button,
-    .cashback-calculator .calculator-buttons a{
-        min-height:72px;
-    }
-
-    .cashback-calculator .calculator-buttons img{
-        height:72px;
-        min-height:72px;
-    }
-}
-
-@media (min-width: 1200px) {
-    .cashback-calculator .calculator-buttons button,
-    .cashback-calculator .calculator-buttons a{
-        min-height:80px;
-    }
-
-    .cashback-calculator .calculator-buttons img{
-        height:80px;
-        min-height:80px;
-    }
-}
-
-/* Mobile: field and buttons on separate lines */
-@media (max-width:768px){
-
-    .cashback-calculator{
-        padding:20px 10px;
-    }
-
-    .calculator-box{
-        padding:14px 14px;
-    }
-
-    .cashback-calculator .wd-find-select.calculator-box{
-        flex-direction:column;
-        align-items:stretch;
-        gap:12px;
-    }
-
-    .cashback-calculator .wd-find-select .inner-group{
-        width:100%;
-        max-width:100%;
-        flex:none;
-    }
-
-    .cashback-calculator .wd-find-select .form-control#amount{
-        font-size:16px !important;
-        min-height:48px;
-        height:48px;
-        white-space:normal;
-    }
-
-    .cashback-calculator .wd-find-select .form-control#amount::placeholder{
-        font-size:15px !important;
-    }
-
-    .cashback-calculator .calculator-buttons{
-        width:100%;
-        max-width:100%;
-        flex:none;
-        flex-direction:column !important;
-        gap:10px;
-        padding-bottom:0;
-        align-items:stretch;
-    }
-
-    .cashback-calculator .calculator-buttons button,
-    .cashback-calculator .calculator-buttons a{
-        width:100% !important;
-        flex:none !important;
-        display:flex !important;
-        justify-content:center;
-    }
-
-    .cashback-calculator .calculator-buttons img{
-        width:100%;
-        max-width:100%;
-        height:auto;
-        min-height:48px;
-        max-height:56px;
-        object-fit:contain;
-    }
-}
-
-.title1 {
-    font-size: 80px;
-}
-
-
-    
-.flat-section{padding:10px 0 !important;}
-.flat-section-v2{padding-top:20px !important;}
-.flat-section-v3{padding:20px 0 !important;}
-.flat-section-v4{padding:15px 0 !important;}
-.flat-section-v5{padding:30px 0 20px !important;}
-.flat-section-v6{padding:20px 0 20px !important;}
-
-
-.btn-wrapper {
-    position: relative;
-    width:100%;
-    display: inline-block;
-}
-@media (max-width: 768px) {
-    .title1 {
-        font-size: 28px !important;
-        line-height: 1.2;
-    }
-    .flat-section{padding:10px 0 !important;}
-.flat-section-v2{padding-top:10px !important;}
-.flat-section-v3{padding:10px 0 !important;}
-.flat-section-v4{padding:10px 0 !important;}
-.flat-section-v5{padding:20px 0 10px !important;}
-.flat-section-v6{padding:10px 0 20px !important;}
-}
-
-@media (max-width: 768px) {
-   
-    .btn-wrapper {
-    width:100%;
-   }
-   .flat-slider.home-2 .slider-content {
-        padding: 0px 0;
-    }
-   .flat-slider.home-2 .slider-content .heading .subtitle{
-       margin-bottom: 10px;
-   }
-   .flat-slider.home-2 .slider-content .heading h1.hero-banner-headline {
-       margin: 0;
-   }
-   .calculator-box{
-       padding: 14px 14px;
-   }
-   .swiper{
-           overflow: visible !important;
-   }
-}
-
-.calculator-buttons {
-    display: flex;
-    gap: 5px; /* space between buttons */
-    align-items: stretch;
-}
-
-.calculator-buttons button,
-.calculator-buttons a {
-    flex: 1 1 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 0;
-}
-
-.calculator-buttons img {
-    width: 100%;
-    max-width: 100%;
-    height: 54px;
-    min-height: 54px;
-    object-fit: contain;
-    object-position: center;
-    border-radius: 6px;
-}
-    
-</style>
-
-@php
-    $titleColor = $shortcode->title_color ?: '#000000';
-    $descriptionColor = $shortcode->description_color ?: '#000000';
-@endphp
-
 @php
     use App\Support\ImageAlt;
     use App\Support\SerikMediaUrl;
 
+    $titleColor = $shortcode->title_color ?: '#161e2d';
+    $descriptionColor = $shortcode->description_color ?: '#5b6573';
     $heroAltContext = trim(strip_tags((string) ($shortcode->title ?: $shortcode->subtitle ?: __('Ontario homes for sale'))));
-    $heroLcpUrl = $shortcode->background_image ? SerikMediaUrl::cmsImageUrl($shortcode->background_image, 'large') : null;
+    $firstSlider = null;
+    foreach (range(1, 4) as $si) {
+        if ($shortcode->{"slider_image_$si"}) {
+            $firstSlider = $shortcode->{"slider_image_$si"};
+            break;
+        }
+    }
+    $heroMediaUrl = $firstSlider
+        ? SerikMediaUrl::cmsImageUrl($firstSlider, 'large')
+        : ($shortcode->background_image ? SerikMediaUrl::cmsImageUrl($shortcode->background_image, 'large') : null);
 @endphp
 
-@if ($heroLcpUrl)
+@if ($heroMediaUrl)
     @push('header')
-        <link rel="preload" as="image" href="{{ $heroLcpUrl }}" fetchpriority="high">
+        <link rel="preload" as="image" href="{{ $heroMediaUrl }}" fetchpriority="high">
     @endpush
 @endif
 
-<section class="flat-slider home-2">
-    <div class="container relative">
-        <div class="row">
-            <div class="col-xl-10">
-                <div class="slider-content">
-                    <div class="heading">
-                        <h1 class="subtitle body-1 hero-banner-headline" style="color: {{ $descriptionColor }} !important; font-weight:700;">
-                            Top Realtor in Ontario - Buy or Sell Homes and Get
-                        </h1>
-                        <div class="title title1 animationtext clip" style="color: {{ $titleColor }} !important; font-weight:700; font-size: 35px;">
-                           <div>  {!! Theme::partial('shortcodes.hero-banner.partials.animation-text', compact('shortcode')) !!}
-						   </div>
-                            <div style="margin-top: 15px;">
-                           
-                           <p style="color:red;">*Terms and Conditions Apply</p>
-							</div>
-                        </div>
-                        @if ($shortcode->description)
-                            <p class="subtitle body-1" style="color: {{ $descriptionColor }} !important; font-weight:700;">
-                                {!! BaseHelper::clean($shortcode->description) !!}
-                            </p>
-                        @endif
+{{--
+  Split portal hero:
+  LEFT  = discovery (heading, CTA, stats)
+  RIGHT = cashback banner — framed, fully visible, never cropped
+--}}
+<section class="flat-slider home-2 serik-split-hero" aria-label="{{ __('Ontario property search') }}">
+    <div class="container serik-split-hero__container">
+        <div class="serik-split-hero__grid">
+
+            {{-- LEFT: property discovery --}}
+            <div class="serik-split-hero__left slider-content">
+                <div class="heading serik-split-hero__heading">
+                    <p class="serik-split-hero__eyebrow">{{ __('Ontario MLS® Property Search') }}</p>
+                    <h1 class="subtitle body-1 hero-banner-headline serik-split-hero__title" style="color: {{ $descriptionColor }} !important;">
+                        {{ __('Find homes for sale & lease across Ontario') }}
+                    </h1>
+                    <div class="title title1 serik-split-hero__cashback" style="color: {{ $titleColor }} !important;">
+                        @php
+                            $cashbackBits = array_values(array_filter(array_map('trim', explode(',', (string) ($shortcode->animation_text ?: '')))));
+                            $cashbackLabel = $cashbackBits[0] ?? ($shortcode->title ?: __('Upto 1.5% Cash Back'));
+                        @endphp
+                        {{ $cashbackLabel }}
                     </div>
-                    <br>
-                    {!! Theme::partial('shortcodes.hero-banner.partials.action-button', ['shortcode' => $shortcode, 'class' => 'mb-5']) !!}
-                   
+                    <p class="serik-split-hero__terms">*{{ __('Terms and Conditions Apply') }}</p>
+                    @if ($shortcode->description)
+                        <p class="subtitle body-1 serik-split-hero__desc" style="color: {{ $descriptionColor }} !important;">
+                            {!! BaseHelper::clean($shortcode->description) !!}
+                        </p>
+                    @endif
+                </div>
+
+                <div class="serik-split-hero__actions">
+                    {!! Theme::partial('shortcodes.hero-banner.partials.action-button', ['shortcode' => $shortcode, 'class' => 'serik-split-hero__cta']) !!}
+                    <a href="{{ url('/map') }}" class="serik-split-hero__link">{{ __('Browse all listings') }}</a>
+                </div>
+
+                <ul class="serik-split-stats" aria-label="{{ __('Highlights') }}">
+                    <li><strong>MLS®</strong><span>{{ __('Listings') }}</span></li>
+                    <li><strong>GTA+</strong><span>{{ __('Coverage') }}</span></li>
+                    <li><strong>1.5%</strong><span>{{ __('Cash Back') }}</span></li>
+                    <li><strong>Map</strong><span>{{ __('Search') }}</span></li>
+                </ul>
+            </div>
+
+            {{-- RIGHT: existing cashback banner — framed, fully visible --}}
+            <div class="serik-split-hero__right">
+                <div class="serik-split-hero__frame img-banner-right">
+                    <div class="swiper slider-sw-home2 serik-split-hero__swiper">
+                        <div class="swiper-wrapper">
+                            @php $heroSlideIndex = 0; @endphp
+                            @foreach (range(1, 4) as $i)
+                                @continue(! $shortcode->{"slider_image_$i"})
+                                @php $heroSlideIndex++; @endphp
+                                <div class="swiper-slide">
+                                    <div class="slider-home2 serik-split-hero__slide">
+                                        {{ RvMedia::image(
+                                            $shortcode->{"slider_image_$i"},
+                                            ImageAlt::resolve($shortcode->title, $shortcode->{"slider_image_$i"}, $heroAltContext),
+                                            'large',
+                                            lazy: $heroSlideIndex > 1,
+                                            attributes: $heroSlideIndex === 1
+                                                ? ['data-bb-lazy' => 'false', 'fetchpriority' => 'high', 'loading' => 'eager', 'decoding' => 'async', 'width' => 1200, 'height' => 900, 'class' => 'serik-split-hero__banner-img']
+                                                : ['data-bb-lazy' => 'true', 'loading' => 'lazy', 'decoding' => 'async', 'width' => 1200, 'height' => 900, 'class' => 'serik-split-hero__banner-img']
+                                        ) }}
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
     @if ($shortcode->background_image)
-        <div class="img-banner-left">
+        <div class="img-banner-left" hidden aria-hidden="true">
             {{ RvMedia::image(
                 $shortcode->background_image,
                 ImageAlt::resolve($shortcode->title, $shortcode->background_image, $heroAltContext),
                 'large',
-                lazy: false,
-                attributes: array_merge(
-                    ['data-bb-lazy' => 'false', 'fetchpriority' => 'high', 'loading' => 'eager', 'decoding' => 'async', 'width' => 800, 'height' => 600],
-                    []
-                )
+                lazy: true,
+                attributes: ['loading' => 'lazy', 'width' => 400, 'height' => 300]
             ) }}
         </div>
     @endif
+</section>
 
-    <div class="img-banner-right">
-        <div class="swiper slider-sw-home2">
-            <div class="swiper-wrapper">
-                @php $heroSlideIndex = 0; @endphp
-                @foreach (range(1, 4) as $i)
-                    @continue(! $shortcode->{"slider_image_$i"})
-                    @php $heroSlideIndex++; @endphp
-
-                    <div class="swiper-slide">
-                        <div class="slider-home2 img-animation wow">
-                            {{ RvMedia::image(
-                                $shortcode->{"slider_image_$i"},
-                                ImageAlt::resolve($shortcode->title, $shortcode->{"slider_image_$i"}, $heroAltContext),
-                                'large',
-                                lazy: $heroSlideIndex > 1,
-                                attributes: array_merge(
-                                    $heroSlideIndex === 1
-                                        ? ['data-bb-lazy' => 'false', 'fetchpriority' => 'high', 'loading' => 'eager', 'decoding' => 'async', 'width' => 800, 'height' => 600]
-                                        : ['data-bb-lazy' => 'true', 'loading' => 'lazy', 'decoding' => 'async', 'width' => 800, 'height' => 600],
-                                    []
-                                )
-                            ) }}
-                        </div>
-                    </div>
-                @endforeach
-            </div>
-        </div>
-    </div>
-    
-    
-</section >
- @if(is_plugin_active('real-estate') && $shortcode->search_box_enabled)
-					 <div class="flat-tab flat-tab-form cashback-calculator"  id="calculator-buttons" style=" scroll-margin-top: 150px;">
-    <div class="tab-content">
-        <div class="container relative">
-            <div class="row justify-content-center">
-
-                <div class="col-lg-8 col-xl-7 col-md-10 col-12">
-                    <div class="tab-pane fade active show" role="tabpanel">
-
-                        <form id="myForm">
-
-                            <div class="wd-find-select calculator-box">
-
-                                <div class="inner-group" >
-
-                                    <div class="form-group-1 form-search-form form-style form-search-keyword-input"
-                                         data-bb-toggle="search-suggestion">
-
-                                        <label>{{ __('Purchase Price') }}</label>
-
-                                        <div class="position-relative">
-                                            <input
-                                                type="text"
-                                                class="form-control"
-                                                placeholder="{{ __('Enter Home Price') }}"
-                                                value="{{ BaseHelper::stringify(request()->query('k')) }}"
-                                                id="amount"
-                                                required
-                                            />
-
-                                            <div data-bb-toggle="data-suggestion"></div>
-                                        </div>
-
-                                    </div>
-
-                                </div>
-
-                                <div class="calculator-buttons">
-
-                                    <button type="submit" style="border: none; background: none;"
-                                        
-                                        onclick="calculatePercentage()">
-                                       <img src="https://serik.ca/storage/button-calculate-cashback-1.png" alt="{{ __('Calculate cash back') }}" width="180" height="54" decoding="async" loading="lazy"/>
-                                    </button>
-                                
-                                    <a href="{{ url('/mortgage-calculator') }}">
-                                        <img src="https://serik.ca/storage/button-mortgage-calculator-blue-1.png" alt="{{ __('Mortgage Calculator') }}" width="180" height="54" decoding="async" loading="lazy"/>
-                                    </a>
-                                    
-                                    <a href="{{ url('/appointment-scheduler') }}">
-                                        <img src="https://serik.ca/storage/button-copy1-2.png" alt="{{ __('Schedule an appointment') }}" width="180" height="54" decoding="async" loading="lazy"/>
-                                    </a>
-                                
-                                </div>
-
-                            </div>
-
-                        </form>
-
-                        <center>
-                            <div id="result" class="calculator-result"></div>
-                        </center>
-
-                    </div>
+@if(is_plugin_active('real-estate') && $shortcode->search_box_enabled)
+<div class="flat-tab flat-tab-form cashback-calculator serik-split-calc" id="calculator-buttons" style="scroll-margin-top: 150px;">
+    <div class="container">
+        <div class="serik-split-calc__card">
+            <form id="myForm" class="serik-split-calc__form serik-split-calc__row">
+                <div class="serik-split-calc__copy">
+                    <strong>{{ __('Estimate your cash back') }}</strong>
+                    <span>{{ __('Up to 1.5% rebate') }}</span>
                 </div>
-
-            </div>
+                <label class="visually-hidden" for="amount">{{ __('Purchase Price') }}</label>
+                <input
+                    type="text"
+                    class="form-control serik-split-calc__input"
+                    placeholder="{{ __('Enter home price') }}"
+                    value="{{ BaseHelper::stringify(request()->query('k')) }}"
+                    id="amount"
+                    required
+                    inputmode="decimal"
+                    autocomplete="off"
+                />
+                <div class="serik-split-calc__actions calculator-buttons">
+                    <button type="submit" class="serik-split-calc__btn serik-split-calc__btn--primary" onclick="calculatePercentage()">
+                        {{ __('Calculate cash back') }}
+                    </button>
+                    <a href="{{ url('/mortgage-calculator') }}" class="serik-split-calc__btn serik-split-calc__btn--primary">{{ __('Mortgage Calculator') }}</a>
+                    <a href="{{ url('/appointment-scheduler') }}" class="serik-split-calc__btn serik-split-calc__btn--primary">{{ __('Schedule an appointment') }}</a>
+                </div>
+            </form>
+            <div id="result" class="calculator-result serik-split-calc__result"></div>
         </div>
     </div>
 </div>
 
-     @endif
-     
-     
-     <script>
-
+<script>
 var form = document.getElementById("myForm");
-function handleForm(event) { event.preventDefault(); } 
-form.addEventListener('submit', handleForm);
-
-
+function handleForm(event) { event.preventDefault(); }
+if (form) form.addEventListener('submit', handleForm);
 
 document.addEventListener('DOMContentLoaded', () => {
     const currencyInput = document.getElementById('amount');
-
+    if (!currencyInput) return;
     function formatCurrency(value) {
         let number = value.replace(/[^0-9.]/g, '');
         number = parseFloat(number);
-
         if (!isNaN(number)) {
             return new Intl.NumberFormat('en-US', {
-                style: 'currency',
-                currency: 'USD',
-                minimumFractionDigits: 0,
-                maximumFractionDigits: 0
+                style: 'currency', currency: 'USD',
+                minimumFractionDigits: 0, maximumFractionDigits: 0
             }).format(number);
         }
         return '';
     }
-
     currencyInput.addEventListener('input', (e) => {
         e.target.value = formatCurrency(e.target.value);
     });
 });
 
-
-
-
-  function calculatePercentage() {
-    // 🔥 strip $, commas, spaces
-    const rawAmount = document
-        .getElementById("amount")
-        .value
-        .replace(/[^0-9.]/g, '');
-
+function calculatePercentage() {
+    const rawAmount = document.getElementById("amount").value.replace(/[^0-9.]/g, '');
     const amount = parseFloat(rawAmount);
-   
     if (!rawAmount || isNaN(amount)) {
-        document.getElementById("result").textContent =
-            "Please enter a valid number.";
+        document.getElementById("result").textContent = "Please enter a valid number.";
+        document.getElementById("result").style.display = 'block';
         return;
     }
-
-   
-
-    const percentage = 1.5;
-    const result = (amount * percentage) / 100;
-
+    const result = (amount * 1.5) / 100;
     document.getElementById("result").style.display = 'block';
-   document.getElementById("result").innerHTML =
-    "Your Cash Back is Upto $" + result.toLocaleString('en-US', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    }) + "<br> (<span style='color:red;'>*Terms and Conditions Apply</span>)";
-
+    document.getElementById("result").innerHTML =
+        "Your Cash Back is Upto $" + result.toLocaleString('en-US', {
+            minimumFractionDigits: 2, maximumFractionDigits: 2
+        }) + "<br> (<span style='color:red;'>*Terms and Conditions Apply</span>)";
     hideResultAfterDelay();
 }
 
-  
-  
-   function hideResultAfterDelay() {
+function hideResultAfterDelay() {
     setTimeout(function () {
-        document.getElementById("amount").value=null;
-         document.getElementById("location").value =null;
-      document.getElementById("result").style.display = "none";
-    }, 30000); // 30 seconds
-  }
-  
-  
-  
-  
-
-  
+        const amountEl = document.getElementById("amount");
+        const resultEl = document.getElementById("result");
+        if (amountEl) amountEl.value = null;
+        const locationEl = document.getElementById("location");
+        if (locationEl) locationEl.value = null;
+        if (resultEl) resultEl.style.display = "none";
+    }, 30000);
+}
 </script>
+@endif

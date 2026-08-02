@@ -4205,6 +4205,32 @@ class PropertyController extends BaseController
     }
 
     /**
+     * For Lease + closed (LEASED) map filter must never include Sold* MlsStatus.
+     * For Sale closed (SOLD) keeps the historical Sold+Leased status set unchanged.
+     *
+     * @param  array<int, string>  $statuses
+     * @return array<int, string>
+     */
+    private function coerceMapClosedStatusesForTransaction(array $statuses, ?string $transaction): array
+    {
+        if ($statuses === [] || ($transaction ?? '') !== 'For Lease') {
+            return $statuses;
+        }
+
+        $delistedStatuses = ['Expired', 'Terminated', 'Suspended'];
+        if (! empty(array_intersect($statuses, $delistedStatuses))) {
+            return $statuses;
+        }
+
+        $closedStatuses = ['Sold', 'Sold Conditional', 'Sold Conditional Escape', 'Leased', 'Leased Conditional'];
+        if (empty(array_intersect($statuses, $closedStatuses))) {
+            return $statuses;
+        }
+
+        return ['Leased', 'Leased Conditional'];
+    }
+
+    /**
      * Map UI date chips to Meili timestamp filters. Returns false when MySQL is required.
      *
      * @param  array<string, mixed>  $opts
@@ -5646,7 +5672,8 @@ class PropertyController extends BaseController
             // v14: enforce DB MlsStatus against Active/Sold/Delisted filter so
             // stale Meili hits cannot leak Sold pins onto Active map (and vice versa).
             $meiliAuth = (auth('account')->check() || auth()->check()) ? '1' : '0';
-            $meiliCacheKey = 'map_meili_v14_' . md5(implode('|', [
+            // v15: For Lease + closed coerces MlsStatus to Leased* only.
+            $meiliCacheKey = 'map_meili_v15_' . md5(implode('|', [
                 round($south, 4), round($north, 4), round($west, 4), round($east, 4),
                 $this->mapFilterSignature($request),
                 'a=' . $meiliAuth,
@@ -5673,8 +5700,8 @@ class PropertyController extends BaseController
             }
         }
 
-        // v29: requires_login as 0/1 for MapLibre-safe sold gating.
-        $cacheKey = 'map_v29_' . md5(implode('|', [
+        // v30: For Lease + closed coerces MlsStatus to Leased* only.
+        $cacheKey = 'map_v30_' . md5(implode('|', [
             round($south, 4), round($north, 4), round($west, 4), round($east, 4),
             $this->mapFilterSignature($request),
         ]));
@@ -5785,6 +5812,11 @@ class PropertyController extends BaseController
             // --- Status (parse early for transaction/date rules) ---
             $statusInput = trim((string) $request->input('status', ''));
             $statuses = $statusInput !== '' ? array_values(array_filter(array_map('trim', explode(',', $statusInput)))) : [];
+            $transaction = $request->input('transaction');
+            $statuses = $this->coerceMapClosedStatusesForTransaction(
+                $statuses,
+                is_string($transaction) ? $transaction : null
+            );
 
             $activeStatuses = ['New', 'Price Change', 'Extension', 'Previous Status'];
             $soldStatuses = ['Sold', 'Sold Conditional', 'Sold Conditional Escape', 'Leased', 'Leased Conditional'];
@@ -5795,7 +5827,6 @@ class PropertyController extends BaseController
                 && count(array_intersect($statuses, $activeStatuses)) === count($activeStatuses);
 
             // --- Transaction (skip for sold/de-listed — MlsStatus is authoritative) ---
-            $transaction = $request->input('transaction');
             if (! empty($transaction) && $transaction !== 'null' && ! $isSoldOrDelistedFilter) {
                 if ($transaction === 'For Lease') {
                     $query->whereIn('TransactionType', ['For Lease', 'For Sub-Lease']);
@@ -6079,6 +6110,11 @@ class PropertyController extends BaseController
 
         $status = trim((string) $request->input('status', ''));
         $statuses = $status !== '' ? array_values(array_filter(array_map('trim', explode(',', $status)))) : [];
+        $transaction = $request->input('transaction');
+        $statuses = $this->coerceMapClosedStatusesForTransaction(
+            $statuses,
+            is_string($transaction) ? $transaction : null
+        );
         $soldStatuses = ['Sold', 'Sold Conditional', 'Sold Conditional Escape', 'Leased', 'Leased Conditional'];
         $delistedStatuses = ['Expired', 'Terminated', 'Suspended'];
         $soldOrDelisted = array_merge($soldStatuses, $delistedStatuses);
@@ -6112,7 +6148,6 @@ class PropertyController extends BaseController
 
         $community = TrebPropertyHelper::formatRegionLabel(trim((string) $request->input('community', '')));
 
-        $transaction = $request->input('transaction');
         $zoom = (int) $request->input('zoom', 10);
         $limit = match (true) {
             // Cold Meili responses dominate map latency. Client-side clustering

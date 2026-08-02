@@ -45,10 +45,14 @@
     padding: 0 15px 15px 15px;
 }
 
-.section-title {
-    font-weight:600;
-    color:#666;
-    margin-bottom:10px;
+.search-dropdown .section-title {
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #666;
+    margin: 10px 0 6px;
 }
 
 .location-item {
@@ -274,7 +278,8 @@
 }
 
 #navbarSupportedContent{
-    background-color: #9dbdfd;    height: 58px;
+    background-color: transparent;
+    height: 64px;
 }
 
 @media (max-width: 991px) {
@@ -381,8 +386,8 @@
         width: 100%;
         height: 70px;
         color:#fff !important;
-        background-color:#9dbdfd;
-        border-top: 1px solid #eee;
+        background-color:#111827;
+        border-top: 1px solid rgba(255,255,255,0.08);
         z-index: 9999;
         justify-content: space-around;
         align-items: center;
@@ -499,12 +504,68 @@
         }
     }
 
+    /* Navbar responsive polish (UI only — keep sticky/mobile menu behavior) */
+    .main-header .inner-container {
+        min-width: 0;
+        width: 100%;
+        gap: 0.5rem;
+        flex-wrap: nowrap;
+    }
+    .main-header .logo-box {
+        min-width: 0;
+        flex: 0 1 auto;
+    }
+    .main-header .logo {
+        max-width: min(200px, 46vw);
+    }
+    .main-header .logo img {
+        max-width: 100% !important;
+        height: auto !important;
+        object-fit: contain;
+    }
+    .main-header .header-account {
+        flex: 0 0 auto;
+        min-width: 0;
+    }
+    .main-header .serik-portal-nav__actions {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: nowrap;
+    }
+    .main-header .serik-portal-nav__map,
+    .main-header .serik-portal-nav__cta {
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+    .main-header .main-menu .navigation > li > a {
+        white-space: nowrap;
+    }
+    .main-header .mobile-nav-toggler {
+        flex-shrink: 0;
+    }
+    @media (max-width: 1199.98px) {
+        .main-header .serik-portal-nav__map {
+            display: none;
+        }
+    }
+    @media (max-width: 767.98px) {
+        .main-header .logo {
+            max-width: min(160px, 52vw);
+        }
+        .smart-search {
+            min-width: 0;
+            max-width: 100%;
+        }
+    }
+
     
 </style>
 
 <header
-    id="header" style="background-color:#9dbdfd; height: 60px;"
-    @class(['main-header', 'fixed-header' => theme_option('sticky_header_enabled', true), Theme::get('headerClass')])
+    id="header"
+    style="min-height: 64px;"
+    @class(['main-header', 'serik-hp-nav', 'fixed-header' => theme_option('sticky_header_enabled', true), Theme::get('headerClass')])
 >
 <script>
 (function () {
@@ -532,7 +593,7 @@
                     <div class="logo-box d-flex align-items-center gap-3">
                         <div class="logo">
                             <a href="{{ BaseHelper::getHomepageUrl() }}">
-                                {{ Theme::getLogoImage(maxHeight: 44) }}
+                                {{ Theme::getLogoImage(maxHeight: 52) }}
                             </a>
                         </div>
                         
@@ -611,8 +672,9 @@
                     </div>
                     <div class="header-account">
                         @if (is_plugin_active('real-estate') && RealEstateHelper::isLoginEnabled())
-                            <div class="flat-bt-top">
-                                <a class="tf-btn primary" href="{{ url('/contact-us') }}">{{ __('Contact Us') }}</a>
+                            <div class="flat-bt-top serik-portal-nav__actions">
+                                <a class="serik-portal-nav__map" href="{{ url('/map') }}">{{ __('Map Search') }}</a>
+                                <a class="tf-btn primary serik-hp-nav__cta serik-portal-nav__cta" href="{{ url('/contact-us') }}">{{ __('Contact Us') }}</a>
                             </div>
                         @endif
                     </div>

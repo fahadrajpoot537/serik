@@ -632,10 +632,14 @@ body:has(.map-housesigma) .progress-wrap,
     padding:15px;
 }
 
-.section-title {
-    font-weight:600;
-    color:#666;
-    margin-bottom:10px;
+.search-dropdown .section-title {
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #666;
+    margin: 10px 0 6px;
 }
 
 .location-item {
@@ -1029,10 +1033,39 @@ button {
     color: #333;
 }
 
-/* RANGE SLIDER */
+/* RANGE SLIDER — unified dual-handle (min left / max right) */
 .range-wrapper {
   position: relative;
   margin-bottom: 18px;
+}
+
+.range-wrapper.dual-range {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.dual-range__rail {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 4px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.dual-range__fill {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border-radius: 999px;
+  background: #0255a1;
+  left: 0%;
+  width: 100%;
+  pointer-events: none;
 }
 
 .slider {
@@ -1044,16 +1077,45 @@ button {
   outline: none;
 }
 
+.dual-range .slider {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  margin: 0 !important;
+  height: 28px;
+  background: transparent !important;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.dual-range .slider-max,
+.dual-range .hs-m-slider-max {
+  z-index: 3;
+}
+
 /* Chrome Thumb */
 .slider::-webkit-slider-thumb {
   appearance: none;
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: #d9d9d9;
-  border: none;
+  background: #fff;
+  border: 2px solid #0255a1;
   cursor: pointer;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+}
+
+.dual-range .slider::-webkit-slider-thumb {
+  pointer-events: auto;
+  position: relative;
+  z-index: 5;
+}
+
+.dual-range .slider::-webkit-slider-runnable-track {
+  background: transparent;
+  height: 4px;
+  border: none;
 }
 
 /* Firefox Thumb */
@@ -1061,9 +1123,20 @@ button {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: #d9d9d9;
-  border: none;
+  background: #fff;
+  border: 2px solid #0255a1;
   cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+}
+
+.dual-range .slider::-moz-range-thumb {
+  pointer-events: auto;
+}
+
+.dual-range .slider::-moz-range-track {
+  background: transparent;
+  height: 4px;
+  border: none;
 }
 
 /* Price scale labels */
@@ -4698,9 +4771,10 @@ position: absolute;
                             
                               <div class="price-display">$0 - Max</div>
                             
-                                <div class="range-wrapper">
-                                    <input type="range" min="0" max="5000000" value="0" step="50000" class="slider slider-min">
-                                    <input type="range" min="0" max="5000000" value="5000000" step="50000" class="slider slider-max" style="margin-top:10px;">
+                                <div class="range-wrapper dual-range">
+                                    <div class="dual-range__rail" aria-hidden="true"><div class="dual-range__fill"></div></div>
+                                    <input type="range" min="0" max="5000000" value="0" step="50000" class="slider slider-min" aria-label="Minimum price">
+                                    <input type="range" min="0" max="5000000" value="5000000" step="50000" class="slider slider-max" aria-label="Maximum price">
                                 </div>
                             
                               <div class="price-scale">
@@ -5214,9 +5288,10 @@ position: absolute;
                 <div class="hs-m-filter-section">
                     <p class="header">Price range</p>
                     <div class="price-display hs-m-price-label">$0 - Max</div>
-                    <div class="range-wrapper">
-                        <input type="range" min="0" max="5000000" value="0" step="50000" class="slider hs-m-slider-min">
-                        <input type="range" min="0" max="5000000" value="5000000" step="50000" class="slider hs-m-slider-max" style="margin-top:10px;">
+                    <div class="range-wrapper dual-range">
+                        <div class="dual-range__rail" aria-hidden="true"><div class="dual-range__fill"></div></div>
+                        <input type="range" min="0" max="5000000" value="0" step="50000" class="slider hs-m-slider-min" aria-label="Minimum price">
+                        <input type="range" min="0" max="5000000" value="5000000" step="50000" class="slider hs-m-slider-max" aria-label="Maximum price">
                     </div>
                 </div>
                 <div class="hs-m-filter-section">
@@ -5838,9 +5913,16 @@ document.addEventListener("DOMContentLoaded", function () {
         if (isMapUserLoggedIn || !isMapSoldListing(status, props)) {
             return '';
         }
+        const mls = String(
+            (props && (props.mls_status || props.transaction)) || status || ''
+        ).trim().toLowerCase();
+        const isLeased = mls === 'leased' || mls === 'leased conditional';
+        const cta = isLeased ? 'Login to View Leased Property' : 'Login to View Sold Property';
         return '<div class="map-sold-login-gate">' +
-            '<p class="mb-2 small text-muted">Local real estate board rules require you to log in to view sold property details.</p>' +
-            '<button type="button" class="btn btn-light fw-bold js-map-auth-open">Login to View Sold Property</button>' +
+            '<p class="mb-2 small text-muted">Local real estate board rules require you to log in to view ' +
+            (isLeased ? 'leased' : 'sold') +
+            ' property details.</p>' +
+            '<button type="button" class="btn btn-light fw-bold js-map-auth-open">' + cta + '</button>' +
             '</div>';
     };
 
@@ -5869,6 +5951,11 @@ document.addEventListener("DOMContentLoaded", function () {
             if (close > 0) {
                 return '$' + window.formatMapMarkerPriceShort(close);
             }
+            // Closed history without ClosePrice: show real MlsStatus (Leased ≠ Sold).
+            const mls = String(status || props?.mls_status || '').trim().toLowerCase();
+            if (mls === 'leased' || mls === 'leased conditional') {
+                return 'Leased';
+            }
             return 'Sold';
         }
 
@@ -5886,6 +5973,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
     window.resolveMapMarkerVariant = function (props) {
         const status = window.mapListingStatus(props || {});
+        const mls = String(status || props?.mls_status || '').trim().toLowerCase();
+        // Leased pins use the lease pin — not the Sold pin style.
+        if (mls === 'leased' || mls === 'leased conditional') {
+            return 'lease';
+        }
         if (window.isMapSoldListing(status, props || {})) {
             return 'sold';
         }
@@ -6722,6 +6814,47 @@ function getHsDateLabel(val) {
     return HS_DATE_LABELS[val] || val;
 }
 
+/** Sold statuses for For Sale; Leased statuses for For Lease (same day-filter UX). */
+function getClosedStatusValues() {
+    if (selectedTransaction === 'For Lease') {
+        return ['Leased', 'Leased Conditional'];
+    }
+    return ['Sold', 'Sold Conditional', 'Sold Conditional Escape', 'Leased', 'Leased Conditional'];
+}
+
+/**
+ * For Lease + closed (LEASED) filter: force TREB leased MlsStatus only.
+ * Prevents stale Sold* statuses (URL / history / prior For Sale) from leaking into LEASED results.
+ * For Sale is intentionally untouched.
+ */
+function alignClosedStatusWithTransaction() {
+    if (selectedTransaction !== 'For Lease') {
+        return;
+    }
+    const closedStatuses = ['Sold', 'Sold Conditional', 'Sold Conditional Escape', 'Leased', 'Leased Conditional'];
+    const current = Array.isArray(selectedStatus)
+        ? selectedStatus
+        : (selectedStatus ? [selectedStatus] : []);
+    if (!current.some((s) => closedStatuses.includes(s))) {
+        return;
+    }
+    selectedStatus = getClosedStatusValues();
+}
+
+function getClosedStatusLabel() {
+    return selectedTransaction === 'For Lease' ? 'Leased' : 'Sold';
+}
+
+function syncSoldLeasedUiLabels() {
+    const label = getClosedStatusLabel();
+    const soldSplitLabel = document.querySelector('#hsSplitWrapSold .hs-split-label');
+    if (soldSplitLabel) soldSplitLabel.textContent = label;
+    const plainSold = document.getElementById('hsPlainSold');
+    if (plainSold) plainSold.textContent = label;
+    const mSold = document.querySelector('.hs-m-status[data-status="Sold"]');
+    if (mSold) mSold.textContent = label;
+}
+
 function updateSplitFilterLabels() {
     const activeEl = document.getElementById('hsActiveDateLabel');
     const soldEl = document.getElementById('hsSoldDateLabel');
@@ -6732,6 +6865,8 @@ function updateSplitFilterLabels() {
     if (soldEl) soldEl.textContent = getHsDateLabel(soldDate);
     if (delistedEl) delistedEl.textContent = getHsDateLabel(soldDate);
 
+    syncSoldLeasedUiLabels();
+
     const soldStatuses = ['Sold', 'Sold Conditional', 'Sold Conditional Escape', 'Leased', 'Leased Conditional'];
     const delistedStatuses = ['Expired', 'Terminated', 'Suspended'];
     const current = selectedStatus || [];
@@ -6741,7 +6876,7 @@ function updateSplitFilterLabels() {
     const mobLabel = document.getElementById('hsMobSplitLabel');
     if (mobLabel) {
         if (isDelisted) mobLabel.textContent = 'De-listed';
-        else if (isSold) mobLabel.textContent = 'Sold';
+        else if (isSold) mobLabel.textContent = getClosedStatusLabel();
         else mobLabel.textContent = 'Active';
     }
 
@@ -6833,6 +6968,8 @@ function initFromUrl() {
         selectedStatus = ['New', 'Price Change', 'Extension', 'Previous Status'];
     }
 
+    alignClosedStatusWithTransaction();
+
     selectedMinSquare = parseInt(urlParams.get('square_min') || 0);
     selectedMaxSquare = parseInt(urlParams.get('square_max') || 4000);
 
@@ -6876,6 +7013,7 @@ function restoreMapStateFromHistory(state) {
     hsMobileDateSale = state.hsMobileDateSale || hsMobileDateSale;
     hsMobileDateSold = state.hsMobileDateSold || hsMobileDateSold;
 
+    alignClosedStatusWithTransaction();
     syncFilterUiFromState();
     syncPriceSlidersFromState?.();
     updatePriceDisplay?.();
@@ -7528,13 +7666,7 @@ map.on('mouseleave', 'unclustered-exact-dot', () => {
         }
         
         else if (value === 'Sold') {
-            selectedStatus = [
-                'Sold',
-                'Sold Conditional',
-                'Sold Conditional Escape',
-                'Leased',
-                'Leased Conditional'
-            ];
+            selectedStatus = getClosedStatusValues();
             hsMobileDateSold = hsMobileDateSold || 'all';
         }
         
@@ -7566,6 +7698,7 @@ document.querySelectorAll('input[name="date"], input[name="date-sold"], input[na
             hsMobileDateSale = this.value;
         } else {
             hsMobileDateSold = this.value;
+            alignClosedStatusWithTransaction();
         }
         syncDateRadiosFromState();
         if (typeof updateSplitFilterLabels === 'function') {
@@ -7593,6 +7726,16 @@ document.querySelectorAll('input[name="date"], input[name="date-sold"], input[na
                 applyPriceConfig(LEASE_CONFIG);
             } else if (selectedTransaction === 'For Sale') {
                 applyPriceConfig(SALE_CONFIG);
+            }
+
+            // Keep Sold/Leased filter aligned with transaction type (labels + status values).
+            const closedStatuses = ['Sold', 'Sold Conditional', 'Sold Conditional Escape', 'Leased', 'Leased Conditional'];
+            if ((selectedStatus || []).some((s) => closedStatuses.includes(s))) {
+                selectedStatus = getClosedStatusValues();
+            }
+            syncSoldLeasedUiLabels();
+            if (typeof updateSplitFilterLabels === 'function') {
+                updateSplitFilterLabels();
             }
 
             loadProperties({ fromFilters: true });
@@ -7812,6 +7955,19 @@ function applyPriceConfig(config) {
     maxSlider.max = config.max;
     maxSlider.step = config.step;
 
+    const mMinCfg = document.querySelector('.hs-m-slider-min');
+    const mMaxCfg = document.querySelector('.hs-m-slider-max');
+    if (mMinCfg) {
+        mMinCfg.min = config.min;
+        mMinCfg.max = config.max;
+        mMinCfg.step = config.step;
+    }
+    if (mMaxCfg) {
+        mMaxCfg.min = config.min;
+        mMaxCfg.max = config.max;
+        mMaxCfg.step = config.step;
+    }
+
     // Reset values
     selectedMinPrice = config.min;
     selectedMaxPrice = config.max;
@@ -7873,6 +8029,31 @@ function applyPriceConfig(config) {
         const mMaxSlider = document.querySelector('.hs-m-slider-max');
         if (mMinSlider) mMinSlider.value = selectedMinPrice || 0;
         if (mMaxSlider) mMaxSlider.value = maxVal;
+        updateDualRangeFill();
+    }
+
+    function updateDualRangeFill() {
+        document.querySelectorAll('.range-wrapper.dual-range').forEach((wrap) => {
+            const minEl = wrap.querySelector('.slider-min, .hs-m-slider-min');
+            const maxEl = wrap.querySelector('.slider-max, .hs-m-slider-max');
+            const fill = wrap.querySelector('.dual-range__fill');
+            if (!minEl || !maxEl || !fill) return;
+
+            const rangeMin = parseFloat(minEl.min) || 0;
+            const rangeMax = parseFloat(minEl.max) || 1;
+            const span = Math.max(rangeMax - rangeMin, 1);
+            const lo = parseFloat(minEl.value) || 0;
+            const hi = parseFloat(maxEl.value) || 0;
+            const leftPct = ((lo - rangeMin) / span) * 100;
+            const rightPct = ((hi - rangeMin) / span) * 100;
+            fill.style.left = Math.max(0, Math.min(100, leftPct)) + '%';
+            fill.style.width = Math.max(0, Math.min(100, rightPct) - Math.max(0, Math.min(100, leftPct))) + '%';
+
+            // Keep the active side of the track easier to grab when handles are close.
+            const midPct = (leftPct + rightPct) / 2;
+            minEl.style.zIndex = midPct > 50 ? '4' : '2';
+            maxEl.style.zIndex = midPct > 50 ? '2' : '4';
+        });
     }
 
     function updatePriceDisplay() {
@@ -7887,6 +8068,7 @@ function applyPriceConfig(config) {
             const isFiltered = (selectedMinPrice || 0) > 0 || !isDefaultMaxPrice(selectedMaxPrice);
             priceBtn.classList.toggle('filter-active', isFiltered);
         }
+        updateDualRangeFill();
     }
     const dropdownMenu = document.querySelector('.dropdown-menu-min');
 
@@ -8854,6 +9036,8 @@ function mapMovedEnoughToRefetch() {
     function normalizeMapStatusFilter() {
         const activeDefaults = ['New', 'Price Change', 'Extension', 'Previous Status'];
 
+        alignClosedStatusWithTransaction();
+
         if (!selectedStatus) {
             return activeDefaults;
         }
@@ -8870,12 +9054,16 @@ function mapMovedEnoughToRefetch() {
     }
 
     function normalizeMapTransactionFilter() {
-        // Sold / De-listed: MlsStatus is authoritative (match MySQL map path).
-        if (typeof isSoldOrDelistedStatus === 'function' && isSoldOrDelistedStatus()) {
-            return '';
-        }
+        // Always send listing type. Backend skips TransactionType for closed
+        // filters, but uses transaction=For Lease to coerce MlsStatus to
+        // Leased/Leased Conditional only (never Sold*).
         const tx = (selectedTransaction || '').trim();
         if (selectedCommunity && !communityEnforceTransaction) {
+            // Closed LEASED still needs transaction for server-side coercion.
+            if (typeof isSoldOrDelistedStatus === 'function' && isSoldOrDelistedStatus()
+                && !isDelistedStatus() && tx === 'For Lease') {
+                return 'For Lease';
+            }
             return '';
         }
         if (!tx || tx === 'all' || tx === 'null') {
@@ -9616,7 +9804,8 @@ function mapMovedEnoughToRefetch() {
         params.set('subtypes', seoSubtypes.join(','));
     }
 
-    // STATUS
+    // STATUS (align For Lease + LEASED before writing URL)
+    alignClosedStatusWithTransaction();
     if (selectedStatus && selectedStatus.length) {
         params.set('status', selectedStatus.join(','));
     }
@@ -9906,6 +10095,10 @@ function mapMovedEnoughToRefetch() {
 
     function buildMapPriceHtml(props, status, soldLocked) {
         if (soldLocked) {
+            const mls = String(props?.mls_status || status || props?.transaction || '').trim().toLowerCase();
+            if (mls === 'leased' || mls === 'leased conditional') {
+                return '<span>Leased listing</span>';
+            }
             return '<span>Sold listing</span>';
         }
         if (isMapSoldListing(status, props) && props.ClosePrice) {
@@ -11909,7 +12102,11 @@ function buildHsListCardHtml(props, geometry) {
     }
     const stats = [bedsLabel, bathsLabel, areaLabel].filter(Boolean).join(' ');
 
-    const address = locked ? 'Sold listing — login required' : (props.name || '');
+    const address = locked
+        ? ((String(props.mls_status || status || '').toLowerCase().includes('lease'))
+            ? 'Leased listing — login required'
+            : 'Sold listing — login required')
+        : (props.name || '');
     const mlsParts = [];
     if (!locked && props.external_id) {
         mlsParts.push('MLS® ' + props.external_id);
@@ -12422,6 +12619,7 @@ function initMobileFilters() {
     });
 
     document.getElementById('hsDateApply')?.addEventListener('click', () => {
+        alignClosedStatusWithTransaction();
         syncDateRadiosFromState();
         updateMobileFilterLabels();
         closeMobileSheets();
@@ -12435,7 +12633,7 @@ function initMobileFilters() {
             if (value === 'Expired') {
                 selectedStatus = ['Expired', 'Terminated', 'Suspended'];
             } else if (value === 'Sold') {
-                selectedStatus = ['Sold', 'Sold Conditional', 'Sold Conditional Escape', 'Leased', 'Leased Conditional'];
+                selectedStatus = getClosedStatusValues();
                 hsMobileDateSold = hsMobileDateSold || 'all';
             } else {
                 selectedStatus = ['New', 'Price Change', 'Extension', 'Previous Status'];

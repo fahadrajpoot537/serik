@@ -357,14 +357,34 @@
         @endif
     </div>
 
-    @if(
-        ($model->TransactionType ?? '') !== 'For Lease'
-        && ($model->TransactionType ?? '') !== 'For Sub-Lease'
-        && ($model->MlsStatus ?? '') !== 'Leased'
-        && ($model->MlsStatus ?? '') !== 'Leased Conditional'
-    )
+    @php
+        $coopCommissionDisplay = null;
+        $coopModel = $model ?? null;
+        $coopTx = (string) ($coopModel->TransactionType ?? '');
+        $coopMls = (string) ($coopModel->MlsStatus ?? '');
+        $coopInactiveStatuses = [
+            'Sold', 'Sold Conditional', 'Sold Conditional Escape',
+            'Leased', 'Leased Conditional',
+            'Terminated', 'Expired', 'Suspended', 'Draft', 'Unavailable',
+        ];
+        $showCoopCommission = $coopModel
+            && $coopTx === 'For Sale'
+            && ! in_array($coopMls, $coopInactiveStatuses, true)
+            && ! (method_exists($coopModel, 'isSoldHistory') && $coopModel->isSoldHistory());
+
+        if ($showCoopCommission && ! empty($coopModel->external_id)) {
+            try {
+                $coopCommissionDisplay = \Theme\homzen\Supports\TrebPropertyHelper::resolveCoopCommissionForDetail(
+                    (string) $coopModel->external_id
+                );
+            } catch (\Throwable) {
+                $coopCommissionDisplay = null;
+            }
+        }
+    @endphp
+    @if ($coopCommissionDisplay)
     <div style="color:#e63946;font-size:14px;margin:16px 0 0;font-weight:600;">
-        Coop Commission: 2.5%
+        Coop Commission: {{ $coopCommissionDisplay }}
     </div>
     @endif
 </div>

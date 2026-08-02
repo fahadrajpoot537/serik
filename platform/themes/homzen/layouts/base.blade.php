@@ -95,8 +95,8 @@
             #page-home .flat-section-v2,
             #page-home .flat-section-v3,
             #page-home .flat-section-v4 {
-                padding-top: clamp(2.5rem, 5vw, 5rem);
-                padding-bottom: clamp(2.5rem, 5vw, 5rem);
+                padding-top: clamp(1.75rem, 3.2vw, 3.25rem);
+                padding-bottom: clamp(1.75rem, 3.2vw, 3.25rem);
             }
 @php
     $isSerikHomepage = \App\Support\SerikHomepage::isHomepageRequest();
@@ -106,7 +106,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" rel="stylesheet">
-<link rel="stylesheet" href="{{ Theme::asset()->url('css/homepage-premium.css') }}?v={{ get_cms_version() }}-hp6">
 @else
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
@@ -116,6 +115,12 @@
 
         @stack('header')
         {!! Theme::header() !!}
+{{-- Site-wide top bar + navbar + dropdown chrome (same as homepage) --}}
+<link rel="stylesheet" href="{{ Theme::asset()->url('css/site-chrome.css') }}?v={{ get_cms_version() }}-sc3">
+@if ($isSerikHomepage)
+{{-- MUST load AFTER Theme::header() so redesign beats style.css --}}
+<link rel="stylesheet" href="{{ Theme::asset()->url('css/homepage-premium.css') }}?v={{ get_cms_version() }}-hp28">
+@endif
         @php
             $serikFaviconPath = theme_option('favicon');
             $serikFaviconUrl = $serikFaviconPath

@@ -67,12 +67,14 @@
 }
 </style>
 
-<section @class(['flat-section', 'text-center' => $shortcode->centered_content]) @style(["background-color: $shortcode->background_color" => $shortcode->background_color])>
+<section @class(['flat-section', 'serik-hp-services', 'text-center' => $shortcode->centered_content]) @style(["background-color: $shortcode->background_color" => $shortcode->background_color])>
     <div class="container">
-         
-                     <h2 class="section-title mt-4" style="font-weight: 700;text-align:center;color: #000;">{!! BaseHelper::clean($shortcode->title) !!}</h2>
-<div  style="font-weight: 700;text-align:center;">{!! BaseHelper::clean($shortcode->subtitle) !!}</div>
-<br>
+        <header class="serik-hp-section-head serik-hp-section-head--center">
+            @if($shortcode->subtitle)
+                <p class="serik-hp-eyebrow">{!! BaseHelper::clean($shortcode->subtitle) !!}</p>
+            @endif
+            <h2 class="section-title mt-0">{!! BaseHelper::clean($shortcode->title) !!}</h2>
+        </header>
        @if($services)
     <div class="swiper tf-sw-services wow fadeInUpSmall"
          data-wow-delay=".4s"

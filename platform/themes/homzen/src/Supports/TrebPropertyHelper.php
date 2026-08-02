@@ -1424,12 +1424,92 @@ class TrebPropertyHelper
             'CoveredSpaces', 'LotWidth', 'LotDepth', 'FrontageLength', 'DirectionFaces', 'RoomsTotal',
             'KitchensTotal', 'FireplaceYN', 'WaterSource', 'Sewer', 'Zoning', 'DenFamilyroomYN', 'PropertyType',
             'OtherStructures', 'ExteriorFeatures',
+            // TREB co-op / buyer-broker compensation (AMPRE field name).
+            'TransactionBrokerCompensation',
             'WashroomsType1', 'WashroomsType1Pcs', 'WashroomsType1Level',
             'WashroomsType2', 'WashroomsType2Pcs', 'WashroomsType2Level',
             'WashroomsType3', 'WashroomsType3Pcs', 'WashroomsType3Level',
             'WashroomsType4', 'WashroomsType4Pcs', 'WashroomsType4Level',
             'WashroomsType5', 'WashroomsType5Pcs', 'WashroomsType5Level',
         ]);
+    }
+
+    /**
+     * Format TREB TransactionBrokerCompensation for display (e.g. "2.5" → "2.5%").
+     */
+    public static function formatCoopCommission(?string $raw): ?string
+    {
+        $raw = trim((string) $raw);
+        if ($raw === '' || strcasecmp($raw, 'null') === 0) {
+            return null;
+        }
+
+        if (preg_match('/^\d+(\.\d+)?$/', $raw)) {
+            return $raw . '%';
+        }
+
+        return $raw;
+    }
+
+    /**
+     * Resolve Co-op Commission for a For Sale listing detail page.
+     * AMPRE only returns TransactionBrokerCompensation when the filter references it.
+     */
+    public static function resolveCoopCommissionForDetail(string $listingKey): ?string
+    {
+        $listingKey = strtoupper(trim($listingKey));
+        if ($listingKey === '') {
+            return null;
+        }
+
+        $cacheKey = 'treb_coop_commission_v1_' . $listingKey;
+        if (Cache::has($cacheKey)) {
+            $cached = Cache::get($cacheKey);
+            if ($cached === false || $cached === null || $cached === '') {
+                return null;
+            }
+
+            return self::formatCoopCommission(is_string($cached) ? $cached : (string) $cached);
+        }
+
+        $snapshot = self::loadStoredAmpSnapshot($listingKey);
+        if (is_array($snapshot)) {
+            $fromSnap = self::ampFieldFirst($snapshot, 'TransactionBrokerCompensation');
+            if ($fromSnap !== null) {
+                Cache::put($cacheKey, $fromSnap, 86400 * 14);
+
+                return self::formatCoopCommission($fromSnap);
+            }
+        }
+
+        // AMPRE strips this field unless the filter references it.
+        try {
+            app()->instance('serik.live_treb_fallback', true);
+            $filter = rawurlencode("ListingKey eq '{$listingKey}' and TransactionBrokerCompensation ne null");
+            $select = rawurlencode('ListingKey,TransactionBrokerCompensation');
+            $url = "https://query.ampre.ca/odata/Property?\$filter={$filter}&\$top=1&\$select={$select}";
+            $response = self::ampRequest($url, 6, 1, 'coopCommission', $listingKey, 'all');
+            $value = $response['data']['value'][0]['TransactionBrokerCompensation'] ?? null;
+
+            if ($value !== null && trim((string) $value) !== '') {
+                $raw = trim((string) $value);
+                Cache::put($cacheKey, $raw, 86400 * 14);
+
+                if (is_array($snapshot)) {
+                    $snapshot['TransactionBrokerCompensation'] = $raw;
+                    self::persistAmpSnapshot($listingKey, $snapshot);
+                }
+
+                return self::formatCoopCommission($raw);
+            }
+
+            // Empty / unavailable — hide section; short negative cache.
+            Cache::put($cacheKey, false, 3600);
+        } catch (\Throwable) {
+            Cache::put($cacheKey, false, 600);
+        }
+
+        return null;
     }
 
     /**
