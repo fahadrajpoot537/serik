@@ -15,12 +15,53 @@
       display:none;
     }
 
-    /* Categories "View All" must stay usable without overlapping the title */
+    /* Categories heading: stack title + subtitle + View All (no float overlap) */
+    #page-home .flat-categories .serik-hp-heading,
+    #page-home .flat-categories .wow.fadeIn.style-1 {
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: flex-start !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      margin-bottom: 1rem !important;
+      gap: 0.35rem;
+    }
+
+    #page-home .flat-categories .box-left {
+      display: block !important;
+      width: 100% !important;
+      max-width: 100% !important;
+    }
+
+    #page-home .flat-categories .section-title {
+      margin-top: 0 !important;
+      margin-bottom: 0.35rem !important;
+      font-size: 1.35rem !important;
+      line-height: 1.25 !important;
+      text-align: left !important;
+      white-space: normal !important;
+      overflow-wrap: break-word !important;
+      word-break: normal !important;
+    }
+
+    #page-home .flat-categories .box-left > div,
+    #page-home .flat-categories .serik-hp-heading > div {
+      width: 100% !important;
+      max-width: 100% !important;
+      font-size: 0.9rem !important;
+      line-height: 1.45 !important;
+      color: #5b6573 !important;
+      white-space: normal !important;
+      overflow-wrap: break-word !important;
+      word-break: normal !important;
+    }
+
     #page-home .flat-categories .btn-view.button-prop {
       display: inline-flex !important;
       float: none !important;
-      margin: 0.65rem 0 0 !important;
+      margin: 0.55rem 0 0 !important;
       position: static !important;
+      align-self: flex-start;
     }
 }
 

@@ -120,7 +120,7 @@
 <link rel="stylesheet" href="{{ Theme::asset()->url('css/site-chrome.css') }}?v={{ get_cms_version() }}-sc6">
 @if ($isSerikHomepage)
 {{-- MUST load AFTER Theme::header() so redesign beats style.css --}}
-<link rel="stylesheet" href="{{ Theme::asset()->url('css/homepage-premium.css') }}?v={{ get_cms_version() }}-hp36">
+<link rel="stylesheet" href="{{ Theme::asset()->url('css/homepage-premium.css') }}?v={{ get_cms_version() }}-hp37">
 @endif
         <script type="text/javascript">
             (function(c,l,a,r,i,t,y){
