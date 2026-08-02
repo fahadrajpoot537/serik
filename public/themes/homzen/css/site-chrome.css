@@ -31,6 +31,15 @@
   .top-header,
   .serik-hp-topbar {
     display: block !important;
+    font-size: 0.9375rem;
+  }
+  .top-header a,
+  .serik-hp-topbar__link,
+  .serik-hp-topbar__auth a,
+  .serik-hp-topbar__auth li,
+  .serik-hp-topbar__sep {
+    font-size: 0.9375rem !important;
+    font-weight: 600;
   }
 }
 

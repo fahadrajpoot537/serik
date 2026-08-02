@@ -194,7 +194,15 @@ body:has(#page-home) {
   overflow: hidden;
 }
 @media (min-width: 992px) {
-  #page-home .top-header { display: block !important; }
+  #page-home .top-header { display: block !important; font-size: 0.9375rem; }
+  #page-home .top-header a,
+  #page-home .serik-hp-topbar__link,
+  #page-home .serik-hp-topbar__auth a,
+  #page-home .serik-hp-topbar__auth li,
+  #page-home .serik-hp-topbar__sep {
+    font-size: 0.9375rem !important;
+    font-weight: 600;
+  }
 }
 #page-home .serik-hp-topbar__inner,
 #page-home .top-header .top-header-inner {

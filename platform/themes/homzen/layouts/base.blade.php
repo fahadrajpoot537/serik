@@ -116,10 +116,10 @@
         @stack('header')
         {!! Theme::header() !!}
 {{-- Site-wide top bar + navbar + dropdown chrome (same as homepage) --}}
-<link rel="stylesheet" href="{{ Theme::asset()->url('css/site-chrome.css') }}?v={{ get_cms_version() }}-sc5">
+<link rel="stylesheet" href="{{ Theme::asset()->url('css/site-chrome.css') }}?v={{ get_cms_version() }}-sc6">
 @if ($isSerikHomepage)
 {{-- MUST load AFTER Theme::header() so redesign beats style.css --}}
-<link rel="stylesheet" href="{{ Theme::asset()->url('css/homepage-premium.css') }}?v={{ get_cms_version() }}-hp35">
+<link rel="stylesheet" href="{{ Theme::asset()->url('css/homepage-premium.css') }}?v={{ get_cms_version() }}-hp36">
 @endif
         @php
             $serikFaviconPath = theme_option('favicon');
