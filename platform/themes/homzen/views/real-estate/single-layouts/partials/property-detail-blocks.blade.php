@@ -357,9 +357,11 @@
         @endif
     </div>
 
+    @if(($model->MlsStatus ?? '') !== 'Leased' && ($model->MlsStatus ?? '') !== 'Leased Conditional')
     <div style="color:#e63946;font-size:14px;margin:16px 0 0;font-weight:600;">
         Coop Commission: 2.5%
     </div>
+    @endif
 </div>
 
 <script>

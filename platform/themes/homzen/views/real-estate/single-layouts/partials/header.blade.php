@@ -104,6 +104,10 @@
                     <span style="text-decoration: line-through; color: gray;">
                         {{ $model->price_html ?? $model->formatted_price }}
                     </span>
+                    @if($model->MlsStatus == 'Terminated')
+                        <br>
+                        <span class="flag-tag primary status-sold d-inline-block mb-2">{{ $model->MlsStatus }}</span>
+                    @endif
 
                 @else
                     Listed For :
