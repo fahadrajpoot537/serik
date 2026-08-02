@@ -1,18 +1,4 @@
- <link rel="icon" type="image/x-icon" href="https://serik.ca/storage/whatsapp-image-2025-1.png">
-
-<style>
-    /* Property detail iframe only — do not stretch login/auth modals. */
-    #propertyModal .modal-content,
-    .property-modal .modal-content {
-        height: 95% !important;
-        margin-top: -20px !important;
-    }
-</style>
-
-@extends(Theme::getThemeNamespace('layouts.base'))
-
-@section('content')
-    {!! Theme::content() !!}
-@endsection
-
-{!! apply_filters('theme_front_footer_content', null) !!}
+<link rel="icon" href="{{ asset('favicon.ico') }}" sizes="48x48">
+<link rel="icon" type="image/png" sizes="48x48" href="{{ asset('favicon-48x48.png') }}">
+<link rel="icon" type="image/png" sizes="192x192" href="{{ asset('android-chrome-192x192.png') }}">
+<link rel="apple-touch-icon" sizes="180x180" href="{{ asset('apple-touch-icon.png') }}">
