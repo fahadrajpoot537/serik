@@ -10055,7 +10055,18 @@ function mapMovedEnoughToRefetch() {
         const images = mergeMapPopupImages(res.images, props.image);
         const statusLabel = props.transaction || status;
         const mlsStatusValue = String(props.mls_status || status || props.transaction || '').trim();
-        const isLeasedMlsStatus = mlsStatusValue === 'Leased' || mlsStatusValue === 'Leased Conditional';
+        const transactionTypeValue = String(
+            detail?.TransactionType
+            || props.TransactionType
+            || props.transaction_type
+            || ''
+        ).trim();
+        const isLeaseListing = transactionTypeValue === 'For Lease'
+            || transactionTypeValue === 'For Sub-Lease'
+            || mlsStatusValue === 'Leased'
+            || mlsStatusValue === 'Leased Conditional'
+            || String(props.transaction || '').toLowerCase().includes('lease')
+            || (typeof selectedTransaction !== 'undefined' && selectedTransaction === 'For Lease');
 
         const displayName = detail?.display_address || props.name || 'Property';
         const displayLocation = detail?.display_location || '';
@@ -10094,7 +10105,7 @@ function mapMovedEnoughToRefetch() {
                     <div class="map-popup-date">${escapeMapHtml(relativeListedLabel(props.date, 'Listed'))}</div>
                 </div>
                 ${mlsStatusValue === 'Terminated' ? `<div style="margin:4px 0 8px;"><span class="flag-tag primary status-sold d-inline-block">${escapeMapHtml(mlsStatusValue)}</span></div>` : ''}
-                ${!soldLocked && !isMapSoldListing(status, props) ? '<div style="color:#e63946;font-size:14px;margin:4px 0 8px;">Cash back upto 1.5% of purchase price<br>(*Some Terms and Conditions Apply)</div>' : ''}
+                ${!soldLocked && !isMapSoldListing(status, props) && !isLeaseListing ? '<div class="js-purchase-only-info" style="color:#e63946;font-size:14px;margin:4px 0 8px;">Cash back upto 1.5% of purchase price<br>(*Some Terms and Conditions Apply)</div>' : ''}
                 <div class="map-popup-detail-header">${escapeMapHtml(displayName)}</div>
                 ${displayLocation ? `<div class="map-popup-detail-location">${escapeMapHtml(displayLocation)}</div>` : ''}
                 ${displayType ? `<div class="map-popup-detail-type">${escapeMapHtml(displayType)}</div>` : ''}
@@ -10122,7 +10133,7 @@ function mapMovedEnoughToRefetch() {
                 <div class="hs-map-tab-panel" data-map-panel="facts">${buildMapKeyFactsHtml(keyFacts, displayName, displayLocation, displayType, listingId, brokerage)}</div>
                 <div class="hs-map-tab-panel" data-map-panel="details">${buildMapDetailsGridHtml(propertyDetails)}</div>
                 <div class="hs-map-tab-panel" data-map-panel="rooms">${buildMapRoomsTableHtml(rooms)}</div>
-                ${!isLeasedMlsStatus ? '<div style="color:#e63946;font-size:14px;margin:16px 0 8px;font-weight:600;">Coop Commission: 2.5%</div>' : ''}
+                ${!isLeaseListing ? '<div class="js-purchase-only-info" style="color:#e63946;font-size:14px;margin:16px 0 8px;font-weight:600;">Coop Commission: 2.5%</div>' : ''}
                 <div class="property-popup-footer" style="margin-top:8px;font-size:12px;color:#6c757d;">${escapeMapHtml(listingId)}${brokerage ? ' , ' + escapeMapHtml(brokerage) : ''}</div>
             `;
 
@@ -10246,6 +10257,18 @@ function mapMovedEnoughToRefetch() {
             root.dataset.propertyId = String(propertyId);
             const form = root.querySelector('.hs-map-consult-form');
             if (form) form.dataset.propertyId = String(propertyId);
+        }
+
+        const txType = String(detail.TransactionType || props.TransactionType || props.transaction_type || '').trim();
+        const mlsVal = String(props.mls_status || status || props.transaction || '').trim();
+        const isLeaseListing = txType === 'For Lease'
+            || txType === 'For Sub-Lease'
+            || mlsVal === 'Leased'
+            || mlsVal === 'Leased Conditional'
+            || String(props.transaction || '').toLowerCase().includes('lease')
+            || (typeof selectedTransaction !== 'undefined' && selectedTransaction === 'For Lease');
+        if (isLeaseListing) {
+            root.querySelectorAll('.js-purchase-only-info').forEach((el) => el.remove());
         }
 
         setupMapPopupScrollAreas(root);

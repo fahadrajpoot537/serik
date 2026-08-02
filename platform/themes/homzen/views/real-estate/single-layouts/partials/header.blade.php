@@ -117,12 +117,14 @@
 
                     <br>
 
+                    @if(($model->TransactionType ?? '') !== 'For Lease' && ($model->TransactionType ?? '') !== 'For Sub-Lease')
                     <span style="color:#e63946;font-size:14px;">
                         Cash back upto 1.5% of purchase price<br>
                         (*Some Terms and Conditions Apply)
                     </span>
 
                     <br>
+                    @endif
 
                     <span style="color:#777;font-size:17px;">
                         @php
