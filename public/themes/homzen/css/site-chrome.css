@@ -113,19 +113,24 @@
   box-shadow: none;
   backdrop-filter: blur(12px);
   overflow: visible !important;
+  padding-left: 16px !important;
+  padding-right: 16px !important;
 }
 #header.main-header.fixed-header {
   box-shadow: 0 8px 28px rgba(16, 24, 40, 0.07);
 }
 
 .main-header .header-lower,
-.main-header .inner-container {
+.main-header .inner-container,
+.main-header .serik-nav-bar {
   min-height: var(--p-nav-h);
   height: 100%;
   min-width: 0;
-  width: 100%;
-  display: flex;
-  align-items: center;
+  width: 100% !important;
+  max-width: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
   gap: 0.5rem 0.75rem;
 }
 
@@ -151,12 +156,27 @@
   flex: 1 1 auto;
   min-width: 0;
 }
+
+/* Contact Us + phone locked to far right */
+.main-header .serik-nav-right {
+  display: flex !important;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+  margin-left: auto !important;
+  margin-right: 0 !important;
+  padding-right: 0 !important;
+}
 .main-header .header-account {
   flex: 0 0 auto;
   min-width: 0;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
 }
 .main-header .mobile-nav-toggler {
   flex-shrink: 0;
+  margin-left: 0;
 }
 
 .main-header .main-menu .navigation > li > a {
@@ -288,8 +308,10 @@
 .serik-portal-nav__actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.65rem;
   flex-wrap: nowrap;
+  margin-left: auto;
 }
 .serik-portal-nav__map {
   display: inline-flex;
@@ -411,7 +433,8 @@
     max-width: 100% !important;
   }
 
-  .main-header .inner-container {
+  .main-header .inner-container,
+  .main-header .serik-nav-bar {
     display: flex !important;
     justify-content: space-between !important;
     align-items: center !important;
@@ -424,9 +447,14 @@
     margin-right: auto !important;
   }
 
-  .main-header .mobile-nav-toggler {
+  .main-header .serik-nav-right {
     order: 99;
     margin-left: auto !important;
+  }
+
+  .main-header .mobile-nav-toggler {
+    order: unset;
+    margin-left: 0 !important;
     margin-right: 0 !important;
     flex: 0 0 auto;
     display: inline-flex !important;

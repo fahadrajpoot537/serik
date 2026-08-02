@@ -25,7 +25,7 @@
 
 {{--
   Split portal hero:
-  LEFT  = discovery (heading, CTA, stats)
+  LEFT  = heading
   RIGHT = cashback banner — framed, fully visible, never cropped
 --}}
 <section class="flat-slider home-2 serik-split-hero" aria-label="{{ __('Ontario property search') }}">
@@ -35,17 +35,25 @@
             {{-- LEFT: property discovery --}}
             <div class="serik-split-hero__left slider-content">
                 <div class="heading serik-split-hero__heading">
-                    <p class="serik-split-hero__eyebrow">{{ __('Ontario MLS® Property Search') }}</p>
-                    <h1 class="subtitle body-1 hero-banner-headline serik-split-hero__title" style="color: {{ $descriptionColor }} !important;">
-                        {{ __('Find homes for sale & lease across Ontario') }}
+                    <h1 class="subtitle body-1 hero-banner-headline serik-split-hero__title" style="color: {{ $descriptionColor }} !important; font-weight:700;">
+                        {{ __('Top Realtor in Ontario - Buy or Sell Homes and Get') }}
                     </h1>
-                    <div class="title title1 serik-split-hero__cashback" style="color: {{ $titleColor }} !important;">
-                        @php
-                            $cashbackBits = array_values(array_filter(array_map('trim', explode(',', (string) ($shortcode->animation_text ?: '')))));
-                            $cashbackLabel = $cashbackBits[0] ?? ($shortcode->title ?: __('Upto 1.5% Cash Back'));
-                        @endphp
-                        {{ $cashbackLabel }}
-                    </div>
+                    @php
+                        $cashbackBits = array_values(array_filter(array_map('trim', explode(',', (string) ($shortcode->animation_text ?: '')))));
+                        if ($cashbackBits === []) {
+                            $cashbackBits = [__('Upto 1.5% Cash Back')];
+                        }
+                        $cashbackLabel = $cashbackBits[0];
+                    @endphp
+                    <h2 class="title title1 serik-split-hero__cashback" style="color: {{ $titleColor }} !important; font-weight:700;" aria-label="{{ $cashbackLabel }}">
+                        <span
+                            class="serik-typewriter"
+                            id="serikHeroTypewriter"
+                            data-phrases="{{ e(json_encode(array_values($cashbackBits), JSON_UNESCAPED_UNICODE)) }}"
+                        >
+                            <span class="serik-typewriter__text"></span><span class="serik-typewriter__cursor" aria-hidden="true"></span>
+                        </span>
+                    </h2>
                     <p class="serik-split-hero__terms">*{{ __('Terms and Conditions Apply') }}</p>
                     @if ($shortcode->description)
                         <p class="subtitle body-1 serik-split-hero__desc" style="color: {{ $descriptionColor }} !important;">
@@ -56,15 +64,7 @@
 
                 <div class="serik-split-hero__actions">
                     {!! Theme::partial('shortcodes.hero-banner.partials.action-button', ['shortcode' => $shortcode, 'class' => 'serik-split-hero__cta']) !!}
-                    <a href="{{ url('/map') }}" class="serik-split-hero__link">{{ __('Browse all listings') }}</a>
                 </div>
-
-                <ul class="serik-split-stats" aria-label="{{ __('Highlights') }}">
-                    <li><strong>MLS®</strong><span>{{ __('Listings') }}</span></li>
-                    <li><strong>GTA+</strong><span>{{ __('Coverage') }}</span></li>
-                    <li><strong>1.5%</strong><span>{{ __('Cash Back') }}</span></li>
-                    <li><strong>Map</strong><span>{{ __('Search') }}</span></li>
-                </ul>
             </div>
 
             {{-- RIGHT: existing cashback banner — framed, fully visible --}}
@@ -110,20 +110,81 @@
     @endif
 </section>
 
+<script>
+(function () {
+    var root = document.getElementById('serikHeroTypewriter');
+    if (!root) return;
+    var textEl = root.querySelector('.serik-typewriter__text');
+    if (!textEl) return;
+
+    var phrases = [];
+    try {
+        phrases = JSON.parse(root.getAttribute('data-phrases') || '[]');
+    } catch (e) {
+        phrases = [];
+    }
+    if (!phrases.length) {
+        phrases = ['Upto 1.5% Cash Back'];
+    }
+
+    var phraseIndex = 0;
+    var charIndex = 0;
+    var deleting = false;
+    var typeMs = 70;
+    var deleteMs = 40;
+    var holdMs = 1800;
+    var gapMs = 400;
+
+    function tick() {
+        var phrase = phrases[phraseIndex] || '';
+        if (!deleting) {
+            charIndex = Math.min(charIndex + 1, phrase.length);
+            textEl.textContent = phrase.slice(0, charIndex);
+            if (charIndex === phrase.length) {
+                if (phrases.length < 2) {
+                    return; // typed once, keep full text with blinking cursor
+                }
+                deleting = true;
+                setTimeout(tick, holdMs);
+                return;
+            }
+            setTimeout(tick, typeMs);
+            return;
+        }
+
+        charIndex = Math.max(charIndex - 1, 0);
+        textEl.textContent = phrase.slice(0, charIndex);
+        if (charIndex === 0) {
+            deleting = false;
+            phraseIndex = (phraseIndex + 1) % phrases.length;
+            setTimeout(tick, gapMs);
+            return;
+        }
+        setTimeout(tick, deleteMs);
+    }
+
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        textEl.textContent = phrases[0];
+        return;
+    }
+
+    tick();
+})();
+</script>
+
 @if(is_plugin_active('real-estate') && $shortcode->search_box_enabled)
 <div class="flat-tab flat-tab-form cashback-calculator serik-split-calc" id="calculator-buttons" style="scroll-margin-top: 150px;">
     <div class="container">
         <div class="serik-split-calc__card">
             <form id="myForm" class="serik-split-calc__form serik-split-calc__row">
                 <div class="serik-split-calc__copy">
-                    <strong>{{ __('Estimate your cash back') }}</strong>
-                    <span>{{ __('Up to 1.5% rebate') }}</span>
+                    <strong>{{ __('Purchase Price') }}</strong>
                 </div>
                 <label class="visually-hidden" for="amount">{{ __('Purchase Price') }}</label>
                 <input
                     type="text"
                     class="form-control serik-split-calc__input"
-                    placeholder="{{ __('Enter home price') }}"
+                    placeholder="{{ __('Enter Home Price') }}"
                     value="{{ BaseHelper::stringify(request()->query('k')) }}"
                     id="amount"
                     required

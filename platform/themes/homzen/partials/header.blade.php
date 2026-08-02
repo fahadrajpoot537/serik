@@ -505,11 +505,15 @@
     }
 
     /* Navbar responsive polish (UI only — keep sticky/mobile menu behavior) */
-    .main-header .inner-container {
+    .main-header .inner-container,
+    .main-header .serik-nav-bar {
         min-width: 0;
-        width: 100%;
+        width: 100% !important;
         gap: 0.5rem;
         flex-wrap: nowrap;
+        display: flex !important;
+        justify-content: flex-start !important;
+        align-items: center !important;
     }
     .main-header .logo-box {
         min-width: 0;
@@ -523,15 +527,27 @@
         height: auto !important;
         object-fit: contain;
     }
+    .main-header .serik-nav-right {
+        display: flex !important;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        margin-left: auto !important;
+        flex: 0 0 auto;
+    }
     .main-header .header-account {
         flex: 0 0 auto;
         min-width: 0;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
     }
     .main-header .serik-portal-nav__actions {
-        display: flex;
+        display: flex !important;
         align-items: center;
+        justify-content: flex-end;
         gap: 0.5rem;
         flex-wrap: nowrap;
+        margin-left: 0;
     }
     .main-header .serik-portal-nav__map,
     .main-header .serik-portal-nav__cta {
@@ -589,7 +605,7 @@
     <div class="header-lower">
         <div class="row">
             <div class="col-lg-12">
-                <div class="inner-container d-flex justify-content-between align-items-center">
+                <div class="inner-container d-flex align-items-center serik-nav-bar">
                     <div class="logo-box d-flex align-items-center gap-3">
                         <div class="logo">
                             <a href="{{ BaseHelper::getHomepageUrl() }}">
@@ -670,18 +686,20 @@
                         </nav>
                         
                     </div>
-                    <div class="header-account">
-                        @if (is_plugin_active('real-estate') && RealEstateHelper::isLoginEnabled())
-                            <div class="flat-bt-top serik-portal-nav__actions">
-                                <a class="serik-portal-nav__map" href="{{ url('/map') }}">{{ __('Map Search') }}</a>
-                                <a class="tf-btn primary serik-hp-nav__cta serik-portal-nav__cta" href="{{ url('/contact-us') }}">{{ __('Contact Us') }}</a>
-                            </div>
-                        @endif
-                    </div>
-                    
-                    <div class="mobile-nav-toggler mobile-button">
-                       
-                        <x-core::icon name="ti ti-menu-2" />
+                    <div class="serik-nav-right">
+                        <div class="header-account">
+                            @if (is_plugin_active('real-estate') && RealEstateHelper::isLoginEnabled())
+                                <div class="flat-bt-top serik-portal-nav__actions">
+                                    <a class="tf-btn primary serik-hp-nav__cta serik-portal-nav__cta" href="{{ url('/contact-us') }}">{{ __('Contact Us') }}</a>
+                                    <a class="serik-portal-nav__map" href="tel:+16475789400">+1 (647) 578-9400</a>
+                                </div>
+                            @endif
+                        </div>
+                        
+                        <div class="mobile-nav-toggler mobile-button">
+                           
+                            <x-core::icon name="ti ti-menu-2" />
+                        </div>
                     </div>
                 </div>
             </div>

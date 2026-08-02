@@ -34,8 +34,8 @@
 </style>
 
 @if($pageTitle || $shortcode->subtitle)
-    <div style="display: block;margin-bottom:30px;"
-        @class(['text-center' => $centered && ! $hasButton, 'wow fadeIn' => $animation, 'style-1' => $hasButton, $class ?? null])
+    <div style="display:block;width:100%;margin-bottom:30px;"
+        @class(['text-center' => $centered && ! $hasButton, 'wow fadeIn' => $animation, 'style-1' => $hasButton, 'serik-hp-heading' => true, $class ?? null])
         @if($animation)
             data-wow-delay=".2s" data-wow-duration="2000ms"
         @endif

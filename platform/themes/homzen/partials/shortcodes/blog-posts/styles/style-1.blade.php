@@ -34,6 +34,17 @@
         flex: 1 1 auto;
     }
 
+    #page-home .flat-latest-new .flat-blog-item .title,
+    #page-home .flat-latest-new .flat-blog-item .title a {
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: unset !important;
+        display: block;
+        -webkit-line-clamp: unset !important;
+        line-clamp: unset !important;
+        word-break: break-word;
+    }
+
     #page-home .flat-latest-new .row > .box {
         display: flex;
         margin-bottom: 1.25rem;
@@ -183,10 +194,10 @@
         .serik-blog-m__title a {
             color: #161e2d;
             text-decoration: none;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
+            display: block;
+            white-space: normal;
+            overflow: visible;
+            word-break: break-word;
         }
 
         .serik-blog-m__excerpt {

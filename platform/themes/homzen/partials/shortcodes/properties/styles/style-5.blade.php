@@ -24,7 +24,6 @@
     <div class="container">
         <header class="section-heading-block serik-hp-section-head serik-hp-props__head wow fadeIn" data-wow-delay=".2s" data-wow-duration="2000ms">
             <div class="serik-hp-section-head__copy">
-                <p class="serik-hp-eyebrow">{{ __('Featured Listings') }}</p>
                 <h2 class="section-title mt-0">{{ $saleHeading }}</h2>
                 <p class="serik-hp-subhead">{{ $saleSubheading }}</p>
             </div>
@@ -52,7 +51,6 @@
 
         <header class="section-heading-block serik-hp-section-head serik-hp-props__head wow fadeIn" data-wow-delay=".2s" data-wow-duration="2000ms">
             <div class="serik-hp-section-head__copy">
-                <p class="serik-hp-eyebrow">{{ __('Market Insight') }}</p>
                 <h2 class="section-title mt-0">{{ __('Sold History') }}</h2>
                 <p class="serik-hp-subhead">{{ __('Ontario Residential recently sold/leased properties') }}</p>
             </div>

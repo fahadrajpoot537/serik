@@ -116,23 +116,25 @@
         @stack('header')
         {!! Theme::header() !!}
 {{-- Site-wide top bar + navbar + dropdown chrome (same as homepage) --}}
-<link rel="stylesheet" href="{{ Theme::asset()->url('css/site-chrome.css') }}?v={{ get_cms_version() }}-sc3">
+<link rel="stylesheet" href="{{ Theme::asset()->url('css/site-chrome.css') }}?v={{ get_cms_version() }}-sc5">
 @if ($isSerikHomepage)
 {{-- MUST load AFTER Theme::header() so redesign beats style.css --}}
-<link rel="stylesheet" href="{{ Theme::asset()->url('css/homepage-premium.css') }}?v={{ get_cms_version() }}-hp28">
+<link rel="stylesheet" href="{{ Theme::asset()->url('css/homepage-premium.css') }}?v={{ get_cms_version() }}-hp35">
 @endif
         @php
             $serikFaviconPath = theme_option('favicon');
             $serikFaviconUrl = $serikFaviconPath
                 ? RvMedia::getImageUrl($serikFaviconPath)
-                : asset('favicon.ico');
+                : asset('favicon-48x48.png');
             $serikFaviconType = theme_option('favicon_type', 'image/png');
         @endphp
-        {{-- Extra favicon / mobile icons (Theme::header already emits the primary favicon when set) --}}
+        {{-- Root favicons for Google SERP (must be valid ≥48×48; /favicon.ico was empty) --}}
         <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
+        <link rel="icon" type="image/png" sizes="48x48" href="{{ asset('favicon-48x48.png') }}">
+        <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('favicon-32x32.png') }}">
         <link rel="icon" type="{{ $serikFaviconType }}" href="{{ $serikFaviconUrl }}">
+        <link rel="apple-touch-icon" sizes="180x180" href="{{ asset('apple-touch-icon.png') }}">
         <link rel="apple-touch-icon" href="{{ $serikFaviconUrl }}">
-        <link rel="apple-touch-icon" sizes="180x180" href="{{ $serikFaviconUrl }}">
         <script type="text/javascript">
             (function(c,l,a,r,i,t,y){
                 c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};

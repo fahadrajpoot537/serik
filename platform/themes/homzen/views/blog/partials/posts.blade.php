@@ -55,7 +55,7 @@
                             @endif
                         </div>
                         <h6 class="title">
-                            <a href="{{ $post->url }}" class="w-100 text-truncate">{!! BaseHelper::clean($post->name) !!}</a>
+                            <a href="{{ $post->url }}" class="w-100">{!! BaseHelper::clean($post->name) !!}</a>
                         </h6>
                         @if($post->description)
                             <p class="description" style="text-align:justify">{!! BaseHelper::clean(Str::limit($post->description)) !!}</p>

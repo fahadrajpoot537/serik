@@ -110,12 +110,32 @@ body:has(#page-home) {
 }
 
 #page-home .serik-hp-section-head {
-  display: flex;
+  display: block;
+  width: 100% !important;
+  max-width: 100% !important;
   align-items: flex-end;
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
   margin-bottom: 1.25rem;
+}
+
+#page-home .serik-hp-section-head .serik-hp-heading,
+#page-home .serik-hp-section-head .wow.fadeIn.style-1,
+#page-home .flat-categories .serik-hp-heading,
+#page-home .flat-categories .wow.fadeIn.style-1 {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box;
+}
+
+#page-home .serik-hp-section-head .box-left,
+#page-home .flat-categories .box-left {
+  display: block;
+  width: calc(100% - 8rem);
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 #page-home .serik-hp-section-head--center {
@@ -250,18 +270,23 @@ body:has(#page-home) {
   box-shadow: none;
   backdrop-filter: blur(12px);
   overflow: visible !important;
+  padding-left: 16px !important;
+  padding-right: 16px !important;
 }
 #page-home #header.main-header.fixed-header {
   box-shadow: 0 8px 28px rgba(16, 24, 40, 0.07);
 }
 #page-home .main-header .header-lower,
-#page-home .main-header .inner-container {
+#page-home .main-header .inner-container,
+#page-home .main-header .serik-nav-bar {
   min-height: var(--p-nav-h);
   height: 100%;
   min-width: 0;
-  width: 100%;
-  display: flex;
-  align-items: center;
+  width: 100% !important;
+  max-width: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
   gap: 0.5rem 0.75rem;
 }
 #page-home .main-header .logo {
@@ -285,12 +310,25 @@ body:has(#page-home) {
   flex: 1 1 auto;
   min-width: 0;
 }
+#page-home .main-header .serik-nav-right {
+  display: flex !important;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+  margin-left: auto !important;
+  margin-right: 0 !important;
+  padding-right: 0 !important;
+}
 #page-home .main-header .header-account {
   flex: 0 0 auto;
   min-width: 0;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
 }
 #page-home .main-header .mobile-nav-toggler {
   flex-shrink: 0;
+  margin-left: 0;
 }
 
 #page-home .main-header .main-menu .navigation > li > a {
@@ -422,8 +460,10 @@ body:has(#page-home) {
 #page-home .serik-portal-nav__actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.65rem;
   flex-wrap: nowrap;
+  margin-left: auto;
 }
 #page-home .serik-portal-nav__map {
   display: inline-flex;
@@ -546,6 +586,7 @@ body:has(#page-home) {
 }
 
 #page-home .serik-split-hero__cashback,
+#page-home .serik-split-hero h2.serik-split-hero__cashback,
 #page-home .serik-split-hero .title1 {
   font-size: clamp(1.85rem, 3.6vw, 2.85rem) !important;
   font-weight: 750 !important;
@@ -556,6 +597,37 @@ body:has(#page-home) {
   max-width: 100%;
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+#page-home .serik-typewriter {
+  display: inline;
+  max-width: 100%;
+}
+
+#page-home .serik-typewriter__text {
+  white-space: pre-wrap;
+}
+
+#page-home .serik-typewriter__cursor {
+  display: inline-block;
+  width: 0.08em;
+  height: 1em;
+  margin-left: 0.12em;
+  vertical-align: -0.08em;
+  background: currentColor;
+  animation: serik-type-caret 0.9s steps(1) infinite;
+}
+
+@keyframes serik-type-caret {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #page-home .serik-typewriter__cursor {
+    animation: none;
+    opacity: 0;
+  }
 }
 
 #page-home .serik-split-hero .animationtext,
@@ -1490,6 +1562,14 @@ body:has(#page-home) {
 #page-home .serik-hp-reviews.flat-testimonial-v2::before {
   height: 100% !important;
   background: linear-gradient(145deg, #161e2d 0%, #243044 100%) !important;
+}
+#page-home .serik-hp-reviews .section-title,
+#page-home .serik-hp-reviews h3.section-title {
+  color: #ffffff !important;
+}
+#page-home .serik-hp-reviews .serik-hp-eyebrow,
+#page-home .serik-hp-reviews .serik-hp-eyebrow--light {
+  color: #ffffff !important;
 }
 #page-home .serik-hp-review-card,
 #page-home .flat-testimonial-v2 .box-tes-item.style-1 {
