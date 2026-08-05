@@ -1436,6 +1436,7 @@ class TrebPropertyHelper
 
     /**
      * Format TREB TransactionBrokerCompensation for display (e.g. "2.5" → "2.5%").
+     * Display ONLY the commission percentage — never "+", "plus", "HST", or "H.S.T".
      */
     public static function formatCoopCommission(?string $raw): ?string
     {
@@ -1444,11 +1445,17 @@ class TrebPropertyHelper
             return null;
         }
 
-        if (preg_match('/^\d+(\.\d+)?$/', $raw)) {
-            return $raw . '%';
+        // Prefer first numeric percent token: "2.5% plus HST" → "2.5%"
+        if (preg_match('/(\d+(?:\.\d+)?)\s*%/', $raw, $m)) {
+            return $m[1] . '%';
         }
 
-        return $raw;
+        // Bare number with tax/plus junk: "2.5 plus HST" / "2.5 + H.S.T" → "2.5%"
+        if (preg_match('/(\d+(?:\.\d+)?)/', $raw, $m)) {
+            return $m[1] . '%';
+        }
+
+        return null;
     }
 
     /**
@@ -1462,7 +1469,7 @@ class TrebPropertyHelper
             return null;
         }
 
-        $cacheKey = 'treb_coop_commission_v1_' . $listingKey;
+        $cacheKey = 'treb_coop_commission_v2_' . $listingKey;
         if (Cache::has($cacheKey)) {
             $cached = Cache::get($cacheKey);
             if ($cached === false || $cached === null || $cached === '') {

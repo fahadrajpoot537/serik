@@ -1215,6 +1215,17 @@ expenses using the Serik Realty Mortgage Payment Calculator.
         <button class="btn">see which rates I qualify for</button>
     </div>
 </div> 
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const btn = document.querySelector('.mortgage-sidebar .sidebar button.btn');
+    if (!btn) return;
+    btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        window.location.href = "{{ url('/contact-us') }}";
+    });
+});
+</script>
     
     
     

@@ -40,8 +40,10 @@
                     </h1>
                     @php
                         $cashbackBits = array_values(array_filter(array_map('trim', explode(',', (string) ($shortcode->animation_text ?: '')))));
+                        // Remove space in the hero heading: "CashBack" (not "Cash Back").
+                        $cashbackBits = array_map(static fn ($t) => str_replace('Cash Back', 'CashBack', (string) $t), $cashbackBits);
                         if ($cashbackBits === []) {
-                            $cashbackBits = [__('Upto 1.5% Cash Back')];
+                            $cashbackBits = [__('Upto 1.5% CashBack')];
                         }
                         $cashbackLabel = $cashbackBits[0];
                     @endphp
@@ -124,7 +126,7 @@
         phrases = [];
     }
     if (!phrases.length) {
-        phrases = ['Upto 1.5% Cash Back'];
+        phrases = ['Upto 1.5% CashBack'];
     }
 
     var phraseIndex = 0;

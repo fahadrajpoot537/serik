@@ -384,7 +384,7 @@
     @endphp
     @if ($coopCommissionDisplay)
     <div style="color:#e63946;font-size:14px;margin:16px 0 0;font-weight:600;">
-        Coop Commission: {{ $coopCommissionDisplay }}
+        Co-op Commission : {{ $coopCommissionDisplay }}
     </div>
     @endif
 </div>
@@ -422,6 +422,20 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     });
+
+    // Sold/History rows are sometimes injected dynamically; ensure click works immediately.
+    // This specifically restores: clicking "(Sign in required)" opens the existing login modal.
+    document.addEventListener('click', (event) => {
+        const lockedRow = event.target?.closest?.('.hs-history-locked-row');
+        if (!lockedRow) return;
+
+        const loginModal = document.getElementById('modalLogin');
+        if (loginModal && window.bootstrap?.Modal) {
+            event.preventDefault();
+            event.stopPropagation();
+            window.bootstrap.Modal.getOrCreateInstance(loginModal).show();
+        }
+    }, true);
 
     // Lazy-load listing history after first paint (never block SSR on Meili/FULLTEXT).
     const blocks = document.getElementById('propertyDetailBlocks');

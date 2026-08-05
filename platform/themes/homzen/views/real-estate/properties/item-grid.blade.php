@@ -114,7 +114,33 @@
     $isSold = $property->isSoldHistory();
     $statusLabel = $isSold
         ? ($property->MlsStatus === 'Leased' ? __('Leased') : __('Sold'))
-        : ($property->TransactionType === 'For Lease' ? __('For Lease') : __('For Sale'));
+        : (function () use ($property) {
+            $mlsStatus = trim((string) ($property->MlsStatus ?? ''));
+            $transactionType = trim((string) ($property->TransactionType ?? ''));
+
+            // Delisted badges must come from the real MLS status (not TransactionType).
+            if ($mlsStatus === 'Terminated') {
+                return __('Terminated');
+            }
+
+            if ($mlsStatus === 'Expired') {
+                return __('Expired');
+            }
+
+            if ($mlsStatus === 'Suspended') {
+                return __('Suspended');
+            }
+
+            if (in_array($mlsStatus, ['Leased', 'Leased Conditional'], true)) {
+                return __('Leased');
+            }
+
+            if (in_array($transactionType, ['For Lease', 'For Sub-Lease'], true)) {
+                return __('For Lease');
+            }
+
+            return __('For Sale');
+        })();
     $baths = (int) ($property->number_bathroom ?? 0);
     $sqft = trim((string) ($property->square_text ?? ''));
     $broker = trim((string) ($property->broker ?? ''));

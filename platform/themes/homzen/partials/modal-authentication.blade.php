@@ -22,6 +22,20 @@
         z-index: 10040 !important;
     }
 
+    /* Mobile usability fix:
+       reCAPTCHA is inside iframes; sometimes an overlay layer blocks taps.
+       Force pointer events so a single tap on the captcha responds instantly. */
+    @media (max-width: 767.98px) {
+        #modalLogin #loginRecaptcha,
+        #modalLogin #loginRecaptcha iframe,
+        #modalLogin .g-recaptcha,
+        #modalLogin .g-recaptcha iframe {
+            pointer-events: auto !important;
+            position: relative;
+            z-index: 10060 !important;
+        }
+    }
+
     /* Modern Unified Auth Modal Styles */
     .auth-modal-dialog {
         max-width: 480px;

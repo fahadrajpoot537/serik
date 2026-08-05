@@ -10246,7 +10246,9 @@ function mapMovedEnoughToRefetch() {
         const propertyId = res.property_id || props.id || '';
         const description = res.description || '';
         const images = mergeMapPopupImages(res.images, props.image);
-        const statusLabel = props.transaction || status;
+        // Badge label must come from the real MLS status (not TransactionType),
+        // otherwise delisted statuses like "Terminated" can incorrectly show "For Sale".
+        let statusLabel = props.transaction || status;
         const mlsStatusValue = String(props.mls_status || status || props.transaction || '').trim();
         const transactionTypeValue = String(
             detail?.TransactionType
@@ -10260,6 +10262,23 @@ function mapMovedEnoughToRefetch() {
             || mlsStatusValue === 'Leased Conditional'
             || String(props.transaction || '').toLowerCase().includes('lease')
             || (typeof selectedTransaction !== 'undefined' && selectedTransaction === 'For Lease');
+
+        // Derive badge from actual MLS status.
+        if (mlsStatusValue === 'Terminated') {
+            statusLabel = 'Terminated';
+        } else if (mlsStatusValue === 'Expired') {
+            statusLabel = 'Expired';
+        } else if (mlsStatusValue === 'Suspended') {
+            statusLabel = 'Suspended';
+        } else if (mlsStatusValue === 'Leased' || mlsStatusValue === 'Leased Conditional') {
+            statusLabel = 'Leased';
+        } else if (String(mlsStatusValue).toLowerCase().includes('sold')) {
+            statusLabel = 'Sold';
+        } else if (isLeaseListing) {
+            statusLabel = 'For Lease';
+        } else {
+            statusLabel = 'For Sale';
+        }
 
         const displayName = detail?.display_address || props.name || 'Property';
         const displayLocation = detail?.display_location || '';
@@ -10326,7 +10345,7 @@ function mapMovedEnoughToRefetch() {
                 <div class="hs-map-tab-panel" data-map-panel="facts">${buildMapKeyFactsHtml(keyFacts, displayName, displayLocation, displayType, listingId, brokerage)}</div>
                 <div class="hs-map-tab-panel" data-map-panel="details">${buildMapDetailsGridHtml(propertyDetails)}</div>
                 <div class="hs-map-tab-panel" data-map-panel="rooms">${buildMapRoomsTableHtml(rooms)}</div>
-                ${!isLeaseListing ? '<div class="js-purchase-only-info" style="color:#e63946;font-size:14px;margin:16px 0 8px;font-weight:600;">Coop Commission: 2.5%</div>' : ''}
+                ${!isLeaseListing ? '<div class="js-purchase-only-info" style="color:#e63946;font-size:14px;margin:16px 0 8px;font-weight:600;">Co-op Commission : 2.5%</div>' : ''}
                 <div class="property-popup-footer" style="margin-top:8px;font-size:12px;color:#6c757d;">${escapeMapHtml(listingId)}${brokerage ? ' , ' + escapeMapHtml(brokerage) : ''}</div>
             `;
 
