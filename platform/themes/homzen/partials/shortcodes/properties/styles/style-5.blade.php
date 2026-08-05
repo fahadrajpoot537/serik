@@ -54,7 +54,7 @@
                 <h2 class="section-title mt-0">{{ __('Sold History') }}</h2>
                 <p class="serik-hp-subhead">{{ __('Ontario Residential recently sold/leased properties') }}</p>
             </div>
-            @if(!auth('account')->check())
+            @if(! (auth('account')->check() || auth()->check()))
                 <button type="button" class="tf-btn primary size-1 js-auth-open-login serik-hp-login-cta">
                     {{ __('Login to View Sold History') }}
                 </button>

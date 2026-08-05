@@ -22,12 +22,12 @@ class HomepageFeaturedPropertiesAction
     private const CACHE_SECONDS = 600;
 
     private const INACTIVE_STATUSES = [
-        'Sold', 'Leased', 'Sold Conditional', 'Sold Conditional Escape',
+        'Sold', 'Leased', 'Sold Conditional', 'Sold Conditional Escape', 'Leased Conditional',
         'Expired', 'Terminated', 'Suspended',
     ];
 
     private const SOLD_STATUSES = [
-        'Sold', 'Leased', 'Sold Conditional', 'Sold Conditional Escape',
+        'Sold', 'Leased', 'Sold Conditional', 'Sold Conditional Escape', 'Leased Conditional',
     ];
 
     /**
@@ -52,7 +52,7 @@ class HomepageFeaturedPropertiesAction
 
         $cityKey = $visitorCity ? strtolower((string) $visitorCity) : 'ontario';
         $version = HomepageFeaturedCache::version();
-        $cacheKey = "homepage_featured_props_v4:{$version}:{$cityKey}:{$limit}";
+        $cacheKey = "homepage_featured_props_v5:{$version}:{$cityKey}:{$limit}";
 
         try {
             return Cache::remember($cacheKey, self::CACHE_SECONDS, function () use ($limit, $visitorCity) {

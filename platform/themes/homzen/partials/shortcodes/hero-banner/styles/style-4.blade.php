@@ -5853,22 +5853,20 @@ document.addEventListener("DOMContentLoaded", function () {
     window.isMapSoldListing = function (status, props) {
         // HARD RULE: login is ONLY for Sold/Leased history.
         // For Sale / For Lease / Active / Delisted must NEVER trigger login on map.
+        // MlsStatus must win over TransactionType — Sold/Leased rows often still
+        // carry transaction "For Sale" / "For Lease".
         props = props || {};
-
-        const tx = String(props.transaction || '').trim().toLowerCase();
-        if (
-            tx === 'for sale'
-            || tx === 'for lease'
-            || tx === 'for sub-lease'
-        ) {
-            return false;
-        }
 
         const raw = String(
             props.mls_status
             || status
             || ''
         ).trim().toLowerCase();
+
+        // Explicit sold/leased MlsStatus always requires login for guests.
+        if (raw && MAP_SOLD_STATUSES.some((s) => s.toLowerCase() === raw)) {
+            return true;
+        }
 
         // Active browse + delisted statuses are never login-gated.
         if (
@@ -5892,13 +5890,23 @@ document.addEventListener("DOMContentLoaded", function () {
             return false;
         }
 
-        // Explicit sold/leased MlsStatus always counts — even if requires_login
-        // was wrongly left as 0 on a Meili pin.
-        if (raw && MAP_SOLD_STATUSES.some((s) => s.toLowerCase() === raw)) {
+        // Active TransactionType without a sold MlsStatus is never locked
+        // (prevents stale requires_login from locking For Sale pins).
+        const tx = String(props.transaction || '').trim().toLowerCase();
+        if (
+            tx === 'for sale'
+            || tx === 'for lease'
+            || tx === 'for sub-lease'
+        ) {
+            return false;
+        }
+
+        // Guest GeoJSON strip: requires_login=1 with MlsStatus already rewritten
+        // onto transaction (e.g. "Sold") — honor when status string was empty above.
+        if (window.mapFlagTrue(props.requires_login)) {
             return true;
         }
 
-        // No sold status → never lock from requires_login alone.
         return false;
     };
 
