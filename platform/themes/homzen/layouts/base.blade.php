@@ -49,6 +49,14 @@
                     touch-action: pan-y; /* allow only vertical gestures */
                 }
 
+                /* Login/auth modal must receive immediate taps (not delayed by pan-y). */
+                body.modal-open,
+                body.serik-auth-open,
+                #modalLogin,
+                #modalLogin * {
+                    touch-action: manipulation;
+                }
+
                 /* Horizontal carousels must still receive swipe gestures */
                 .swiper,
                 .tf-sw-blog,
@@ -120,7 +128,7 @@
 <link rel="stylesheet" href="{{ Theme::asset()->url('css/site-chrome.css') }}?v={{ get_cms_version() }}-sc6">
 @if ($isSerikHomepage)
 {{-- MUST load AFTER Theme::header() so redesign beats style.css --}}
-<link rel="stylesheet" href="{{ Theme::asset()->url('css/homepage-premium.css') }}?v={{ get_cms_version() }}-hp37">
+<link rel="stylesheet" href="{{ Theme::asset()->url('css/homepage-premium.css') }}?v={{ get_cms_version() }}-hp39">
 @endif
         <script type="text/javascript">
             (function(c,l,a,r,i,t,y){
@@ -142,7 +150,7 @@
                 mobile: {
                     position: 'br',
                     xOffset: '12px',
-                    yOffset: '70px'
+                    yOffset: '80px'
                 }
             }
         };
@@ -156,20 +164,17 @@
         })();
         </script>
         <style>
-            /* Keep Tawk.to bubble on the right */
+            /* Keep Tawk.to bubble on the right (desktop/tablet unchanged) */
             iframe[title="chat widget"],
-            iframe[title="chat widget"][style],
-            div.widget-visible {
+            iframe[title="Chat widget"] {
                 right: 20px !important;
                 left: auto !important;
             }
+            /* Mobile only: bottom 80px above sticky nav */
             @media (max-width: 768px) {
                 iframe[title="chat widget"],
-                iframe[title="chat widget"][style],
-                div.widget-visible {
-                    right: 12px !important;
-                    left: auto !important;
-                    bottom: 70px !important;
+                iframe[title="Chat widget"] {
+                    bottom: 80px !important;
                 }
             }
         </style>

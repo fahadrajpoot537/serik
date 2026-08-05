@@ -22,17 +22,57 @@
         z-index: 10040 !important;
     }
 
+    /* Inactive register/login panel must not steal taps while the other is shown. */
+    #modalLogin .auth-slider-container:not(.show-register) > .auth-panel:nth-child(2),
+    #modalLogin .auth-slider-container.show-register > .auth-panel:nth-child(1) {
+        pointer-events: none;
+        visibility: hidden;
+    }
+
     /* Mobile usability fix:
-       reCAPTCHA is inside iframes; sometimes an overlay layer blocks taps.
-       Force pointer events so a single tap on the captcha responds instantly. */
+       - Site-wide touch-action: pan-y delays taps
+       - Tawk chat iframe often sits above the modal and steals taps
+       - reCAPTCHA needs a clean, single-tap hit target */
     @media (max-width: 767.98px) {
+        body.modal-open,
+        body.serik-auth-open {
+            touch-action: auto !important;
+        }
+
+        #modalLogin.modal,
+        #modalLogin .modal-dialog,
+        #modalLogin .modal-content,
+        #modalLogin .auth-body,
+        #modalLogin .auth-panel,
+        #modalLogin input,
+        #modalLogin button,
+        #modalLogin a,
+        #modalLogin label {
+            touch-action: manipulation !important;
+        }
+
+        #modalLogin .auth-body {
+            overflow: visible;
+        }
+
         #modalLogin #loginRecaptcha,
+        #modalLogin #registerRecaptcha,
         #modalLogin #loginRecaptcha iframe,
+        #modalLogin #registerRecaptcha iframe,
         #modalLogin .g-recaptcha,
         #modalLogin .g-recaptcha iframe {
             pointer-events: auto !important;
+            touch-action: manipulation !important;
             position: relative;
             z-index: 10060 !important;
+        }
+
+        /* Hide / disable chat bubble while login is open so it cannot block taps. */
+        body.serik-auth-open iframe[title*="chat"],
+        body.serik-auth-open iframe[title*="Chat"],
+        body.serik-auth-open div.widget-visible {
+            pointer-events: none !important;
+            visibility: hidden !important;
         }
     }
 
@@ -600,6 +640,12 @@
         document.getElementById('customForgotForm')?.reset();
         document.getElementById('forgotEmailErr').style.display = 'none';
         document.getElementById('loginPassErr').style.display = 'none';
+        document.body.classList.remove('serik-auth-open');
+        try {
+            if (typeof Tawk_API !== 'undefined' && typeof Tawk_API.showWidget === 'function') {
+                Tawk_API.showWidget();
+            }
+        } catch (e) {}
     }
 
     const authCsrfRefreshUrl = @json(route('auth.csrf-token'));
@@ -670,7 +716,15 @@
             modalEl.removeAttribute('aria-hidden');
             modalEl.setAttribute('aria-modal', 'true');
             document.body.classList.add('modal-open');
+            document.body.classList.add('serik-auth-open');
         }
+
+        // Mobile: hide Tawk bubble so its iframe cannot steal taps on the login form/CAPTCHA.
+        try {
+            if (typeof Tawk_API !== 'undefined' && typeof Tawk_API.hideWidget === 'function') {
+                Tawk_API.hideWidget();
+            }
+        } catch (e) {}
 
         const modal = getAuthModal();
         if (modal) {
@@ -721,6 +775,12 @@
         }
 
         modalEl?.addEventListener('show.bs.modal', () => {
+            document.body.classList.add('serik-auth-open');
+            try {
+                if (typeof Tawk_API !== 'undefined' && typeof Tawk_API.hideWidget === 'function') {
+                    Tawk_API.hideWidget();
+                }
+            } catch (e) {}
             refreshAuthCsrfTokens();
         });
 

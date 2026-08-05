@@ -194,11 +194,36 @@
                     autocomplete="off"
                 />
                 <div class="serik-split-calc__actions calculator-buttons">
-                    <button type="submit" class="serik-split-calc__btn serik-split-calc__btn--primary" onclick="calculatePercentage()">
-                        {{ __('Calculate cash back') }}
+                    <button type="submit" class="serik-split-calc__btn serik-split-calc__btn--image" onclick="calculatePercentage()" aria-label="{{ __('Calculate cash back') }}">
+                        <img
+                            src="{{ \App\Support\SerikMediaUrl::toPublic('button-calculate-cashback-1.png') }}"
+                            alt="{{ __('Calculate cash back') }}"
+                            width="140"
+                            height="40"
+                            decoding="async"
+                            loading="lazy"
+                        />
                     </button>
-                    <a href="{{ url('/mortgage-calculator') }}" class="serik-split-calc__btn serik-split-calc__btn--primary">{{ __('Mortgage Calculator') }}</a>
-                    <a href="{{ url('/appointment-scheduler') }}" class="serik-split-calc__btn serik-split-calc__btn--primary">{{ __('Schedule an appointment') }}</a>
+                    <a href="{{ url('/mortgage-calculator') }}" class="serik-split-calc__btn serik-split-calc__btn--image" aria-label="{{ __('Mortgage Calculator') }}">
+                        <img
+                            src="{{ \App\Support\SerikMediaUrl::toPublic('button-mortgage-calculator-blue-1.png') }}"
+                            alt="{{ __('Mortgage Calculator') }}"
+                            width="140"
+                            height="40"
+                            decoding="async"
+                            loading="lazy"
+                        />
+                    </a>
+                    <a href="{{ url('/appointment-scheduler') }}" class="serik-split-calc__btn serik-split-calc__btn--image" aria-label="{{ __('Schedule an appointment') }}">
+                        <img
+                            src="{{ \App\Support\SerikMediaUrl::toPublic('button-copy1-2.png') }}"
+                            alt="{{ __('Schedule an appointment') }}"
+                            width="140"
+                            height="40"
+                            decoding="async"
+                            loading="lazy"
+                        />
+                    </a>
                 </div>
             </form>
             <div id="result" class="calculator-result serik-split-calc__result"></div>
