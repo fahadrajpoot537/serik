@@ -155,6 +155,22 @@
             }
         };
         (function(){
+        function serikTawkBottom80() {
+            if (window.innerWidth > 991) return;
+            try {
+                document.querySelectorAll('iframe').forEach(function (frame) {
+                    var title = String(frame.getAttribute('title') || '').toLowerCase();
+                    if (title.indexOf('chat') === -1) return;
+                    frame.style.setProperty('bottom', '80px', 'important');
+                    frame.style.setProperty('right', '12px', 'important');
+                    frame.style.setProperty('left', 'auto', 'important');
+                });
+            } catch (e) {}
+        }
+        Tawk_API.onLoad = function () {
+            serikTawkBottom80();
+            setTimeout(serikTawkBottom80, 500);
+        };
         var s1=document.createElement("script"),s0=document.getElementsByTagName("script")[0];
         s1.async=true;
         s1.src='https://embed.tawk.to/6a6d0ff4f9ea531d4e9995a8/1jut0cl8v';
@@ -164,17 +180,19 @@
         })();
         </script>
         <style>
-            /* Keep Tawk.to bubble on the right (desktop/tablet unchanged) */
+            /* Keep Tawk.to bubble on the right (desktop unchanged) */
             iframe[title="chat widget"],
             iframe[title="Chat widget"] {
                 right: 20px !important;
                 left: auto !important;
             }
-            /* Mobile only: bottom 80px above sticky nav */
-            @media (max-width: 768px) {
+            /* Mobile / map breakpoint: lift chat 80px above bottom bar */
+            @media (max-width: 991px) {
                 iframe[title="chat widget"],
                 iframe[title="Chat widget"] {
                     bottom: 80px !important;
+                    right: 12px !important;
+                    left: auto !important;
                 }
             }
         </style>

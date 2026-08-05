@@ -3024,18 +3024,19 @@ position: absolute;
 
 #hsMobileSheetsRoot {
     position: relative;
-    z-index: 1000002;
+    /* Must stay above .hs-mobile-view-bar (1000010) or Apply is covered/unclickable */
+    z-index: 1000025;
 }
 
 #hsMobileSheetsRoot .hs-m-sheet.open {
-    z-index: 1000015;
+    z-index: 1000026;
 }
 
     .mobile-overlay {
         position: fixed;
         inset: 0;
         background: rgba(0,0,0,0.45);
-        z-index: 1000001;
+        z-index: 1000020;
         display: none;
     }
 
@@ -4303,7 +4304,7 @@ position: absolute;
         bottom: 0;
         background: #fff;
         border-radius: 16px 16px 0 0;
-        z-index: 1000001;
+        z-index: 1000025;
         max-height: 88vh;
         transform: translateY(110%);
         transition: transform 0.28s ease;
@@ -4319,7 +4320,7 @@ position: absolute;
         transform: translateY(0);
         pointer-events: auto;
         visibility: visible;
-        z-index: 1000015;
+        z-index: 1000026;
     }
 
     .hs-m-sheet-header {
@@ -4330,6 +4331,7 @@ position: absolute;
         border-bottom: 1px solid #eee;
         font-weight: 600;
         font-size: 16px;
+        flex-shrink: 0;
     }
 
     .hs-m-sheet-close {
@@ -4344,6 +4346,8 @@ position: absolute;
         overflow-y: auto;
         padding: 12px 16px 20px;
         -webkit-overflow-scrolling: touch;
+        flex: 1 1 auto;
+        min-height: 0;
     }
 
     .hs-m-option {
@@ -4436,8 +4440,12 @@ position: absolute;
     .hs-m-sheet-actions {
         display: flex;
         gap: 10px;
-        padding: 12px 16px 16px;
+        padding: 12px 16px calc(16px + env(safe-area-inset-bottom, 0px));
         border-top: 1px solid #eee;
+        flex-shrink: 0;
+        background: #fff;
+        position: relative;
+        z-index: 2;
     }
 
     .hs-m-sheet-actions button {
@@ -4448,6 +4456,8 @@ position: absolute;
         font-size: 15px;
         font-weight: 600;
         cursor: pointer;
+        pointer-events: auto;
+        -webkit-tap-highlight-color: transparent;
     }
 
     .hs-m-apply {
@@ -4458,6 +4468,14 @@ position: absolute;
     .hs-m-clear {
         background: #f3f4f6;
         color: #374151;
+    }
+}
+
+/* While a filter sheet is open, hide the Map/List bar so Apply stays visible/tappable */
+@media (max-width: 991px) {
+    body:has(.hs-m-sheet.open) .hs-mobile-view-bar {
+        visibility: hidden !important;
+        pointer-events: none !important;
     }
 }
 
