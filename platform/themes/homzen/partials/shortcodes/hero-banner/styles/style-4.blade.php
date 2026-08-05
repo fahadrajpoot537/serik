@@ -6822,23 +6822,19 @@ function getHsDateLabel(val) {
     return HS_DATE_LABELS[val] || val;
 }
 
-/** Sold statuses for For Sale; Leased statuses for For Lease (same day-filter UX). */
+/** Closed MlsStatus values for the current listing type (never mix Sold with Leased). */
 function getClosedStatusValues() {
     if (selectedTransaction === 'For Lease') {
         return ['Leased', 'Leased Conditional'];
     }
-    return ['Sold', 'Sold Conditional', 'Sold Conditional Escape', 'Leased', 'Leased Conditional'];
+    return ['Sold', 'Sold Conditional', 'Sold Conditional Escape'];
 }
 
 /**
- * For Lease + closed (LEASED) filter: force TREB leased MlsStatus only.
- * Prevents stale Sold* statuses (URL / history / prior For Sale) from leaking into LEASED results.
- * For Sale is intentionally untouched.
+ * Keep closed (Sold/Leased) filter aligned with listing type.
+ * For Sale → Sold* only; For Lease → Leased* only.
  */
 function alignClosedStatusWithTransaction() {
-    if (selectedTransaction !== 'For Lease') {
-        return;
-    }
     const closedStatuses = ['Sold', 'Sold Conditional', 'Sold Conditional Escape', 'Leased', 'Leased Conditional'];
     const current = Array.isArray(selectedStatus)
         ? selectedStatus
@@ -9062,15 +9058,14 @@ function mapMovedEnoughToRefetch() {
     }
 
     function normalizeMapTransactionFilter() {
-        // Always send listing type. Backend skips TransactionType for closed
-        // filters, but uses transaction=For Lease to coerce MlsStatus to
-        // Leased/Leased Conditional only (never Sold*).
+        // Always send listing type. Backend coerces closed MlsStatus by transaction:
+        // For Sale → Sold* only; For Lease → Leased* only.
         const tx = (selectedTransaction || '').trim();
         if (selectedCommunity && !communityEnforceTransaction) {
-            // Closed LEASED still needs transaction for server-side coercion.
+            // Closed Sold/Leased still needs transaction for server-side coercion.
             if (typeof isSoldOrDelistedStatus === 'function' && isSoldOrDelistedStatus()
-                && !isDelistedStatus() && tx === 'For Lease') {
-                return 'For Lease';
+                && !isDelistedStatus() && (tx === 'For Lease' || tx === 'For Sale')) {
+                return tx;
             }
             return '';
         }

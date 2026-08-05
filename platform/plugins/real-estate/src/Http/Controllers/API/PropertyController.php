@@ -4205,15 +4205,15 @@ class PropertyController extends BaseController
     }
 
     /**
-     * For Lease + closed (LEASED) map filter must never include Sold* MlsStatus.
-     * For Sale closed (SOLD) keeps the historical Sold+Leased status set unchanged.
+     * Closed map filters must not mix sale and lease history.
+     * For Sale + Sold → Sold* only; For Lease + Leased → Leased* only.
      *
      * @param  array<int, string>  $statuses
      * @return array<int, string>
      */
     private function coerceMapClosedStatusesForTransaction(array $statuses, ?string $transaction): array
     {
-        if ($statuses === [] || ($transaction ?? '') !== 'For Lease') {
+        if ($statuses === []) {
             return $statuses;
         }
 
@@ -4222,12 +4222,35 @@ class PropertyController extends BaseController
             return $statuses;
         }
 
-        $closedStatuses = ['Sold', 'Sold Conditional', 'Sold Conditional Escape', 'Leased', 'Leased Conditional'];
+        $soldOnly = ['Sold', 'Sold Conditional', 'Sold Conditional Escape'];
+        $leasedOnly = ['Leased', 'Leased Conditional'];
+        $closedStatuses = array_merge($soldOnly, $leasedOnly);
+
         if (empty(array_intersect($statuses, $closedStatuses))) {
             return $statuses;
         }
 
-        return ['Leased', 'Leased Conditional'];
+        if (($transaction ?? '') === 'For Lease') {
+            return $leasedOnly;
+        }
+
+        if (($transaction ?? '') === 'For Sale') {
+            return $soldOnly;
+        }
+
+        // No explicit listing type: keep a single family; de-mix legacy Sold+Leased payloads.
+        $hasSold = ! empty(array_intersect($statuses, $soldOnly));
+        $hasLeased = ! empty(array_intersect($statuses, $leasedOnly));
+
+        if ($hasSold && $hasLeased) {
+            return $soldOnly;
+        }
+
+        if ($hasLeased) {
+            return $leasedOnly;
+        }
+
+        return $soldOnly;
     }
 
     /**
