@@ -16,6 +16,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
         \App\Console\Commands\SerikQueueInstallImagesWorkerCommand::class,
         \App\Console\Commands\WarmHomepageCacheCommand::class,
         \App\Console\Commands\RestoreAdminAccessCommand::class,
+        \App\Console\Commands\TrebArchiveImportCommand::class,
     ])
     ->withRouting(
         web: __DIR__ . '/../routes/web.php',
@@ -186,6 +187,25 @@ $app = Application::configure(basePath: dirname(__DIR__))
             ->everyTenMinutes()
             ->withoutOverlapping(20)
             ->appendOutputTo(storage_path('logs/homepage-cache.log'));
+
+        // NEW: isolated TREB Archive (AUTH2) sold import — small batches every 30 min.
+        // Does not alter existing TREB/VOW/IDX schedules above.
+        $schedule->call(function () {
+            try {
+                @set_time_limit(120);
+                Artisan::call('serik:treb-archive-import');
+            } catch (\Throwable $e) {
+                Log::channel('treb_archive')->error(
+                    '[schedule] serik:treb-archive-import failed: ' . $e->getMessage()
+                );
+            }
+
+            return 0;
+        })
+            ->name('serik-treb-archive-import')
+            ->everyThirtyMinutes()
+            ->withoutOverlapping(25)
+            ->appendOutputTo(storage_path('logs/treb-archive-import.log'));
     })
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->prepend(\App\Http\Middleware\ForceCanonicalDomainMiddleware::class);

@@ -99,6 +99,15 @@ return [
             'replace_placeholders' => true,
         ],
 
+        // Isolated TREB Archive (AUTH2) importer — do not mix with live TREB logs.
+        'treb_archive' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/treb-archive-import.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => env('LOG_DAILY_DAYS', 30),
+            'replace_placeholders' => true,
+        ],
+
         'slack' => [
             'driver' => 'slack',
             'url' => env('LOG_SLACK_WEBHOOK_URL'),
