@@ -121,6 +121,12 @@
         geocodeInBackground: geocodeCommunityInBackground,
     };
 
-    ensureCommunityIndexLoaded();
+    // Defer index prefetch so it does not compete with first-paint assets.
+    // Search still works immediately via /api/v1/community-suggestions fallback.
+    if (typeof requestIdleCallback === 'function') {
+        requestIdleCallback(function () { ensureCommunityIndexLoaded(); }, { timeout: 4000 });
+    } else {
+        setTimeout(ensureCommunityIndexLoaded, 2000);
+    }
 })(window);
 </script>

@@ -48,19 +48,74 @@
 </section>
 
 <script>
-const testimonialSwiper = new Swiper('.tf-sw-testimonial', {
-    slidesPerView: 1,
-    spaceBetween: 24,
-    loop: true,
-    autoplay: { delay: 3000, disableOnInteraction: false },
-    breakpoints: {
-        768: { slidesPerView: 2 },
-        1200: { slidesPerView: 3 }
+(function () {
+    function bindTestimonialHover(el, swiperInstance) {
+        if (!el || !swiperInstance || !swiperInstance.autoplay) {
+            return;
+        }
+        if (el.dataset.acHoverBound === '1') {
+            return;
+        }
+        el.dataset.acHoverBound = '1';
+        el.addEventListener('mouseenter', function () {
+            if (swiperInstance.autoplay) {
+                swiperInstance.autoplay.stop();
+            }
+        });
+        el.addEventListener('mouseleave', function () {
+            if (swiperInstance.autoplay) {
+                swiperInstance.autoplay.start();
+            }
+        });
     }
-});
-const swiperEl = document.querySelector('.tf-sw-testimonial');
-if (swiperEl) {
-    swiperEl.addEventListener('mouseenter', () => { testimonialSwiper.autoplay.stop(); });
-    swiperEl.addEventListener('mouseleave', () => { testimonialSwiper.autoplay.start(); });
-}
+
+    function initTestimonialSwiper() {
+        if (typeof Swiper === 'undefined') {
+            return false;
+        }
+        const el = document.querySelector('.tf-sw-testimonial');
+        if (!el) {
+            return true;
+        }
+        // Reuse instance if theme script.js already initialized this slider
+        if (el.swiper) {
+            bindTestimonialHover(el, el.swiper);
+            return true;
+        }
+        if (el.dataset.swiperReady === '1') {
+            return true;
+        }
+        el.dataset.swiperReady = '1';
+        const testimonialSwiper = new Swiper(el, {
+            slidesPerView: 1,
+            spaceBetween: 24,
+            loop: true,
+            autoplay: { delay: 3000, disableOnInteraction: false },
+            breakpoints: {
+                768: { slidesPerView: 2 },
+                1200: { slidesPerView: 3 }
+            }
+        });
+        bindTestimonialHover(el, testimonialSwiper);
+        return true;
+    }
+
+    function bootTestimonialSwiper(maxRetries) {
+        var retries = 0;
+        var limit = maxRetries || 12;
+        var tick = function () {
+            if (initTestimonialSwiper()) {
+                return;
+            }
+            retries++;
+            if (retries < limit) {
+                setTimeout(tick, 180);
+            }
+        };
+        tick();
+    }
+
+    window.addEventListener('DOMContentLoaded', function () { bootTestimonialSwiper(); });
+    window.addEventListener('load', function () { bootTestimonialSwiper(6); });
+})();
 </script>

@@ -652,6 +652,30 @@ body:has(.map-housesigma) .progress-wrap,
     background:#f4f7f9;
 }
 
+.ac-cat-item-hidden {
+    display: none !important;
+}
+
+.ac-cat-load-more {
+    display: block;
+    width: auto;
+    margin: 0 0 4px 10px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: #6b7280;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.4;
+    cursor: pointer;
+    text-align: left;
+}
+
+.ac-cat-load-more:hover {
+    color: #0255a1;
+    text-decoration: underline;
+}
+
 .listing-item {
     display:flex;
     gap:12px;
@@ -13097,6 +13121,49 @@ function looksLikeMlsPrefix(keyword) {
     return /^[a-z]{1,2}\d{2,}$/i.test(String(keyword || '').trim());
 }
 
+const AC_SUGGEST_PREVIEW_LIMIT = 2;
+let mapAcCatExpanded = { cities: false, communities: false, addresses: false };
+
+function resetMapAcCatExpanded() {
+    mapAcCatExpanded = { cities: false, communities: false, addresses: false };
+}
+
+function applyMapSuggestionCategoryLimits() {
+    const container = document.getElementById('mapLocationResults');
+    if (!container) {
+        return;
+    }
+
+    container.querySelectorAll('.ac-cat-load-more').forEach((el) => el.remove());
+
+    [
+        { key: 'cities', selector: '.city-item' },
+        { key: 'communities', selector: '.community-item, .place-item' },
+        { key: 'addresses', selector: '.address-item' },
+    ].forEach(({ key, selector }) => {
+        const items = Array.from(container.querySelectorAll(selector));
+        const expanded = !!mapAcCatExpanded[key];
+
+        items.forEach((item, index) => {
+            if (!expanded && index >= AC_SUGGEST_PREVIEW_LIMIT) {
+                item.classList.add('ac-cat-item-hidden');
+            } else {
+                item.classList.remove('ac-cat-item-hidden');
+            }
+        });
+
+        if (!expanded && items.length > AC_SUGGEST_PREVIEW_LIMIT) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'ac-cat-load-more';
+            btn.dataset.acCat = key;
+            btn.setAttribute('aria-label', 'Load more suggestions');
+            btn.textContent = 'Load More';
+            items[AC_SUGGEST_PREVIEW_LIMIT - 1].insertAdjacentElement('afterend', btn);
+        }
+    });
+}
+
 function renderInstantSearchShell(keyword) {
     const cityHTML = buildCitySuggestionsHtml(keyword);
     const locationEl = document.getElementById('mapLocationResults');
@@ -13104,6 +13171,7 @@ function renderInstantSearchShell(keyword) {
 
     if (locationEl) {
         locationEl.innerHTML = cityHTML;
+        applyMapSuggestionCategoryLimits();
     }
     if (listingEl) {
         listingEl.innerHTML = '<div class="hs-search-pending" style="padding:10px 12px;color:#6b7280;">Searching...</div>';
@@ -13131,6 +13199,7 @@ function handleSmartSearchInput(keyword) {
     currentKeyword = keyword;
     skip = 0;
     clearTimeout(typingTimer);
+    resetMapAcCatExpanded();
 
     const trimmed = String(keyword || '').trim();
 
@@ -13442,6 +13511,7 @@ function loadResults(keyword, reset = false){
         const locationEl = document.getElementById('mapLocationResults');
         if (locationEl) {
             locationEl.innerHTML = locationHTML || cityHTML;
+            applyMapSuggestionCategoryLimits();
         }
         if (prefixListings && prefixListings.length) {
             renderSmartSearchResults(keyword, true, locationHTML || cityHTML, prefixListings, isMlsSearchKeyword(keyword));
@@ -13497,6 +13567,7 @@ function loadResults(keyword, reset = false){
             if (reset) {
                 const locationHTML = buildLocationSuggestionsHtml(keyword, communities);
                 document.getElementById("mapLocationResults").innerHTML = locationHTML;
+                applyMapSuggestionCategoryLimits();
                 document.getElementById("mapListingResults").innerHTML =
                     '<div style="padding:12px;color:#666;">Could not display search results. Please refresh and try again.</div>';
             }
@@ -13512,6 +13583,7 @@ function loadResults(keyword, reset = false){
         console.error('Smart search failed:', err);
         if (reset) {
             document.getElementById("mapLocationResults").innerHTML = cityHTML;
+            applyMapSuggestionCategoryLimits();
             document.getElementById("mapListingResults").innerHTML =
                 '<div style="padding:12px;color:#666;">Search failed. Check your connection and try again.</div>';
         }
@@ -13570,6 +13642,7 @@ function renderSmartSearchResults(keyword, reset, cityHTML, data, isMlsKey) {
     if(!Array.isArray(data) || data.length === 0){
         if (reset) {
             document.getElementById("mapLocationResults").innerHTML = cityHTML;
+            applyMapSuggestionCategoryLimits();
             document.getElementById("mapListingResults").innerHTML = isMlsKey
                 ? '<div style="padding:12px;color:#666;">MLS listing not found. Try again or search by address.</div>'
                 : (cityHTML ? '' : '<div style="padding:12px;color:#666;">No listings found. Try another address.</div>');
@@ -13639,6 +13712,7 @@ function renderSmartSearchResults(keyword, reset, cityHTML, data, isMlsKey) {
 
     if (reset) {
         document.getElementById("mapLocationResults").innerHTML = finalSuggestions || cityHTML;
+        applyMapSuggestionCategoryLimits();
         document.getElementById("mapListingResults").innerHTML = listingsHTML;
     } else {
         document.getElementById("mapListingResults")
@@ -13999,6 +14073,17 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // Close when clicking any item inside dropdown
     dropdown.addEventListener("click", function (e) {
+        const loadMoreCat = e.target.closest('.ac-cat-load-more');
+        if (loadMoreCat) {
+            e.preventDefault();
+            e.stopPropagation();
+            const key = loadMoreCat.dataset.acCat;
+            if (key) {
+                mapAcCatExpanded[key] = true;
+                applyMapSuggestionCategoryLimits();
+            }
+            return;
+        }
 
         // location item OR listing item OR any clickable result
         if (

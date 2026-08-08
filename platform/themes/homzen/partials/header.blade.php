@@ -65,6 +65,30 @@
     background:#f4f7f9;
 }
 
+.ac-cat-item-hidden {
+    display: none !important;
+}
+
+.ac-cat-load-more {
+    display: block;
+    width: auto;
+    margin: 0 0 4px 10px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: #6b7280;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.4;
+    cursor: pointer;
+    text-align: left;
+}
+
+.ac-cat-load-more:hover {
+    color: #0255a1;
+    text-decoration: underline;
+}
+
 .listing-item {
     display:flex;
     gap:12px;
@@ -917,7 +941,10 @@ document.querySelectorAll('.mobile-dropdown .dropdown-toggle').forEach(toggle =>
         document.querySelectorAll('.mobile-dropdown .dropdown-item').forEach(item => {
             if (item !== parent) {
                 item.classList.remove('active');
-                item.querySelector('.dropdown-menu').style.display = 'none';
+                const otherMenu = item.querySelector('.dropdown-menu');
+                if (otherMenu) {
+                    otherMenu.style.display = 'none';
+                }
             }
         });
 
@@ -925,7 +952,9 @@ document.querySelectorAll('.mobile-dropdown .dropdown-toggle').forEach(toggle =>
         parent.classList.toggle('active');
         const menu = parent.querySelector('.dropdown-menu');
 
-        menu.style.display = menu.style.display === 'contents' ? 'none' : 'contents';
+        if (menu) {
+            menu.style.display = menu.style.display === 'contents' ? 'none' : 'contents';
+        }
     });
 });
 
@@ -977,9 +1006,13 @@ if (openSearchBottom) {
     });
 }
 
-closeSearch.addEventListener('click', function(){
-    mobilePanel.classList.remove('active');
-});
+if (closeSearch) {
+    closeSearch.addEventListener('click', function(){
+        if (mobilePanel) {
+            mobilePanel.classList.remove('active');
+        }
+    });
+}
 
 const headerCityCoordinates = {
     Brampton: { lat: 43.6886, lng: -79.7561 },
@@ -1247,12 +1280,56 @@ function buildHeaderCommunityMapUrl(community) {
     return url;
 }
 
+const AC_SUGGEST_PREVIEW_LIMIT = 2;
+let headerAcCatExpanded = { cities: false, communities: false, addresses: false };
+
+function resetHeaderAcCatExpanded() {
+    headerAcCatExpanded = { cities: false, communities: false, addresses: false };
+}
+
+function applyHeaderSuggestionCategoryLimits() {
+    const container = document.getElementById('locationResults');
+    if (!container) {
+        return;
+    }
+
+    container.querySelectorAll('.ac-cat-load-more').forEach((el) => el.remove());
+
+    [
+        { key: 'cities', selector: '.city-item' },
+        { key: 'communities', selector: '.community-item, .place-item' },
+        { key: 'addresses', selector: '.address-item' },
+    ].forEach(({ key, selector }) => {
+        const items = Array.from(container.querySelectorAll(selector));
+        const expanded = !!headerAcCatExpanded[key];
+
+        items.forEach((item, index) => {
+            if (!expanded && index >= AC_SUGGEST_PREVIEW_LIMIT) {
+                item.classList.add('ac-cat-item-hidden');
+            } else {
+                item.classList.remove('ac-cat-item-hidden');
+            }
+        });
+
+        if (!expanded && items.length > AC_SUGGEST_PREVIEW_LIMIT) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'ac-cat-load-more';
+            btn.dataset.acCat = key;
+            btn.setAttribute('aria-label', 'Load more suggestions');
+            btn.textContent = 'Load More';
+            items[AC_SUGGEST_PREVIEW_LIMIT - 1].insertAdjacentElement('afterend', btn);
+        }
+    });
+}
+
 function renderHeaderSearchShell(keyword) {
     const cityHTML = buildHeaderCitySuggestionsHtml(keyword);
     const locationEl = document.getElementById('locationResults');
     const listingEl = document.getElementById('listingResults');
     if (locationEl) {
         locationEl.innerHTML = cityHTML;
+        applyHeaderSuggestionCategoryLimits();
     }
     if (listingEl) {
         listingEl.innerHTML = '<div class="hs-search-pending" style="padding:10px 12px;color:#6b7280;">Searching...</div>';
@@ -1271,7 +1348,9 @@ const isLoggedIn = @json((is_plugin_active('real-estate') && auth('account')->ch
 const SOLD_STATUSES = ['Sold', 'Leased', 'Sold Conditional', 'Sold Conditional Escape', 'Leased Conditional'];
 let skip = 0;
 let currentKeyword = "";
-loadMoreBtn.style.display = "block";
+if (loadMoreBtn) {
+    loadMoreBtn.style.display = "block";
+}
 let typingTimer;
 const typingDelay = 80;
 let searchController = null;
@@ -1357,6 +1436,7 @@ function handleHeaderSearchInput(keyword) {
     currentKeyword = keyword;
     skip = 0;
     clearTimeout(typingTimer);
+    resetHeaderAcCatExpanded();
 
     const trimmed = String(keyword || '').trim();
     if (trimmed.length < 2) {
@@ -1371,6 +1451,7 @@ function handleHeaderSearchInput(keyword) {
     loadResults(trimmed, true);
 }
 
+if (input) {
 input.addEventListener('input', function () {
     handleHeaderSearchInput(this.value);
 });
@@ -1380,8 +1461,22 @@ input.addEventListener('focus', function () {
         handleHeaderSearchInput(this.value);
     }
 });
+}
 
+if (dropdown) {
 dropdown.addEventListener('click', function (e) {
+    const loadMoreCat = e.target.closest('.ac-cat-load-more');
+    if (loadMoreCat) {
+        e.preventDefault();
+        e.stopPropagation();
+        const key = loadMoreCat.dataset.acCat;
+        if (key) {
+            headerAcCatExpanded[key] = true;
+            applyHeaderSuggestionCategoryLimits();
+        }
+        return;
+    }
+
     const communityItem = e.target.closest('.community-item, .place-item');
     if (communityItem) {
         e.preventDefault();
@@ -1439,7 +1534,7 @@ dropdown.addEventListener('keydown', function (e) {
     e.preventDefault();
     item.click();
 });
-
+}
 
 function buildPropertyUrl(item) {
     const slug = String(item.URL || item.url || '').replace(/^\/+/, '');
@@ -1493,6 +1588,7 @@ function loadResults(keyword, reset = false){
             : getPrefixCommunityCache(keyword, headerCommunitySuggestCache);
         const locationHTML = buildHeaderLocationSuggestionsHtml(keyword, prefixCommunities || []);
         document.getElementById('locationResults').innerHTML = locationHTML || cityHTML;
+        applyHeaderSuggestionCategoryLimits();
         if (prefixListings && prefixListings.length) {
             renderHeaderSearchResults(keyword, true, locationHTML || cityHTML, prefixListings, isHeaderMlsKeyword(keyword));
         } else if (!document.getElementById('listingResults').innerHTML) {
@@ -1544,6 +1640,7 @@ function loadResults(keyword, reset = false){
         console.error('Header search failed:', err);
         if (reset) {
             document.getElementById('locationResults').innerHTML = cityHTML;
+            applyHeaderSuggestionCategoryLimits();
             document.getElementById('listingResults').innerHTML =
                 '<div style="padding:12px;color:#666;">Search failed. Please try again.</div>';
         }
@@ -1568,6 +1665,7 @@ function renderHeaderSearchResults(keyword, reset, cityHTML, data, isMlsKey) {
 
     if (data.length === 0 && reset) {
         document.getElementById('locationResults').innerHTML = cityHTML;
+        applyHeaderSuggestionCategoryLimits();
         document.getElementById('listingResults').innerHTML = isMlsKey
             ? '<div style="padding:12px;color:#666;">MLS listing not found in TREB feed. Try again later or search by address.</div>'
             : (cityHTML ? '' : '<div style="padding:12px;color:#666;">No listings found. Try another address or filter.</div>');
@@ -1662,6 +1760,7 @@ function renderHeaderSearchResults(keyword, reset, cityHTML, data, isMlsKey) {
 
     if (reset) {
         document.getElementById('locationResults').innerHTML = finalSuggestions || cityHTML;
+        applyHeaderSuggestionCategoryLimits();
         document.getElementById('listingResults').innerHTML = listingsHTML;
     } else {
         document.getElementById('listingResults').insertAdjacentHTML('beforeend', listingsHTML);
@@ -1740,20 +1839,32 @@ function importProperty(key){
 
 
 // LOAD MORE CLICK
+if (loadMoreBtn) {
 loadMoreBtn.addEventListener("click", function(){
-    loader.style.display = "flex";
+    if (loader) {
+        loader.style.display = "flex";
+    }
     skip += 10;
     loadResults(currentKeyword, false);
 
 });
+}
 
+if (clearBtn) {
 clearBtn.addEventListener("click", function(){
+if (loader) {
 loader.style.display = "none";
+}
+        if (dropdown) {
         dropdown.style.display = "none";
-        document.getElementById("smartInput").value='';
+        }
+        const smartInputEl = document.getElementById("smartInput");
+        if (smartInputEl) {
+            smartInputEl.value='';
+        }
 
 });
-
+}
 
 
 let selectedFilters = {
@@ -1801,6 +1912,9 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
     const input = document.getElementById("smartInput");
 
     // If click is NOT inside dropdown AND NOT on input
+    if (!dropdown || !input) {
+        return;
+    }
     if (
         !dropdown.contains(e.target) &&
         !input.contains(e.target)
@@ -1817,7 +1931,11 @@ document.querySelectorAll('.navigation li').forEach(li => {
     if (submenu && !li.querySelector(':scope > .mega-dropdown')){
         li.classList.add('has-dropdown');
 
-        li.querySelector('a').addEventListener('click', function(e){
+        const navLink = li.querySelector('a');
+        if (!navLink) {
+            return;
+        }
+        navLink.addEventListener('click', function(e){
 
             if (window.innerWidth > 991) {
                 return;

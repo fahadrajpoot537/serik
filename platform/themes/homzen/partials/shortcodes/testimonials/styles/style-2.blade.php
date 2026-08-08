@@ -73,22 +73,56 @@
     </div>
 </section>
 <script>
-    const imageSlider = new Swiper('.image-slider', {
-        slidesPerView: 1,
-        spaceBetween: 30,
-        loop: true,
-        autoplay: {
-            delay: 3000,      // 3 seconds per slide
-            disableOnInteraction: false, // continue autoplay after user interacts
-        },
-        pagination: {
-            el: '.image-slider-pagination',
-            clickable: true,
-        },
-         breakpoints: {
-            640: { slidesPerView: 1 },
-            768: { slidesPerView: 2 },
-            1024: { slidesPerView: 2 },
-        },
-    });
+(function () {
+    function initImageSliderSwiper() {
+        if (typeof Swiper === 'undefined') {
+            return false;
+        }
+        const el = document.querySelector('.image-slider');
+        if (!el) {
+            return true;
+        }
+        if (el.swiper || el.dataset.swiperReady === '1') {
+            return true;
+        }
+        el.dataset.swiperReady = '1';
+        new Swiper(el, {
+            slidesPerView: 1,
+            spaceBetween: 30,
+            loop: true,
+            autoplay: {
+                delay: 3000,
+                disableOnInteraction: false,
+            },
+            pagination: {
+                el: '.image-slider-pagination',
+                clickable: true,
+            },
+            breakpoints: {
+                640: { slidesPerView: 1 },
+                768: { slidesPerView: 2 },
+                1024: { slidesPerView: 2 },
+            },
+        });
+        return true;
+    }
+
+    function bootImageSliderSwiper(maxRetries) {
+        var retries = 0;
+        var limit = maxRetries || 12;
+        var tick = function () {
+            if (initImageSliderSwiper()) {
+                return;
+            }
+            retries++;
+            if (retries < limit) {
+                setTimeout(tick, 180);
+            }
+        };
+        tick();
+    }
+
+    window.addEventListener('DOMContentLoaded', function () { bootImageSliderSwiper(); });
+    window.addEventListener('load', function () { bootImageSliderSwiper(6); });
+})();
 </script>

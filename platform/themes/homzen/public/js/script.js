@@ -468,6 +468,9 @@ $(() => {
     const goTop = function () {
         if ($('div').hasClass('progress-wrap')) {
             const progressPath = document.querySelector('.progress-wrap path')
+            if (!progressPath) {
+                return
+            }
             const pathLength = progressPath.getTotalLength()
             progressPath.style.transition = progressPath.style.WebkitTransition = 'none'
             progressPath.style.strokeDasharray = pathLength + ' ' + pathLength
@@ -1402,6 +1405,10 @@ $(() => {
     const initTestimonials = () => {
         if ($('.tf-sw-testimonial').length > 0) {
             const $element = $('.tf-sw-testimonial')
+            const el = $element.get(0)
+            if (el && (el.swiper || el.dataset.swiperReady === '1')) {
+                return
+            }
             const previewLg = $element.data('preview-lg')
             const previewMd = $element.data('preview-md')
             const previewSm = $element.data('preview-sm')
