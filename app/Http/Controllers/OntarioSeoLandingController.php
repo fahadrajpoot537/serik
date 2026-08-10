@@ -56,6 +56,9 @@ class OntarioSeoLandingController extends Controller
                 return response($cached, 200, [
                     'Content-Type' => 'text/html; charset=UTF-8',
                     'X-Serik-Ontario-Cache' => 'HIT',
+                    // Auth chrome differs by Cookie; never let bfcache/CDN reuse guest HTML.
+                    'Cache-Control' => 'private, no-cache, no-store, must-revalidate',
+                    'Vary' => 'Cookie',
                 ]);
             }
         }
@@ -84,6 +87,8 @@ class OntarioSeoLandingController extends Controller
         return response($html, 200, [
             'Content-Type' => 'text/html; charset=UTF-8',
             'X-Serik-Ontario-Cache' => 'MISS',
+            'Cache-Control' => 'private, no-cache, no-store, must-revalidate',
+            'Vary' => 'Cookie',
         ]);
     }
 
@@ -110,7 +115,7 @@ class OntarioSeoLandingController extends Controller
             }
         }
 
-        // v12: lease AJAX + location-aware keys; never serve stale sale HTML for type=rent.
-        return 'ontario_seo_html_v12' . $authPart . ':' . md5(strtolower($seo) . '|' . $request->getQueryString());
+        // v13: Vary/Cookie + no-store on HTML; invalidate guest HTML that predated auth-nav sync.
+        return 'ontario_seo_html_v13' . $authPart . ':' . md5(strtolower($seo) . '|' . $request->getQueryString());
     }
 }

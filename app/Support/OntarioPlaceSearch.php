@@ -2,7 +2,6 @@
 
 namespace App\Support;
 
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Theme\homzen\Supports\TrebPropertyHelper;
 
@@ -23,7 +22,9 @@ class OntarioPlaceSearch
         $limit = min($limit, 6);
         $cacheKey = 'serik_place_search_v1:' . md5(mb_strtolower($keyword) . '|' . $limit);
 
-        return Cache::remember($cacheKey, 86400, function () use ($keyword, $limit) {
+        // Single-flight lock prevents Nominatim stampedes under concurrent autocomplete.
+        // Cached payload is identical to Cache::remember.
+        return SerikCache::remember($cacheKey, max(60, (int) config('serik.cache.place_search_ttl', 86400)), function () use ($keyword, $limit) {
             return $this->nominatimSearch($keyword, $limit);
         });
     }

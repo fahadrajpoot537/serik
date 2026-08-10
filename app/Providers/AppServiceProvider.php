@@ -7,8 +7,12 @@ use App\Support\ImageAlt;
 use App\Support\SerikSeo;
 use App\Support\SerikLogging;
 use App\Support\TrustBadgeImageAlt;
+use App\Listeners\TrackSerikQueueMetrics;
 use Illuminate\Foundation\Application;
+use Illuminate\Queue\Events\JobExceptionOccurred;
 use Illuminate\Queue\Events\JobFailed;
+use Illuminate\Queue\Events\JobProcessed;
+use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
@@ -57,6 +61,7 @@ class AppServiceProvider extends ServiceProvider
         CanonicalUrl::forceApplicationUrl();
 
         $this->registerAccountAuthCookieMarker();
+        $this->registerQueueMetricsListeners();
 
         // New CMS uploads → WebP (TREB images use a separate proxy; untouched).
         try {
@@ -326,31 +331,37 @@ class AppServiceProvider extends ServiceProvider
             }, 1200);
         }
 
-        // Homepage can be served from anonymous HTML cache; if the browser still
-        // shows Login while the session is authenticated, reload once.
+        // Full-page/anonymous HTML (homepage, Ontario SEO, bfcache) can still show
+        // Login while the session is authenticated. Reload once on any front page.
         add_filter(THEME_FRONT_FOOTER, static function (?string $html): ?string {
-            if (! \App\Support\SerikHomepage::isHomepageRequest()) {
-                return $html;
-            }
-
             $script = <<<'HTML'
 <script>
 (function () {
-    if (window.__serikHomeAuthSync) return;
-    window.__serikHomeAuthSync = true;
-    if (!document.querySelector('.js-auth-open-login, .js-auth-open-register')) return;
-    if (sessionStorage.getItem('serik_home_auth_reloaded') === '1') return;
-    fetch('/api/v1/auth/session-status', {
-        credentials: 'same-origin',
-        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
-    }).then(function (r) { return r.ok ? r.json() : null; }).then(function (data) {
-        if (!data || !data.logged_in) {
-            sessionStorage.removeItem('serik_home_auth_reloaded');
-            return;
-        }
-        sessionStorage.setItem('serik_home_auth_reloaded', '1');
-        window.location.reload();
-    }).catch(function () {});
+    if (window.__serikAuthNavSync) return;
+    window.__serikAuthNavSync = true;
+    function serikAuthNavNeedsSync() {
+        return !!document.querySelector('.js-auth-open-login, .js-auth-open-register');
+    }
+    function serikAuthNavSync(fromBfcache) {
+        if (!serikAuthNavNeedsSync()) return;
+        var key = 'serik_auth_nav_reloaded:' + location.pathname;
+        if (!fromBfcache && sessionStorage.getItem(key) === '1') return;
+        fetch('/api/v1/auth/session-status', {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        }).then(function (r) { return r.ok ? r.json() : null; }).then(function (data) {
+            if (!data || !data.logged_in) {
+                sessionStorage.removeItem(key);
+                return;
+            }
+            sessionStorage.setItem(key, '1');
+            window.location.reload();
+        }).catch(function () {});
+    }
+    serikAuthNavSync(false);
+    window.addEventListener('pageshow', function (e) {
+        if (e.persisted) serikAuthNavSync(true);
+    });
 })();
 </script>
 HTML;
@@ -389,10 +400,23 @@ HTML;
             }
 
             cookie()->queue(cookie()->forget('serik_acct'));
-            if (function_exists('session') && session()->isStarted()) {
-                session()->forget('serik_home_auth_reloaded');
-            }
+            // Client sessionStorage keys are cleared on next auth-sync miss.
         });
+    }
+
+    /**
+     * Additive queue metrics — never alters job success/failure.
+     */
+    protected function registerQueueMetricsListeners(): void
+    {
+        if (! config('serik.orchestration.enabled', true)) {
+            return;
+        }
+
+        Event::listen(JobProcessing::class, [TrackSerikQueueMetrics::class, 'handleProcessing']);
+        Event::listen(JobProcessed::class, [TrackSerikQueueMetrics::class, 'handleProcessed']);
+        Event::listen(JobFailed::class, [TrackSerikQueueMetrics::class, 'handleFailed']);
+        Event::listen(JobExceptionOccurred::class, [TrackSerikQueueMetrics::class, 'handleException']);
     }
 
     protected static function ensureWritableLoggingOrFallback(): void

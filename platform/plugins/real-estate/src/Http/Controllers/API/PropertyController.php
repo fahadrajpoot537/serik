@@ -3693,44 +3693,77 @@ class PropertyController extends BaseController
      */
     private function ensureSearchResultSlugs(array $rows): array
     {
-        foreach ($rows as &$row) {
+        $needsLookup = [];
+        foreach ($rows as $idx => $row) {
             if (! is_array($row)) {
                 continue;
             }
-
             $listingKey = strtoupper(trim((string) ($row['ListingKey'] ?? '')));
             if ($listingKey === '') {
                 continue;
             }
+            // Hydrate path already attached real slugs.key as URL — skip DB.
+            $existing = trim((string) ($row['URL'] ?? ''));
+            if ($existing !== '' && ! str_contains($existing, ' ')) {
+                continue;
+            }
+            $needsLookup[$idx] = $listingKey;
+        }
 
-            $propertyId = (int) DB::table('re_properties')
-                ->where('external_id', $listingKey)
-                ->value('id');
+        if ($needsLookup === []) {
+            return $rows;
+        }
 
+        $keys = array_values(array_unique(array_values($needsLookup)));
+        $idByKey = DB::table('re_properties')
+            ->whereIn('external_id', $keys)
+            ->pluck('id', 'external_id')
+            ->mapWithKeys(fn ($id, $key) => [strtoupper((string) $key) => (int) $id])
+            ->all();
+
+        $propertyIds = array_values(array_filter(array_map(
+            static fn ($k) => (int) ($idByKey[$k] ?? 0),
+            $keys
+        )));
+        $slugByPropertyId = [];
+        if ($propertyIds !== []) {
+            $slugByPropertyId = DB::table('slugs')
+                ->where('reference_type', Property::class)
+                ->whereIn('reference_id', $propertyIds)
+                ->pluck('key', 'reference_id')
+                ->mapWithKeys(fn ($key, $id) => [(int) $id => (string) $key])
+                ->all();
+        }
+
+        foreach ($needsLookup as $idx => $listingKey) {
+            $propertyId = (int) ($idByKey[$listingKey] ?? 0);
             if ($propertyId <= 0) {
                 continue;
             }
 
-            $slug = $this->ensurePropertySlug(
-                $propertyId,
-                (string) ($row['UnparsedAddress'] ?? $row['building_address'] ?? ''),
-                $listingKey
-            );
-
-            if ($slug !== '') {
-                $row['URL'] = $slug;
+            $slug = trim((string) ($slugByPropertyId[$propertyId] ?? ''));
+            if ($slug === '') {
+                $slug = $this->ensurePropertySlug(
+                    $propertyId,
+                    (string) ($rows[$idx]['UnparsedAddress'] ?? $rows[$idx]['building_address'] ?? ''),
+                    $listingKey
+                );
             }
 
-            if (! empty($row['units']) && is_array($row['units'])) {
-                foreach ($row['units'] as &$unit) {
-                    if (is_array($unit) && $slug !== '') {
+            if ($slug === '') {
+                continue;
+            }
+
+            $rows[$idx]['URL'] = $slug;
+            if (! empty($rows[$idx]['units']) && is_array($rows[$idx]['units'])) {
+                foreach ($rows[$idx]['units'] as &$unit) {
+                    if (is_array($unit)) {
                         $unit['URL'] = $slug;
                     }
                 }
                 unset($unit);
             }
         }
-        unset($row);
 
         return $rows;
     }
@@ -5729,12 +5762,9 @@ class PropertyController extends BaseController
             $this->mapFilterSignature($request),
         ]));
 
-        $cachedPayload = Cache::get($cacheKey);
-        if (is_array($cachedPayload) && (isset($cachedPayload['gz']) || isset($cachedPayload['json']))) {
-            return $this->respondMapPayload($request, $cachedPayload);
-        }
-
-        $geojson = (function () use ($request, $south, $north, $west, $east) {
+        // Stampede-safe remember: one MySQL build per cache key under concurrent pans.
+        $payload = \App\Support\SerikCache::remember($cacheKey, 600, function () use ($request, $south, $north, $west, $east) {
+            $geojson = (function () use ($request, $south, $north, $west, $east) {
             $canViewSold = auth('account')->check() || auth()->check();
 
             $community = TrebPropertyHelper::formatRegionLabel(trim((string) $request->input('community', '')));
@@ -6108,8 +6138,8 @@ class PropertyController extends BaseController
             ];
         })();
 
-        $payload = $this->encodeMapPayload($geojson);
-        Cache::put($cacheKey, $payload, 600);
+            return $this->encodeMapPayload($geojson);
+        }, 45);
 
         return $this->respondMapPayload($request, $payload);
 
@@ -6595,30 +6625,78 @@ class PropertyController extends BaseController
             ], 401);
         }
 
-        // On API requests AMP is allowed — pull same-unit siblings into local DB
-        // so history can grow beyond the single current ListingKey.
-        if (TrebPropertyHelper::canFetchRemoteAmp()) {
-            try {
-                TrebPropertyHelper::syncAddressHistoryForListing($listingKey);
-            } catch (\Throwable $e) {
-                report($e);
+        $local = $property
+            ? TrebPropertyHelper::dbRowToLocalArray($property)
+            : TrebPropertyHelper::localPropertyArray($listingKey);
+
+        // Serve cache/local history immediately — never block the HTTP request on AMP.
+        $authenticated = auth('account')->check() || auth()->check();
+        $detailCacheKey = 'treb_listing_history_detail_v10_' . $listingKey . ($authenticated ? '_auth' : '_guest');
+        $cached = Cache::get($detailCacheKey);
+        if (is_array($cached)) {
+            if ($authenticated && \Theme\homzen\Supports\TrebPropertyHelper::historyPayloadLooksGuestLocked($cached)) {
+                Cache::forget($detailCacheKey);
+                $cached = null;
+            } else {
+                $history = $cached;
+            }
+        }
+        if (! isset($history)) {
+            $history = TrebPropertyHelper::fetchListingHistoryFast($listingKey, $local);
+            if ($history !== []) {
+                Cache::put($detailCacheKey, $history, 1800);
             }
         }
 
-        $local = $property
-            ? TrebPropertyHelper::dbRowToLocalArray($property->fresh() ?? $property)
-            : TrebPropertyHelper::localPropertyArray($listingKey);
-
-        $history = TrebPropertyHelper::fetchListingHistoryForDetail(
-            $listingKey,
-            $local,
-            TrebPropertyHelper::resolveFactRecordForDetail($listingKey, $local)
-        );
+        // Background AMP sibling sync (capped) — one flight per listing key.
+        $this->scheduleListingHistoryAmpSync($listingKey, $property?->id);
 
         return response()->json([
             'data' => $history,
             'count' => count($history),
         ]);
+    }
+
+    /**
+     * afterResponse AMP address sync without blocking listing-history JSON.
+     * Uses existing TrebPropertyHelper sync + per-listing lock (no new queue system).
+     */
+    private function scheduleListingHistoryAmpSync(string $listingKey, ?int $propertyId): void
+    {
+        if (! TrebPropertyHelper::canFetchRemoteAmp()) {
+            return;
+        }
+
+        $listingKey = strtoupper(trim($listingKey));
+        if ($listingKey === '') {
+            return;
+        }
+
+        // Deduplicate scheduling across concurrent API hits.
+        $queuedKey = 'serik:history-sync-queued:' . $listingKey;
+        if (! Cache::add($queuedKey, 1, 180)) {
+            return;
+        }
+
+        // afterResponse: same process, after JSON is sent — works without workers.
+        // SyncPropertyHistoryJob remains for SyncLiveJob chain (unique + retries).
+        dispatch(function () use ($listingKey, $queuedKey) {
+            $lock = Cache::lock('serik:history-sync:' . $listingKey, 180);
+            if (! $lock->get()) {
+                Cache::forget($queuedKey);
+
+                return;
+            }
+
+            try {
+                TrebPropertyHelper::syncAddressHistoryForListing($listingKey, false, 8);
+            } catch (\Throwable $e) {
+                report($e);
+            } finally {
+                optional($lock)->release();
+                Cache::forget($queuedKey);
+            }
+        })->afterResponse();
     }
 
     public function getPriceChanges($listingKey)

@@ -17,6 +17,11 @@ final class HomepageFragmentCache
 
   private const TTL_SECONDS = 3600;
 
+  public static function ttl(): int
+  {
+    return max(60, (int) config('serik.cache.fragment_ttl', self::TTL_SECONDS));
+  }
+
   /** @var list<string> */
   public const CACHED_SHORTCODES = [
     'properties',
@@ -117,7 +122,7 @@ final class HomepageFragmentCache
     $version = self::version($fragment);
     $key = self::CACHE_PREFIX . $fragment . ':' . $version . ':' . $suffix;
 
-    return Cache::remember($key, self::TTL_SECONDS, static fn (): string => self::stringify($render()));
+    return SerikCache::remember($key, self::ttl(), static fn (): string => self::stringify($render()));
   }
 
   public static function shortcodeSuffix(string $name, Shortcode $compiled): string

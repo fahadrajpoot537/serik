@@ -17,10 +17,21 @@ class CacheHomepageResponseMiddleware
         $cached = HomepageResponseCache::get($request);
 
         if ($cached !== null) {
+            $etag = HomepageResponseCache::getEtag($request) ?: ('"' . sha1($cached) . '"');
+            if (trim((string) $request->headers->get('If-None-Match')) === $etag) {
+                return response('', 304, [
+                    'ETag' => $etag,
+                    'X-Serik-Homepage-Cache' => 'HIT-304',
+                    'Cache-Control' => 'private, no-cache, no-store, must-revalidate',
+                    'Vary' => 'Cookie',
+                ]);
+            }
+
             return response($cached, 200, [
                 'Content-Type' => 'text/html; charset=UTF-8',
+                'ETag' => $etag,
                 'X-Serik-Homepage-Cache' => 'HIT',
-                'Cache-Control' => 'private, no-cache, must-revalidate',
+                'Cache-Control' => 'private, no-cache, no-store, must-revalidate',
                 'Vary' => 'Cookie',
             ]);
         }
@@ -34,8 +45,12 @@ class CacheHomepageResponseMiddleware
         ) {
             HomepageResponseCache::put($request, (string) $response->getContent());
             $response->headers->set('X-Serik-Homepage-Cache', 'MISS');
-            $response->headers->set('Cache-Control', 'private, no-cache, must-revalidate');
+            $response->headers->set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
             $response->headers->set('Vary', 'Cookie');
+            $etag = HomepageResponseCache::getEtag($request);
+            if ($etag) {
+                $response->headers->set('ETag', $etag);
+            }
         }
 
         return $response;

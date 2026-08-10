@@ -227,11 +227,14 @@ class PublicController extends BaseController
         if (! \Illuminate\Support\Facades\Cache::has('serik_active_listing_count_v1')) {
             app()->terminating(function (): void {
                 \Illuminate\Support\Facades\Cache::remember('serik_active_listing_count_v1', 600, function () {
-                    return \Botble\RealEstate\Models\Property::query()
+                    $total = (int) \Botble\RealEstate\Models\Property::query()
                         ->active()
                         ->residential()
                         ->mlsActive()
                         ->count();
+                    \Illuminate\Support\Facades\Cache::put('serik_active_listing_count_v1:last', $total, 86400);
+
+                    return $total;
                 });
             });
         }

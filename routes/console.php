@@ -868,7 +868,8 @@ Artisan::command('serik:sync-properties', function () {
         }
     }
 
-    Cache::forget('map_v17_*');
+    // Map caches use content-hashed keys (map_meili_v15_*, map_v30_*). TTL expiry
+    // is the safe invalidation path — wildcard forget is not supported by Redis/file stores.
     $this->info("Full sync complete. Extra geocoded: {$rounds}");
 })->purpose('Full sync: cron import, sold sync, dates, geocode');
 

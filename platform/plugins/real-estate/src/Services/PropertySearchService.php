@@ -30,24 +30,27 @@ class PropertySearchService
             return false;
         }
 
-        // Cache health for 30s to avoid a network round-trip on every request.
-        // Also require the properties index to exist with documents — an empty
-        // healthy Meili (common on fresh live deploys) must report unavailable
-        // so map/search fall back to MySQL instead of returning zero pins.
-        return (bool) Cache::remember('serik_meili_health_v2', 30, function () {
-            try {
-                if (! $this->client()->isHealthy()) {
-                    return false;
-                }
+        // Cache health: positive 30s, negative 5s so recovery after Meili restart
+        // is picked up quickly without hammering a downed host on every request.
+        $cached = Cache::get('serik_meili_health_v2');
+        if ($cached !== null) {
+            return (bool) $cached;
+        }
 
+        $healthy = false;
+        try {
+            if ($this->client()->isHealthy()) {
                 $stats = $this->index()->stats();
                 $docs = (int) ($stats['numberOfDocuments'] ?? 0);
-
-                return $docs > 0;
-            } catch (Throwable) {
-                return false;
+                $healthy = $docs > 0;
             }
-        });
+        } catch (Throwable) {
+            $healthy = false;
+        }
+
+        Cache::put('serik_meili_health_v2', $healthy, $healthy ? 30 : 5);
+
+        return $healthy;
     }
 
     /**
@@ -625,7 +628,7 @@ class PropertySearchService
         }
 
         $opts = [
-                'limit' => max(1, min($limit, 20000)),
+            'limit' => max(1, min($limit, 20000)),
             'residential_only' => true,
             'community' => $community,
         ];
@@ -637,9 +640,16 @@ class PropertySearchService
             }
         }
 
-        $cacheKey = 'serik_community_ids_v3:' . md5(mb_strtolower($community) . '|' . mb_strtolower(trim((string) $city)) . '|' . $limit);
+        $cacheKey = 'serik_community_ids_v4:' . md5(mb_strtolower($community) . '|' . mb_strtolower(trim((string) $city)) . '|' . $limit);
 
-        return Cache::remember($cacheKey, 1800, function () use ($community, $city, $limit) {
+        return Cache::remember($cacheKey, 1800, function () use ($community, $city, $limit, $opts) {
+            // Prefer Meili filter (community/city) — MySQL JSON_EXTRACT on
+            // meta_boxes.amp_snapshot was measuring 0.7–2.2s per community.
+            $meiliIds = $this->searchIds('', $opts);
+            if (is_array($meiliIds)) {
+                return array_values(array_map('intval', $meiliIds));
+            }
+
             return $this->searchCommunityIdsFromMysql($community, $city, $limit);
         });
     }

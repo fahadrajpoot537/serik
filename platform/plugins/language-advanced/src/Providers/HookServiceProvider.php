@@ -380,6 +380,25 @@ class HookServiceProvider extends ServiceProvider
     public function getSlugQuery(EloquentBuilder $query, array $condition = []): EloquentBuilder
     {
         try {
+            // Default / single-locale sites must not wrap slug lookup in
+            // OR EXISTS (slugs_translations) — that forces a full scan of
+            // slugs (~200k rows, ~400–500ms) on every property URL resolve.
+            if (
+                is_plugin_active('language')
+                && Language::getCurrentLocaleCode() === Language::getDefaultLocaleCode()
+            ) {
+                return $query;
+            }
+
+            static $hasSlugTranslations = null;
+            if ($hasSlugTranslations === null) {
+                $hasSlugTranslations = \Illuminate\Support\Facades\Schema::hasTable('slugs_translations')
+                    && \Illuminate\Support\Facades\DB::table('slugs_translations')->limit(1)->exists();
+            }
+            if (! $hasSlugTranslations) {
+                return $query;
+            }
+
             return $query
                 ->orWhereHas('translations', function (EloquentBuilder $query) use ($condition) {
                     return $query->where($condition);

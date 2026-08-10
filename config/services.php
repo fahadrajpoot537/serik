@@ -76,6 +76,7 @@ return [
         'location_id' => env('GOHIGHLEVEL_LOCATION_ID'),
         'base_url' => env('GOHIGHLEVEL_BASE_URL', 'https://services.leadconnectorhq.com'),
         'api_version' => env('GOHIGHLEVEL_API_VERSION', '2021-07-28'),
+        // MLS → Showings sync settings live in config/gohighlevel.php (additive).
     ],
 
 ];

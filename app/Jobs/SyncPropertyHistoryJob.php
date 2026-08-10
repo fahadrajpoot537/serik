@@ -5,10 +5,12 @@ namespace App\Jobs;
 use App\Support\SerikQueue;
 use Botble\RealEstate\Models\Property;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Theme\homzen\Supports\TrebPropertyHelper;
 use Throwable;
@@ -16,8 +18,9 @@ use Throwable;
 /**
  * HIGH lane: fetch address/listing history AFTER geocode (Bus::chain).
  * Caps sibling AMP imports so workers never stall for 10+ minutes.
+ * Also used (via afterResponse) for non-blocking listing-history API refresh.
  */
-class SyncPropertyHistoryJob implements ShouldQueue
+class SyncPropertyHistoryJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
 {
     use Dispatchable;
     use InteractsWithQueue;
@@ -31,11 +34,19 @@ class SyncPropertyHistoryJob implements ShouldQueue
 
     public int $timeout = 90;
 
+    /** Unique lock held until the job starts processing (dedupe concurrent dispatches). */
+    public int $uniqueFor = 180;
+
     public function __construct(
         public int $propertyId,
         public int $maxSiblings = 8
     ) {
         $this->onQueue(SerikQueue::high());
+    }
+
+    public function uniqueId(): string
+    {
+        return 'history-sync-' . $this->propertyId;
     }
 
     public function handle(): void
@@ -63,6 +74,12 @@ class SyncPropertyHistoryJob implements ShouldQueue
             return;
         }
 
+        $queuedKey = 'serik:history-sync-queued:' . $listingKey;
+        $lock = Cache::lock('serik:history-sync:' . $listingKey, 180);
+        if (! $lock->get()) {
+            return;
+        }
+
         try {
             TrebPropertyHelper::syncAddressHistoryForListing(
                 $listingKey,
@@ -76,6 +93,9 @@ class SyncPropertyHistoryJob implements ShouldQueue
                 'error' => $e->getMessage(),
             ]);
             throw $e;
+        } finally {
+            optional($lock)->release();
+            Cache::forget($queuedKey);
         }
     }
 

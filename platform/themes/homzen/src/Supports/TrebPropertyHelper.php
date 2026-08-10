@@ -2981,12 +2981,17 @@ class TrebPropertyHelper
     {
         $listingKey = strtoupper(trim($listingKey));
         $authenticated = auth('account')->check() || auth()->check();
-        // v8: unit-exact history (no building-wide sibling bleed).
-        $cacheKey = 'treb_listing_history_detail_v9_' . $listingKey . ($authenticated ? '_auth' : '_guest');
+        // v10: auth/guest keys must never be poisoned by queue warmers (no request auth).
+        $cacheKey = 'treb_listing_history_detail_v10_' . $listingKey . ($authenticated ? '_auth' : '_guest');
 
         $cached = Cache::get($cacheKey);
         if (is_array($cached)) {
-            return $cached;
+            // Defend against older poisoned `_auth` payloads that still contain locks.
+            if ($authenticated && self::historyPayloadLooksGuestLocked($cached)) {
+                Cache::forget($cacheKey);
+            } else {
+                return $cached;
+            }
         }
 
         if (self::shouldSkipRemoteAmpFetch()) {
@@ -3010,6 +3015,27 @@ class TrebPropertyHelper
         return self::computeListingHistoryForDetail($listingKey, $local, $ampRecord, $authenticated, $cacheKey);
     }
 
+    /**
+     * @param  array<int, mixed>  $rows
+     */
+    public static function historyPayloadLooksGuestLocked(array $rows): bool
+    {
+        foreach ($rows as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            if (! empty($row['locked'])) {
+                return true;
+            }
+            $event = (string) ($row['event'] ?? '');
+            if (str_contains($event, 'Sign in required')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     protected static function scheduleListingHistoryWarm(
         string $listingKey,
         ?array $local,
@@ -3022,7 +3048,9 @@ class TrebPropertyHelper
             }
 
             try {
-                $authenticated = auth('account')->check() || auth()->check();
+                // Queue workers have no HTTP session. Derive viewer mode from the
+                // cache key suffix so `_auth` is never filled with guest-locked rows.
+                $authenticated = str_ends_with($cacheKey, '_auth');
                 self::computeListingHistoryForDetail($listingKey, $local, $ampRecord, $authenticated, $cacheKey);
             } catch (\Throwable $e) {
                 try {
@@ -3910,8 +3938,13 @@ class TrebPropertyHelper
             'treb_property_rooms_detail_v2_',
             'treb_listing_history_detail_v6_',
             'treb_listing_history_detail_v7_',
+            'treb_listing_history_detail_v8_',
+            'treb_listing_history_detail_v9_',
+            'treb_listing_history_detail_v10_',
         ] as $prefix) {
             Cache::forget($prefix . $listingKey);
+            Cache::forget($prefix . $listingKey . '_guest');
+            Cache::forget($prefix . $listingKey . '_auth');
         }
     }
 
@@ -4508,7 +4541,7 @@ class TrebPropertyHelper
             return;
         }
 
-        foreach (['treb_listing_history_v5_', 'treb_listing_history_detail_v6_', 'treb_listing_history_detail_v7_', 'treb_listing_history_detail_v8_'] as $prefix) {
+        foreach (['treb_listing_history_v5_', 'treb_listing_history_detail_v6_', 'treb_listing_history_detail_v7_', 'treb_listing_history_detail_v8_', 'treb_listing_history_detail_v9_', 'treb_listing_history_detail_v10_'] as $prefix) {
             Cache::forget($prefix . $listingKey);
             Cache::forget($prefix . $listingKey . '_guest');
             Cache::forget($prefix . $listingKey . '_auth');

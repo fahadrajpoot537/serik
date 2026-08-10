@@ -7,7 +7,6 @@ use Botble\RealEstate\Models\Project;
 use Botble\RealEstate\Models\Property;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\View;
 
 class RelatedPropertiesService
@@ -32,20 +31,45 @@ class RelatedPropertiesService
         $soldStatuses = ['Sold', 'Sold Conditional', 'Sold Conditional Escape', 'Leased', 'Leased Conditional'];
         // v6: match by city name — MLS rows almost never have city_id populated.
         $cacheKey = 'serik_related_props_v6_' . $model->getKey() . '_' . ($isProject ? 'project' : 'property');
+        $ttl = max(60, (int) config('serik.cache.related_ttl', 900));
 
-        $cached = Cache::get($cacheKey);
-        if (is_array($cached) && array_key_exists('ids', $cached) && $cached['ids'] !== []) {
+        $cached = \Illuminate\Support\Facades\Cache::get($cacheKey);
+        if (is_array($cached) && array_key_exists('ids', $cached)) {
             return [
                 'relatedProperties' => $this->hydrateByIds($cached['ids'] ?? []),
                 'sectionTitle' => (string) ($cached['sectionTitle'] ?? $this->buildSectionTitle($model)),
             ];
         }
 
-        $payload = $this->computeFast($model, $isProject, $soldStatuses);
-        Cache::put($cacheKey, [
-            'ids' => $payload['relatedProperties']->pluck('id')->all(),
-            'sectionTitle' => $payload['sectionTitle'],
-        ], 600);
+        // Single-flight: prevent stampede on cold related-property misses.
+        $lock = \Illuminate\Support\Facades\Cache::lock('serik:cache:sf:' . md5($cacheKey), 15);
+        try {
+            $payload = $lock->block(5, function () use ($cacheKey, $ttl, $model, $isProject, $soldStatuses) {
+                $again = \Illuminate\Support\Facades\Cache::get($cacheKey);
+                if (is_array($again) && array_key_exists('ids', $again)) {
+                    return [
+                        'relatedProperties' => $this->hydrateByIds($again['ids'] ?? []),
+                        'sectionTitle' => (string) ($again['sectionTitle'] ?? $this->buildSectionTitle($model)),
+                    ];
+                }
+
+                $computed = $this->computeFast($model, $isProject, $soldStatuses);
+                // Cache empty too — rare cities (e.g. Unorganized Townships) otherwise
+                // re-run multi-minute LIKE scans on every cold request.
+                \Illuminate\Support\Facades\Cache::put($cacheKey, [
+                    'ids' => $computed['relatedProperties']->pluck('id')->all(),
+                    'sectionTitle' => $computed['sectionTitle'],
+                ], $ttl);
+
+                return $computed;
+            });
+        } catch (\Throwable) {
+            $payload = $this->computeFast($model, $isProject, $soldStatuses);
+            \Illuminate\Support\Facades\Cache::put($cacheKey, [
+                'ids' => $payload['relatedProperties']->pluck('id')->all(),
+                'sectionTitle' => $payload['sectionTitle'],
+            ], $ttl);
+        }
 
         return $payload;
     }
@@ -113,7 +137,7 @@ class RelatedPropertiesService
         ];
 
         // beds/baths in SQL + LIKE city is multi-second on MLS volume.
-        // Fetch city(+subtype) fast, then prefer matching beds/baths in PHP.
+        // Prefer Meili city IDs (via runScopedQuery); then prefer matching beds/baths in PHP.
         $attempts = [
             [$cityName, $subtype],
             [$cityName, ''],
@@ -132,6 +156,12 @@ class RelatedPropertiesService
             );
 
             if ($pool->count() >= min(3, $limit)) {
+                break;
+            }
+
+            // Rare/tiny cities: one city-scoped attempt is enough — a second
+            // full-table LIKE scan can block property detail for 60–100s+.
+            if ($city !== '' && $pool->count() > 0) {
                 break;
             }
         }
@@ -174,6 +204,24 @@ class RelatedPropertiesService
         array $with
     ): Collection {
         $query = Property::query()
+            ->select([
+                'id',
+                'name',
+                'location',
+                'number_bedroom',
+                'number_bathroom',
+                'PropertySubType',
+                'MlsStatus',
+                'ClosePrice',
+                'price',
+                'images',
+                'image_val',
+                'currency_id',
+                'square',
+                'status',
+                'moderation_status',
+                'external_id',
+            ])
             ->where('id', '!=', $excludeId)
             ->where('moderation_status', ModerationStatusEnum::APPROVED)
             ->residential();
@@ -187,24 +235,56 @@ class RelatedPropertiesService
             $query->mlsActive();
         }
 
-        // MLS imports leave city_id null — match ", City, ON" in the display name.
+        // Prefer Meili city IDs; MySQL fallback uses "%, City, ON%" only (no
+        // leading-wildcard OR) — that pattern was scanning 100k+ rows for rare cities.
         if ($cityName !== '') {
-            $needle = '%, ' . $cityName . ', ON%';
-            $query->where(function ($q) use ($needle, $cityName) {
-                $q->where('name', 'like', $needle)
-                    ->orWhere('location', 'like', '%' . $cityName . '%');
-            });
+            $search = app(\Botble\RealEstate\Services\PropertySearchService::class);
+            $opts = $isSoldListing
+                ? ['statuses' => $soldStatuses]
+                : [
+                    'statuses' => [
+                        'New',
+                        'Active',
+                        'Ext',
+                        'Extension',
+                        'Price Change',
+                        'Active Under Contract',
+                    ],
+                ];
+            $applied = $search->constrainQueryToCity($query, $cityName, 2000, true, $opts);
+            if (! $applied) {
+                return collect();
+            }
         }
 
         if ($subtype !== '') {
             $query->where('PropertySubType', $subtype);
         }
 
-        return $query
-            ->orderByDesc('id')
-            ->take($limit)
-            ->with($with)
-            ->get();
+        // Soft time cap so a bad plan cannot hold the property detail request.
+        try {
+            \Illuminate\Support\Facades\DB::statement('SET SESSION MAX_EXECUTION_TIME=3000');
+        } catch (\Throwable) {
+            // MariaDB / older MySQL — ignore.
+        }
+
+        try {
+            return $query
+                ->orderByDesc('id')
+                ->take($limit)
+                ->with($with)
+                ->get();
+        } catch (\Throwable $e) {
+            report($e);
+
+            return collect();
+        } finally {
+            try {
+                \Illuminate\Support\Facades\DB::statement('SET SESSION MAX_EXECUTION_TIME=0');
+            } catch (\Throwable) {
+                // ignore
+            }
+        }
     }
 
     protected function resolveCityName(Model $model): string

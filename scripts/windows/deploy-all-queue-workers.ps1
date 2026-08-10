@@ -1,9 +1,18 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-    Install or update ALL Serik NSSM queue workers (high, images, low).
+    Install or update Serik NSSM queue workers.
 
-    Run once on every fresh Windows production server after git pull.
+    Lanes (isolated — imports NEVER share a process with user-facing queues):
+      high              SerikQueueHigh
+      images            SerikQueueImages
+      low               SerikQueueLow          (also drains search-index when used)
+      imports           SerikQueueImports      (sold-history / archive only)
+      ghl               SerikQueueGhl
+      aux               SerikQueueAux          (critical,default,emails,notifications)
+      cache-refresh     SerikQueueCacheRefresh (background warm only)
+
+    Existing high/images/low job destinations are unchanged.
 #>
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -23,7 +32,7 @@ $workers = @(
     @{
         Name = 'SerikQueueHigh'
         DisplayName = 'Serik Queue High Worker'
-        Description = 'Laravel queue worker for live sync, geocode, and history (high queue).'
+        Description = 'Laravel queue worker for live sync, geocode, history, auth emails (high queue).'
         Parameters = 'artisan queue:work database --queue=high --sleep=1 --tries=5 --timeout=200 --memory=384 --max-jobs=200 --max-time=3600'
         Stdout = 'queue-high.log'
         Stderr = 'queue-high-error.log'
@@ -39,10 +48,44 @@ $workers = @(
     @{
         Name = 'SerikQueueLow'
         DisplayName = 'Serik Queue Low Worker'
-        Description = 'Laravel queue worker for backlog geocode and maintenance (low queue).'
-        Parameters = 'artisan queue:work database --queue=low --sleep=2 --tries=4 --timeout=120 --memory=256 --max-jobs=100 --max-time=3600'
+        Description = 'Laravel queue worker for backlog/maintenance; also drains search-index if opted in.'
+        # search-index first so dedicated indexing wins when SERIK_QUEUE_SEARCH=search-index
+        # timeout=300 aligns with SearchBatchJob::$timeout (was 120 — prematurely killed Meili drains)
+        Parameters = 'artisan queue:work database --queue=search-index,low --sleep=2 --tries=4 --timeout=300 --memory=384 --max-jobs=100 --max-time=3600'
         Stdout = 'queue-low.log'
         Stderr = 'queue-low-error.log'
+    },
+    @{
+        Name = 'SerikQueueImports'
+        DisplayName = 'Serik Queue Imports Worker'
+        Description = 'Laravel queue worker for TREB archive / sold-history ONLY (imports). Never user-facing.'
+        Parameters = 'artisan queue:work database --queue=imports --sleep=1 --tries=5 --timeout=300 --memory=512 --max-jobs=40 --max-time=3600'
+        Stdout = 'queue-imports.log'
+        Stderr = 'queue-imports-error.log'
+    },
+    @{
+        Name = 'SerikQueueGhl'
+        DisplayName = 'Serik Queue GHL Worker'
+        Description = 'Laravel queue worker for GoHighLevel MLS sync (ghl queue).'
+        Parameters = 'artisan queue:work database --queue=ghl --sleep=1 --tries=8 --timeout=180 --memory=256 --max-jobs=100 --max-time=3600'
+        Stdout = 'queue-ghl.log'
+        Stderr = 'queue-ghl-error.log'
+    },
+    @{
+        Name = 'SerikQueueAux'
+        DisplayName = 'Serik Queue Aux Worker'
+        Description = 'Laravel queue worker for critical/default/emails/notifications lanes.'
+        Parameters = 'artisan queue:work database --queue=critical,emails,notifications,default --sleep=2 --tries=5 --timeout=120 --memory=256 --max-jobs=100 --max-time=3600'
+        Stdout = 'queue-aux.log'
+        Stderr = 'queue-aux-error.log'
+    },
+    @{
+        Name = 'SerikQueueCacheRefresh'
+        DisplayName = 'Serik Queue Cache Refresh Worker'
+        Description = 'Laravel queue worker for background cache warming (cache-refresh). Never user-facing.'
+        Parameters = 'artisan queue:work database --queue=cache-refresh --sleep=2 --tries=2 --timeout=240 --memory=256 --max-jobs=50 --max-time=3600'
+        Stdout = 'queue-cache-refresh.log'
+        Stderr = 'queue-cache-refresh-error.log'
     }
 )
 
@@ -78,6 +121,7 @@ function Install-OrUpdateWorker {
     Set-SerikNssmService -Nssm $Nssm -ServiceName $name -Key 'AppRotateSeconds' -Value '86400'
     Set-SerikNssmService -Nssm $Nssm -ServiceName $name -Key 'AppRotateBytes' -Value '10485760'
     Set-SerikNssmService -Nssm $Nssm -ServiceName $name -Key 'Start' -Value 'SERVICE_AUTO_START'
+    # Self-healing: NSSM restarts worker on crash / unexpected exit (reboot + deploy safe)
     Set-SerikNssmServiceExit -Nssm $Nssm -ServiceName $name -Action 'AppExit' -ExitCode 'Default' -RestartAction 'Restart'
     Set-SerikNssmService -Nssm $Nssm -ServiceName $name -Key 'AppRestartDelay' -Value '5000'
     Set-SerikNssmService -Nssm $Nssm -ServiceName $name -Key 'AppThrottle' -Value '15000'
@@ -99,6 +143,10 @@ foreach ($worker in $workers) {
     Install-OrUpdateWorker -Worker $worker
 }
 
+# Deployment self-heal marker — schedule heal / queue:restart picks this up
+$restartFlag = Join-Path $AppRoot 'storage\framework\queue-restart.flag'
+Set-Content -LiteralPath $restartFlag -Value (Get-Date).ToString('o') -Encoding ascii
+
 Start-Sleep -Seconds 3
 
 Push-Location $AppRoot
@@ -113,4 +161,5 @@ try {
 }
 
 Write-Host ""
-Write-Host "SUCCESS: All queue workers deployed." -ForegroundColor Green
+Write-Host "SUCCESS: All queue workers deployed (high/images/low/imports/ghl/aux/cache-refresh)." -ForegroundColor Green
+Write-Host "Imports are isolated — they cannot block high/low/ghl/emails/cache-refresh." -ForegroundColor Green

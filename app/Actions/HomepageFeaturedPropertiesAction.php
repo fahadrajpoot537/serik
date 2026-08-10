@@ -8,7 +8,6 @@ use Botble\RealEstate\Facades\RealEstateHelper;
 use Botble\RealEstate\Models\Property;
 use Botble\RealEstate\Services\PropertySearchService;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Theme\homzen\Supports\TrebPropertyHelper;
 use Theme\homzen\Supports\VisitorCityHelper;
@@ -20,6 +19,11 @@ use Throwable;
 class HomepageFeaturedPropertiesAction
 {
     private const CACHE_SECONDS = 600;
+
+    private static function cacheTtl(): int
+    {
+        return max(60, (int) config('serik.cache.featured_ttl', self::CACHE_SECONDS));
+    }
 
     private const INACTIVE_STATUSES = [
         'Sold', 'Leased', 'Sold Conditional', 'Sold Conditional Escape', 'Leased Conditional',
@@ -55,7 +59,7 @@ class HomepageFeaturedPropertiesAction
         $cacheKey = "homepage_featured_props_v5:{$version}:{$cityKey}:{$limit}";
 
         try {
-            return Cache::remember($cacheKey, self::CACHE_SECONDS, function () use ($limit, $visitorCity) {
+            return \App\Support\SerikCache::remember($cacheKey, self::cacheTtl(), function () use ($limit, $visitorCity) {
                 $idPayload = $this->resolveIds($limit, $visitorCity);
 
                 return [

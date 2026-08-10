@@ -3,7 +3,6 @@
 namespace App\Services\RealEstate;
 
 use Botble\RealEstate\Models\Property;
-use Illuminate\Support\Facades\Cache;
 use Theme\homzen\Supports\TrebPropertyHelper;
 
 class PropertyDetailPayloadService
@@ -14,9 +13,12 @@ class PropertyDetailPayloadService
         $isAuthenticated = auth('account')->check() || auth()->check();
         $isLocked = $property->isSoldHistory() && ! $isAuthenticated;
 
-        $cacheKey = 'serik_property_detail_payload_v1_' . $property->getKey() . '_' . ($isAuthenticated ? 'auth' : 'guest') . '_' . ($isIframe ? 'iframe' : 'full');
+        $cacheKey = 'serik_property_detail_payload_v2_' . $property->getKey() . '_' . ($isAuthenticated ? 'auth' : 'guest') . '_' . ($isIframe ? 'iframe' : 'full');
 
-        return Cache::remember($cacheKey, 300, function () use ($property, $listingKey, $isIframe, $isAuthenticated, $isLocked): array {
+        return \App\Support\SerikCache::remember(
+            $cacheKey,
+            (int) config('serik.cache.property_detail_ttl', 1800),
+            function () use ($property, $listingKey, $isIframe, $isAuthenticated, $isLocked): array {
             $localData = TrebPropertyHelper::dbRowToLocalArray($property);
             $factRecord = [];
             $listingHistory = [];

@@ -16,7 +16,7 @@ if defined SERIK_PHP_EXE (
 )
 
 echo === Windows services ===
-for %%S in (SerikQueueHigh SerikQueueImages SerikQueueLow SerikMeilisearch) do (
+for %%S in (SerikQueueHigh SerikQueueImages SerikQueueLow SerikQueueImports SerikQueueGhl SerikQueueAux SerikQueueCacheRefresh SerikMeilisearch SerikMemurai) do (
     sc query %%S 2>nul | findstr /I "SERVICE_NAME STATE" 
     if errorlevel 1 echo %%S: NOT INSTALLED
     echo.

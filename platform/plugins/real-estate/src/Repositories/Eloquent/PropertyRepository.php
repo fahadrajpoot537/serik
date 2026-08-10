@@ -17,6 +17,7 @@ use Illuminate\Pagination\Paginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
+use App\Support\SerikCache;
 use Illuminate\Support\Facades\Cache;
 
 class PropertyRepository extends RepositoriesAbstract implements PropertyInterface
@@ -571,7 +572,7 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
 
         $query = $this->applyBeforeExecuteQuery($query);
 
-        $items = (clone $query)->forPage($page, $perPage)->get();
+        $items = $this->browseListingFetchPage($query, $filters, $page, $perPage);
         $total = $this->resolveBrowseListingTotal($query, $filters);
 
         return new LengthAwarePaginator(
@@ -587,31 +588,227 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
         );
     }
 
+    /**
+     * Prefer Meili ID page (sort id:desc) then hydrate — avoids MySQL scanning
+     * ~140k active rows for LIMIT 15 (measured 0.5–5s). Falls back to SQL.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder|\Illuminate\Database\Query\Builder  $query
+     * @return \Illuminate\Support\Collection<int, \Botble\RealEstate\Models\Property>
+     */
+    protected function browseListingFetchPage($query, array $filters, int $page, int $perPage)
+    {
+        $meiliIds = $this->browsePageIdsViaMeili($filters, $page, $perPage);
+        if (is_array($meiliIds)) {
+            if ($meiliIds === []) {
+                return collect();
+            }
+
+            $rows = (clone $query)
+                ->whereIn('re_properties.id', $meiliIds)
+                ->get()
+                ->keyBy('id');
+
+            return collect($meiliIds)
+                ->map(fn ($id) => $rows->get((int) $id))
+                ->filter()
+                ->values();
+        }
+
+        return (clone $query)->forPage($page, $perPage)->get();
+    }
+
+    /**
+     * @return int[]|null
+     */
+    protected function browsePageIdsViaMeili(array $filters, int $page, int $perPage): ?array
+    {
+        if (! empty($filters['open_house']) || ($filters['status'] ?? '') === 'sold') {
+            return null;
+        }
+
+        // Keyword path already applies Meili/SQL whereIn on the builder — don't
+        // replace pagination with a second Meili window.
+        if (trim((string) ($filters['keyword'] ?? '')) !== '') {
+            return null;
+        }
+
+        // Keyword / heavy filters already constrain via whereIn elsewhere;
+        // only accelerate the common Ontario-wide / city / type browse path.
+        $opts = [
+            'residential_only' => true,
+            'statuses' => [
+                'New',
+                'Active',
+                'Ext',
+                'Extension',
+                'Price Change',
+                'Active Under Contract',
+            ],
+            'limit' => max(1, $perPage),
+            'offset' => max(0, ($page - 1) * $perPage),
+            'sort' => ['id:desc'],
+        ];
+
+        $location = trim((string) ($filters['location'] ?? ''));
+        if ($location !== '') {
+            $parts = explode(',', $location);
+            $city = trim($parts[0]);
+            if ($city !== '' && strcasecmp($city, 'ontario') !== 0) {
+                $opts['city'] = $city;
+            }
+        }
+
+        $type = (string) ($filters['type'] ?? '');
+        if (in_array($type, [PropertyTypeEnum::RENT, 'rent', 'lease'], true)) {
+            $opts['transactions'] = ['For Lease', 'For Sub-Lease'];
+        } elseif ($type === PropertyTypeEnum::SALE || $type === 'sale') {
+            $opts['transaction'] = 'For Sale';
+        }
+
+        $subtypeMap = [
+            'house' => ['Detached', 'Semi-Detached', 'Link', 'Rural Residential', 'Farm'],
+            'condo' => ['Condo Apartment', 'Condo Townhouse', 'Detached Condo', 'Leasehold Condo', 'Common Element Condo', 'Co-Ownership Apartment'],
+            'townhouse' => ['Att/Row/Townhouse', 'Condo Townhouse'],
+        ];
+        $subtypes = [];
+        foreach ((array) ($filters['home_types'] ?? []) as $homeType) {
+            if (isset($subtypeMap[$homeType])) {
+                $subtypes = array_merge($subtypes, $subtypeMap[$homeType]);
+            }
+        }
+        if (! empty($filters['subtypes']) && is_array($filters['subtypes'])) {
+            $subtypes = array_merge($subtypes, array_map('strval', $filters['subtypes']));
+        }
+        $subtypes = array_values(array_unique($subtypes));
+        if ($subtypes !== []) {
+            $opts['subtypes'] = $subtypes;
+        }
+
+        if (isset($filters['min_price']) && (float) $filters['min_price'] > 0) {
+            $opts['min_price'] = (float) $filters['min_price'];
+        }
+        if (isset($filters['max_price']) && (float) $filters['max_price'] > 0) {
+            $opts['max_price'] = (float) $filters['max_price'];
+        }
+        if (! empty($filters['bedroom'])) {
+            $opts['min_bedrooms'] = (int) $filters['bedroom'];
+        }
+        if (! empty($filters['bathroom'])) {
+            $opts['min_bathrooms'] = (int) $filters['bathroom'];
+        }
+
+        return app(\Botble\RealEstate\Services\PropertySearchService::class)
+            ->searchIds('', $opts);
+    }
+
     protected function resolveBrowseListingTotal(Builder $query, array $filters): int
     {
-        if (! $this->browseListingHasFilters($filters)) {
-            $cached = Cache::get('serik_active_listing_count_v1');
+        $unfiltered = ! $this->browseListingHasFilters($filters);
 
+        if ($unfiltered) {
+            $cached = Cache::get('serik_active_listing_count_v1');
             if ($cached !== null) {
                 return (int) $cached;
+            }
+
+            // Soft last-known total: serve instantly and refresh after response.
+            // Prevents 10–14s COUNT on cold TTFB while keeping totals stable.
+            $lastKnown = Cache::get('serik_active_listing_count_v1:last');
+            if ($lastKnown !== null) {
+                $this->scheduleBrowseListingTotalRefresh($query, $filters, true);
+
+                return (int) $lastKnown;
             }
         }
 
         $cacheKey = 'serik_browse_count:' . md5(json_encode($this->browseListingCountSignature($filters)));
+        $ttl = $unfiltered ? 600 : 300;
 
-        return (int) Cache::remember($cacheKey, 300, function () use ($query, $filters) {
+        $total = (int) SerikCache::remember($cacheKey, $ttl, function () use ($query, $filters, $unfiltered) {
             $meiliTotal = $this->estimateBrowseTotalViaMeili($filters);
             if ($meiliTotal !== null) {
+                if ($unfiltered) {
+                    Cache::put('serik_active_listing_count_v1', $meiliTotal, 600);
+                    Cache::put('serik_active_listing_count_v1:last', $meiliTotal, 86400);
+                }
+
                 return $meiliTotal;
             }
 
-            return (clone $query)->toBase()->count('re_properties.id');
+            $mysqlTotal = (int) (clone $query)->toBase()->count('re_properties.id');
+            if ($unfiltered) {
+                Cache::put('serik_active_listing_count_v1', $mysqlTotal, 600);
+                Cache::put('serik_active_listing_count_v1:last', $mysqlTotal, 86400);
+            }
+
+            return $mysqlTotal;
+        }, 45);
+
+        return $total;
+    }
+
+    /**
+     * Background refresh for soft-served listing totals (does not block TTFB).
+     */
+    protected function scheduleBrowseListingTotalRefresh(Builder $query, array $filters, bool $unfiltered): void
+    {
+        static $scheduled = false;
+        if ($scheduled || ! $unfiltered) {
+            return;
+        }
+        $scheduled = true;
+
+        app()->terminating(function (): void {
+            $lock = Cache::lock('serik:browse-count-refresh:active', 90);
+            if (! $lock->get()) {
+                return;
+            }
+
+            try {
+                $meiliTotal = app(\Botble\RealEstate\Services\PropertySearchService::class)
+                    ->searchEstimatedTotal('', [
+                        'residential_only' => true,
+                        'statuses' => [
+                            'New',
+                            'Active',
+                            'Ext',
+                            'Extension',
+                            'Price Change',
+                            'Active Under Contract',
+                        ],
+                    ]);
+
+                $total = $meiliTotal;
+                if ($total === null) {
+                    $total = (int) Property::query()
+                        ->active()
+                        ->residential()
+                        ->mlsActive()
+                        ->toBase()
+                        ->count('re_properties.id');
+                }
+
+                $total = (int) $total;
+                $signature = md5(json_encode([
+                    'unfiltered' => true,
+                    'statuses' => 'mlsActive',
+                    'residential' => true,
+                ]));
+                Cache::put('serik_browse_count:' . $signature, $total, 600);
+                Cache::put('serik_active_listing_count_v1', $total, 600);
+                Cache::put('serik_active_listing_count_v1:last', $total, 86400);
+            } catch (\Throwable $e) {
+                report($e);
+            } finally {
+                optional($lock)->release();
+            }
         });
     }
 
     /**
-     * Prefer Meilisearch estimatedTotalHits for city browse counts — avoids MySQL
-     * COUNT over a 10k–20k whereIn id list (often 10–30s on cold local DBs).
+     * Prefer Meilisearch estimatedTotalHits for browse counts — avoids MySQL
+     * COUNT over the full active residential set (often 10–14s on cold local DBs).
+     * Works for city filters and unfiltered Ontario-wide active browse.
      */
     protected function estimateBrowseTotalViaMeili(array $filters): ?int
     {
@@ -619,19 +816,8 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
             return null;
         }
 
-        $location = trim((string) ($filters['location'] ?? ''));
-        if ($location === '') {
-            return null;
-        }
-
-        $parts = explode(',', $location);
-        $city = trim($parts[0]);
-        if ($city === '' || strcasecmp($city, 'ontario') === 0) {
-            return null;
-        }
-
         $opts = [
-            'city' => $city,
+            'residential_only' => true,
             'statuses' => [
                 'New',
                 'Active',
@@ -641,6 +827,15 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
                 'Active Under Contract',
             ],
         ];
+
+        $location = trim((string) ($filters['location'] ?? ''));
+        if ($location !== '') {
+            $parts = explode(',', $location);
+            $city = trim($parts[0]);
+            if ($city !== '' && strcasecmp($city, 'ontario') !== 0) {
+                $opts['city'] = $city;
+            }
+        }
 
         $type = (string) ($filters['type'] ?? '');
         if (in_array($type, [PropertyTypeEnum::RENT, 'rent', 'lease'], true)) {

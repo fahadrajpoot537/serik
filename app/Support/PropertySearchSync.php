@@ -8,11 +8,14 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Throwable;
 
 /**
  * Single source of truth for deferred Meilisearch property indexing.
  * Writers call schedule() only — never searchable() inline.
+ *
+ * Cache remains the hot pending set; DB checkpoints enable crash recovery.
  */
 final class PropertySearchSync
 {
@@ -28,7 +31,7 @@ final class PropertySearchSync
      */
     public function schedule(int $propertyId): void
     {
-        Log::info('[PropertySearchSync] schedule', [
+        Log::debug('[PropertySearchSync] schedule', [
             'property_id' => $propertyId,
         ]);
 
@@ -38,6 +41,33 @@ final class PropertySearchSync
 
         $dispatch = function () use ($propertyId): void {
             $this->markPending($propertyId);
+        };
+
+        if (DB::transactionLevel() > 0) {
+            DB::afterCommit($dispatch);
+        } else {
+            $dispatch();
+        }
+    }
+
+    /**
+     * Bulk schedule many property IDs for deferred Meilisearch indexing (one lock, one job).
+     *
+     * @param  list<int>  $propertyIds
+     */
+    public function scheduleMany(array $propertyIds): void
+    {
+        $ids = array_values(array_unique(array_filter(
+            array_map(static fn ($id): int => (int) $id, $propertyIds),
+            static fn (int $id): bool => $id > 0
+        )));
+
+        if ($ids === []) {
+            return;
+        }
+
+        $dispatch = function () use ($ids): void {
+            $this->markPendingMany($ids);
         };
 
         if (DB::transactionLevel() > 0) {
@@ -81,9 +111,10 @@ final class PropertySearchSync
         $indexedIds = $searchable->pluck('id')->map(static fn ($id): int => (int) $id)->all();
 
         if ($searchable->isEmpty()) {
+            $this->clearInflight($propertyIds);
             $remaining = $this->pendingCount();
 
-            Log::info('[PropertySearchSync] batch skipped (no searchable properties)', [
+            Log::debug('[PropertySearchSync] batch skipped (no searchable properties)', [
                 'batch_size' => $batchSize,
                 'property_count' => 0,
                 'claimed_property_ids' => $propertyIds,
@@ -104,6 +135,7 @@ final class PropertySearchSync
 
         try {
             $this->indexCollection($searchable);
+            $this->clearInflight($propertyIds);
         } catch (Throwable $e) {
             $this->requeue($propertyIds);
 
@@ -116,18 +148,29 @@ final class PropertySearchSync
                 'error' => $e->getMessage(),
             ]);
 
+            SerikAuditLog::event(SerikAuditLog::DOMAIN_SEARCH, 'index_failed', [
+                'property_ids' => $propertyIds,
+                'error' => $e->getMessage(),
+            ], 'warning');
+
             throw $e;
         }
 
         $durationMs = round((microtime(true) - $started) * 1000, 2);
         $remaining = $this->pendingCount();
 
-        Log::info('[PropertySearchSync] batch indexed', [
+        Log::debug('[PropertySearchSync] batch indexed', [
             'batch_size' => $batchSize,
             'property_count' => $searchable->count(),
             'property_ids' => $indexedIds,
             'meilisearch_duration_ms' => $durationMs,
             'remaining_pending' => $remaining,
+        ]);
+
+        SerikAuditLog::event(SerikAuditLog::DOMAIN_SEARCH, 'batch_indexed', [
+            'count' => $searchable->count(),
+            'duration_ms' => $durationMs,
+            'remaining' => $remaining,
         ]);
 
         return [
@@ -147,9 +190,89 @@ final class PropertySearchSync
         return is_array($pending) ? count($pending) : 0;
     }
 
+    /**
+     * Restore cache pending set from durable DB checkpoint (cache flush / crash recovery).
+     *
+     * @return array{restored: int, requeued_inflight: int}
+     */
+    public function recoverFromCheckpoint(): array
+    {
+        $restored = 0;
+        $requeuedInflight = 0;
+
+        if (! $this->checkpointsEnabled()) {
+            return ['restored' => 0, 'requeued_inflight' => 0];
+        }
+
+        $staleMinutes = max(5, (int) config('serik.search_sync.inflight_stale_minutes', 30));
+
+        try {
+            $staleIds = DB::table('serik_search_sync_inflight')
+                ->where('claimed_at', '<', now()->subMinutes($staleMinutes))
+                ->pluck('property_id')
+                ->map(static fn ($id): int => (int) $id)
+                ->all();
+
+            if ($staleIds !== []) {
+                $this->requeue($staleIds);
+                $requeuedInflight = count($staleIds);
+            }
+
+            $pendingIds = DB::table('serik_search_sync_pending')
+                ->orderBy('property_id')
+                ->limit(50000)
+                ->pluck('property_id')
+                ->map(static fn ($id): int => (int) $id)
+                ->all();
+
+            if ($pendingIds !== []) {
+                Cache::lock(self::PENDING_LOCK_KEY, 30)->block(10, function () use ($pendingIds, &$restored): void {
+                    /** @var array<int, bool> $pending */
+                    $pending = Cache::get(self::PENDING_CACHE_KEY, []);
+                    if (! is_array($pending)) {
+                        $pending = [];
+                    }
+                    $before = count($pending);
+                    foreach ($pendingIds as $id) {
+                        if ($id > 0) {
+                            $pending[$id] = true;
+                        }
+                    }
+                    Cache::put(self::PENDING_CACHE_KEY, $pending, 86400);
+                    $restored = max(0, count($pending) - $before);
+
+                    if ($before === 0 && $pending !== []) {
+                        SearchBatchJob::dispatch();
+                    }
+                });
+            }
+        } catch (Throwable $e) {
+            Log::warning('[PropertySearchSync] recoverFromCheckpoint failed', ['error' => $e->getMessage()]);
+        }
+
+        SerikAuditLog::event(SerikAuditLog::DOMAIN_SEARCH, 'checkpoint_recover', [
+            'restored' => $restored,
+            'requeued_inflight' => $requeuedInflight,
+        ]);
+
+        return ['restored' => $restored, 'requeued_inflight' => $requeuedInflight];
+    }
+
     private function markPending(int $propertyId): void
     {
-        Cache::lock(self::PENDING_LOCK_KEY, 10)->block(5, function () use ($propertyId): void {
+        $this->markPendingMany([$propertyId]);
+    }
+
+    /**
+     * @param  list<int>  $propertyIds
+     */
+    private function markPendingMany(array $propertyIds): void
+    {
+        if ($propertyIds === []) {
+            return;
+        }
+
+        Cache::lock(self::PENDING_LOCK_KEY, 10)->block(5, function () use ($propertyIds): void {
             /** @var array<int, bool> $pending */
             $pending = Cache::get(self::PENDING_CACHE_KEY, []);
             if (! is_array($pending)) {
@@ -158,9 +281,15 @@ final class PropertySearchSync
 
             $wasEmpty = $pending === [];
             $pendingCountBefore = count($pending);
-            $pending[$propertyId] = true;
+
+            foreach ($propertyIds as $propertyId) {
+                $pending[(int) $propertyId] = true;
+            }
+
             $pendingCountAfter = count($pending);
             Cache::put(self::PENDING_CACHE_KEY, $pending, 86400);
+            $this->persistPendingCheckpoint($propertyIds, remove: false);
+            $this->clearInflight($propertyIds);
 
             $searchBatchJobDispatched = false;
             if ($wasEmpty) {
@@ -168,8 +297,8 @@ final class PropertySearchSync
                 $searchBatchJobDispatched = true;
             }
 
-            Log::info('[PropertySearchSync] markPending', [
-                'property_id' => $propertyId,
+            Log::debug('[PropertySearchSync] markPendingMany', [
+                'scheduled_count' => count($propertyIds),
                 'pending_count_before' => $pendingCountBefore,
                 'pending_count_after' => $pendingCountAfter,
                 'search_batch_job_dispatched' => $searchBatchJobDispatched,
@@ -188,7 +317,7 @@ final class PropertySearchSync
             /** @var array<int, bool> $pending */
             $pending = Cache::get(self::PENDING_CACHE_KEY, []);
             if (! is_array($pending) || $pending === []) {
-                Log::info('[PropertySearchSync] claimNextBatch', [
+                Log::debug('[PropertySearchSync] claimNextBatch', [
                     'claimed_property_ids' => [],
                     'claimed_count' => 0,
                     'remaining_pending_count' => 0,
@@ -211,8 +340,10 @@ final class PropertySearchSync
             }
 
             Cache::put(self::PENDING_CACHE_KEY, $pending, 86400);
+            $this->persistPendingCheckpoint($ids, remove: true);
+            $this->markInflight($ids);
 
-            Log::info('[PropertySearchSync] claimNextBatch', [
+            Log::debug('[PropertySearchSync] claimNextBatch', [
                 'claimed_property_ids' => $ids,
                 'claimed_count' => count($ids),
                 'remaining_pending_count' => count($pending),
@@ -246,7 +377,110 @@ final class PropertySearchSync
             }
 
             Cache::put(self::PENDING_CACHE_KEY, $pending, 86400);
+            $this->persistPendingCheckpoint($propertyIds, remove: false);
+            $this->clearInflight($propertyIds);
         });
+    }
+
+    /**
+     * @param  list<int>  $propertyIds
+     */
+    private function persistPendingCheckpoint(array $propertyIds, bool $remove): void
+    {
+        if (! $this->checkpointsEnabled() || $propertyIds === []) {
+            return;
+        }
+
+        try {
+            if ($remove) {
+                DB::table('serik_search_sync_pending')->whereIn('property_id', $propertyIds)->delete();
+
+                return;
+            }
+
+            $now = now();
+            $rows = [];
+            foreach ($propertyIds as $id) {
+                $id = (int) $id;
+                if ($id <= 0) {
+                    continue;
+                }
+                $rows[] = [
+                    'property_id' => $id,
+                    'queued_at' => $now,
+                    'updated_at' => $now,
+                ];
+            }
+            if ($rows !== []) {
+                DB::table('serik_search_sync_pending')->upsert($rows, ['property_id'], ['updated_at']);
+            }
+        } catch (Throwable $e) {
+            Log::debug('[PropertySearchSync] checkpoint write skipped', ['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * @param  list<int>  $propertyIds
+     */
+    private function markInflight(array $propertyIds): void
+    {
+        if (! $this->checkpointsEnabled() || $propertyIds === []) {
+            return;
+        }
+
+        try {
+            $now = now();
+            $token = substr(bin2hex(random_bytes(8)), 0, 16);
+            $rows = [];
+            foreach ($propertyIds as $id) {
+                $id = (int) $id;
+                if ($id <= 0) {
+                    continue;
+                }
+                $rows[] = [
+                    'property_id' => $id,
+                    'claimed_at' => $now,
+                    'worker_token' => $token,
+                ];
+            }
+            if ($rows !== []) {
+                DB::table('serik_search_sync_inflight')->upsert($rows, ['property_id'], ['claimed_at', 'worker_token']);
+            }
+        } catch (Throwable $e) {
+            Log::debug('[PropertySearchSync] inflight write skipped', ['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * @param  list<int>  $propertyIds
+     */
+    private function clearInflight(array $propertyIds): void
+    {
+        if (! $this->checkpointsEnabled() || $propertyIds === []) {
+            return;
+        }
+
+        try {
+            DB::table('serik_search_sync_inflight')->whereIn('property_id', $propertyIds)->delete();
+        } catch (Throwable) {
+        }
+    }
+
+    private function checkpointsEnabled(): bool
+    {
+        static $enabled = null;
+        if ($enabled !== null) {
+            return $enabled;
+        }
+
+        try {
+            $enabled = Schema::hasTable('serik_search_sync_pending')
+                && Schema::hasTable('serik_search_sync_inflight');
+        } catch (Throwable) {
+            $enabled = false;
+        }
+
+        return $enabled;
     }
 
     /**
@@ -256,7 +490,7 @@ final class PropertySearchSync
     {
         $propertyIds = $properties->pluck('id')->map(static fn ($id): int => (int) $id)->all();
 
-        Log::info('[PropertySearchSync] searchableSync start', [
+        Log::debug('[PropertySearchSync] searchableSync start', [
             'collection_size' => $properties->count(),
             'property_ids' => $propertyIds,
         ]);
@@ -270,7 +504,7 @@ final class PropertySearchSync
             config(['scout.queue' => $previous]);
         }
 
-        Log::info('[PropertySearchSync] searchableSync complete', [
+        Log::debug('[PropertySearchSync] searchableSync complete', [
             'indexed_count' => $properties->count(),
             'remaining_pending' => $this->pendingCount(),
         ]);

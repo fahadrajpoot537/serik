@@ -35,18 +35,35 @@ class EarlyHomepageCacheMiddleware
             return $next($request);
         }
 
+        $etag = HomepageResponseCache::getSharedEtag();
         $cached = HomepageResponseCache::getSharedHtml();
         if ($cached === null || $cached === '') {
             return $next($request);
         }
 
-        return response($cached, 200, [
+        $etag = $etag ?: ('"' . sha1($cached) . '"');
+        if (trim((string) $request->headers->get('If-None-Match')) === $etag) {
+            $notModified = response('', 304, [
+                'ETag' => $etag,
+                'X-Serik-Homepage-Cache' => 'HIT-EARLY-304',
+                // no-store: block bfcache restoring guest nav after login.
+                'Cache-Control' => 'private, no-cache, no-store, must-revalidate',
+                'Vary' => 'Cookie',
+            ]);
+
+            return \App\Support\SerikSecurityHeaders::apply($notModified, $request);
+        }
+
+        $response = response($cached, 200, [
             'Content-Type' => 'text/html; charset=UTF-8',
+            'ETag' => $etag,
             'X-Serik-Homepage-Cache' => 'HIT-EARLY',
-            // private + Vary: Cookie — never reuse guest HTML after login in the browser.
-            'Cache-Control' => 'private, no-cache, must-revalidate',
+            // private + no-store + Vary: Cookie — never reuse guest HTML after login.
+            'Cache-Control' => 'private, no-cache, no-store, must-revalidate',
             'Vary' => 'Cookie',
         ]);
+
+        return \App\Support\SerikSecurityHeaders::apply($response, $request);
     }
 
     private function shouldBypassEarlyCache(Request $request): bool

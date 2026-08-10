@@ -7,12 +7,16 @@ use Illuminate\Support\Facades\Cache;
 
 /**
  * Versioned full-page HTML cache for GET / (anonymous).
+ *
+ * Entry format (v5): ['html' => string, 'etag' => string, 'gz' => ?string]
+ * Legacy v4 string entries are still readable until TTL expiry.
  */
 final class HomepageResponseCache
 {
     private const VERSION_KEY = 'homepage_response_cache_version_v4';
 
-    private const TTL_SECONDS = 7200;
+    private const KEY_PREFIX = 'homepage_html_v5:';
+
     private const TRACKING_QUERY_KEYS = [
         'utm_source',
         'utm_medium',
@@ -30,17 +34,24 @@ final class HomepageResponseCache
         return (int) Cache::get(self::VERSION_KEY, 1);
     }
 
+    public static function ttl(): int
+    {
+        return max(60, (int) config('serik.cache.homepage_ttl', 7200));
+    }
+
     public static function bump(): void
     {
         $locale = app()->getLocale();
         $oldVersion = self::version();
-        $oldKey = 'homepage_html_v4:' . $oldVersion . ':' . $locale . ':shared';
+        $oldKey = self::KEY_PREFIX . $oldVersion . ':' . $locale . ':shared';
+        // Also forget legacy v4 keys if present.
+        $legacyKey = 'homepage_html_v4:' . $oldVersion . ':' . $locale . ':shared';
 
         Cache::forever(self::VERSION_KEY, $oldVersion + 1);
 
-        // Drop both keys so the next request regenerates fresh HTML.
-        // Copying stale HTML was serving broken property hrefs (homepage "/").
         Cache::forget($oldKey);
+        Cache::forget($legacyKey);
+        Cache::forget(self::KEY_PREFIX . self::version() . ':' . $locale . ':shared');
         Cache::forget('homepage_html_v4:' . self::version() . ':' . $locale . ':shared');
     }
 
@@ -48,6 +59,7 @@ final class HomepageResponseCache
     {
         $locale = app()->getLocale();
         $version = self::version();
+        Cache::forget(self::KEY_PREFIX . $version . ':' . $locale . ':shared');
         Cache::forget('homepage_html_v4:' . $version . ':' . $locale . ':shared');
     }
 
@@ -93,6 +105,14 @@ final class HomepageResponseCache
 
     private static function isAuthenticatedRequest(Request $request): bool
     {
+        // Marker cookies mean "might be an account session" — never serve shared guest HTML.
+        foreach ($request->cookies->keys() as $key) {
+            $normalized = strtolower((string) $key);
+            if ($normalized === 'serik_acct' || str_starts_with($normalized, 'remember_')) {
+                return true;
+            }
+        }
+
         if (! $request->hasSession()) {
             return false;
         }
@@ -114,10 +134,25 @@ final class HomepageResponseCache
      */
     public static function getSharedHtml(): ?string
     {
-        $locale = app()->getLocale();
-        $cached = Cache::get('homepage_html_v4:' . self::version() . ':' . $locale . ':shared');
+        return self::extractHtml(Cache::get(self::sharedKey()));
+    }
 
-        return is_string($cached) && $cached !== '' ? $cached : null;
+    /**
+     * Precomputed ETag for shared HTML (avoids sha1 on every HIT).
+     */
+    public static function getSharedEtag(): ?string
+    {
+        $entry = Cache::get(self::sharedKey());
+        if (is_array($entry) && ! empty($entry['etag']) && is_string($entry['etag'])) {
+            return $entry['etag'];
+        }
+
+        $html = self::extractHtml($entry);
+        if ($html === null || $html === '') {
+            return null;
+        }
+
+        return '"' . sha1($html) . '"';
     }
 
     private static function hasOnlyTrackingQueryParams(Request $request): bool
@@ -138,11 +173,14 @@ final class HomepageResponseCache
 
     public static function cacheKey(Request $request): string
     {
-        // Shared key for all anonymous visitors — visitor-city personalization
-        // loads via async SEO nav / featured fragments, not per-city full HTML.
+        return self::sharedKey();
+    }
+
+    private static function sharedKey(): string
+    {
         $locale = app()->getLocale();
 
-        return 'homepage_html_v4:' . self::version() . ':' . $locale . ':shared';
+        return self::KEY_PREFIX . self::version() . ':' . $locale . ':shared';
     }
 
     public static function get(Request $request): ?string
@@ -151,9 +189,23 @@ final class HomepageResponseCache
             return null;
         }
 
-        $cached = Cache::get(self::cacheKey($request));
+        return self::extractHtml(Cache::get(self::cacheKey($request)));
+    }
 
-        return is_string($cached) && $cached !== '' ? $cached : null;
+    public static function getEtag(Request $request): ?string
+    {
+        if (! self::isCacheableRequest($request)) {
+            return null;
+        }
+
+        $entry = Cache::get(self::cacheKey($request));
+        if (is_array($entry) && ! empty($entry['etag']) && is_string($entry['etag'])) {
+            return $entry['etag'];
+        }
+
+        $html = self::extractHtml($entry);
+
+        return ($html !== null && $html !== '') ? '"' . sha1($html) . '"' : null;
     }
 
     public static function put(Request $request, string $html): void
@@ -162,6 +214,54 @@ final class HomepageResponseCache
             return;
         }
 
-        Cache::put(self::cacheKey($request), $html, self::TTL_SECONDS);
+        Cache::put(self::cacheKey($request), self::packEntry($html), self::ttl());
+    }
+
+    /**
+     * @return array{html: string, etag: string, gz?: string}
+     */
+    private static function packEntry(string $html): array
+    {
+        $entry = [
+            'html' => $html,
+            'etag' => '"' . sha1($html) . '"',
+        ];
+
+        // Compress for Memurai/Redis storage (response still serves plaintext; IIS may gzip).
+        if (function_exists('gzencode') && strlen($html) > 2048) {
+            $gz = @gzencode($html, 6);
+            if (is_string($gz) && $gz !== '') {
+                $entry['gz'] = $gz;
+                // Prefer gz blob in redis to cut memory; keep html for file-store simplicity.
+                if (config('cache.default') === 'redis') {
+                    unset($entry['html']);
+                }
+            }
+        }
+
+        return $entry;
+    }
+
+    private static function extractHtml(mixed $cached): ?string
+    {
+        if (is_string($cached) && $cached !== '') {
+            return $cached;
+        }
+
+        if (! is_array($cached)) {
+            return null;
+        }
+
+        if (! empty($cached['html']) && is_string($cached['html'])) {
+            return $cached['html'];
+        }
+
+        if (! empty($cached['gz']) && is_string($cached['gz']) && function_exists('gzdecode')) {
+            $html = @gzdecode($cached['gz']);
+
+            return is_string($html) && $html !== '' ? $html : null;
+        }
+
+        return null;
     }
 }

@@ -108,6 +108,33 @@ return [
             'replace_placeholders' => true,
         ],
 
+        // GoHighLevel MLS → Showings sync audit trail.
+        'ghl_sync' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/ghl-mls-sync.log'),
+            'level' => env('LOG_LEVEL', 'info'),
+            'days' => env('LOG_DAILY_DAYS', 30),
+            'replace_placeholders' => true,
+        ],
+
+        // Deferred Meilisearch indexing audit trail.
+        'search_sync' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/search-sync.log'),
+            'level' => env('LOG_LEVEL', 'info'),
+            'days' => env('LOG_DAILY_DAYS', 14),
+            'replace_placeholders' => true,
+        ],
+
+        // Cross-domain reliability / recovery / integrity events.
+        'reliability' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/reliability.log'),
+            'level' => env('LOG_LEVEL', 'info'),
+            'days' => env('LOG_DAILY_DAYS', 30),
+            'replace_placeholders' => true,
+        ],
+
         'slack' => [
             'driver' => 'slack',
             'url' => env('LOG_SLACK_WEBHOOK_URL'),

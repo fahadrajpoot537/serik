@@ -12,6 +12,10 @@ final class SerikWindowsService
         'high' => 'SerikQueueHigh',
         'images' => 'SerikQueueImages',
         'low' => 'SerikQueueLow',
+        'imports' => 'SerikQueueImports',
+        'ghl' => 'SerikQueueGhl',
+        'aux' => 'SerikQueueAux',
+        'cache_refresh' => 'SerikQueueCacheRefresh',
     ];
 
     public static function isWindows(): bool

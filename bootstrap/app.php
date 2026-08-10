@@ -17,6 +17,12 @@ $app = Application::configure(basePath: dirname(__DIR__))
         \App\Console\Commands\WarmHomepageCacheCommand::class,
         \App\Console\Commands\RestoreAdminAccessCommand::class,
         \App\Console\Commands\TrebArchiveImportCommand::class,
+        \App\Console\Commands\TrebArchiveHealthCommand::class,
+        \App\Console\Commands\ProcessGhlPendingMlsCommand::class,
+        \App\Console\Commands\SerikQueueHealCommand::class,
+        \App\Console\Commands\SerikQueueRecoverFailedCommand::class,
+        \App\Console\Commands\SerikReliabilityValidateCommand::class,
+        \App\Console\Commands\SerikProductionOptimizeCommand::class,
     ])
     ->withRouting(
         web: __DIR__ . '/../routes/web.php',
@@ -188,24 +194,67 @@ $app = Application::configure(basePath: dirname(__DIR__))
             ->withoutOverlapping(20)
             ->appendOutputTo(storage_path('logs/homepage-cache.log'));
 
-        // NEW: isolated TREB Archive (AUTH2) sold import — small batches every 30 min.
-        // Does not alter existing TREB/VOW/IDX schedules above.
+        // Enterprise sold-history archive (AUTH2): scheduler ONLY dispatches.
+        // Fan-out up to max_parallel_jobs; page leases prevent duplicate skips.
+        // Worker: php artisan queue:work --queue=imports
+        // Memurai lock + depth gate: imports never share workers with user-facing lanes.
         $schedule->call(function () {
-            try {
-                @set_time_limit(120);
-                Artisan::call('serik:treb-archive-import');
-            } catch (\Throwable $e) {
-                Log::channel('treb_archive')->error(
-                    '[schedule] serik:treb-archive-import failed: ' . $e->getMessage()
-                );
-            }
+            return \App\Support\SerikQueueLock::dispatchGuard('schedule-treb-archive-import', function () {
+                try {
+                    if (! config('treb.auth2')) {
+                        return 0;
+                    }
 
-            return 0;
+                    if (! \App\Support\SerikScheduler::shouldDispatchImports()) {
+                        Log::debug('[schedule] skipped imports fan-out (depth)');
+
+                        return 0;
+                    }
+
+                    $maxParallel = max(1, (int) config('treb.archive.max_parallel_jobs', 4));
+                    $pending = 0;
+                    try {
+                        $pending = (int) \Illuminate\Support\Facades\DB::table('jobs')
+                            ->where('queue', \App\Support\SerikQueue::imports())
+                            ->count();
+                    } catch (\Throwable) {
+                        $pending = 0;
+                    }
+
+                    $toDispatch = max(0, $maxParallel - $pending);
+                    for ($i = 0; $i < $toDispatch; $i++) {
+                        \App\Jobs\ProcessTrebArchiveImportJob::dispatch()
+                            ->onQueue(\App\Support\SerikQueue::imports());
+                    }
+                } catch (\Throwable $e) {
+                    Log::channel('treb_archive')->error(
+                        '[schedule] ProcessTrebArchiveImportJob dispatch failed: ' . $e->getMessage()
+                    );
+                }
+
+                return 0;
+            }, 50) ?? 0;
         })
-            ->name('serik-treb-archive-import')
-            ->everyThirtyMinutes()
-            ->withoutOverlapping(25)
+            ->name('serik-treb-archive-import-dispatch')
+            ->everyMinute()
+            ->withoutOverlapping(2)
             ->appendOutputTo(storage_path('logs/treb-archive-import.log'));
+
+        // GoHighLevel MLS → Showings: early morning dispatch onto dedicated ghl queue.
+        // Webhooks only create pending rows; this schedule processes them.
+        // Worker: php artisan queue:work --queue=ghl --sleep=1 --tries=8
+        $schedule->call($safe('serik:ghl:process-pending-mls', ['--dispatch' => true]))
+            ->name('serik-ghl-process-pending-mls')
+            ->dailyAt((string) config('gohighlevel.mls_sync.process_at', '05:15'))
+            ->withoutOverlapping(30)
+            ->appendOutputTo(storage_path('logs/ghl-mls-sync.log'));
+
+        // Queue ecosystem self-heal — dispatch only (never heavy inline work).
+        $schedule->call($safe('serik:queue:heal'))
+            ->name('serik-queue-heal-dispatch')
+            ->cron('*/' . max(1, (int) config('serik.orchestration.heal_every_minutes', 5)) . ' * * * *')
+            ->withoutOverlapping(4)
+            ->appendOutputTo(storage_path('logs/queue-heal.log'));
     })
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->prepend(\App\Http\Middleware\ForceCanonicalDomainMiddleware::class);
@@ -214,6 +263,8 @@ $app = Application::configure(basePath: dirname(__DIR__))
         $middleware->prepend(\App\Http\Middleware\EarlyHomepageCacheMiddleware::class);
         // Must run BEFORE EarlyHomepageCache so blocked countries never get a cache HIT.
         $middleware->prepend(\App\Http\Middleware\GeoBlockMiddleware::class);
+        // Outermost: security headers on every response (including EarlyHomepageCache HIT).
+        $middleware->prepend(\App\Http\Middleware\SerikSecurityHeadersMiddleware::class);
         $middleware->appendToGroup('web', \App\Http\Middleware\CacheHomepageResponseMiddleware::class);
         $middleware->appendToGroup('web', \App\Http\Middleware\RequestProfilerMiddleware::class);
         $middleware->prependToGroup('web', \App\Http\Middleware\UseRequestRootUrlInLocal::class);

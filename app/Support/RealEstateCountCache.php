@@ -26,6 +26,11 @@ final class RealEstateCountCache
         return (int) Cache::get(self::VERSION_KEY, 1);
     }
 
+    private static function ttl(): int
+    {
+        return max(60, (int) config('serik.cache.counts_ttl', 3600));
+    }
+
     /**
      * @return Collection<int|string, int>
      */
@@ -33,7 +38,7 @@ final class RealEstateCountCache
     {
         $version = self::version();
 
-        return Cache::remember(self::CATEGORY_KEY.':'.$version, 3600, function (): Collection {
+        return SerikCache::remember(self::CATEGORY_KEY.':'.$version, self::ttl(), function (): Collection {
             return DB::table('re_property_categories')
                 ->select('category_id', DB::raw('COUNT(*) as aggregate'))
                 ->groupBy('category_id')
@@ -49,7 +54,7 @@ final class RealEstateCountCache
     {
         $version = self::version();
 
-        return Cache::remember(self::AGENT_KEY.':'.$version, 3600, function (): Collection {
+        return SerikCache::remember(self::AGENT_KEY.':'.$version, self::ttl(), function (): Collection {
             return DB::table('re_properties')
                 ->select('author_id', DB::raw('COUNT(*) as aggregate'))
                 ->where('moderation_status', ModerationStatusEnum::APPROVED)
@@ -78,7 +83,7 @@ final class RealEstateCountCache
         $version = self::version();
         $idsKey = md5(implode(',', $authorIds));
 
-        return Cache::remember(self::AGENT_KEY.':scoped:'.$version.':'.$idsKey, 3600, function () use ($authorIds): Collection {
+        return SerikCache::remember(self::AGENT_KEY.':scoped:'.$version.':'.$idsKey, self::ttl(), function () use ($authorIds): Collection {
             return DB::table('re_properties')
                 ->select('author_id', DB::raw('COUNT(*) as aggregate'))
                 ->where('moderation_status', ModerationStatusEnum::APPROVED)
@@ -104,7 +109,7 @@ final class RealEstateCountCache
         $version = self::version();
         $typesKey = md5(implode('|', $allowedTypes));
 
-        return Cache::remember(self::SUBTYPE_KEY.':'.$version.':'.$typesKey, 3600, function () use ($allowedTypes): array {
+        return SerikCache::remember(self::SUBTYPE_KEY.':'.$version.':'.$typesKey, self::ttl(), function () use ($allowedTypes): array {
             $order = implode(',', array_map(
                 static fn (string $type): string => "'" . str_replace("'", "''", $type) . "'",
                 $allowedTypes
@@ -124,7 +129,7 @@ final class RealEstateCountCache
     {
         $version = self::version();
 
-        return (int) Cache::remember(self::MIN_SQUARE_KEY.':'.$version, 3600, function (): int {
+        return (int) SerikCache::remember(self::MIN_SQUARE_KEY.':'.$version, self::ttl(), function (): int {
             $square = DB::table('re_properties')
                 ->where('moderation_status', ModerationStatusEnum::APPROVED)
                 ->whereNotNull('square')
@@ -139,7 +144,7 @@ final class RealEstateCountCache
     {
         $version = self::version();
 
-        return (int) Cache::remember(self::MAX_SQUARE_KEY.':'.$version, 3600, function (): int {
+        return (int) SerikCache::remember(self::MAX_SQUARE_KEY.':'.$version, self::ttl(), function (): int {
             $square = DB::table('re_properties')
                 ->where('moderation_status', ModerationStatusEnum::APPROVED)
                 ->whereNotNull('square')

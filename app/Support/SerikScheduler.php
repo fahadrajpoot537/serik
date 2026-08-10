@@ -29,6 +29,24 @@ final class SerikScheduler
         return self::queueDepth(SerikQueue::default());
     }
 
+    public static function importsQueueDepth(): int
+    {
+        return self::queueDepth(SerikQueue::imports());
+    }
+
+    public static function ghlQueueDepth(): int
+    {
+        return self::queueDepth(SerikQueue::ghl());
+    }
+
+    /**
+     * Public depth helper for orchestrator / monitoring.
+     */
+    public static function queueDepthPublic(string $queue): int
+    {
+        return self::queueDepth($queue);
+    }
+
     /**
      * Skip dispatching another long LOW maintenance job when the lane is already busy.
      */
@@ -47,6 +65,16 @@ final class SerikScheduler
         $maxDepth = max(10, (int) config('serik.images.max_pending', 120));
 
         return self::imagesQueueDepth() < $maxDepth;
+    }
+
+    /**
+     * Imports must never contend with user-facing workers; depth gate only.
+     */
+    public static function shouldDispatchImports(): bool
+    {
+        $maxDepth = max(1, (int) config('serik.scheduler.max_imports_queue_depth', 20));
+
+        return self::importsQueueDepth() < $maxDepth;
     }
 
     private static function queueDepth(string $queue): int

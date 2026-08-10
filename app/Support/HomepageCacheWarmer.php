@@ -95,6 +95,11 @@ final class HomepageCacheWarmer
             return "status={$response->getStatusCode()}, cache={$cacheStatus}, bytes={$bytes}";
         });
 
+        // Additive light warm (map / popular places) when enabled — same payloads as live traffic.
+        if (config('serik.cache.warm_extended_on_homepage', true)) {
+            $timings = array_merge($timings, ProductionCacheWarmer::warmLight());
+        }
+
         return $timings;
     }
 
