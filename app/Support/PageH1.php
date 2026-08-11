@@ -23,6 +23,7 @@ final class PageH1
         'map' => 'Search Homes for Sale in Ontario',
         'mortgage-calculator' => 'Ontario Mortgage Calculator',
         'our-services' => 'Our Real Estate Services',
+        'term-and-conditions' => 'Terms & Conditions',
         'terms-conditions' => 'Terms & Conditions',
         'tips-for-home-selling' => 'Tips for Selling Your Home in Ontario',
         'categories' => 'Categories',

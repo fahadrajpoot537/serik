@@ -5413,7 +5413,7 @@ position: absolute;
             <a href="{{ url('/faqs') }}">FAQs</a>
             <a href="{{ url('/contact-us') }}">Contact Us</a>
             <a href="{{ url('/privacy-policy') }}">Privacy Policy</a>
-            <a href="{{ url('/terms-conditions') }}">Terms & Conditions</a>
+            <a href="{{ url('/term-and-conditions') }}">Terms & Conditions</a>
         </div>
 
         <!--div class="footer-right">

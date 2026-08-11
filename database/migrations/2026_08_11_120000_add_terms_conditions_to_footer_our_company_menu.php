@@ -38,7 +38,7 @@ return new class extends Migration
 
             $items[] = [
                 ['key' => 'label', 'value' => 'Terms & Conditions'],
-                ['key' => 'url', 'value' => '/terms-conditions'],
+                ['key' => 'url', 'value' => '/term-and-conditions'],
                 ['key' => 'attributes', 'value' => ''],
                 ['key' => 'is_open_new_tab', 'value' => '0'],
             ];
@@ -124,6 +124,7 @@ return new class extends Migration
         }
 
         return str_contains(strtolower($label), 'terms')
+            || str_contains(strtolower($url), 'term-and-conditions')
             || str_contains(strtolower($url), 'terms-conditions')
             || str_contains(strtolower($url), 'terms-of-service');
     }
