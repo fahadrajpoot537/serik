@@ -3,6 +3,10 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Ensure "Terms & Conditions" appears in the footer Our Company simple menu
+ * (same CoreSimpleMenu widget as Privacy Policy — not a new widget).
+ */
 return new class extends Migration
 {
     public function up(): void
@@ -14,65 +18,35 @@ return new class extends Migration
 
         foreach ($rows as $row) {
             $data = json_decode((string) $row->data, true);
-            if (! is_array($data) || ($data['name'] ?? '') !== 'Our Company') {
+            if (! is_array($data)) {
                 continue;
             }
 
-            $items = $data['items'] ?? [];
+            $name = (string) ($data['name'] ?? '');
+            if (strcasecmp($name, 'Our Company') !== 0) {
+                continue;
+            }
+
+            $items = $data['items'] ?? null;
             if (! is_array($items)) {
                 continue;
             }
 
-            foreach ($items as $item) {
-                if (! is_array($item)) {
-                    continue;
-                }
-                $label = null;
-                $url = null;
-                foreach ($item as $field) {
-                    if (! is_array($field)) {
-                        continue;
-                    }
-                    if (($field['key'] ?? '') === 'label') {
-                        $label = (string) ($field['value'] ?? '');
-                    }
-                    if (($field['key'] ?? '') === 'url') {
-                        $url = (string) ($field['value'] ?? '');
-                    }
-                }
-                if (
-                    strcasecmp((string) $label, 'Terms & Conditions') === 0
-                    || strcasecmp((string) $label, 'Terms and Conditions') === 0
-                    || $url === '/terms-conditions'
-                    || $url === '/terms-of-service'
-                ) {
-                    return;
-                }
+            if ($this->menuHasTerms($items)) {
+                continue;
             }
 
             $items[] = [
-                [
-                    'key' => 'label',
-                    'value' => 'Terms & Conditions',
-                ],
-                [
-                    'key' => 'url',
-                    'value' => '/terms-conditions',
-                ],
-                [
-                    'key' => 'attributes',
-                    'value' => '',
-                ],
-                [
-                    'key' => 'is_open_new_tab',
-                    'value' => '0',
-                ],
+                ['key' => 'label', 'value' => 'Terms & Conditions'],
+                ['key' => 'url', 'value' => '/terms-conditions'],
+                ['key' => 'attributes', 'value' => ''],
+                ['key' => 'is_open_new_tab', 'value' => '0'],
             ];
 
             $data['items'] = array_values($items);
 
             DB::table('widgets')->where('id', $row->id)->update([
-                'data' => json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                'data' => json_encode($data, JSON_UNESCAPED_SLASHES),
                 'updated_at' => now(),
             ]);
         }
@@ -87,39 +61,18 @@ return new class extends Migration
 
         foreach ($rows as $row) {
             $data = json_decode((string) $row->data, true);
-            if (! is_array($data) || ($data['name'] ?? '') !== 'Our Company') {
+            if (! is_array($data) || strcasecmp((string) ($data['name'] ?? ''), 'Our Company') !== 0) {
                 continue;
             }
 
-            $items = $data['items'] ?? [];
+            $items = $data['items'] ?? null;
             if (! is_array($items)) {
                 continue;
             }
 
             $filtered = [];
             foreach ($items as $item) {
-                if (! is_array($item)) {
-                    $filtered[] = $item;
-                    continue;
-                }
-                $label = null;
-                $url = null;
-                foreach ($item as $field) {
-                    if (! is_array($field)) {
-                        continue;
-                    }
-                    if (($field['key'] ?? '') === 'label') {
-                        $label = (string) ($field['value'] ?? '');
-                    }
-                    if (($field['key'] ?? '') === 'url') {
-                        $url = (string) ($field['value'] ?? '');
-                    }
-                }
-                if (
-                    strcasecmp((string) $label, 'Terms & Conditions') === 0
-                    || strcasecmp((string) $label, 'Terms and Conditions') === 0
-                    || $url === '/terms-conditions'
-                ) {
+                if ($this->itemIsTerms($item)) {
                     continue;
                 }
                 $filtered[] = $item;
@@ -128,9 +81,50 @@ return new class extends Migration
             $data['items'] = array_values($filtered);
 
             DB::table('widgets')->where('id', $row->id)->update([
-                'data' => json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                'data' => json_encode($data, JSON_UNESCAPED_SLASHES),
                 'updated_at' => now(),
             ]);
         }
+    }
+
+    /**
+     * @param  array<int, mixed>  $items
+     */
+    private function menuHasTerms(array $items): bool
+    {
+        foreach ($items as $item) {
+            if ($this->itemIsTerms($item)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function itemIsTerms(mixed $item): bool
+    {
+        if (! is_array($item)) {
+            return false;
+        }
+
+        $label = '';
+        $url = '';
+        foreach ($item as $field) {
+            if (! is_array($field)) {
+                continue;
+            }
+            $key = (string) ($field['key'] ?? '');
+            $value = (string) ($field['value'] ?? '');
+            if ($key === 'label') {
+                $label = $value;
+            }
+            if ($key === 'url') {
+                $url = $value;
+            }
+        }
+
+        return str_contains(strtolower($label), 'terms')
+            || str_contains(strtolower($url), 'terms-conditions')
+            || str_contains(strtolower($url), 'terms-of-service');
     }
 };
