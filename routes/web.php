@@ -11,6 +11,10 @@ use Illuminate\Support\Facades\Route;
 Route::get('/auth/csrf-token', FreshCsrfTokenController::class)
     ->name('auth.csrf-token');
 
+// CMS page slug is terms-conditions; keep common alternate URLs working.
+Route::redirect('/terms-of-service', '/terms-conditions', 301);
+Route::redirect('/terms', '/terms-conditions', 301);
+
 // GoHighLevel inbound webhook / workflow hook — pending MLS enqueue only (ghl queue).
 Route::post('/webhooks/gohighlevel', GoHighLevelWebhookController::class)
     ->name('webhooks.gohighlevel')
