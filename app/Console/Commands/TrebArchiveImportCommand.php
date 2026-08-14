@@ -35,6 +35,8 @@ class TrebArchiveImportCommand extends Command
     {
         if ($this->option('status')) {
             $progress = $service->readProgress();
+            // Monitoring only: feed progress samples for throughput/ETA (no import side effects).
+            app(\App\Services\Treb\TrebArchiveHealthMonitor::class)->sampleProgress($progress);
             $this->line(json_encode($progress, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 
             return self::SUCCESS;

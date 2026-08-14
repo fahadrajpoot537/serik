@@ -70,6 +70,9 @@ return [
     'search_sync' => [
         // Max properties indexed per Meilisearch addDocuments request (throughput only; same docs/order).
         'batch_size' => (int) env('SERIK_SEARCH_SYNC_BATCH', 50),
+        // Bound one worker run so indexing cannot starve other LOW-lane work.
+        'max_batches_per_job' => (int) env('SERIK_SEARCH_SYNC_MAX_BATCHES', 20),
+        'max_seconds_per_job' => (int) env('SERIK_SEARCH_SYNC_MAX_SECONDS', 240),
         // Requeue claimed-but-unfinished IDs after this many minutes (crash mid-index).
         'inflight_stale_minutes' => (int) env('SERIK_SEARCH_INFLIGHT_STALE', 30),
     ],

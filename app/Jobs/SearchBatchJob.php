@@ -15,8 +15,9 @@ use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
- * Global Meilisearch batch drainer. One worker processes all pending property IDs
- * in chunks within a single execution (under the worker lock).
+ * Global Meilisearch batch drainer. One worker processes a bounded slice of
+ * pending property IDs in chunks within a single execution (under the worker
+ * lock), then schedules a continuation when work remains.
  */
 class SearchBatchJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
 {
@@ -64,9 +65,15 @@ class SearchBatchJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
             return;
         }
 
+        $batches = 0;
+        $maxBatches = max(1, (int) config('serik.search_sync.max_batches_per_job', 20));
+        $maxSeconds = max(30, min(270, (int) config('serik.search_sync.max_seconds_per_job', 240)));
+        $deadline = microtime(true) + $maxSeconds;
+
         try {
-            while ($sync->pendingCount() > 0) {
+            while ($sync->pendingCount() > 0 && $batches < $maxBatches && microtime(true) < $deadline) {
                 $stats = $sync->processNextBatch();
+                $batches++;
 
                 if (($stats['property_count'] ?? 0) === 0 && ($stats['remaining_pending'] ?? 0) === 0) {
                     break;
@@ -82,6 +89,14 @@ class SearchBatchJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
             throw $e;
         } finally {
             $lock->release();
+        }
+
+        if ($sync->pendingCount() > 0) {
+            Log::info('[SearchBatchJob] bounded drain yielding continuation', [
+                'batches' => $batches,
+                'remaining_pending' => $sync->pendingCount(),
+            ]);
+            self::dispatch();
         }
     }
 

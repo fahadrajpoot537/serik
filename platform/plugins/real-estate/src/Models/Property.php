@@ -4,6 +4,7 @@ namespace Botble\RealEstate\Models;
 
 use App\Casts\SafePropertyStatusEnum;
 use App\Support\SerikMediaUrl;
+use App\Support\PropertySearchSync;
 use Botble\Base\Casts\SafeContent;
 use Botble\Base\Facades\Html;
 use Botble\Base\Models\BaseModel;
@@ -650,18 +651,18 @@ class Property extends BaseModel
     }
 
     /**
-     * Resilient index write: never let a search-engine outage break a listing
-     * save (admin edit or TREB import). Delegates to Scout's real path.
+     * Queue one id for the centralized, deduplicating Meilisearch writer.
+     *
+     * Scout's model observer and explicit legacy callers both enter here. The
+     * pending-id set collapses them into one batch write without changing the
+     * indexed document or its eligibility rules.
      */
     public function searchable(): void
     {
         try {
-            // Prefer sync path — queued Scout jobs were stacking (1700+) with no
-            // worker, so new listings never appeared on the map.
-            if (config('scout.queue')) {
-                $this->newCollection([$this])->searchable();
-            } else {
-                $this->newCollection([$this])->searchableSync();
+            $id = (int) $this->getKey();
+            if ($id > 0) {
+                app(PropertySearchSync::class)->schedule($id);
             }
         } catch (\Throwable $e) {
             report($e);

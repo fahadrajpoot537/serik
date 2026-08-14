@@ -3050,15 +3050,16 @@ class PropertyController extends BaseController
 
         $rememberSearch = function (array $payload) use ($isListingKey, $keyword, $searchCacheKey): array {
             $payload = $this->ensureSearchResultSlugs($payload);
-            if ($payload === []) {
-                return $payload;
-            }
+            // Cache hits and short-lived empty address misses so typing does not
+            // re-hit Meili/FULLTEXT/AMP for the same keyword within a few seconds.
             if ($isListingKey) {
-                Cache::put('smart_search_mls:' . strtoupper($keyword), $payload, 600);
+                if ($payload !== []) {
+                    Cache::put('smart_search_mls:' . strtoupper($keyword), $payload, 600);
+                }
             } elseif (mb_strlen($keyword) >= 3 && preg_match('/\d/', $keyword)) {
-                Cache::put($searchCacheKey, $payload, 180);
+                Cache::put($searchCacheKey, $payload, $payload === [] ? 45 : 180);
             } elseif (mb_strlen($keyword) >= 4) {
-                Cache::put($searchCacheKey, $payload, 180);
+                Cache::put($searchCacheKey, $payload, $payload === [] ? 30 : 180);
             }
 
             return $payload;
@@ -3106,22 +3107,36 @@ class PropertyController extends BaseController
 
                 // Address queries: constrain Meili to the street number so
                 // "390 Bank" cannot rank "390 Cherry Street" above Bank Street.
+                // If street_number is missing on older docs, retry phrase-only and
+                // keep PHP address matching (avoids a slow AMP round-trip).
                 $meiliKeyword = $keyword;
+                $search = app(\Botble\RealEstate\Services\PropertySearchService::class);
                 if ($parsed) {
                     $meiliOpts['street_number'] = $parsed['street_number'];
                     $meiliOpts['limit'] = max($top * 5, 50);
                     $meiliKeyword = trim($parsed['street_number'] . ' ' . ($parsed['street_name'] ?? $parsed['street_part']));
                 }
 
-                $ids = app(\Botble\RealEstate\Services\PropertySearchService::class)->searchIds($meiliKeyword, $meiliOpts);
+                $ids = $search->searchIds($meiliKeyword, $meiliOpts);
 
                 if ($ids === null) {
                     $meiliUnavailable = true;
-        } else {
+                } else {
+                    if ($ids === [] && $parsed) {
+                        $retryOpts = $meiliOpts;
+                        unset($retryOpts['street_number']);
+                        $retryIds = $search->searchIds($meiliKeyword, $retryOpts);
+                        if ($retryIds === null) {
+                            $meiliUnavailable = true;
+                        } else {
+                            $ids = $retryIds;
+                        }
+                    }
+
                     // Meili answered — never fall through to AMP for free-text.
-                    if ($ids === []) {
+                    if (! $meiliUnavailable && $ids === []) {
                         // Parsed street address: allow FULLTEXT / AMP address ingest below.
-                    } else {
+                    } elseif (! $meiliUnavailable && $ids !== []) {
                         $ordered = $this->hydrateSmartSearchRows($ids, max($top * 3, 30), false);
                         if ($parsed) {
                             $ordered = array_values(array_filter(
@@ -3186,44 +3201,26 @@ class PropertyController extends BaseController
                 ->offset(max(0, $skip))
             ->get();
         } elseif ($parsed) {
-            // Meili already tried above. If empty/unavailable: FULLTEXT only —
-            // never leading-% LIKE (scanned ~179k rows / ~4s).
-            $search = app(\Botble\RealEstate\Services\PropertySearchService::class);
-            $phrase = trim($parsed['street_number'] . ' ' . ($parsed['street_name'] ?? $parsed['street_part']));
-            $meiliIds = $search->searchIds($phrase, [
-                'limit' => max($top, 40),
-                'offset' => $skip,
-                'residential_only' => true,
-                'street_number' => $parsed['street_number'],
-                'transaction' => $request->filled('transaction') ? $request->transaction : null,
-                'status' => $request->filled('status') ? $request->status : null,
-            ]);
-
+            // Meili already tried above (including street_number soft-retry).
+            // If empty/unavailable: FULLTEXT only — never leading-% LIKE.
             $matchParsed = fn ($item) => $this->addressMatchesParsedSearch((string) ($item->name ?? ''), $parsed);
 
-            if (is_array($meiliIds) && $meiliIds !== []) {
-                $localResults = $search->hydrateIds($meiliIds, PropertyFulltextSearch::SEARCH_COLUMNS)
-                    ->filter($matchParsed)
-                    ->values()
-                    ->take($top);
-            } else {
-                $ftQuery = PropertyFulltextSearch::baseQuery(PropertyFulltextSearch::SEARCH_COLUMNS);
-                PropertyFulltextSearch::applyParsedAddressFulltext(
-                    $ftQuery,
-                    $parsed['street_number'],
-                    $parsed['street_name'] ?? $parsed['street_part']
-                );
-                $this->applyResidentialSubTypeScope($ftQuery);
-                $applySearchFilters($ftQuery);
-                $localResults = $ftQuery
-                    ->orderByDesc('updated_at')
-                    ->limit(max($top * 5, 40))
-                    ->offset(max(0, $skip))
-                    ->get()
-                    ->filter($matchParsed)
-                    ->values()
-                    ->take($top);
-            }
+            $ftQuery = PropertyFulltextSearch::baseQuery(PropertyFulltextSearch::SEARCH_COLUMNS);
+            PropertyFulltextSearch::applyParsedAddressFulltext(
+                $ftQuery,
+                $parsed['street_number'],
+                $parsed['street_name'] ?? $parsed['street_part']
+            );
+            $this->applyResidentialSubTypeScope($ftQuery);
+            $applySearchFilters($ftQuery);
+            $localResults = $ftQuery
+                ->orderByDesc('updated_at')
+                ->limit(max($top * 5, 40))
+                ->offset(max(0, $skip))
+                ->get()
+                ->filter($matchParsed)
+                ->values()
+                ->take($top);
         } else {
             // Free-text MySQL path should not run when Meili was available (early return).
             // If we land here Meili was down: FULLTEXT only — never %LIKE%.
@@ -3258,14 +3255,28 @@ class PropertyController extends BaseController
 
         // Address miss in local/Meili — pull exact street from AMP (AUTH/AUTH1),
         // ingest, then return. Fixes "390 Bank St Ottawa" when only Cherry "390"s
-        // were indexed locally.
+        // were indexed locally. Cache short-lived so typing the same address
+        // does not re-pay the AMP round-trip.
         if ($parsed && $mappedLocal === []) {
-            $ingestedIds = app(\Botble\RealEstate\Services\LiveTrebPropertyFallbackService::class)
-                ->ingestAddressSearchHits($parsed, $top);
-            if ($ingestedIds !== []) {
-                $ordered = $this->hydrateSmartSearchRows($ingestedIds, $top, false);
+            $ampCacheKey = 'smart_search_amp_addr_v1:' . md5(strtolower(
+                ($parsed['street_number'] ?? '') . '|' . ($parsed['street_name'] ?? $parsed['street_part'] ?? '')
+            ));
+            $cachedAmpIds = Cache::get($ampCacheKey);
+            if (is_array($cachedAmpIds)) {
+                if ($cachedAmpIds !== []) {
+                    $ordered = $this->hydrateSmartSearchRows($cachedAmpIds, $top, false);
 
-                return response()->json($rememberSearch(TrebPropertyHelper::groupListingsByBuilding($ordered)));
+                    return response()->json($rememberSearch(TrebPropertyHelper::groupListingsByBuilding($ordered)));
+                }
+            } else {
+                $ingestedIds = app(\Botble\RealEstate\Services\LiveTrebPropertyFallbackService::class)
+                    ->ingestAddressSearchHits($parsed, $top);
+                Cache::put($ampCacheKey, $ingestedIds, 120);
+                if ($ingestedIds !== []) {
+                    $ordered = $this->hydrateSmartSearchRows($ingestedIds, $top, false);
+
+                    return response()->json($rememberSearch(TrebPropertyHelper::groupListingsByBuilding($ordered)));
+                }
             }
         }
 
@@ -4319,7 +4330,28 @@ class PropertyController extends BaseController
             return true;
         }
 
-        if (isset($moreThanMap[$finalDate]) || preg_match('/^year_(\d{4})$/', $finalDate)) {
+        // Sold/Leased history year: a closed-timestamp range is the same window the
+        // MySQL path builds with whereYear(), so Meili can answer it directly
+        // instead of falling back to a full-table year scan.
+        if (preg_match('/^year_(\d{4})$/', $finalDate, $yearMatch)) {
+            $year = (int) $yearMatch[1];
+            if ($year < 2000 || $year > (int) date('Y') + 1) {
+                return false;
+            }
+
+            $tsField = match (true) {
+                ! $usesSoldDate => 'listing_contract_ts',
+                $isDelisted => 'updated_ts',
+                default => 'close_ts',
+            };
+
+            $opts[$tsField . '_gte'] = Carbon::create($year, 1, 1)->startOfYear()->getTimestamp();
+            $opts[$tsField . '_lte'] = Carbon::create($year, 12, 31)->endOfYear()->getTimestamp();
+
+            return true;
+        }
+
+        if (isset($moreThanMap[$finalDate])) {
             return false;
         }
 
@@ -5520,7 +5552,7 @@ class PropertyController extends BaseController
 
             $query->where(function ($q) use ($dateColumn, $fallbackColumn, $year) {
                 $q->whereYear($dateColumn, $year)
-                    ->orWhere(function ($inner) use ($fallbackColumn, $year) {
+                    ->orWhere(function ($inner) use ($dateColumn, $fallbackColumn, $year) {
                         $inner->whereNull($dateColumn)
                             ->whereYear($fallbackColumn, $year);
                     });

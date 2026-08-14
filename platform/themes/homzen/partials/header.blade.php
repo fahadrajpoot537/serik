@@ -1352,7 +1352,7 @@ if (loadMoreBtn) {
     loadMoreBtn.style.display = "block";
 }
 let typingTimer;
-const typingDelay = 80;
+const typingDelay = 300;
 let searchController = null;
 let headerSearchRequestId = 0;
 const headerSearchCache = new Map();
@@ -1391,15 +1391,6 @@ function buildHeaderSearchUrl(keyword) {
     return url;
 }
 
-function shouldKeepHeaderSearchRequest(newKeyword) {
-    const prev = String(loadResults._activeKeyword || '').trim().toLowerCase();
-    const next = String(newKeyword || '').trim().toLowerCase();
-    if (!prev || !next) {
-        return false;
-    }
-    return next.startsWith(prev) && next.length > prev.length;
-}
-
 function isSoldListing(item) {
     return SOLD_STATUSES.includes(item.MlsStatus);
 }
@@ -1433,13 +1424,15 @@ function isHeaderLocationOnlyKeyword(keyword) {
 }
 
 function handleHeaderSearchInput(keyword) {
-    currentKeyword = keyword;
-    skip = 0;
     clearTimeout(typingTimer);
-    resetHeaderAcCatExpanded();
+    const trimmed = String(keyword || '').replace(/\s+/g, ' ').trim();
 
-    const trimmed = String(keyword || '').trim();
     if (trimmed.length < 2) {
+        currentKeyword = '';
+        if (searchController) {
+            searchController.abort();
+            searchController = null;
+        }
         dropdown.style.display = 'none';
         loader.style.display = 'none';
         document.getElementById('locationResults').innerHTML = '';
@@ -1447,8 +1440,23 @@ function handleHeaderSearchInput(keyword) {
         return;
     }
 
+    if (trimmed === currentKeyword) {
+        return;
+    }
+
+    currentKeyword = trimmed;
+    skip = 0;
+    if (searchController) {
+        searchController.abort();
+        searchController = null;
+    }
+    resetHeaderAcCatExpanded();
     renderHeaderSearchShell(trimmed);
-    loadResults(trimmed, true);
+    typingTimer = setTimeout(() => {
+        if (currentKeyword === trimmed) {
+            loadResults(trimmed, true);
+        }
+    }, typingDelay);
 }
 
 if (input) {
@@ -1457,8 +1465,13 @@ input.addEventListener('input', function () {
 });
 
 input.addEventListener('focus', function () {
-    if (String(this.value || '').trim().length >= 2) {
-        handleHeaderSearchInput(this.value);
+    const trimmed = String(this.value || '').replace(/\s+/g, ' ').trim();
+    if (trimmed.length >= 2) {
+        if (trimmed === currentKeyword) {
+            dropdown.style.display = 'block';
+        } else {
+            handleHeaderSearchInput(this.value);
+        }
     }
 });
 }
@@ -1597,16 +1610,20 @@ function loadResults(keyword, reset = false){
         }
     }
 
-    if (searchController && !shouldKeepHeaderSearchRequest(keyword)) {
+    if (searchController) {
         searchController.abort();
     }
-    searchController = new AbortController();
-    const communityPromise = fetchHeaderCommunitySuggestions(keyword, searchController.signal);
+    const requestController = new AbortController();
+    searchController = requestController;
+    const isAddressLike = /\d/.test(String(keyword || ''));
+    const communityPromise = isAddressLike
+        ? Promise.resolve([])
+        : fetchHeaderCommunitySuggestions(keyword, requestController.signal);
     loadResults._activeKeyword = keyword;
 
     const isMlsKey = isHeaderMlsKeyword(keyword);
     const searchTimeoutMs = isMlsKey ? 45000 : 15000;
-    const searchTimeoutId = setTimeout(() => searchController.abort(), searchTimeoutMs);
+    const searchTimeoutId = setTimeout(() => requestController.abort(), searchTimeoutMs);
     const searchUrl = buildHeaderSearchUrl(keyword);
 
     if (headerSearchCache.has(searchUrl)) {
@@ -1623,7 +1640,7 @@ function loadResults(keyword, reset = false){
     }
 
     Promise.all([
-        headerSmartSearchFetch(searchUrl, searchController.signal),
+        headerSmartSearchFetch(searchUrl, requestController.signal),
         communityPromise,
     ])
     .then(([data, communities]) => {

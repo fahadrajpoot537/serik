@@ -100,6 +100,7 @@ class TrebArchiveImportService
             Cache::forget((string) config('treb.archive.progress_cache_key', 'serik_treb_archive_progress'));
             Cache::forget(TrebArchiveHealthMonitor::METRICS_KEY);
             Cache::forget(TrebArchiveHealthMonitor::WINDOW_KEY);
+            Cache::forget(TrebArchiveHealthMonitor::PROGRESS_SAMPLES_KEY);
             $log->info('Archive progress reset.');
         }
 
@@ -956,19 +957,33 @@ class TrebArchiveImportService
 
         $keys = array_keys($payloadByKey);
 
-        $existingKeys = DB::table('re_properties')
+        $existingRows = DB::table('re_properties')
             ->whereIn('external_id', $keys)
-            ->pluck('external_id')
-            ->map(static fn ($k): string => strtoupper((string) $k))
-            ->all();
-        $existingSet = array_fill_keys($existingKeys, true);
+            ->get(array_values(array_unique(array_merge(
+                ['external_id'],
+                self::UPSERT_UPDATE_COLUMNS
+            ))))
+            ->keyBy(static fn (object $row): string => strtoupper((string) $row->external_id));
+        $changedPayloadByKey = [];
+        $searchKeys = [];
 
-        foreach ($keys as $key) {
-            if (isset($existingSet[$key])) {
-                $updated++;
-            } else {
+        foreach ($payloadByKey as $key => $payload) {
+            $current = $existingRows->get($key);
+            if ($current === null) {
+                $changedPayloadByKey[$key] = $payload;
+                $searchKeys[] = $key;
                 $imported++;
+            } elseif ($this->archivePayloadChanged($payload, $current)) {
+                $changedPayloadByKey[$key] = $payload;
+                $updated++;
+                if ($this->archiveSearchPayloadChanged($payload, $current)) {
+                    $searchKeys[] = $key;
+                }
             }
+        }
+
+        if ($changedPayloadByKey === []) {
+            return [$imported, $updated, $skipped, $duplicates];
         }
 
         $prevHistory = null;
@@ -978,9 +993,9 @@ class TrebArchiveImportService
         }
 
         try {
-            DB::transaction(function () use ($payloadByKey): void {
+            DB::transaction(function () use ($changedPayloadByKey): void {
                 $upsertChunk = max(50, min(500, (int) config('treb.archive.upsert_chunk', 250)));
-                foreach (array_chunk(array_values($payloadByKey), $upsertChunk) as $chunk) {
+                foreach (array_chunk(array_values($changedPayloadByKey), $upsertChunk) as $chunk) {
                     DB::table('re_properties')->upsert(
                         $chunk,
                         ['external_id'],
@@ -1001,11 +1016,65 @@ class TrebArchiveImportService
             }
         }
 
-        if (config('treb.archive.queue_search_index', true)) {
-            $this->queueSearchForKeys($keys);
+        if (config('treb.archive.queue_search_index', true) && $searchKeys !== []) {
+            $this->queueSearchForKeys($searchKeys);
         }
 
         return [$imported, $updated, $skipped, $duplicates];
+    }
+
+    /**
+     * Compare only columns this archive upsert can mutate. This avoids a write
+     * and a downstream index task when AMP has not changed the local record.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    private function archivePayloadChanged(array $payload, object $current): bool
+    {
+        foreach (self::UPSERT_UPDATE_COLUMNS as $column) {
+            if ($this->archiveValuesDiffer($payload[$column] ?? null, $current->{$column} ?? null)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * A narrower comparison for fields emitted by Property::toSearchableArray().
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    private function archiveSearchPayloadChanged(array $payload, object $current): bool
+    {
+        $searchColumns = [
+            'name', 'location', 'PropertySubType', 'price', 'ClosePrice',
+            'zip_code', 'MlsStatus', 'TransactionType', 'broker',
+            'number_bedroom', 'BedroomsBelowGrade', 'number_bathroom',
+            'moderation_status', 'status', 'close_date', 'listing_contract_date',
+            'purchase_contract_date', 'listing_modified_at', 'updated_at',
+        ];
+
+        foreach ($searchColumns as $column) {
+            if ($this->archiveValuesDiffer($payload[$column] ?? null, $current->{$column} ?? null)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function archiveValuesDiffer(mixed $incoming, mixed $stored): bool
+    {
+        if ($incoming === null || $stored === null) {
+            return $incoming !== $stored;
+        }
+
+        if (is_numeric($incoming) && is_numeric($stored)) {
+            return (float) $incoming !== (float) $stored;
+        }
+
+        return (string) $incoming !== (string) $stored;
     }
 
     /**

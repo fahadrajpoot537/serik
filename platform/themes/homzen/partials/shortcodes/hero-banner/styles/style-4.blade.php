@@ -3172,6 +3172,40 @@ position: absolute;
         font-weight: 600;
     }
 
+    .hs-split-dropdown-wrap .dropdown-menu {
+        max-height: min(70vh, 520px);
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .hs-year-filter-heading {
+        margin: 10px 0 6px;
+        font-weight: 600;
+        font-size: 13px;
+        color: #1f2937;
+    }
+
+    .hs-sold-year-radios {
+        display: flex;
+        flex-direction: column;
+        max-height: 220px;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding-right: 2px;
+        margin-bottom: 4px;
+        -webkit-overflow-scrolling: touch;
+        border-top: 1px solid #eef2f7;
+        padding-top: 6px;
+    }
+
+    .hs-sold-year-radios .radio-item {
+        display: flex;
+        width: 100%;
+        margin-bottom: 2px;
+        flex: 0 0 auto;
+    }
+
     .hs-split-dropdown-wrap .custom-radio {
         width: 16px;
         height: 16px;
@@ -3537,6 +3571,7 @@ position: absolute;
 
 .map-housesigma.view-list .map-search-wrapper > .hs-map-stage,
 .map-housesigma.view-list .map-search-wrapper > .hs-map-status-bar,
+.map-housesigma.view-list .map-search-wrapper > .hs-map-mobile-stack,
 .map-housesigma.view-list .map-search-wrapper > .map-count-box,
 .map-housesigma.view-list .map-search-wrapper > .hs-map-property-sheet,
 .map-housesigma.view-list .map-search-wrapper > .hs-map-center-panel,
@@ -3778,8 +3813,13 @@ position: absolute;
         z-index: 6 !important;
     }
 
-    .map-housesigma .hs-map-status-bar {
+    .map-housesigma .hs-map-mobile-stack {
         top: 8px;
+        z-index: 7;
+    }
+
+    .map-housesigma .hs-map-status-bar {
+        top: auto;
         z-index: 6;
     }
 
@@ -4282,19 +4322,57 @@ position: absolute;
         text-align: center;
     }
 
-    .hs-map-status-bar {
+    .hs-map-mobile-stack {
         position: absolute;
         top: 10px;
         left: 50%;
         transform: translateX(-50%);
+        z-index: 7;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        width: calc(100% - 20px);
+        max-width: 340px;
+    }
+
+    .hs-map-txn-bar {
+        display: flex;
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0,0,0,.12);
+        padding: 3px;
+        width: 100%;
+    }
+
+    .hs-map-txn-bar .hs-m-txn {
+        flex: 1;
+        border: none;
+        background: transparent;
+        padding: 7px 4px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        color: #374151;
+    }
+
+    .hs-map-txn-bar .hs-m-txn.active {
+        background: var(--hs-primary);
+        color: #fff;
+    }
+
+    .hs-map-status-bar {
+        position: relative;
+        top: auto;
+        left: auto;
+        transform: none;
         z-index: 6;
         display: flex;
         background: #fff;
         border-radius: 8px;
         box-shadow: 0 2px 10px rgba(0,0,0,.12);
         padding: 3px;
-        width: calc(100% - 20px);
-        max-width: 340px;
+        width: 100%;
+        max-width: none;
     }
 
     .hs-map-status-bar .hs-m-status {
@@ -4390,12 +4468,28 @@ position: absolute;
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 12px;
+        max-height: min(52vh, 420px);
+        overflow: hidden;
+    }
+
+    .hs-m-date-columns .column {
+        min-height: 0;
+        max-height: min(52vh, 420px);
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+        padding-right: 4px;
     }
 
     .hs-m-date-columns .column-title {
         font-weight: 600;
         font-size: 14px;
         margin-bottom: 8px;
+        position: sticky;
+        top: 0;
+        background: #fff;
+        z-index: 1;
+        padding-bottom: 4px;
     }
 
     .hs-m-radio-option {
@@ -4506,7 +4600,8 @@ position: absolute;
 @media (min-width: 992px) {
     .hs-mobile-filters,
     .hs-mob-watch,
-    .hs-map-status-bar {
+    .hs-map-status-bar,
+    .hs-map-mobile-stack {
         display: none !important;
     }
 }
@@ -4982,6 +5077,9 @@ position: absolute;
                                 <span class="custom-radio"></span>
                                 More than 90 days
                               </label>
+
+                              <div class="hs-year-filter-heading">Year</div>
+                              <div class="hs-sold-year-radios" data-date-group="date-sold"></div>
                             
                             </div>
                         </div>
@@ -5242,10 +5340,16 @@ position: absolute;
             <div class="hs-list-sidebar-body" id="hsListSidebarBody"></div>
         </aside>
 
-        <div class="hs-map-status-bar d-lg-none">
-            <button type="button" class="hs-m-status active" data-status="Active">For Sale</button>
-            <button type="button" class="hs-m-status" data-status="Sold">Sold</button>
-            <button type="button" class="hs-m-status" data-status="Expired">De-listed</button>
+        <div class="hs-map-mobile-stack d-lg-none">
+            <div class="hs-map-txn-bar" role="group" aria-label="Listing type">
+                <button type="button" class="hs-m-txn active" data-transaction="For Sale">For Sale</button>
+                <button type="button" class="hs-m-txn" data-transaction="For Lease">For Lease</button>
+            </div>
+            <div class="hs-map-status-bar">
+                <button type="button" class="hs-m-status active" data-status="Active">For Sale</button>
+                <button type="button" class="hs-m-status" data-status="Sold">Sold</button>
+                <button type="button" class="hs-m-status" data-status="Expired">De-listed</button>
+            </div>
         </div>
     
         <div class="hs-map-stage">
@@ -6858,6 +6962,35 @@ const HS_DATE_LABELS = {
     last_360_day: 'Last 360 days',
 };
 
+/** Dynamic sold/leased year options: current calendar year down to 2013 (never hardcode current year). */
+function getHsHistoryYearValues() {
+    const currentYear = new Date().getFullYear();
+    const minYear = 2013;
+    const years = [];
+    for (let y = currentYear; y >= minYear; y--) {
+        years.push('year_' + y);
+    }
+    return years;
+}
+
+function populateHsSoldYearRadios() {
+    document.querySelectorAll('.hs-sold-year-radios[data-date-group="date-sold"]').forEach((container) => {
+        if (container.dataset.populated === '1') return;
+        const selected = (typeof hsMobileDateSold !== 'undefined' && hsMobileDateSold) ? hsMobileDateSold : 'all';
+        container.innerHTML = getHsHistoryYearValues().map((val) => {
+            const year = val.replace('year_', '');
+            const isSelected = val === selected;
+            // Keep the class attribute quote closed: class="radio-item" / class="radio-item selected"
+            return '<label class="radio-item' + (isSelected ? ' selected' : '') + '">'
+                + '<input type="radio" name="date-sold" value="' + val + '"' + (isSelected ? ' checked' : '') + '>'
+                + '<span class="custom-radio"></span>'
+                + year
+                + '</label>';
+        }).join('');
+        container.dataset.populated = '1';
+    });
+}
+
 function getHsDateLabel(val) {
     if (!val || val === 'all') return 'All';
     if (val.startsWith('year_')) return 'Year ' + val.replace('year_', '');
@@ -6891,6 +7024,26 @@ function getClosedStatusLabel() {
     return selectedTransaction === 'For Lease' ? 'Leased' : 'Sold';
 }
 
+/** True only for Sold/Leased history statuses (not Active, not De-listed). */
+function isHistoryClosedStatus() {
+    const historyStatuses = ['Sold', 'Sold Conditional', 'Sold Conditional Escape', 'Leased', 'Leased Conditional'];
+    return (selectedStatus || []).some((s) => historyStatuses.includes(s));
+}
+
+/** Clear history year + sold date state to all (desktop radios + mobile state). */
+function resetHistoryYearFilter() {
+    hsMobileDateSold = 'all';
+    if (typeof syncSoldDateRadios === 'function') {
+        syncSoldDateRadios('all');
+    } else {
+        document.querySelectorAll('input[name="date-sold"], input[name="date-delisted"]').forEach((r) => {
+            const isAll = r.value === 'all';
+            r.checked = isAll;
+            r.closest('.radio-item')?.classList.toggle('selected', isAll);
+        });
+    }
+}
+
 function syncSoldLeasedUiLabels() {
     const label = getClosedStatusLabel();
     const soldSplitLabel = document.querySelector('#hsSplitWrapSold .hs-split-label');
@@ -6899,6 +7052,9 @@ function syncSoldLeasedUiLabels() {
     if (plainSold) plainSold.textContent = label;
     const mSold = document.querySelector('.hs-m-status[data-status="Sold"]');
     if (mSold) mSold.textContent = label;
+    document.querySelectorAll('.hs-m-txn').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.transaction === selectedTransaction);
+    });
 }
 
 function updateSplitFilterLabels() {
@@ -7697,7 +7853,12 @@ map.on('mouseleave', 'unclustered-exact-dot', () => {
         if (!isSoldOrDelistedStatus()) {
             return 'all';
         }
-        return hsMobileDateSold || 'all';
+        const val = hsMobileDateSold || 'all';
+        // De-listed must never send a history year (desktop hides Year; clear stale year_*).
+        if (isDelistedStatus() && String(val).startsWith('year_')) {
+            return 'all';
+        }
+        return val;
     }
     
     
@@ -7705,6 +7866,7 @@ map.on('mouseleave', 'unclustered-exact-dot', () => {
   document.querySelectorAll('[data-type="status"]').forEach(btn => {
     btn.addEventListener('click', function () {
 
+       const wasHistory = typeof isHistoryClosedStatus === 'function' && isHistoryClosedStatus();
        const value = this.dataset.value;
 
         if (value === 'Expired') {
@@ -7729,6 +7891,10 @@ map.on('mouseleave', 'unclustered-exact-dot', () => {
             selectedStatus = [value];
         }
 
+        if (wasHistory && typeof isHistoryClosedStatus === 'function' && !isHistoryClosedStatus()) {
+            resetHistoryYearFilter();
+        }
+
         syncFilterUiFromState();
         syncDateRadiosFromState();
         if (typeof updateSplitFilterLabels === 'function') {
@@ -7738,53 +7904,80 @@ map.on('mouseleave', 'unclustered-exact-dot', () => {
     });
 });
 
-document.querySelectorAll('input[name="date"], input[name="date-sold"], input[name="date-delisted"]').forEach(radio => {
-    radio.addEventListener('change', function () {
-        if (this.name === 'date') {
-            hsMobileDateSale = this.value;
-        } else {
-            hsMobileDateSold = this.value;
-            alignClosedStatusWithTransaction();
-        }
-        syncDateRadiosFromState();
-        if (typeof updateSplitFilterLabels === 'function') {
-            updateSplitFilterLabels();
-        }
-        if (typeof updateMobileFilterLabels === 'function') {
-            updateMobileFilterLabels();
-        }
-        loadProperties({ fromFilters: true });
-    });
+populateHsSoldYearRadios();
+
+// Event delegation so dynamically-injected year radios always work.
+document.addEventListener('change', function (e) {
+    const radio = e.target;
+    if (!(radio instanceof HTMLInputElement) || radio.type !== 'radio') return;
+    if (radio.name !== 'date' && radio.name !== 'date-sold' && radio.name !== 'date-delisted') return;
+
+    if (radio.name === 'date') {
+        hsMobileDateSale = radio.value;
+    } else {
+        hsMobileDateSold = radio.value;
+        alignClosedStatusWithTransaction();
+    }
+    syncDateRadiosFromState();
+    if (typeof updateSplitFilterLabels === 'function') {
+        updateSplitFilterLabels();
+    }
+    if (typeof updateMobileFilterLabels === 'function') {
+        updateMobileFilterLabels();
+    }
+    loadProperties({ fromFilters: true });
 });
     
     
     
+function applyListingTransaction(nextTransaction, { reload = true } = {}) {
+    selectedTransaction = nextTransaction;
+    communityEnforceTransaction = true;
+    const dropdown = document.getElementById('transactionDropdown');
+    if (dropdown) dropdown.innerText = selectedTransaction;
+
+    document.querySelectorAll('.transaction-item').forEach((i) => {
+        i.classList.toggle('active', i.dataset.transaction === selectedTransaction);
+    });
+    document.querySelectorAll('.hs-m-txn').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.transaction === selectedTransaction);
+    });
+
+    if (selectedTransaction === 'For Lease') {
+        applyPriceConfig(LEASE_CONFIG);
+    } else if (selectedTransaction === 'For Sale') {
+        applyPriceConfig(SALE_CONFIG);
+    }
+
+    const closedStatuses = ['Sold', 'Sold Conditional', 'Sold Conditional Escape', 'Leased', 'Leased Conditional'];
+    if ((selectedStatus || []).some((s) => closedStatuses.includes(s))) {
+        selectedStatus = getClosedStatusValues();
+    }
+
+    // For Sale ↔ For Lease must never keep a stale history year.
+    resetHistoryYearFilter();
+
+    syncSoldLeasedUiLabels();
+    if (typeof updateSplitFilterLabels === 'function') {
+        updateSplitFilterLabels();
+    }
+    if (typeof syncFilterUiFromState === 'function') {
+        syncFilterUiFromState();
+    }
+    if (reload) {
+        loadProperties({ fromFilters: true });
+    }
+}
+
    document.querySelectorAll('.transaction-item').forEach(item => {
         item.addEventListener('click', function() {
-            selectedTransaction = this.dataset.transaction;
-            communityEnforceTransaction = true;
-            document.getElementById('transactionDropdown').innerText = selectedTransaction;
+            applyListingTransaction(this.dataset.transaction);
+        });
+    });
 
-            document.querySelectorAll('.transaction-item').forEach(i => i.classList.remove('active'));
-            this.classList.add('active');
-
-            if (selectedTransaction === 'For Lease') {
-                applyPriceConfig(LEASE_CONFIG);
-            } else if (selectedTransaction === 'For Sale') {
-                applyPriceConfig(SALE_CONFIG);
-            }
-
-            // Keep Sold/Leased filter aligned with transaction type (labels + status values).
-            const closedStatuses = ['Sold', 'Sold Conditional', 'Sold Conditional Escape', 'Leased', 'Leased Conditional'];
-            if ((selectedStatus || []).some((s) => closedStatuses.includes(s))) {
-                selectedStatus = getClosedStatusValues();
-            }
-            syncSoldLeasedUiLabels();
-            if (typeof updateSplitFilterLabels === 'function') {
-                updateSplitFilterLabels();
-            }
-
-            loadProperties({ fromFilters: true });
+    document.querySelectorAll('.hs-m-txn').forEach((btn) => {
+        btn.addEventListener('click', function () {
+            applyListingTransaction(this.dataset.transaction);
         });
     });
     
@@ -12563,12 +12756,20 @@ function buildHsDateColumns() {
         'all', 'more_than_15_days', 'more_than_30_days', 'more_than_60_days', 'more_than_90_days',
     ];
     const soldOptions = ['last_1_day', 'last_3_day', 'last_7_day', 'last_30_day', 'last_90_day', 'last_180_day', 'last_360_day'];
-    for (let y = 2026; y >= 2003; y--) soldOptions.push('year_' + y);
+    // Year options only for Sold*/Leased* — never for Active or De-listed (match desktop).
+    if (typeof isHistoryClosedStatus === 'function' && isHistoryClosedStatus()) {
+        getHsHistoryYearValues().forEach((y) => soldOptions.push(y));
+    }
 
     const renderCol = (title, group, options, selected) => {
         let html = '<div class="column"><p class="column-title">' + title + '</p>';
+        let yearHeadingAdded = false;
         options.forEach((val) => {
-            const label = val.startsWith('year_') ? 'Year ' + val.replace('year_', '') : (HS_DATE_LABELS[val] || val);
+            if (String(val).startsWith('year_') && !yearHeadingAdded) {
+                html += '<p class="column-title" style="margin-top:10px;">Year</p>';
+                yearHeadingAdded = true;
+            }
+            const label = String(val).startsWith('year_') ? String(val).replace('year_', '') : (HS_DATE_LABELS[val] || val);
             html += '<div class="hs-m-radio-option' + (val === selected ? ' selected' : '') + '" data-date-group="' + group + '" data-value="' + val + '">';
             html += '<span class="dot"></span><span>' + label + '</span></div>';
         });
@@ -12693,6 +12894,7 @@ function initMobileFilters() {
 
     document.querySelectorAll('.hs-m-status').forEach((btn) => {
         btn.addEventListener('click', function () {
+            const wasHistory = typeof isHistoryClosedStatus === 'function' && isHistoryClosedStatus();
             const value = this.dataset.status;
             if (value === 'Expired') {
                 selectedStatus = ['Expired', 'Terminated', 'Suspended'];
@@ -12701,6 +12903,9 @@ function initMobileFilters() {
                 hsMobileDateSold = hsMobileDateSold || 'all';
             } else {
                 selectedStatus = ['New', 'Price Change', 'Extension', 'Previous Status'];
+            }
+            if (wasHistory && typeof isHistoryClosedStatus === 'function' && !isHistoryClosedStatus()) {
+                resetHistoryYearFilter();
             }
             syncFilterUiFromState();
             syncDateRadiosFromState();
@@ -13111,7 +13316,7 @@ if (loadMoreBtn) {
 }
 let typingTimer;
 let searchRequestId = 0;
-const typingDelay = 80;
+const typingDelay = 300;
 
 function isMlsSearchKeyword(keyword) {
     return /^[a-z]{1,2}\d{5,}$/i.test(String(keyword || '').trim());
@@ -13196,14 +13401,15 @@ function isLocationOnlySearchKeyword(keyword) {
 }
 
 function handleSmartSearchInput(keyword) {
-    currentKeyword = keyword;
-    skip = 0;
     clearTimeout(typingTimer);
-    resetMapAcCatExpanded();
-
-    const trimmed = String(keyword || '').trim();
+    const trimmed = String(keyword || '').replace(/\s+/g, ' ').trim();
 
     if (trimmed.length < 2) {
+        currentKeyword = '';
+        if (searchAbortController) {
+            searchAbortController.abort();
+            searchAbortController = null;
+        }
         if (dropdown) {
             dropdown.style.display = 'none';
         }
@@ -13215,8 +13421,23 @@ function handleSmartSearchInput(keyword) {
         return;
     }
 
+    if (trimmed === currentKeyword) {
+        return;
+    }
+
+    currentKeyword = trimmed;
+    skip = 0;
+    if (searchAbortController) {
+        searchAbortController.abort();
+        searchAbortController = null;
+    }
+    resetMapAcCatExpanded();
     renderInstantSearchShell(trimmed);
-    loadResults(trimmed, true);
+    typingTimer = setTimeout(() => {
+        if (currentKeyword === trimmed) {
+            loadResults(trimmed, true);
+        }
+    }, typingDelay);
 }
 
 function buildCitySuggestionsHtml(keyword) {
@@ -13400,8 +13621,13 @@ input.addEventListener('input', function () {
 });
 
 input.addEventListener('focus', function () {
-    if (String(this.value || '').trim().length >= 2) {
-        handleSmartSearchInput(this.value);
+    const trimmed = String(this.value || '').replace(/\s+/g, ' ').trim();
+    if (trimmed.length >= 2) {
+        if (trimmed === currentKeyword) {
+            dropdown.style.display = 'block';
+        } else {
+            handleSmartSearchInput(this.value);
+        }
     }
 });
 
@@ -13449,15 +13675,6 @@ function getMatchingCities(keyword) {
     return matches
         .sort((a, b) => a.score - b.score || a.label.localeCompare(b.label))
         .slice(0, 6);
-}
-
-function shouldKeepSearchRequest(newKeyword) {
-    const prev = String(loadResults._activeKeyword || '').trim().toLowerCase();
-    const next = String(newKeyword || '').trim().toLowerCase();
-    if (!prev || !next) {
-        return false;
-    }
-    return next.startsWith(prev) && next.length > prev.length;
 }
 
 function getMapPrefixSearchCache(keyword) {
@@ -13521,14 +13738,18 @@ function loadResults(keyword, reset = false){
         }
     }
 
-    if (searchAbortController && !shouldKeepSearchRequest(keyword)) {
+    if (searchAbortController) {
         searchAbortController.abort();
     }
-    searchAbortController = new AbortController();
-    const communityPromise = fetchCommunitySuggestions(keyword, searchAbortController.signal);
+    const requestController = new AbortController();
+    searchAbortController = requestController;
+    const isAddressLike = /\d/.test(String(keyword || ''));
+    const communityPromise = isAddressLike
+        ? Promise.resolve([])
+        : fetchCommunitySuggestions(keyword, requestController.signal);
     loadResults._activeKeyword = keyword;
     const isMlsKey = isMlsSearchKeyword(keyword);
-    const searchTimeoutId = setTimeout(() => searchAbortController.abort(), isMlsKey ? 45000 : 12000);
+    const searchTimeoutId = setTimeout(() => requestController.abort(), isMlsKey ? 45000 : 12000);
 
     const searchUrl = buildSmartSearchUrl(keyword);
 
@@ -13552,7 +13773,7 @@ function loadResults(keyword, reset = false){
     }
 
     Promise.all([
-        smartSearchFetch(searchUrl, searchAbortController.signal),
+        smartSearchFetch(searchUrl, requestController.signal),
         communityPromise,
     ])
     .then(([data, communities]) => {

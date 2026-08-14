@@ -978,7 +978,7 @@ class PropertySearchService
         // Date-window filters use the indexed numeric timestamps so "Last N days"
         // resolves entirely inside Meilisearch instead of a slow MySQL scan.
         // 'listing_contract_ts' => active "Listed On" date; 'close_ts' => sold date.
-        foreach (['listing_contract_ts', 'close_ts', 'created_ts'] as $tsField) {
+        foreach (['listing_contract_ts', 'close_ts', 'created_ts', 'updated_ts'] as $tsField) {
             if (isset($opts[$tsField . '_gte']) && $opts[$tsField . '_gte'] > 0) {
                 $filters[] = $tsField . ' >= ' . (int) $opts[$tsField . '_gte'];
             }
