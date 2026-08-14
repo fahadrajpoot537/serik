@@ -25,6 +25,10 @@ final class PropertySearchSync
 
     public const WORKER_LOCK_KEY = 'serik:search_sync:worker:lock';
 
+    private const DISPATCH_GUARD_KEY = 'serik:search_sync:dispatch_guard';
+
+    private const MEILISEARCH_CIRCUIT_KEY = 'serik:search_sync:meilisearch_circuit';
+
     /**
      * Mark a property for deferred indexing and ensure the global batch worker runs.
      * Does not dispatch one job per property.
@@ -138,6 +142,8 @@ final class PropertySearchSync
             $this->clearInflight($propertyIds);
         } catch (Throwable $e) {
             $this->requeue($propertyIds);
+            $backoff = $this->recordMeilisearchFailure($e);
+            SerikQueueMetrics::recordSearchMeilisearchFailure();
 
             Log::warning('[PropertySearchSync] batch index failed — IDs requeued', [
                 'batch_size' => $batchSize,
@@ -145,6 +151,7 @@ final class PropertySearchSync
                 'property_ids' => $indexedIds,
                 'claimed_property_ids' => $propertyIds,
                 'remaining_pending' => $this->pendingCount(),
+                'retry_after_seconds' => $backoff,
                 'error' => $e->getMessage(),
             ]);
 
@@ -158,6 +165,8 @@ final class PropertySearchSync
 
         $durationMs = round((microtime(true) - $started) * 1000, 2);
         $remaining = $this->pendingCount();
+        $this->clearMeilisearchFailureState();
+        SerikQueueMetrics::recordSearchBatch($searchable->count(), $durationMs);
 
         Log::debug('[PropertySearchSync] batch indexed', [
             'batch_size' => $batchSize,
@@ -188,6 +197,68 @@ final class PropertySearchSync
         $pending = Cache::get(self::PENDING_CACHE_KEY, []);
 
         return is_array($pending) ? count($pending) : 0;
+    }
+
+    public function isMeilisearchCircuitOpen(): bool
+    {
+        return is_array(Cache::get(self::MEILISEARCH_CIRCUIT_KEY));
+    }
+
+    public function meilisearchRetryAfterSeconds(): int
+    {
+        $state = Cache::get(self::MEILISEARCH_CIRCUIT_KEY);
+        if (! is_array($state)) {
+            return 0;
+        }
+
+        return max(0, (int) ($state['retry_after_seconds'] ?? 0));
+    }
+
+    /**
+     * Ensure only one global batch-worker dispatch is outstanding while the
+     * current drain owns the backlog. Laravel's job uniqueness remains a second
+     * line of defence; this guard avoids needless database queue rows/logging.
+     */
+    public function dispatchWorkerIfNeeded(string $reason): bool
+    {
+        if ($this->pendingCount() === 0) {
+            return false;
+        }
+
+        if ($this->isMeilisearchCircuitOpen()) {
+            Log::info('[PropertySearchSync] batch worker dispatch deferred by Meilisearch cooldown', [
+                'reason' => $reason,
+                'retry_after_seconds' => $this->meilisearchRetryAfterSeconds(),
+                'pending_count' => $this->pendingCount(),
+            ]);
+
+            return false;
+        }
+
+        $ttl = max(60, (int) config('serik.search_sync.dispatch_guard_seconds', 360));
+        if (! Cache::add(self::DISPATCH_GUARD_KEY, $reason, $ttl)) {
+            SerikQueueMetrics::recordSearchDuplicateDispatchPrevented();
+            Log::debug('[PropertySearchSync] duplicate batch worker dispatch prevented', [
+                'reason' => $reason,
+                'pending_count' => $this->pendingCount(),
+            ]);
+
+            return false;
+        }
+
+        SearchBatchJob::dispatch();
+        SerikQueueMetrics::recordSearchBatchDispatched();
+        Log::info('[PropertySearchSync] batch worker dispatched', [
+            'reason' => $reason,
+            'pending_count' => $this->pendingCount(),
+        ]);
+
+        return true;
+    }
+
+    public function releaseDispatchGuard(): void
+    {
+        Cache::forget(self::DISPATCH_GUARD_KEY);
     }
 
     /**
@@ -241,11 +312,9 @@ final class PropertySearchSync
                     Cache::put(self::PENDING_CACHE_KEY, $pending, 86400);
                     $restored = max(0, count($pending) - $before);
 
-                    if ($before === 0 && $pending !== []) {
-                        SearchBatchJob::dispatch();
-                    }
                 });
             }
+            $this->dispatchWorkerIfNeeded('checkpoint_recovery');
         } catch (Throwable $e) {
             Log::warning('[PropertySearchSync] recoverFromCheckpoint failed', ['error' => $e->getMessage()]);
         }
@@ -272,14 +341,15 @@ final class PropertySearchSync
             return;
         }
 
-        Cache::lock(self::PENDING_LOCK_KEY, 10)->block(5, function () use ($propertyIds): void {
+        $duplicateAttempts = 0;
+
+        Cache::lock(self::PENDING_LOCK_KEY, 10)->block(5, function () use ($propertyIds, &$duplicateAttempts): void {
             /** @var array<int, bool> $pending */
             $pending = Cache::get(self::PENDING_CACHE_KEY, []);
             if (! is_array($pending)) {
                 $pending = [];
             }
 
-            $wasEmpty = $pending === [];
             $pendingCountBefore = count($pending);
 
             foreach ($propertyIds as $propertyId) {
@@ -287,23 +357,24 @@ final class PropertySearchSync
             }
 
             $pendingCountAfter = count($pending);
+            $duplicateAttempts = max(0, count($propertyIds) - max(0, $pendingCountAfter - $pendingCountBefore));
             Cache::put(self::PENDING_CACHE_KEY, $pending, 86400);
             $this->persistPendingCheckpoint($propertyIds, remove: false);
             $this->clearInflight($propertyIds);
-
-            $searchBatchJobDispatched = false;
-            if ($wasEmpty) {
-                SearchBatchJob::dispatch();
-                $searchBatchJobDispatched = true;
-            }
 
             Log::debug('[PropertySearchSync] markPendingMany', [
                 'scheduled_count' => count($propertyIds),
                 'pending_count_before' => $pendingCountBefore,
                 'pending_count_after' => $pendingCountAfter,
-                'search_batch_job_dispatched' => $searchBatchJobDispatched,
+                'duplicate_attempts' => $duplicateAttempts,
             ]);
         });
+
+        for ($i = 0; $i < $duplicateAttempts; $i++) {
+            SerikQueueMetrics::recordSearchDuplicateDocumentSkipped();
+        }
+
+        $this->dispatchWorkerIfNeeded('property_scheduled');
     }
 
     /**
@@ -464,6 +535,31 @@ final class PropertySearchSync
             DB::table('serik_search_sync_inflight')->whereIn('property_id', $propertyIds)->delete();
         } catch (Throwable) {
         }
+    }
+
+    private function recordMeilisearchFailure(Throwable $e): int
+    {
+        $previous = Cache::get(self::MEILISEARCH_CIRCUIT_KEY, []);
+        $failures = is_array($previous) ? ((int) ($previous['failures'] ?? 0) + 1) : 1;
+        $base = max(1, (int) config('serik.search_sync.failure_backoff_base_seconds', 30));
+        $max = max($base, (int) config('serik.search_sync.failure_backoff_max_seconds', 900));
+        $backoff = min($max, $base * (2 ** min(8, $failures - 1)));
+        $jitter = random_int(0, max(1, (int) floor($backoff * 0.2)));
+        $delay = min($max, $backoff + $jitter);
+
+        Cache::put(self::MEILISEARCH_CIRCUIT_KEY, [
+            'failures' => $failures,
+            'retry_after_seconds' => $delay,
+            'last_error' => mb_substr($e->getMessage(), 0, 500),
+            'failed_at' => now()->toIso8601String(),
+        ], $delay);
+
+        return $delay;
+    }
+
+    private function clearMeilisearchFailureState(): void
+    {
+        Cache::forget(self::MEILISEARCH_CIRCUIT_KEY);
     }
 
     private function checkpointsEnabled(): bool

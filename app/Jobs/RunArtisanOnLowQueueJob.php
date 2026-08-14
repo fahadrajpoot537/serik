@@ -4,19 +4,20 @@ namespace App\Jobs;
 
 use App\Support\SerikQueue;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
  * Run a long Artisan command on the LOW queue so schedule:run stays &lt;2s.
  */
-class RunArtisanOnLowQueueJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
+class RunArtisanOnLowQueueJob implements ShouldQueue, ShouldBeUnique
 {
     use Dispatchable;
     use InteractsWithQueue;
@@ -46,15 +47,28 @@ class RunArtisanOnLowQueueJob implements ShouldQueue, ShouldBeUniqueUntilProcess
 
     public function handle(): void
     {
+        $lock = Cache::lock('serik:low-maintenance:' . sha1($this->artisanCommand), $this->timeout + 300);
+        if (! $lock->get()) {
+            Log::info('[RunArtisanOnLowQueueJob] overlapping maintenance command skipped', [
+                'command' => $this->artisanCommand,
+            ]);
+
+            return;
+        }
+
         @set_time_limit(0);
         @ini_set('max_execution_time', '0');
 
-        Log::info('[RunArtisanOnLowQueueJob] start', ['command' => $this->artisanCommand]);
-        Artisan::call($this->artisanCommand, $this->parameters);
-        Log::info('[RunArtisanOnLowQueueJob] done', [
-            'command' => $this->artisanCommand,
-            'output' => mb_substr(Artisan::output(), 0, 2000),
-        ]);
+        try {
+            Log::info('[RunArtisanOnLowQueueJob] start', ['command' => $this->artisanCommand]);
+            Artisan::call($this->artisanCommand, $this->parameters);
+            Log::info('[RunArtisanOnLowQueueJob] done', [
+                'command' => $this->artisanCommand,
+                'output' => mb_substr(Artisan::output(), 0, 2000),
+            ]);
+        } finally {
+            $lock->release();
+        }
     }
 
     public function failed(?Throwable $e): void

@@ -32,6 +32,9 @@ return [
     'orchestration' => [
         'enabled' => filter_var(env('SERIK_QUEUE_ORCHESTRATION', true), FILTER_VALIDATE_BOOLEAN),
         'stale_reserved_seconds' => (int) env('SERIK_QUEUE_STALE_RESERVED', 900),
+        // RunArtisanOnLowQueueJob can intentionally run bounded maintenance longer
+        // than the general stale reservation threshold.
+        'maintenance_stale_reserved_seconds' => (int) env('SERIK_QUEUE_MAINTENANCE_STALE_RESERVED', 7500),
         'auto_requeue_failed' => filter_var(env('SERIK_QUEUE_AUTO_REQUEUE_FAILED', true), FILTER_VALIDATE_BOOLEAN),
         'failed_requeue_limit' => (int) env('SERIK_QUEUE_FAILED_REQUEUE_LIMIT', 25),
         'failed_requeue_max_age_hours' => (int) env('SERIK_QUEUE_FAILED_MAX_AGE_HOURS', 24),
@@ -75,6 +78,12 @@ return [
         'max_seconds_per_job' => (int) env('SERIK_SEARCH_SYNC_MAX_SECONDS', 240),
         // Requeue claimed-but-unfinished IDs after this many minutes (crash mid-index).
         'inflight_stale_minutes' => (int) env('SERIK_SEARCH_INFLIGHT_STALE', 30),
+        // Retain a dispatch guard while a batch worker owns the backlog.
+        'dispatch_guard_seconds' => (int) env('SERIK_SEARCH_SYNC_DISPATCH_GUARD', 360),
+        // Persistent Meilisearch failures retain the durable pending checkpoint and cool down
+        // before queue self-healing attempts another batch worker.
+        'failure_backoff_base_seconds' => (int) env('SERIK_SEARCH_SYNC_FAILURE_BACKOFF_BASE', 30),
+        'failure_backoff_max_seconds' => (int) env('SERIK_SEARCH_SYNC_FAILURE_BACKOFF_MAX', 900),
     ],
 
     /*

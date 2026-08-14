@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Support\PropertySearchSync;
 use App\Support\SerikQueue;
+use App\Support\SerikQueueMetrics;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -47,6 +48,18 @@ class SearchBatchJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
 
     public function handle(PropertySearchSync $sync): void
     {
+        if ($sync->isMeilisearchCircuitOpen()) {
+            $delay = max(5, $sync->meilisearchRetryAfterSeconds());
+            Log::warning('[SearchBatchJob] Meilisearch cooldown active; retaining pending checkpoint', [
+                'pending_count' => $sync->pendingCount(),
+                'retry_after_seconds' => $delay,
+            ]);
+            SerikQueueMetrics::recordRetry(SerikQueue::search());
+            $this->release($delay);
+
+            return;
+        }
+
         Log::info('[SearchBatchJob] handle start', [
             'pending_count' => $sync->pendingCount(),
         ]);
@@ -60,6 +73,7 @@ class SearchBatchJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
 
         if (! $workerLockAcquired) {
             Log::debug('[SearchBatchJob] worker lock held — releasing job for retry');
+            SerikQueueMetrics::recordRetry(SerikQueue::search());
             $this->release(5);
 
             return;
@@ -97,7 +111,11 @@ class SearchBatchJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
                 'remaining_pending' => $sync->pendingCount(),
             ]);
             self::dispatch();
+
+            return;
         }
+
+        $sync->releaseDispatchGuard();
     }
 
     public function failed(?Throwable $e): void
@@ -106,8 +124,23 @@ class SearchBatchJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
             'error' => $e?->getMessage(),
         ]);
 
-        if (app(PropertySearchSync::class)->pendingCount() > 0) {
-            SearchBatchJob::dispatch();
+        $sync = app(PropertySearchSync::class);
+        if ($sync->pendingCount() === 0) {
+            $sync->releaseDispatchGuard();
+
+            return;
         }
+
+        if ($sync->isMeilisearchCircuitOpen()) {
+            Log::warning('[SearchBatchJob] permanent failure held by Meilisearch cooldown', [
+                'pending_count' => $sync->pendingCount(),
+                'retry_after_seconds' => $sync->meilisearchRetryAfterSeconds(),
+            ]);
+
+            return;
+        }
+
+        $sync->releaseDispatchGuard();
+        $sync->dispatchWorkerIfNeeded('permanent_failure_recovery');
     }
 }

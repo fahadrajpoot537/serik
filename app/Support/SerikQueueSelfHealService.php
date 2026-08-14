@@ -74,10 +74,25 @@ final class SerikQueueSelfHealService
     {
         $staleSeconds = max(120, (int) config('serik.orchestration.stale_reserved_seconds', 900));
         $cutoff = time() - $staleSeconds;
+        $maintenanceStaleSeconds = max(
+            $staleSeconds,
+            (int) config('serik.orchestration.maintenance_stale_reserved_seconds', 7500)
+        );
+        $maintenanceCutoff = time() - $maintenanceStaleSeconds;
+        $lowQueue = SerikQueue::low();
+        $maintenanceJob = '%RunArtisanOnLowQueueJob%';
 
         return (int) DB::table('jobs')
             ->whereNotNull('reserved_at')
             ->where('reserved_at', '<', $cutoff)
+            ->where(function ($query) use ($lowQueue, $maintenanceJob, $maintenanceCutoff): void {
+                // A LOW maintenance wrapper is allowed to run for up to two
+                // hours. Do not make it visible to another worker at the
+                // generic stale threshold while it is still legitimate.
+                $query->where('queue', '!=', $lowQueue)
+                    ->orWhere('payload', 'not like', $maintenanceJob)
+                    ->orWhere('reserved_at', '<', $maintenanceCutoff);
+            })
             ->update([
                 'reserved_at' => null,
                 'available_at' => time(),
