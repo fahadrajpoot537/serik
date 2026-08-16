@@ -3088,7 +3088,14 @@ class PropertyController extends BaseController
         // MySQL JSON fallback from blocking a healthy Meili response. The original
         // community/MySQL fallback remains available when Meili is unavailable.
         $meiliFirstFreeText = ! $isListingKey && ! $parsed && mb_strlen($keyword) >= 5;
-        $communityRows = (! $isListingKey && ! $parsed && ! $meiliFirstFreeText)
+        // Canadian FSA only (e.g. M5V / K1A). Do NOT broaden short alpha paths
+        // like "to"/"tor"/"toro" — those remain community-only by design.
+        $postalPrefixCompact = strtoupper(preg_replace('/\s+/', '', $keyword) ?? '');
+        $isPartialCanadianPostal = ! $isListingKey
+            && ! $parsed
+            && (bool) preg_match('/^[A-Z]\d[A-Z]$/', $postalPrefixCompact);
+        $meiliFirstPrimary = $meiliFirstFreeText || $isPartialCanadianPostal;
+        $communityRows = (! $isListingKey && ! $parsed && ! $meiliFirstPrimary)
             ? $this->smartSearchRowsFromCommunities($keyword, $top, $skip)
             : [];
 
@@ -3140,7 +3147,7 @@ class PropertyController extends BaseController
 
                     // Meili answered — never fall through to AMP for free-text.
                     if (! $meiliUnavailable && $ids === []) {
-                        if ($meiliFirstFreeText) {
+                        if ($meiliFirstPrimary) {
                             return response()->json(
                                 $rememberSearch(TrebPropertyHelper::groupListingsByBuilding([]))
                             );
@@ -3173,7 +3180,7 @@ class PropertyController extends BaseController
             }
         }
 
-        if ($meiliFirstFreeText && $meiliUnavailable) {
+        if ($meiliFirstPrimary && $meiliUnavailable) {
             $communityRows = $this->smartSearchRowsFromCommunities($keyword, $top, $skip);
         }
 
