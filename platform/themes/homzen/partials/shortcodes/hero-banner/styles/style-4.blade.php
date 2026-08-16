@@ -4740,7 +4740,7 @@ position: absolute;
                <div class="smart-search">
                         <div class="search-box">
                             <i class="icon">🔍</i>
-                            <input type="text" id="mapSmartInput" placeholder="Address, Community, Street or Listing#">
+                            <input type="text" id="mapSmartInput" placeholder="Address, Street Name and MLS">
                             <span class="clear-btn" id="mapClearBtn">✕</span>
                         </div>
 

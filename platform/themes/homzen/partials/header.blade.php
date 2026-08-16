@@ -658,7 +658,7 @@
                                <div class="smart-search">
                                 <div class="search-box">
                                      <x-core::icon name="ti ti-search" />
-                                    <input type="text" id="smartInput" placeholder="Search address, community, street or listing...">
+                                    <input type="text" id="smartInput" placeholder="Address, Street Name and MLS">
                                     <span class="clear-btn" id="clearBtn">✕</span>
                                 </div>
         

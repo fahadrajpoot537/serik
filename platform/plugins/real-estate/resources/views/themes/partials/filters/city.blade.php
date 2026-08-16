@@ -4,7 +4,7 @@
     <div class="location-input" data-url="{{ route('public.ajax.cities') }}" style="position: relative;">
         <div class="input-has-icon">
             <input class="select-city-state form-control" id="location" name="location"
-                value="{{ BaseHelper::stringify(request()->input('location')) }}" placeholder="{{ trans('plugins/real-estate::filters.city_state') }}"
+                value="{{ BaseHelper::stringify(request()->input('location')) }}" placeholder="Address, Street Name and MLS"
                 autocomplete="off">
             <i class="far fa-location"></i>
         </div>

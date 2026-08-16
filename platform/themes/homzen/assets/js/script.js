@@ -1870,7 +1870,11 @@ $(() => {
 
     initMap()
 
-    let projectSearchTimeout = null
+    const searchSuggestionStateKey = 'serik-search-suggestion-state'
+
+    const normalizeSearchSuggestionKeyword = (value) => String(value || '')
+        .replace(/\s+/g, ' ')
+        .trim()
 
     const initWishlistCount = () => {
         const wishlist = decodeURIComponent(getCookie('wishlist') || '')
@@ -2057,33 +2061,74 @@ $(() => {
             window.location.href = $form.prop('action') + cleanedFormData.queryString
         })
         .on('keyup', '[data-bb-toggle="search-suggestion"] input[type="text"]', (e) => {
-            clearTimeout(projectSearchTimeout)
-
             const $currentTarget = $(e.currentTarget)
             const $suggest = $currentTarget
                 .closest('[data-bb-toggle="search-suggestion"]')
                 .find('[data-bb-toggle="data-suggestion"]')
+            const normalizedKeyword = normalizeSearchSuggestionKeyword($currentTarget.val())
+            const state = $currentTarget.data(searchSuggestionStateKey) || {
+                lastRequested: '',
+                requestId: 0,
+                timer: null,
+                xhr: null,
+            }
+
+            clearTimeout(state.timer)
+
+            if (!normalizedKeyword) {
+                state.requestId += 1
+                state.lastRequested = ''
+                state.xhr?.abort()
+                state.xhr = null
+                $suggest.stop(true, true).slideUp().empty()
+                $currentTarget.data(searchSuggestionStateKey, state)
+
+                return
+            }
+
+            if (normalizedKeyword === state.lastRequested) {
+                return
+            }
 
             const $form = $currentTarget.closest('form')
+            const requestKeyword = normalizedKeyword
 
-            const cleanedFormData = cleanFormData($form.serializeArray())
+            state.timer = setTimeout(() => {
+                if (requestKeyword !== normalizeSearchSuggestionKeyword($currentTarget.val())) {
+                    return
+                }
 
-            cleanedFormData.formData.push({name: 'minimal', value: 0})
+                const cleanedFormData = cleanFormData($form.serializeArray())
+                cleanedFormData.formData.push({name: 'minimal', value: 0})
 
-            projectSearchTimeout = setTimeout(() => {
-                $.ajax({
+                state.xhr?.abort()
+                const requestId = ++state.requestId
+                state.lastRequested = requestKeyword
+                state.xhr = $.ajax({
                     url: $currentTarget.data('url') || $currentTarget.closest('form').prop('action'),
                     type: 'GET',
                     data: cleanedFormData.formData,
                     success: ({data}) => {
+                        if (requestId !== state.requestId || requestKeyword !== normalizeSearchSuggestionKeyword($currentTarget.val())) {
+                            return
+                        }
+
                         $suggest.html(data).slideDown()
 
                         if (typeof Theme.lazyLoadInstance !== 'undefined') {
                             Theme.lazyLoadInstance.update()
                         }
                     },
+                    complete: () => {
+                        if (requestId === state.requestId) {
+                            state.xhr = null
+                        }
+                    },
                 })
+                $currentTarget.data(searchSuggestionStateKey, state)
             }, 500)
+
+            $currentTarget.data(searchSuggestionStateKey, state)
         })
         .on('click', '.search-suggestion-item:not([data-no-prevent])', (e) => {
             const $currentTarget = $(e.currentTarget)

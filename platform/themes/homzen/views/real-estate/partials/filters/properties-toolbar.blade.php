@@ -246,7 +246,7 @@
                         </div>
                         <div>
                             <label class="form-label small mb-1" for="attribute-terms">{{ __('Keywords') }}</label>
-                            <input type="text" name="k" id="attribute-terms" class="form-control form-control-sm serik-instant-filter-delay" placeholder="{{ __('City, address, MLS…') }}" value="{{ $keyword }}">
+                            <input type="text" name="k" id="attribute-terms" class="form-control form-control-sm serik-instant-filter-delay" placeholder="Address, Street Name and MLS" value="{{ $keyword }}">
                         </div>
                     </div>
                 </div>
