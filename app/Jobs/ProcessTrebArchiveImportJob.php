@@ -50,6 +50,12 @@ class ProcessTrebArchiveImportJob implements ShouldQueue
     {
         @set_time_limit(0);
 
+        if (! config('treb.archive.enabled', true)) {
+            Log::channel('treb_archive')->info('[ProcessTrebArchiveImportJob] skipped — archive import disabled');
+
+            return;
+        }
+
         try {
             $result = $service->run(
                 batchSize: $this->batchSize,

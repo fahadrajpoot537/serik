@@ -16,6 +16,9 @@ return [
     | queue. Actual AMP fetch + bulk upsert runs in workers.
     */
     'archive' => [
+        // Master switch — false stops scheduler fan-out + sync command work.
+        'enabled' => filter_var(env('TREB_ARCHIVE_IMPORT_ENABLED', true), FILTER_VALIDATE_BOOL),
+
         // OData $top per API page (10–500).
         'chunk_size' => (int) env('TREB_ARCHIVE_CHUNK_SIZE', 200),
         'adaptive_chunk' => filter_var(env('TREB_ARCHIVE_ADAPTIVE_CHUNK', true), FILTER_VALIDATE_BOOL),

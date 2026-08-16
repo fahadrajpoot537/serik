@@ -124,12 +124,12 @@
         {{-- Favicons are emitted by Theme::header() (Google-compliant ≥48×48 root icons) --}}
         @stack('header')
         {!! Theme::header() !!}
-{{-- Site-wide top bar + navbar + dropdown chrome (same as homepage) --}}
-<link rel="stylesheet" href="{{ Theme::asset()->url('css/site-chrome.css') }}?v={{ get_cms_version() }}-sc6">
 @if ($isSerikHomepage)
 {{-- MUST load AFTER Theme::header() so redesign beats style.css --}}
 <link rel="stylesheet" href="{{ Theme::asset()->url('css/homepage-premium.css') }}?v={{ get_cms_version() }}-hp40">
 @endif
+{{-- Site chrome last: shared navbar/footer + compact laptop scaling --}}
+<link rel="stylesheet" href="{{ Theme::asset()->url('css/site-chrome.css') }}?v={{ get_cms_version() }}-sc10">
         <script type="text/javascript">
             (function(c,l,a,r,i,t,y){
                 c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};

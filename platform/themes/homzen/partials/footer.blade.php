@@ -2,8 +2,10 @@
     $topFooterSidebar = dynamic_sidebar('top_footer_sidebar');
     $innerFooterSidebar = dynamic_sidebar('inner_footer_sidebar');
     $bottomFooterSidebar = dynamic_sidebar('bottom_footer_sidebar');
-    $footerBackgroundColor = theme_option('footer_background_color', '#161e2d');
-    $footerBackgroundImage = RvMedia::getImageUrl(theme_option('footer_background_image'));
+    // Light Serik footer is site-wide — never apply the dark texture image.
+    $footerBackgroundColor = '#f4f6fa';
+    $footerBackgroundImage = null;
+    $useFooterBackgroundImage = false;
 @endphp
 
 @if($topFooterSidebar || $innerFooterSidebar || $bottomFooterSidebar)
@@ -39,7 +41,7 @@
       <a href="https://api.whatsapp.com/send?phone=16475789400" class="whatsapp" target="_blank"><img src="{{ \App\Support\SerikMediaUrl::toPublic('whatsapp-icon-free-png.png') }}" width="50" alt="WhatsApp"/></a> 
      
     </div-->
-    <footer class="footer footer-main" @style(["background-color: $footerBackgroundColor" => $footerBackgroundColor, "background-image: url('$footerBackgroundImage') !important" => theme_option('footer_background_image')])>
+    <footer class="footer footer-main" @style(["background-color: $footerBackgroundColor" => $footerBackgroundColor, "background-image: url('$footerBackgroundImage') !important" => $useFooterBackgroundImage])>
         @if($topFooterSidebar)
             <div class="top-footer">
                 <div class="container">

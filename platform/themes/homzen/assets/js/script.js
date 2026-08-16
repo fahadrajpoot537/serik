@@ -736,12 +736,26 @@ $(() => {
 
         const $form = $(e.currentTarget)
         const $button = $form.find('button[type=submit]')
+        const formEl = $form[0]
+
+        // Attach Google reCAPTCHA token (explicit render via initSerikRecaptcha).
+        if (typeof grecaptcha !== 'undefined' && window.newsletterRecaptchaWidgetId != null) {
+            const token = grecaptcha.getResponse(window.newsletterRecaptchaWidgetId) || ''
+            let input = formEl.querySelector('textarea[name="g-recaptcha-response"], input[name="g-recaptcha-response"]')
+            if (!input) {
+                input = document.createElement('input')
+                input.type = 'hidden'
+                input.name = 'g-recaptcha-response'
+                formEl.appendChild(input)
+            }
+            input.value = token
+        }
 
         $.ajax({
             type: 'POST',
             cache: false,
             url: $form.prop('action'),
-            data: new FormData($form[0]),
+            data: new FormData(formEl),
             contentType: false,
             processData: false,
             beforeSend: () => $button.prop('disabled', true).addClass('btn-loading'),

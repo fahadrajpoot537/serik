@@ -468,6 +468,9 @@ $(() => {
     const goTop = function () {
         if ($('div').hasClass('progress-wrap')) {
             const progressPath = document.querySelector('.progress-wrap path')
+            if (!progressPath) {
+                return
+            }
             const pathLength = progressPath.getTotalLength()
             progressPath.style.transition = progressPath.style.WebkitTransition = 'none'
             progressPath.style.strokeDasharray = pathLength + ' ' + pathLength
@@ -733,12 +736,26 @@ $(() => {
 
         const $form = $(e.currentTarget)
         const $button = $form.find('button[type=submit]')
+        const formEl = $form[0]
+
+        // Attach Google reCAPTCHA token (explicit render via initSerikRecaptcha).
+        if (typeof grecaptcha !== 'undefined' && window.newsletterRecaptchaWidgetId != null) {
+            const token = grecaptcha.getResponse(window.newsletterRecaptchaWidgetId) || ''
+            let input = formEl.querySelector('textarea[name="g-recaptcha-response"], input[name="g-recaptcha-response"]')
+            if (!input) {
+                input = document.createElement('input')
+                input.type = 'hidden'
+                input.name = 'g-recaptcha-response'
+                formEl.appendChild(input)
+            }
+            input.value = token
+        }
 
         $.ajax({
             type: 'POST',
             cache: false,
             url: $form.prop('action'),
-            data: new FormData($form[0]),
+            data: new FormData(formEl),
             contentType: false,
             processData: false,
             beforeSend: () => $button.prop('disabled', true).addClass('btn-loading'),
@@ -1402,6 +1419,10 @@ $(() => {
     const initTestimonials = () => {
         if ($('.tf-sw-testimonial').length > 0) {
             const $element = $('.tf-sw-testimonial')
+            const el = $element.get(0)
+            if (el && (el.swiper || el.dataset.swiperReady === '1')) {
+                return
+            }
             const previewLg = $element.data('preview-lg')
             const previewMd = $element.data('preview-md')
             const previewSm = $element.data('preview-sm')

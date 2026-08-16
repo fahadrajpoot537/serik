@@ -35,7 +35,7 @@
             {{-- LEFT: property discovery --}}
             <div class="serik-split-hero__left slider-content">
                 <div class="heading serik-split-hero__heading">
-                    <h1 class="subtitle body-1 hero-banner-headline serik-split-hero__title" style="color: {{ $descriptionColor }} !important; font-weight:700;">
+                    <h1 class="subtitle body-1 hero-banner-headline serik-split-hero__title" style="color: {{ $descriptionColor }}; font-weight:700;">
                         {{ __('Top Realtor in Ontario - Buy or Sell Homes and Get') }}
                     </h1>
                     @php
@@ -47,7 +47,7 @@
                         }
                         $cashbackLabel = $cashbackBits[0];
                     @endphp
-                    <h2 class="title title1 serik-split-hero__cashback" style="color: {{ $titleColor }} !important; font-weight:700;" aria-label="{{ $cashbackLabel }}">
+                    <h2 class="title title1 serik-split-hero__cashback" style="color: {{ $titleColor }}; font-weight:700;" aria-label="{{ $cashbackLabel }}">
                         <span
                             class="serik-typewriter"
                             id="serikHeroTypewriter"

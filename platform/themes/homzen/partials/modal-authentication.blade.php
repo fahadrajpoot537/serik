@@ -1111,6 +1111,8 @@
     let registerRecaptchaWidgetId = null;
     let contactRecaptchaWidgetId = null;
     window.contactRecaptchaWidgetId = null;
+    let newsletterRecaptchaWidgetId = null;
+    window.newsletterRecaptchaWidgetId = null;
 
     function initSerikRecaptcha() {
         if (typeof grecaptcha === 'undefined' || !recaptchaSiteKey) {
@@ -1128,6 +1130,12 @@
             contactRecaptchaWidgetId = grecaptcha.render(contactEl, { sitekey: recaptchaSiteKey });
             window.contactRecaptchaWidgetId = contactRecaptchaWidgetId;
         }
+
+        const newsletterEl = document.getElementById('newsletterRecaptcha');
+        if (newsletterEl && newsletterRecaptchaWidgetId === null && !newsletterEl.childElementCount) {
+            newsletterRecaptchaWidgetId = grecaptcha.render(newsletterEl, { sitekey: recaptchaSiteKey });
+            window.newsletterRecaptchaWidgetId = newsletterRecaptchaWidgetId;
+        }
     }
     window.initSerikRecaptcha = initSerikRecaptcha;
 
@@ -1137,6 +1145,9 @@
         }
         if (contactRecaptchaWidgetId !== null) {
             grecaptcha.reset(contactRecaptchaWidgetId);
+        }
+        if (newsletterRecaptchaWidgetId !== null) {
+            grecaptcha.reset(newsletterRecaptchaWidgetId);
         }
         resetAuthCaptcha();
     };

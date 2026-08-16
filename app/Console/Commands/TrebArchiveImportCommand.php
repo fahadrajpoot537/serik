@@ -48,6 +48,12 @@ class TrebArchiveImportCommand extends Command
             ]);
         }
 
+        if (! config('treb.archive.enabled', true)) {
+            $this->warn('TREB archive import is disabled (TREB_ARCHIVE_IMPORT_ENABLED=false).');
+
+            return self::SUCCESS;
+        }
+
         $batch = $this->option('batch');
         $pages = $this->option('pages');
         $maxSeconds = $this->option('max-seconds');

@@ -61,14 +61,65 @@
         </a>
 
         <div class="serik-prop-card__body serik-portal-card__body">
-            <div class="serik-prop-card__price-row serik-portal-card__price-row">
-                @if (! setting('real_estate_hide_price', false))
-                    @if ($canViewSold)
-                        <h3 class="serik-prop-card__price serik-portal-card__price">{{ $property->price_format }}</h3>
-                    @else
-                        <h3 class="serik-prop-card__price serik-portal-card__price">******</h3>
+            @if (! setting('real_estate_hide_price', false))
+                <h3 class="serik-prop-card__price serik-portal-card__price">
+                    {{ $canViewSold ? $property->price_format : '******' }}
+                </h3>
+            @endif
+
+            <a href="{{ $linkUrl }}" @class(['serik-prop-card__address', 'serik-portal-card__address', 'js-property-modal-link' => $canViewSold, 'js-auth-open-login' => ! $canViewSold])
+                title="{{ $card['address'] }}">
+                <x-core::icon name="ti ti-map-pin" class="serik-portal-card__pin" />
+                <span class="serik-portal-card__address-text">
+                    {{ $card['address'] }}
+                    @if ($card['location'])
+                        <span class="serik-portal-card__address-sub">{{ $card['location'] }}</span>
                     @endif
+                </span>
+            </a>
+
+            <div class="serik-prop-card__stats serik-portal-card__stats">
+                @if ($card['beds'])
+                    <span class="serik-portal-card__stat">
+                        <span class="serik-portal-card__stat-icon"><x-core::icon name="ti ti-bed" /></span>
+                        <span>
+                            <span class="serik-portal-card__stat-value">{{ $card['beds'] }}</span>
+                            <span class="serik-portal-card__stat-label">{{ __('bed') }}</span>
+                        </span>
+                    </span>
                 @endif
+                @if ($baths > 0)
+                    <span class="serik-portal-card__stat">
+                        <span class="serik-portal-card__stat-icon"><x-core::icon name="ti ti-bath" /></span>
+                        <span>
+                            <span class="serik-portal-card__stat-value">{{ $baths }}</span>
+                            <span class="serik-portal-card__stat-label">{{ __('bath') }}</span>
+                        </span>
+                    </span>
+                @endif
+                @if ($sqft !== '')
+                    <span class="serik-portal-card__stat">
+                        <span class="serik-portal-card__stat-icon"><x-core::icon name="ti ti-ruler-measure" /></span>
+                        <span>
+                            <span class="serik-portal-card__stat-value">{{ $sqft }}</span>
+                            <span class="serik-portal-card__stat-label">{{ __('area') }}</span>
+                        </span>
+                    </span>
+                @endif
+            </div>
+
+            @if ($mls || $broker)
+                <div class="serik-prop-card__mls serik-portal-card__meta line-clamp-1">
+                    @if ($mls)MLS® {{ $mls }}@endif
+                    @if ($mls && $broker) · @endif
+                    @if ($broker){{ $broker }}@endif
+                </div>
+            @endif
+
+            <div class="serik-portal-card__cta-row">
+                <a href="{{ $linkUrl }}" @class(['serik-portal-card__view', 'js-property-modal-link' => $canViewSold, 'js-auth-open-login' => ! $canViewSold])
+                    @if(! $canViewSold) role="button" @endif>{{ __('View Details') }}</a>
+
                 @if (RealEstateHelper::isEnabledWishlist())
                     <button type="button" class="serik-prop-card__heart serik-portal-card__heart" data-type="property"
                         data-bb-toggle="add-to-wishlist" data-id="{{ $property->getKey() }}"
@@ -79,23 +130,6 @@
                     </button>
                 @endif
             </div>
-
-            <p class="serik-prop-card__stats serik-portal-card__stats">
-                @if ($card['beds'])<span>{{ $card['beds'] }} {{ __('bed') }}</span>@endif
-                @if ($baths > 0)<span>{{ $baths }} {{ __('bath') }}</span>@endif
-                @if ($sqft !== '')<span>{{ $sqft }}</span>@endif
-            </p>
-
-            <a href="{{ $linkUrl }}" @class(['serik-prop-card__address', 'serik-portal-card__address', 'line-clamp-2', 'js-property-modal-link' => $canViewSold, 'js-auth-open-login' => ! $canViewSold])
-                title="{{ $card['address'] }}">{{ $card['address'] }}@if($card['location']), {{ $card['location'] }}@endif</a>
-
-            @if ($mls || $broker)
-                <div class="serik-prop-card__mls serik-portal-card__meta line-clamp-1">
-                    @if ($mls)MLS® {{ $mls }}@endif
-                    @if ($mls && $broker) · @endif
-                    @if ($broker){{ $broker }}@endif
-                </div>
-            @endif
         </div>
     </div>
 </article>

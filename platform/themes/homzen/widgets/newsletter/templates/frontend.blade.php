@@ -1,24 +1,15 @@
 <div class="col-lg-4 col-md-6">
-    <div class="footer-cl-4">
-        @if($config['title'])
-            <div class="fw-7 text-white">
+    <div class="footer-cl-4 serik-footer-newsletter">
+        @if (! empty($config['title']))
+            <div class="serik-footer-newsletter__title">
                 {!! BaseHelper::clean($config['title']) !!}
             </div>
         @endif
 
-        @if($config['subtitle'])
-            <p class="mt-12 text-variant-2">{!! BaseHelper::clean($config['subtitle']) !!}</p>
+        @if (! empty($config['subtitle']))
+            <p class="serik-footer-newsletter__subtitle">{!! BaseHelper::clean($config['subtitle']) !!}</p>
         @endif
 
         {!! $form->renderForm() !!}
-
-        @if(! app()->environment('local') && config('services.turnstile.site_key'))
-         <x-core::form-group>
-            <div class="cf-turnstile"
-                 data-sitekey="{{ config('services.turnstile.site_key') }}">
-            </div>
-        </x-core::form-group>
-        @endif
     </div>
-    
 </div>

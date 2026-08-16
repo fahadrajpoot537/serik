@@ -509,7 +509,7 @@
         }
 
         body.serik-sticky-header {
-            padding-top: calc(var(--serik-top-header-height, 40px) + var(--serik-main-header-height, 60px));
+            padding-top: calc(var(--serik-top-header-height, 40px) + var(--serik-main-header-height, 78px) + 8px);
         }
     }
 
@@ -613,7 +613,14 @@
     const mainHeader = document.getElementById('header');
     const setHeights = () => {
         const topH = window.innerWidth >= 992 && topBar ? topBar.offsetHeight : 0;
-        const mainH = mainHeader ? mainHeader.offsetHeight : 60;
+        const siteHeader = document.getElementById('serikSiteHeader') || document.querySelector('.serik-site-header');
+        let mainH = 60;
+        if (window.innerWidth >= 992 && siteHeader) {
+            // Includes blue-pill margin-top so content clears the floating navbar.
+            mainH = Math.ceil(siteHeader.getBoundingClientRect().height) || siteHeader.offsetHeight || 78;
+        } else if (mainHeader) {
+            mainH = mainHeader.offsetHeight || 60;
+        }
         document.documentElement.style.setProperty('--serik-top-header-height', topH + 'px');
         document.documentElement.style.setProperty('--serik-main-header-height', mainH + 'px');
     };
@@ -633,7 +640,11 @@
                     <div class="logo-box d-flex align-items-center gap-3">
                         <div class="logo">
                             <a href="{{ BaseHelper::getHomepageUrl() }}">
-                                {{ Theme::getLogoImage(maxHeight: 52) }}
+                                {{-- Desktop navbar is blue site-wide; white wordmark from 992px up. --}}
+                                <picture>
+                                    <source media="(min-width: 992px)" srcset="{{ Theme::asset()->url('images/serik-logo-nav.png') }}">
+                                    {{ Theme::getLogoImage(maxHeight: 52) }}
+                                </picture>
                             </a>
                         </div>
                         

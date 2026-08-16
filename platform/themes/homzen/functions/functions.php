@@ -425,6 +425,30 @@ app()->booted(function (): void {
         });
     }
 
+    if (is_plugin_active('newsletter')) {
+        add_filter('core_request_rules', function (array $rules, $request): array {
+            if (! $request instanceof \Botble\Newsletter\Http\Requests\NewsletterRequest) {
+                return $rules;
+            }
+
+            if (! \Theme\homzen\Supports\RecaptchaHelper::isConfigured()) {
+                return $rules;
+            }
+
+            $rules['g-recaptcha-response'] = [
+                'required',
+                'string',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if (! \Theme\homzen\Supports\RecaptchaHelper::verify(is_string($value) ? $value : null)) {
+                        $fail(__('reCAPTCHA verification failed. Please try again.'));
+                    }
+                },
+            ];
+
+            return $rules;
+        }, 120, 2);
+    }
+
     PageForm::extend(function (PageForm $form): void {
         $form
             ->add(

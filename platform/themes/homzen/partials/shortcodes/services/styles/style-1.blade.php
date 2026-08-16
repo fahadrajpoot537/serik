@@ -131,6 +131,8 @@
 
     const el = document.querySelector('.tf-sw-services');
     if (!el) return;
+    if (el.swiper || el.dataset.serikSwiperReady === '1') return;
+    el.dataset.serikSwiperReady = '1';
 
     new Swiper(el, {
         slidesPerView: 3,
@@ -158,15 +160,23 @@
                 spaceBetween: 20
             },
             992: {
-                slidesPerView: 4,
-                spaceBetween: 20
+                slidesPerView: 3,
+                spaceBetween: 24
             }
         }
     });
 }
 
-// safe init (Laravel fix)
-window.addEventListener('load', function () {
-    setTimeout(initServicesSwiper, 200);
-});
+// Initialize without waiting for third-party analytics/chat resources to finish loading.
+function bootServicesSwiper() {
+    setTimeout(initServicesSwiper, 80);
+}
+
+if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', bootServicesSwiper, { once: true });
+} else {
+    bootServicesSwiper();
+}
+
+window.addEventListener('load', bootServicesSwiper, { once: true });
 </script>

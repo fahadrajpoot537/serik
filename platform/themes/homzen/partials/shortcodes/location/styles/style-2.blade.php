@@ -28,7 +28,7 @@ $locations = $locations->sortBy(function ($location) use ($order) {
              data-wow-delay=".4s"
              data-wow-duration="2000ms">
             <div class="swiper-wrapper">
-                @foreach($locations as $location)
+                @foreach($locations->take(4) as $location)
                     <div class="swiper-slide">
                         <a href="{{ url('/on/houses-for-sale-in-' . strtolower(urlencode($location->name)) . '/map') }}"
                            class="box-location-v2 hover-img location-item serik-hp-loc-card">
@@ -38,6 +38,11 @@ $locations = $locations->sortBy(function ($location) use ($order) {
                                 <div class="content serik-hp-loc-card__content">
                                     <span class="serik-hp-loc-card__label">{{ __('Homes for sale') }}</span>
                                     <h3 class="link serik-hp-loc-card__title">{{ $location->name }}</h3>
+                                    <span class="serik-hp-loc-card__description">{{ __('Family friendly community with excellent amenities') }}</span>
+                                    <span class="serik-hp-loc-card__action">
+                                        {{ __('Explore Listing') }}
+                                        <x-core::icon name="ti ti-arrow-right" />
+                                    </span>
                                 </div>
                             </div>
                         </a>
@@ -55,7 +60,7 @@ function initOntarioLocationsSwiper() {
     if (!el || el.dataset.swiperReady === '1' || el.swiper) return;
     el.dataset.swiperReady = '1';
     new Swiper(el, {
-        slidesPerView: 5,
+        slidesPerView: 4,
         spaceBetween: 18,
         loop: true,
         watchOverflow: true,
@@ -67,7 +72,7 @@ function initOntarioLocationsSwiper() {
             576: { slidesPerView: 2.5, spaceBetween: 14 },
             768: { slidesPerView: 3.2, spaceBetween: 16 },
             992: { slidesPerView: 4, spaceBetween: 18 },
-            1200: { slidesPerView: 5, spaceBetween: 18 }
+            1200: { slidesPerView: 4, spaceBetween: 24 }
         }
     });
 }

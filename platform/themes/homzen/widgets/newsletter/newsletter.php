@@ -20,26 +20,57 @@ class NewsletterWidget extends AbstractWidget
             'description' => __('Display Newsletter form on sidebar'),
             'title' => null,
             'subtitle' => null,
+            // Captcha + CSRF must stay fresh — never cache this widget HTML.
+            'enable_caching' => 'no',
         ]);
     }
 
     protected function data(): array|Collection
     {
         $form = NewsletterForm::create()
-            ->formClass('mt-12')
-            ->modify('wrapper_before', HtmlField::class, HtmlFieldOption::make()->content('<div class="mb-3 position-relative">'))
+            ->formClass('subscribe-form serik-newsletter-form', true)
+            ->modify('wrapper_before', HtmlField::class, HtmlFieldOption::make()->content('<div class="serik-newsletter-form__row">'))
             ->addBefore(
                 'email',
                 'icon',
                 HtmlField::class,
-                HtmlFieldOption::make()->content('<span class="icon-left icon-mail"></span>')
+                HtmlFieldOption::make()->content('<span class="serik-newsletter-form__icon icon-mail" aria-hidden="true"></span>')
             )
-            ->modify('email', 'email', ['attr' => ['class' => '']])
-            ->modify('submit', 'submit', [
-                'attr' => ['class' => '', 'title' => __('Subscribe')],
-                'label' => '<i class="icon icon-send"></i>',
+            ->modify('email', 'email', [
+                'attr' => [
+                    'class' => 'serik-newsletter-form__input',
+                    'autocomplete' => 'email',
+                    'aria-label' => __('Email address'),
+                ],
             ])
+            ->modify('submit', 'submit', [
+                'attr' => [
+                    'class' => 'serik-newsletter-form__submit',
+                    'title' => __('Subscribe'),
+                    'aria-label' => __('Subscribe'),
+                ],
+                'label' => '<i class="icon icon-send" aria-hidden="true"></i>',
+            ])
+            ->modify(
+                'wrapper_after',
+                HtmlField::class,
+                HtmlFieldOption::make()->content('</div>')
+            )
             ->setFormEndKey('messages');
+
+        $siteKey = \Theme\homzen\Supports\RecaptchaHelper::siteKey();
+        if ($siteKey !== '' && ! $form->has('serik_newsletter_recaptcha')) {
+            $form->addBefore(
+                'messages',
+                'serik_newsletter_recaptcha',
+                HtmlField::class,
+                HtmlFieldOption::make()->content(
+                    '<div class="serik-newsletter-recaptcha mb-2">'
+                    . '<div id="newsletterRecaptcha" class="js-serik-newsletter-recaptcha"></div>'
+                    . '</div>'
+                )
+            );
+        }
 
         return compact('form');
     }

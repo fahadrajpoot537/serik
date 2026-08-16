@@ -2,7 +2,7 @@
 <style>
 .property-page-nav {
   position: sticky;
-  top: 80px;
+  top: calc(var(--serik-top-header-height, 49px) + var(--serik-main-header-height, 78px));
   z-index: 90;
   background: #ffffff;
   border-bottom: 1px solid #e5e7eb;
@@ -64,7 +64,7 @@
 #description,
 #location,
 #reviews-section {
-  scroll-margin-top: 130px;
+  scroll-margin-top: calc(var(--serik-top-header-height, 49px) + var(--serik-main-header-height, 78px) + 56px);
 }
 
 /* Mobile */

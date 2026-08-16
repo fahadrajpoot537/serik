@@ -17,7 +17,8 @@
 
     $propertiesForSale = $propertiesForSale ?? collect();
     $propertiesSold = $propertiesSold ?? collect();
-    $eagerImageLimit = \App\Support\SerikHomepage::isHomepageRequest() ? 4 : 0;
+    $eagerImageLimit = \App\Support\SerikHomepage::isHomepageRequest() ? 3 : 0;
+    $homepageCardLimit = 6;
 @endphp
 
 <section class="flat-section-v5 bg-surface flat-recommended flat-recommended-v2 property-top serik-hp-props">
@@ -35,8 +36,8 @@
 
         @if (isset($propertiesForSale) && $propertiesForSale->isNotEmpty())
             <div class="row g-3 g-lg-4 wow fadeInUpSmall mb-2 mb-md-3 serik-hp-props__grid" data-wow-delay=".2s" data-wow-duration="2000ms">
-                @foreach($propertiesForSale as $property)
-                    <div class="col-6 col-md-4 col-lg-3 col-xl-3 prop-box">
+                @foreach($propertiesForSale->take($homepageCardLimit) as $property)
+                    <div class="col-6 col-md-6 col-lg-4 prop-box">
                         @include(Theme::getThemeNamespace('views.real-estate.properties.item-grid-home'), [
                             'lazyImage' => $loop->iteration > $eagerImageLimit,
                         ])
@@ -63,8 +64,8 @@
 
         @if (isset($propertiesSold) && $propertiesSold->isNotEmpty())
             <div class="row g-3 g-lg-4 wow fadeInUpSmall serik-hp-props__grid" data-wow-delay=".2s" data-wow-duration="2000ms">
-                @foreach($propertiesSold as $property)
-                    <div class="col-6 col-md-4 col-lg-3 col-xl-3 prop-box">
+                @foreach($propertiesSold->take($homepageCardLimit) as $property)
+                    <div class="col-6 col-md-6 col-lg-4 prop-box">
                         @include(Theme::getThemeNamespace('views.real-estate.properties.item-grid-home'))
                     </div>
                 @endforeach

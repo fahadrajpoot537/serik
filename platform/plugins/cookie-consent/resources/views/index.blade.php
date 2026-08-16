@@ -275,10 +275,11 @@
         }
 
         .site-notice .site-notice__actions {
-            justify-content: center;
+            justify-content: stretch;
             margin-left: 0;
-            gap: 0.4rem;
-            flex-wrap: wrap;
+            gap: 0.5rem;
+            flex-wrap: nowrap;
+            width: 100%;
         }
 
         [dir="rtl"] .site-notice .site-notice__actions {
@@ -286,15 +287,24 @@
         }
 
         .site-notice .site-notice__actions button {
-            flex: none;
-            min-width: 70px;
-            max-width: 100px;
-            padding: 6px 10px;
-            font-size: 11px;
+            flex: 1 1 auto;
+            width: 100%;
+            min-width: 0;
+            max-width: none;
+            min-height: 44px;
+            height: auto;
+            padding: 0.7rem 1rem;
+            font-size: 14px;
+            font-weight: 700;
+            line-height: 1.25;
             white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            border-radius: 3px;
+            overflow: visible;
+            text-overflow: clip;
+            border-radius: 8px;
+        }
+
+        .site-notice .cookie-consent__actions .site-notice__agree:before {
+            display: none;
         }
     }
 </style>

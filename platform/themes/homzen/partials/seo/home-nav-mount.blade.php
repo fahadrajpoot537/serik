@@ -2,7 +2,15 @@
 @php
     $ajaxUrl = route('public.ajax.seo-city-navigation', ['context' => 'home']);
 @endphp
-<div id="serikHomeSeoNavMount" class="serik-home-seo-nav-mount" data-url="{{ $ajaxUrl }}" aria-hidden="true"></div>
+<section class="serik-hp-find flat-section" aria-label="{{ __('Find your perfect property') }}">
+    <div class="container">
+        <header class="serik-hp-section-head serik-hp-section-head--center serik-hp-find__head">
+            <h2 class="section-title mt-0">{{ __('Find Your Perfect') }} <span class="serik-hp-find__accent">{{ __('Property') }}</span></h2>
+            <p class="serik-hp-find__sub">{{ __('Quick links to explore active listings, sold properties, popular searches, and neighbourhoods across Ontario.') }}</p>
+        </header>
+        <div id="serikHomeSeoNavMount" class="serik-home-seo-nav-mount" data-url="{{ $ajaxUrl }}" aria-hidden="true"></div>
+    </div>
+</section>
 <style>
 .serik-home-seo-nav-mount {
     margin-top: 0;
@@ -10,7 +18,9 @@
 .serik-home-seo-nav-mount .seo-city-navigation {
     margin-top: 0;
     border-top: none;
-    padding-top: 1.25rem;
+    padding-top: 0;
+    padding-bottom: 0;
+    background: transparent;
 }
 
 /* Homepage mobile accordion — kept here so it applies even when nav HTML is AJAX-injected */

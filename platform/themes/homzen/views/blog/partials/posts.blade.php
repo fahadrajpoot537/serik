@@ -60,6 +60,12 @@
                         @if($post->description)
                             <p class="description" style="text-align:justify">{!! BaseHelper::clean(Str::limit($post->description)) !!}</p>
                         @endif
+                        <div class="serik-blog-card__foot">
+                            <a href="{{ $post->url }}" class="serik-blog-card__read">
+                                {{ __('Read More') }}
+                                <x-core::icon name="ti ti-arrow-right" />
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>

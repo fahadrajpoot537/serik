@@ -145,6 +145,7 @@ return [
         // Cap imports fan-out when the imports lane is already deep (never touches high/low).
         'max_imports_queue_depth' => (int) env('SERIK_SCHEDULER_MAX_IMPORTS_DEPTH', 20),
         'search_index_recent_limit' => (int) env('SERIK_SEARCH_INDEX_RECENT_LIMIT', 300),
+        'import_historical_enabled' => filter_var(env('SERIK_IMPORT_HISTORICAL_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
         'import_historical_max_runtime' => (int) env('SERIK_IMPORT_HISTORICAL_MAX_RUNTIME', 180),
         'treb_images_max_runtime' => (int) env('SERIK_TREB_IMAGES_MAX_RUNTIME', 600),
         'treb_images_chunk' => (int) env('SERIK_TREB_IMAGES_CHUNK', 50),

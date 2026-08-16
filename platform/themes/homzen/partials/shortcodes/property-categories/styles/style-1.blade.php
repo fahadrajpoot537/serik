@@ -32,7 +32,7 @@
                         $propertySubTypes = \App\Support\RealEstateCountCache::propertySubTypeCounts($allowedTypes);
                     @endphp
 
-                    @foreach ($propertySubTypes as $category)
+                    @foreach ($propertySubTypes as $categoryIndex => $category)
                         @php
                             $seoUrl = url('/map') . '?subtypes=' . urlencode($category->PropertySubType);
                             $label = $category->PropertySubType === 'Att/Row/Townhouse'
@@ -40,7 +40,7 @@
                                 : $category->PropertySubType;
                         @endphp
                         <div class="swiper-slide">
-                            <a href="{{ $seoUrl }}" class="homeya-categories serik-hp-cat-card" title="{{ $category->PropertySubType }}">
+                            <a href="{{ $seoUrl }}" class="homeya-categories serik-hp-cat-card serik-hp-cat-card--{{ ($categoryIndex % 4) + 1 }}" title="{{ $category->PropertySubType }}">
                                 <div class="content text-center serik-hp-cat-card__content">
                                     <span class="serik-hp-cat-card__count">{{ number_format((int) $category->total) }}</span>
                                     <h6 class="main-heading-cat">{{ $label }}</h6>

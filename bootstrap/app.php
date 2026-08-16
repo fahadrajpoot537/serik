@@ -112,14 +112,16 @@ $app = Application::configure(basePath: dirname(__DIR__))
             ->appendOutputTo(storage_path('logs/treb-search-index.log'));
 
         // Historical TREB import — LOW queue slices (was blocking schedule:run up to 4 min).
-        $schedule->call($dispatchLow('serik:import-historical', [
-            '--resume' => true,
-            '--max-runtime' => (int) config('serik.scheduler.import_historical_max_runtime', 180),
-        ]))
-            ->name('serik-import-historical-dispatch')
-            ->hourly()
-            ->withoutOverlapping(15)
-            ->appendOutputTo(storage_path('logs/treb-historical.log'));
+        if (config('serik.scheduler.import_historical_enabled', true)) {
+            $schedule->call($dispatchLow('serik:import-historical', [
+                '--resume' => true,
+                '--max-runtime' => (int) config('serik.scheduler.import_historical_max_runtime', 180),
+            ]))
+                ->name('serik-import-historical-dispatch')
+                ->hourly()
+                ->withoutOverlapping(15)
+                ->appendOutputTo(storage_path('logs/treb-historical.log'));
+        }
 
         // E) Heavy maintenance → LOW queue (scheduler only dispatches)
         $schedule->call($dispatchLow('serik:catch-up', [
@@ -201,6 +203,10 @@ $app = Application::configure(basePath: dirname(__DIR__))
         $schedule->call(function () {
             return \App\Support\SerikQueueLock::dispatchGuard('schedule-treb-archive-import', function () {
                 try {
+                    if (! config('treb.archive.enabled', true)) {
+                        return 0;
+                    }
+
                     if (! config('treb.auth2')) {
                         return 0;
                     }
