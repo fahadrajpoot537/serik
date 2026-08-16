@@ -115,6 +115,68 @@ class PropertyFulltextSearch
     }
 
     /**
+     * Address-exact candidates for listing history.
+     *
+     * NATURAL LANGUAGE MODE is OR-based, so "328 Cedar" matches every row containing
+     * "328" or "Cedar" (~1k rows locally, far more on production). Callers that then
+     * order by created_at drop the real siblings. BOOLEAN MODE requires every token,
+     * which keeps the candidate set to the actual address.
+     *
+     * Tokens shorter than the InnoDB minimum token size cannot be required, so they
+     * are skipped here and still enforced by the caller's exact PHP comparison.
+     */
+    public static function applyRequiredTokensFulltext(Builder $query, string ...$terms): Builder
+    {
+        $expression = self::requiredTokenExpression(...$terms);
+
+        if ($expression === '' || ! self::fulltextAvailable()) {
+            return $query->whereRaw('0 = 1');
+        }
+
+        return $query->whereRaw(
+            'MATCH(`name`, `location`) AGAINST(? IN BOOLEAN MODE)',
+            [$expression]
+        );
+    }
+
+    /**
+     * Build a `+token +token` BOOLEAN MODE expression, dropping tokens MySQL ignores.
+     */
+    public static function requiredTokenExpression(string ...$terms): string
+    {
+        $minTokenSize = self::minTokenSize();
+        $required = [];
+
+        foreach ($terms as $term) {
+            foreach (preg_split('/\s+/', self::sanitizePhrase($term)) ?: [] as $token) {
+                // Boolean-mode operators must never leak in from address data.
+                $token = trim(preg_replace('/[+\-><()~*"@]/', '', $token) ?? '');
+
+                if ($token === '' || mb_strlen($token) < $minTokenSize) {
+                    continue;
+                }
+
+                $required[strtolower($token)] = '+' . $token;
+            }
+        }
+
+        return implode(' ', $required);
+    }
+
+    protected static function minTokenSize(): int
+    {
+        return (int) Cache::remember('serik_ft_min_token_size', 3600, function () {
+            try {
+                $row = DB::selectOne("SHOW VARIABLES LIKE 'innodb_ft_min_token_size'");
+
+                return max(1, (int) ($row->Value ?? 3));
+            } catch (\Throwable) {
+                return 3;
+            }
+        });
+    }
+
+    /**
      * @deprecated Never call — leading-% LIKE banned. Prefer Meilisearch then FULLTEXT.
      */
     public static function applyStreetLikeFallback(

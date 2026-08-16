@@ -1,5 +1,8 @@
 @php
+    use Theme\homzen\Supports\TrebPropertyHelper;
+
     $canViewSold = ! $property->isSoldHistory() || auth('account')->check() || auth()->check();
+    $displayPrice = TrebPropertyHelper::listingDisplayPriceFormat($property);
 @endphp
 <div class="property-item homeya-box list-style-1 position-relative" @if ($property->latitude && $property->longitude) data-lat="{{ $property->latitude }}" data-lng="{{ $property->longitude }}" @endif>
 @if ($property->isSoldHistory() && ! $canViewSold)
@@ -89,7 +92,7 @@
             @if (!setting('real_estate_hide_price', false))
                 <div class="d-flex align-items-center">
                     @if($canViewSold)
-                        <div class="h7 fw-7">{{ $property->price_format }}</div>
+                        <div class="h7 fw-7">{{ $displayPrice }}</div>
                     @else
                         <div class="h7 fw-7 blur-text">******</div>
                     @endif

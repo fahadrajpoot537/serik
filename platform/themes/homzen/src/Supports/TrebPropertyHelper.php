@@ -664,6 +664,7 @@ class TrebPropertyHelper
         Cache::forget('treb_property_record_v5_' . $listingKey);
         Cache::forget('treb_property_record_raw_v1_' . $listingKey);
         Cache::forget('treb_listing_history_v5_' . $listingKey);
+        Cache::forget('treb_listing_history_v6_' . $listingKey);
         Cache::forget('treb_price_changes_v4_' . $listingKey);
         Cache::forget('treb_price_changes_v5_' . $listingKey);
         Cache::forget('treb_map_popup_bundle_v1_' . $listingKey);
@@ -1180,6 +1181,23 @@ class TrebPropertyHelper
         return '';
     }
 
+    /**
+     * City key for history matching. Board region codes ("Toronto W05") and
+     * punctuation must not split one city into several.
+     */
+    public static function normalizeCityForHistory(?string $city): string
+    {
+        $city = strtolower(trim((string) $city));
+        if ($city === '') {
+            return '';
+        }
+
+        $city = preg_replace('/\s+(?:[ensw]\d+)$/i', '', $city) ?? $city;
+        $city = preg_replace('/[^a-z0-9]+/', ' ', $city) ?? $city;
+
+        return trim(preg_replace('/\s+/', ' ', $city) ?? $city);
+    }
+
     public static function isSoldHistoryMlsStatus(?string $mlsStatus): bool
     {
         return in_array($mlsStatus, [
@@ -1252,7 +1270,20 @@ class TrebPropertyHelper
             'listed_active' => $listedActive !== '' ? $listedActive : null,
             'beds' => $beds,
             'url' => self::listingSeoUrl($property),
+            'price_format' => self::listingDisplayPriceFormat($property),
         ];
+    }
+
+    /**
+     * Card/list display price: ClosePrice for sold/leased, otherwise list price.
+     */
+    public static function listingDisplayPriceFormat(\Botble\RealEstate\Models\Property $property): string
+    {
+        if ($property->isSoldHistory() && (float) ($property->ClosePrice ?? 0) > 0) {
+            return format_price($property->ClosePrice);
+        }
+
+        return (string) $property->price_format;
     }
 
     /**
@@ -1525,7 +1556,8 @@ class TrebPropertyHelper
      */
     public static function fetchListingHistory(string $listingKey, ?array $local = null): array
     {
-        $cacheKey = 'treb_listing_history_v5_' . strtoupper($listingKey);
+        // v6: sold/leased history price uses ClosePrice (sale), not ListPrice.
+        $cacheKey = 'treb_listing_history_v6_' . strtoupper($listingKey);
 
         $cached = Cache::get($cacheKey);
         if (is_array($cached)) {
@@ -1908,7 +1940,8 @@ class TrebPropertyHelper
             return [];
         }
 
-        $unitCacheKey = 'treb_unit_records_v1_' . md5(json_encode([
+        // v2: include ClosePrice so sold/leased history rows can show sale price, not list price.
+        $unitCacheKey = 'treb_unit_records_v2_' . md5(json_encode([
             $record['StreetNumber'] ?? null,
             $record['StreetName'] ?? null,
             $record['UnitNumber'] ?? null,
@@ -1921,7 +1954,7 @@ class TrebPropertyHelper
         $filter = implode(' and ', $filters);
 
         $select = implode(',', [
-            'ListingKey', 'ListPrice', 'OriginalListPrice', 'PreviousListPrice', 'PriceChangeTimestamp',
+            'ListingKey', 'ListPrice', 'ClosePrice', 'OriginalListPrice', 'PreviousListPrice', 'PriceChangeTimestamp',
             'MlsStatus', 'TransactionType', 'PriorMlsStatus', 'ListingContractDate',
             'PurchaseContractDate', 'CloseDate', 'TerminatedDate', 'ExpirationDate', 'UnavailableDate',
             'ModificationTimestamp', 'UnparsedAddress', 'UnitNumber', 'StreetNumber', 'StreetName',
@@ -2042,11 +2075,14 @@ class TrebPropertyHelper
             return [];
         }
 
-        // Brief cache: same address+unit is hit by detail + map popup.
-        $cacheKey = 'serik_addr_hist_v6_' . md5(strtolower($streetNumber . '|' . $streetName . '|' . $unitNumber));
+        $city = self::normalizeCityForHistory($record['City'] ?? null);
 
-        return Cache::remember($cacheKey, 300, function () use ($streetNumber, $streetName, $unitNumber) {
-            $filterRows = function ($candidates) use ($streetNumber, $streetName, $unitNumber) {
+        // Brief cache: same address+unit is hit by detail + map popup.
+        // v8: city-scoped, exact-token candidates (see boolean FULLTEXT pass below).
+        $cacheKey = 'serik_addr_hist_v8_' . md5(strtolower($streetNumber . '|' . $streetName . '|' . $unitNumber . '|' . $city));
+
+        return Cache::remember($cacheKey, 300, function () use ($streetNumber, $streetName, $unitNumber, $city) {
+            $filterRows = function ($candidates) use ($streetNumber, $streetName, $unitNumber, $city) {
                 $rows = [];
                 foreach ($candidates as $item) {
                     $parsed = self::enrichRecordAddress([
@@ -2059,6 +2095,12 @@ class TrebPropertyHelper
                     $itemUnit = trim((string) ($parsed['UnitNumber'] ?? ''));
 
                     if ($itemNumber !== $streetNumber || $itemName !== strtolower($streetName)) {
+                        continue;
+                    }
+
+                    // Same street number/name exists in many cities — keep them apart.
+                    $itemCity = self::normalizeCityForHistory($parsed['City'] ?? null);
+                    if ($city !== '' && $itemCity !== '' && $itemCity !== $city) {
                         continue;
                     }
 
@@ -2092,7 +2134,7 @@ class TrebPropertyHelper
             };
 
             // 1) Meilisearch — fast, but may lag right after fresh AMP imports.
-            $meiliIds = $search->searchStreetCandidateIds($streetNumber, $streetName, 80, [
+            $meiliIds = $search->searchStreetCandidateIds($streetNumber, $streetName, 100, [
                 'unit' => $unitNumber !== '' ? $unitNumber : null,
             ]);
             if (is_array($meiliIds) && $meiliIds !== []) {
@@ -2102,17 +2144,52 @@ class TrebPropertyHelper
             // When a unit is known, never widen to the whole building — that merged
             // other condos' sold history into the wrong detail page.
 
-            // 2) MySQL FULLTEXT — always merge (catches Meili lag + purged AMP siblings
-            // that only exist locally after seed/import).
-            $phrase = \Botble\RealEstate\Supports\PropertyFulltextSearch::sanitizePhrase(
-                $streetNumber . ' ' . $streetName
-            );
-            if ($phrase !== '' && \Botble\RealEstate\Supports\PropertyFulltextSearch::fulltextAvailable()) {
-                $ft = \Botble\RealEstate\Supports\PropertyFulltextSearch::applyFulltext(
-                    \Botble\RealEstate\Supports\PropertyFulltextSearch::baseQuery($cols),
-                    $phrase
-                )->orderByDesc('created_at')->limit(80)->get();
-                $absorb($ft);
+            // 2) MySQL FULLTEXT with required tokens — always merge (catches Meili lag +
+            // purged AMP siblings that only exist locally after import).
+            //
+            // Two passes, because neither is a superset of the other:
+            //   a) street + city + unit — the only way to reach one condo unit when the
+            //      street number is too short for MySQL to require (e.g. "8 Hillcrest").
+            //   b) street only — keeps rows whose name omits city/unit.
+            $fulltext = \Botble\RealEstate\Supports\PropertyFulltextSearch::class;
+            $ftAvailable = $fulltext::fulltextAvailable();
+            $streetTokens = $fulltext::requiredTokenExpression($streetNumber, $streetName);
+            $preciseTokens = $fulltext::requiredTokenExpression($streetNumber, $streetName, $city, $unitNumber);
+
+            if ($ftAvailable && $preciseTokens !== '' && $preciseTokens !== $streetTokens) {
+                $absorb(
+                    $fulltext::applyRequiredTokensFulltext(
+                        $fulltext::baseQuery($cols),
+                        $streetNumber,
+                        $streetName,
+                        $city,
+                        $unitNumber
+                    )->orderByDesc('created_at')->limit(200)->get()
+                );
+            }
+
+            if ($ftAvailable && $streetTokens !== '') {
+                $absorb(
+                    $fulltext::applyRequiredTokensFulltext(
+                        $fulltext::baseQuery($cols),
+                        $streetNumber,
+                        $streetName
+                    )->orderByDesc('created_at')->limit(200)->get()
+                );
+            }
+
+            // 3) Relevance-ranked fallback for addresses whose tokens MySQL cannot
+            // require (below innodb_ft_min_token_size / stopwords).
+            if ($merged === [] && $ftAvailable) {
+                $phrase = $fulltext::sanitizePhrase($streetNumber . ' ' . $streetName);
+                if ($phrase !== '') {
+                    $absorb(
+                        $fulltext::applyFulltext($fulltext::baseQuery($cols), $phrase)
+                            ->orderByDesc('created_at')
+                            ->limit(80)
+                            ->get()
+                    );
+                }
             }
 
             // Do NOT fall back to leading name LIKE here — under sync/geocode load that
@@ -2621,10 +2698,19 @@ class TrebPropertyHelper
 
         $unit = self::isUnitToken($item['UnitNumber'] ?? null) ? trim((string) $item['UnitNumber']) : '';
 
+        // Sold/leased history must show ClosePrice (actual sale), not ListPrice.
+        $mlsStatusRaw = (string) ($item['MlsStatus'] ?? '');
+        $price = $item['ListPrice'] ?? null;
+        if (self::isSoldHistoryMlsStatus($mlsStatusRaw) && isset($item['ClosePrice']) && (float) $item['ClosePrice'] > 0) {
+            $price = $item['ClosePrice'];
+        } elseif ($price === null || $price === '' || (float) $price <= 0) {
+            $price = $item['ClosePrice'] ?? null;
+        }
+
         return [
             'date_start' => self::formatDateValue($item['ListingContractDate'] ?? $item['OriginalEntryTimestamp'] ?? null),
             'date_end' => self::formatDateValue($dateEnd),
-            'price' => $item['ListPrice'] ?? $item['ClosePrice'] ?? null,
+            'price' => $price,
             'event' => $event,
             'listing_id' => $item['ListingKey'] ?? null,
             'address' => self::formatDisplayAddress($item),
@@ -2824,7 +2910,7 @@ class TrebPropertyHelper
         }
 
         if ($rows !== []) {
-            Cache::put('treb_listing_history_v5_' . $listingKey, $rows, 3600);
+            Cache::put('treb_listing_history_v6_' . $listingKey, $rows, 3600);
         }
 
         return self::filterListingHistoryForViewer(
@@ -2981,8 +3067,8 @@ class TrebPropertyHelper
     {
         $listingKey = strtoupper(trim($listingKey));
         $authenticated = auth('account')->check() || auth()->check();
-        // v10: auth/guest keys must never be poisoned by queue warmers (no request auth).
-        $cacheKey = 'treb_listing_history_detail_v10_' . $listingKey . ($authenticated ? '_auth' : '_guest');
+        // v11: sold/leased history price uses ClosePrice; auth/guest keys stay split.
+        $cacheKey = 'treb_listing_history_detail_v11_' . $listingKey . ($authenticated ? '_auth' : '_guest');
 
         $cached = Cache::get($cacheKey);
         if (is_array($cached)) {
@@ -3931,6 +4017,7 @@ class TrebPropertyHelper
             'treb_property_record_v5_',
             'treb_property_record_raw_v1_',
             'treb_listing_history_v5_',
+            'treb_listing_history_v6_',
             'treb_price_changes_v4_',
             'treb_price_changes_v5_',
             'treb_map_popup_bundle_v1_',
@@ -3941,6 +4028,7 @@ class TrebPropertyHelper
             'treb_listing_history_detail_v8_',
             'treb_listing_history_detail_v9_',
             'treb_listing_history_detail_v10_',
+            'treb_listing_history_detail_v11_',
         ] as $prefix) {
             Cache::forget($prefix . $listingKey);
             Cache::forget($prefix . $listingKey . '_guest');
@@ -4516,6 +4604,7 @@ class TrebPropertyHelper
         }
 
         if (! $dryRun) {
+            self::clearAddressHistoryLookupCaches($record);
             self::clearListingHistoryCaches($listingKey);
 
             foreach ($stats['listing_ids'] as $relatedKey) {
@@ -4533,6 +4622,38 @@ class TrebPropertyHelper
         return $stats;
     }
 
+    /**
+     * Drop short-lived street/unit lookup caches so Fast history sees freshly imported siblings.
+     *
+     * @param  array<string, mixed>  $record
+     */
+    public static function clearAddressHistoryLookupCaches(array $record): void
+    {
+        $record = self::enrichRecordAddress($record);
+        $streetNumber = trim((string) ($record['StreetNumber'] ?? ''));
+        $streetName = trim((string) ($record['StreetName'] ?? ''));
+        $unitNumber = self::isUnitToken($record['UnitNumber'] ?? null) ? trim((string) $record['UnitNumber']) : '';
+
+        if ($streetNumber === '' || $streetName === '') {
+            return;
+        }
+
+        $legacyHash = md5(strtolower($streetNumber . '|' . $streetName . '|' . $unitNumber));
+        Cache::forget('serik_addr_hist_v6_' . $legacyHash);
+        Cache::forget('serik_addr_hist_v7_' . $legacyHash);
+
+        $city = self::normalizeCityForHistory($record['City'] ?? null);
+        Cache::forget('serik_addr_hist_v8_' . md5(strtolower($streetNumber . '|' . $streetName . '|' . $unitNumber . '|' . $city)));
+
+        $unitHash = md5(json_encode([
+            $record['StreetNumber'] ?? null,
+            $record['StreetName'] ?? null,
+            $record['UnitNumber'] ?? null,
+        ]));
+        Cache::forget('treb_unit_records_v1_' . $unitHash);
+        Cache::forget('treb_unit_records_v2_' . $unitHash);
+    }
+
     public static function clearListingHistoryCaches(string $listingKey): void
     {
         $listingKey = strtoupper(trim($listingKey));
@@ -4541,7 +4662,7 @@ class TrebPropertyHelper
             return;
         }
 
-        foreach (['treb_listing_history_v5_', 'treb_listing_history_detail_v6_', 'treb_listing_history_detail_v7_', 'treb_listing_history_detail_v8_', 'treb_listing_history_detail_v9_', 'treb_listing_history_detail_v10_'] as $prefix) {
+        foreach (['treb_listing_history_v5_', 'treb_listing_history_v6_', 'treb_listing_history_detail_v6_', 'treb_listing_history_detail_v7_', 'treb_listing_history_detail_v8_', 'treb_listing_history_detail_v9_', 'treb_listing_history_detail_v10_', 'treb_listing_history_detail_v11_'] as $prefix) {
             Cache::forget($prefix . $listingKey);
             Cache::forget($prefix . $listingKey . '_guest');
             Cache::forget($prefix . $listingKey . '_auth');

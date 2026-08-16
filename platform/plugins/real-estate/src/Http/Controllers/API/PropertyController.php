@@ -6684,8 +6684,10 @@ class PropertyController extends BaseController
             : TrebPropertyHelper::localPropertyArray($listingKey);
 
         // Serve cache/local history immediately — never block the HTTP request on AMP.
+        // Must use the same key as TrebPropertyHelper::fetchListingHistoryForDetail (v11)
+        // so background syncAddressHistoryForListing can replace the Fast stub.
         $authenticated = auth('account')->check() || auth()->check();
-        $detailCacheKey = 'treb_listing_history_detail_v10_' . $listingKey . ($authenticated ? '_auth' : '_guest');
+        $detailCacheKey = 'treb_listing_history_detail_v11_' . $listingKey . ($authenticated ? '_auth' : '_guest');
         $cached = Cache::get($detailCacheKey);
         if (is_array($cached)) {
             if ($authenticated && \Theme\homzen\Supports\TrebPropertyHelper::historyPayloadLooksGuestLocked($cached)) {
@@ -6697,8 +6699,9 @@ class PropertyController extends BaseController
         }
         if (! isset($history)) {
             $history = TrebPropertyHelper::fetchListingHistoryFast($listingKey, $local);
+            // Short TTL only — long-lived Fast stubs were hiding AMP siblings after sync.
             if ($history !== []) {
-                Cache::put($detailCacheKey, $history, 1800);
+                Cache::put($detailCacheKey, $history, 90);
             }
         }
 

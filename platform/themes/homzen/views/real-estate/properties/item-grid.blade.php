@@ -171,7 +171,7 @@
             <div class="serik-prop-card__price-row">
                 @if (! setting('real_estate_hide_price', false))
                     @if ($canViewSold)
-                        <h3 class="serik-prop-card__price">{{ $property->price_format }}</h3>
+                        <h3 class="serik-prop-card__price">{{ $card['price_format'] }}</h3>
                     @else
                         <h3 class="serik-prop-card__price">******</h3>
                     @endif

@@ -470,7 +470,7 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     if (listingKey) {
-        fetch('/api/v1/listing-history/' + encodeURIComponent(listingKey), {
+        const loadListingHistory = () => fetch('/api/v1/listing-history/' + encodeURIComponent(listingKey), {
             credentials: 'same-origin',
             headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
         })
@@ -478,8 +478,21 @@ document.addEventListener('DOMContentLoaded', function () {
         .then((payload) => {
             const rows = Array.isArray(payload?.data) ? payload.data : [];
             renderHistoryRows(rows);
+            return rows.length;
         })
-        .catch(() => {});
+        .catch(() => 0);
+
+        // First paint from local Fast history; one delayed refresh picks up AMP siblings
+        // imported by afterResponse sync (does not block SSR / first request).
+        loadListingHistory().then((count) => {
+            window.setTimeout(() => {
+                loadListingHistory().then((nextCount) => {
+                    if (nextCount > count) {
+                        loadListingHistory();
+                    }
+                });
+            }, 4500);
+        });
     }
 
     let roomsLoaded = {{ count($rooms) > 0 ? 'true' : 'false' }};
