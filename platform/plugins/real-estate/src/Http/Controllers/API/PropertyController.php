@@ -3083,7 +3083,12 @@ class PropertyController extends BaseController
 
         $parsed = $this->parseAddressSearchKeyword($keyword);
 
-        $communityRows = (! $isListingKey && ! $parsed)
+        // For longer free-text searches, Meili is the authoritative primary path.
+        // Deferring community resolution prevents a cold JSON community index or
+        // MySQL JSON fallback from blocking a healthy Meili response. The original
+        // community/MySQL fallback remains available when Meili is unavailable.
+        $meiliFirstFreeText = ! $isListingKey && ! $parsed && mb_strlen($keyword) >= 5;
+        $communityRows = (! $isListingKey && ! $parsed && ! $meiliFirstFreeText)
             ? $this->smartSearchRowsFromCommunities($keyword, $top, $skip)
             : [];
 
@@ -3135,6 +3140,12 @@ class PropertyController extends BaseController
 
                     // Meili answered — never fall through to AMP for free-text.
                     if (! $meiliUnavailable && $ids === []) {
+                        if ($meiliFirstFreeText) {
+                            return response()->json(
+                                $rememberSearch(TrebPropertyHelper::groupListingsByBuilding([]))
+                            );
+                        }
+
                         // Parsed street address: allow FULLTEXT / AMP address ingest below.
                     } elseif (! $meiliUnavailable && $ids !== []) {
                         $ordered = $this->hydrateSmartSearchRows($ids, max($top * 3, 30), false);
@@ -3160,6 +3171,10 @@ class PropertyController extends BaseController
                 $meiliUnavailable = true;
                 \Log::warning('Meili smartSearch fast-path failed: ' . $e->getMessage());
             }
+        }
+
+        if ($meiliFirstFreeText && $meiliUnavailable) {
+            $communityRows = $this->smartSearchRowsFromCommunities($keyword, $top, $skip);
         }
 
         if ($communityRows !== [] && ! $isListingKey && ! $parsed) {
