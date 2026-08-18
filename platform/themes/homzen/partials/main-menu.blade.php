@@ -141,22 +141,67 @@
 
 /* ===== DESKTOP ===== */
 @media (min-width: 992px) {
-    .has-dropdown::after {
+    .mega-close {
+        display: none !important;
+    }
+
+    .mega-dropdown {
+        position: fixed !important;
+        top: var(--serik-mega-top, 90px) !important;
+        left: 0 !important;
+        right: 0 !important;
+        width: 100vw !important;
+        min-width: 100vw !important;
+        max-width: none !important;
+        margin: 0 !important;
+        transform: none !important;
+        padding: 20px 32px 22px;
+        border-radius: 0 0 18px 18px;
+        box-sizing: border-box !important;
+        z-index: 20000 !important;
+    }
+
+    /* Hover bridge so the pointer can leave the nav item into the panel. */
+    .has-dropdown.is-active .mega-dropdown::before {
         content: '';
         position: absolute;
         left: 0;
         right: 0;
-        top: 100%;
-        height: 14px;
-        z-index: 1001;
+        bottom: 100%;
+        height: 18px;
     }
 
     /* Only one dropdown open at a time — JS controls .is-active (no :hover) */
-    .has-dropdown.is-active .mega-dropdown {
+    .has-dropdown.is-active .mega-dropdown,
+    .mega-dropdown.serik-mega-portal {
         opacity: 1;
         visibility: visible;
         pointer-events: auto;
-        transform: translateX(-50%) translateY(0);
+        transform: none !important;
+    }
+
+    .mega-left {
+        width: 18%;
+        max-width: 260px;
+    }
+
+    .mega-column a,
+    .mega-right a,
+    .main-city {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        line-height: 1.3;
+    }
+
+    .mega-column a:not(.main-city) {
+        font-size: 13px;
+        padding: 4px 8px;
+    }
+
+    .main-city {
+        font-size: 13.5px;
+        padding: 8px 8px 2px;
     }
 
     .menu-arrow {
@@ -602,11 +647,79 @@
         return window.innerWidth >= DESKTOP_BP;
     }
 
-    function closeMegaMenu() {
-        document.querySelectorAll('.mega-dropdown').forEach(menu => {
-            menu.classList.remove('show');
+    function updateMegaTop() {
+        const header = document.getElementById('header');
+        if (!header) {
+            return;
+        }
+        const bottom = Math.round(header.getBoundingClientRect().bottom);
+        document.documentElement.style.setProperty('--serik-mega-top', bottom + 'px');
+        return bottom;
+    }
+
+    document.querySelectorAll('.has-dropdown').forEach((item) => {
+        const panel = item.querySelector(':scope > .mega-dropdown');
+        if (panel) {
+            panel._megaHome = item;
+            item._megaPanel = panel;
+        }
+    });
+
+    function restoreMega(dropdown) {
+        if (!dropdown) {
+            return;
+        }
+        const home = dropdown._megaHome;
+        dropdown.classList.remove('serik-mega-portal');
+        dropdown.style.removeProperty('position');
+        dropdown.style.removeProperty('left');
+        dropdown.style.removeProperty('right');
+        dropdown.style.removeProperty('top');
+        dropdown.style.removeProperty('width');
+        dropdown.style.removeProperty('min-width');
+        dropdown.style.removeProperty('max-width');
+        dropdown.style.removeProperty('z-index');
+        dropdown.style.removeProperty('transform');
+        dropdown.style.removeProperty('margin');
+        if (home && dropdown.parentElement !== home) {
+            home.appendChild(dropdown);
+        }
+    }
+
+    function portalMega(item) {
+        const dropdown = item && item._megaPanel;
+        if (!dropdown || !isDesktop()) {
+            return;
+        }
+
+        document.querySelectorAll('.mega-dropdown.serik-mega-portal').forEach((panel) => {
+            if (panel !== dropdown) {
+                restoreMega(panel);
+            }
         });
-        document.querySelectorAll('.has-dropdown').forEach(item => {
+
+        const top = updateMegaTop();
+        document.body.appendChild(dropdown);
+        dropdown.classList.add('serik-mega-portal');
+        dropdown.style.position = 'fixed';
+        dropdown.style.left = '0';
+        dropdown.style.right = '0';
+        dropdown.style.top = (top || 90) + 'px';
+        dropdown.style.width = '100vw';
+        dropdown.style.minWidth = '100vw';
+        dropdown.style.maxWidth = 'none';
+        dropdown.style.margin = '0';
+        dropdown.style.transform = 'none';
+        dropdown.style.zIndex = '20000';
+    }
+
+    function closeMegaMenu() {
+        clearTimeout(closeTimer);
+        document.querySelectorAll('.mega-dropdown').forEach((menu) => {
+            menu.classList.remove('show');
+            restoreMega(menu);
+        });
+        document.querySelectorAll('.has-dropdown').forEach((item) => {
             item.classList.remove('is-open', 'is-active');
         });
         const overlay = document.querySelector('.mega-overlay');
@@ -618,17 +731,35 @@
     window.closeMegaMenu = closeMegaMenu;
 
     function setActiveMegaItem(item) {
-        document.querySelectorAll('.has-dropdown.is-active').forEach(el => {
+        document.querySelectorAll('.has-dropdown.is-active').forEach((el) => {
             if (el !== item) {
                 el.classList.remove('is-active');
+                restoreMega(el._megaPanel);
             }
         });
         if (item) {
             item.classList.add('is-active');
+            portalMega(item);
         }
     }
 
-    document.querySelectorAll('.has-dropdown > .menu-link').forEach(link => {
+    function scheduleClose(item) {
+        clearTimeout(closeTimer);
+        closeTimer = setTimeout(() => {
+            const panel = item && item._megaPanel;
+            if (item && (item.matches(':hover') || (panel && panel.matches(':hover')))) {
+                return;
+            }
+            if (item) {
+                item.classList.remove('is-active');
+                restoreMega(item._megaPanel);
+            } else {
+                closeMegaMenu();
+            }
+        }, 280);
+    }
+
+    document.querySelectorAll('.has-dropdown > .menu-link').forEach((link) => {
         link.addEventListener('click', function (e) {
             if (isDesktop()) {
                 e.preventDefault();
@@ -636,9 +767,9 @@
             }
             e.preventDefault();
 
-            const dropdown = this.nextElementSibling;
-            const overlay = document.querySelector('.mega-overlay');
             const parent = this.closest('.has-dropdown');
+            const dropdown = parent && parent._megaPanel;
+            const overlay = document.querySelector('.mega-overlay');
 
             closeMegaMenu();
 
@@ -654,7 +785,7 @@
         });
     });
 
-    document.querySelectorAll('.has-dropdown').forEach(item => {
+    document.querySelectorAll('.has-dropdown').forEach((item) => {
         item.addEventListener('mouseenter', () => {
             if (!isDesktop()) {
                 return;
@@ -663,33 +794,50 @@
             setActiveMegaItem(item);
         });
 
-        item.addEventListener('mouseleave', () => {
+        item.addEventListener('mouseleave', (e) => {
             if (!isDesktop()) {
                 return;
             }
-            closeTimer = setTimeout(() => {
-                item.classList.remove('is-active');
-            }, 220);
+            const panel = item._megaPanel;
+            const next = e.relatedTarget;
+            if (next && (item.contains(next) || (panel && panel.contains(next)))) {
+                return;
+            }
+            scheduleClose(item);
         });
     });
 
-    document.querySelectorAll('.mega-dropdown').forEach(dropdown => {
+    document.querySelectorAll('.mega-dropdown').forEach((dropdown) => {
         dropdown.addEventListener('mouseenter', () => {
             if (!isDesktop()) {
                 return;
             }
             clearTimeout(closeTimer);
+            const parent = dropdown._megaHome;
+            if (parent) {
+                setActiveMegaItem(parent);
+            }
         });
 
-        dropdown.addEventListener('mouseleave', () => {
+        dropdown.addEventListener('mouseleave', (e) => {
             if (!isDesktop()) {
                 return;
             }
-            const parent = dropdown.closest('.has-dropdown');
-            closeTimer = setTimeout(() => {
-                parent?.classList.remove('is-active');
-            }, 220);
+            const parent = dropdown._megaHome;
+            const next = e.relatedTarget;
+            if (parent && next && (parent.contains(next) || dropdown.contains(next))) {
+                return;
+            }
+            scheduleClose(parent);
         });
+    });
+
+    window.addEventListener('scroll', updateMegaTop, { passive: true });
+    window.addEventListener('resize', () => {
+        updateMegaTop();
+        if (!isDesktop()) {
+            closeMegaMenu();
+        }
     });
 
     const overlay = document.querySelector('.mega-overlay');
@@ -697,7 +845,7 @@
         overlay.addEventListener('click', closeMegaMenu);
     }
 
-    document.querySelectorAll('.mega-close').forEach(btn => {
+    document.querySelectorAll('.mega-close').forEach((btn) => {
         btn.addEventListener('click', closeMegaMenu);
     });
 

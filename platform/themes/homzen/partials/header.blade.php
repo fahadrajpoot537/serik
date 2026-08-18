@@ -589,6 +589,12 @@
             display: none;
         }
     }
+    @media (min-width: 992px) {
+        .main-header .smart-search {
+            min-width: 0;
+            max-width: none;
+        }
+    }
     @media (max-width: 767.98px) {
         .main-header .logo {
             max-width: min(160px, 52vw);

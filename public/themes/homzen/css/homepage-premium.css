@@ -2208,19 +2208,20 @@ body:has(#page-home) {
   /* Search kept full-featured, just narrowed so it stops covering the first menu item. */
   #page-home .main-header .logo-box {
     min-width: 0;
-    flex: 0 1 auto;
+    flex: 0 0 auto;
     gap: .75rem !important;
   }
 
   #page-home .main-header .mobile-search-panel {
     min-width: 0;
-    flex: 0 1 auto;
+    flex: 0 0 auto;
   }
 
   #page-home .main-header .smart-search {
     min-width: 0 !important;
-    width: clamp(190px, 16vw, 270px);
-    max-width: 270px;
+    flex: 0 0 auto;
+    width: clamp(240px, 20vw, 380px);
+    max-width: 380px;
   }
 
   #page-home .main-header .smart-search .search-box {
@@ -2236,11 +2237,17 @@ body:has(#page-home) {
     background: transparent !important;
   }
 
+  #page-home .main-header .nav-outer {
+    padding-left: 1.35rem;
+  }
+
   #page-home .main-header .main-menu .navigation {
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: clamp(8px, 1.7vw, 28px);
+    justify-content: flex-end;
+    gap: clamp(6px, 1vw, 16px);
+    padding-left: 0.5rem;
+    padding-right: 0.85rem;
   }
 
   #page-home .main-header .main-menu .navigation > li > a {

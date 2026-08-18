@@ -244,6 +244,30 @@
   position: relative;
 }
 
+@media (min-width: 992px) {
+  .mega-dropdown,
+  body > .mega-dropdown,
+  .mega-dropdown.serik-mega-portal {
+    position: fixed !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: var(--serik-mega-top, 90px) !important;
+    width: 100vw !important;
+    min-width: 100vw !important;
+    max-width: none !important;
+    margin: 0 !important;
+    transform: none !important;
+    box-sizing: border-box !important;
+    z-index: 20000 !important;
+  }
+
+  body > .mega-dropdown.serik-mega-portal {
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+  }
+}
+
 .main-header .main-menu .navigation > li > ul {
   left: 0 !important;
   right: auto !important;
@@ -401,19 +425,20 @@
 
   .main-header .logo-box {
     min-width: 0;
-    flex: 0 1 auto;
+    flex: 0 0 auto;
     gap: 0.75rem !important;
   }
 
   .main-header .mobile-search-panel {
     min-width: 0;
-    flex: 0 1 auto;
+    flex: 0 0 auto;
   }
 
   .main-header .smart-search {
     min-width: 0 !important;
-    width: clamp(190px, 16vw, 270px);
-    max-width: 270px;
+    flex: 0 0 auto;
+    width: clamp(240px, 20vw, 380px);
+    max-width: 380px;
   }
 
   .main-header .smart-search .search-box {
@@ -428,11 +453,17 @@
     background: transparent !important;
   }
 
+  .main-header .nav-outer {
+    padding-left: 1.35rem;
+  }
+
   .main-header .main-menu .navigation {
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: clamp(8px, 1.7vw, 28px);
+    justify-content: flex-end;
+    gap: clamp(6px, 1vw, 16px);
+    padding-left: 0.5rem;
+    padding-right: 0.85rem;
   }
 
   .main-header .main-menu .navigation > li > a {
@@ -515,8 +546,8 @@
 
   .main-header .smart-search,
   #page-home .main-header .smart-search {
-    width: clamp(130px, 11vw, 190px) !important;
-    max-width: 190px !important;
+    width: clamp(200px, 18vw, 300px) !important;
+    max-width: 300px !important;
   }
   .main-header .smart-search .search-box,
   .main-header .smart-search .search-box input,
@@ -532,7 +563,10 @@
 
   .main-header .main-menu .navigation,
   #page-home .main-header .main-menu .navigation {
-    gap: clamp(4px, 0.7vw, 12px) !important;
+    gap: clamp(6px, 0.9vw, 14px) !important;
+    justify-content: flex-end;
+    padding-left: 0.75rem;
+    padding-right: 0.5rem;
   }
   .main-header .main-menu .navigation > li > a,
   #page-home .main-header .main-menu .navigation > li > a {
@@ -568,8 +602,8 @@
 
   .main-header .smart-search,
   #page-home .main-header .smart-search {
-    width: clamp(120px, 10vw, 160px) !important;
-    max-width: 160px !important;
+    width: clamp(170px, 16vw, 240px) !important;
+    max-width: 240px !important;
   }
 
   .serik-portal-nav__map,
@@ -603,8 +637,8 @@
 
   .main-header .smart-search,
   #page-home .main-header .smart-search {
-    width: 110px !important;
-    max-width: 110px !important;
+    width: 170px !important;
+    max-width: 170px !important;
   }
 
   .main-header .main-menu .navigation,
