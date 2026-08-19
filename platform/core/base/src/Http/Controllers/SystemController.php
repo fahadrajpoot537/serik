@@ -55,7 +55,7 @@ class SystemController extends BaseSystemController
                     ]);
             }
 
-            if ($core->isLicenseFullyVerified()) {
+            if ($core->hasLicenseData() || $core->isLicenseFullyVerified()) {
                 return $this->httpResponse()->setData(['verified' => true]);
             }
 

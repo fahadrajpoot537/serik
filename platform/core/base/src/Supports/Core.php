@@ -246,6 +246,14 @@ final class Core
             return false;
         }
 
+        // IIS FastCGI cannot wait on license.botble.com. HTTP uses the local
+        // license file only; remote re-check stays CLI (cms:license:activate).
+        if (! App::runningInConsole()) {
+            LicenseVerified::dispatch();
+
+            return true;
+        }
+
         if ($timeBasedCheck && $this->isLicenseFullyVerified()) {
             LicenseVerified::dispatch();
 

@@ -20,12 +20,8 @@ class UnlicensedController extends BaseController
 
         $this->validateRedirectUrl($request);
 
-        try {
-            if ($this->core->verifyLicense(true, 3)) {
-                return redirect()->route('dashboard.index');
-            }
-        } catch (\Throwable) {
-            // License server hang must not block admin on IIS.
+        if ($this->core->hasLicenseData()) {
+            return redirect()->route('dashboard.index');
         }
 
         Assets::removeStyles(['fontawesome', 'select2', 'datepicker', 'spectrum'])

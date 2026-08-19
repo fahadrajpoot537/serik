@@ -19,6 +19,10 @@ class MembershipAuthorization
     public function authorize(): bool
     {
         try {
+            if (! app()->runningInConsole()) {
+                return true;
+            }
+
             if (! filter_var($this->url, FILTER_VALIDATE_URL)) {
                 return false;
             }
