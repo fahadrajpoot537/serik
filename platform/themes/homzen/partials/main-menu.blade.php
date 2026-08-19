@@ -158,26 +158,36 @@
         padding: 20px 32px 22px;
         border-radius: 0 0 18px 18px;
         box-sizing: border-box !important;
-        z-index: 20000 !important;
+        z-index: 2147483000 !important;
     }
 
     /* Hover bridge so the pointer can leave the nav item into the panel. */
-    .has-dropdown.is-active .mega-dropdown::before {
+    .has-dropdown.is-active .mega-dropdown::before,
+    .mega-dropdown.serik-mega-portal::before {
         content: '';
         position: absolute;
         left: 0;
         right: 0;
         bottom: 100%;
-        height: 18px;
+        height: 48px;
     }
 
     /* Only one dropdown open at a time — JS controls .is-active (no :hover) */
     .has-dropdown.is-active .mega-dropdown,
-    .mega-dropdown.serik-mega-portal {
+    .mega-dropdown.serik-mega-portal,
+    body > .mega-dropdown.serik-mega-portal,
+    .mega-dropdown.serik-mega-portal a {
         opacity: 1;
         visibility: visible;
-        pointer-events: auto;
+        pointer-events: auto !important;
         transform: none !important;
+    }
+
+    html.serik-mega-open iframe[title*="chat"],
+    html.serik-mega-open iframe[title*="Chat"],
+    html.serik-mega-open .widget-visible {
+        pointer-events: none !important;
+        visibility: hidden !important;
     }
 
     .mega-left {
@@ -681,6 +691,9 @@
         dropdown.style.removeProperty('z-index');
         dropdown.style.removeProperty('transform');
         dropdown.style.removeProperty('margin');
+        dropdown.style.removeProperty('pointer-events');
+        dropdown.style.removeProperty('opacity');
+        dropdown.style.removeProperty('visibility');
         if (home && dropdown.parentElement !== home) {
             home.appendChild(dropdown);
         }
@@ -710,11 +723,16 @@
         dropdown.style.maxWidth = 'none';
         dropdown.style.margin = '0';
         dropdown.style.transform = 'none';
-        dropdown.style.zIndex = '20000';
+        dropdown.style.zIndex = '2147483000';
+        dropdown.style.pointerEvents = 'auto';
+        dropdown.style.opacity = '1';
+        dropdown.style.visibility = 'visible';
+        document.documentElement.classList.add('serik-mega-open');
     }
 
     function closeMegaMenu() {
         clearTimeout(closeTimer);
+        document.documentElement.classList.remove('serik-mega-open');
         document.querySelectorAll('.mega-dropdown').forEach((menu) => {
             menu.classList.remove('show');
             restoreMega(menu);
@@ -747,16 +765,20 @@
         clearTimeout(closeTimer);
         closeTimer = setTimeout(() => {
             const panel = item && item._megaPanel;
+            if (panel && panel._megaLock) {
+                return;
+            }
             if (item && (item.matches(':hover') || (panel && panel.matches(':hover')))) {
                 return;
             }
+            document.documentElement.classList.remove('serik-mega-open');
             if (item) {
                 item.classList.remove('is-active');
                 restoreMega(item._megaPanel);
             } else {
                 closeMegaMenu();
             }
-        }, 280);
+        }, 400);
     }
 
     document.querySelectorAll('.has-dropdown > .menu-link').forEach((link) => {
@@ -819,8 +841,32 @@
             }
         });
 
+        dropdown.addEventListener('mousedown', () => {
+            dropdown._megaLock = true;
+        });
+
+        dropdown.addEventListener('mouseup', () => {
+            dropdown._megaLock = false;
+        });
+
+        dropdown.addEventListener('click', (e) => {
+            const link = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+            if (!link) {
+                return;
+            }
+            const href = link.getAttribute('href');
+            if (!href || href === '#' || href.startsWith('javascript:')) {
+                return;
+            }
+            e.preventDefault();
+            window.location.assign(link.href);
+        });
+
         dropdown.addEventListener('mouseleave', (e) => {
             if (!isDesktop()) {
+                return;
+            }
+            if (dropdown._megaLock) {
                 return;
             }
             const parent = dropdown._megaHome;

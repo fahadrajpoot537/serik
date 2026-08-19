@@ -76,7 +76,7 @@ class GeneralSettingController extends SettingController
         }
 
         try {
-            if (! $core->verifyLicense(false)) {
+            if (! $core->verifyLicense(true, 8)) {
                 if (! $core->hasLicenseData()) {
                     $this
                         ->httpResponse()

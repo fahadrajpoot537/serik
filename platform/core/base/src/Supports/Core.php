@@ -162,7 +162,7 @@ final class Core
         return $this->cache->remember(
             "license:{$this->getLicenseCacheKey()}:check_connection",
             Carbon::now()->addDays($this->verificationPeriod),
-            fn () => rescue(fn () => $this->createRequest('check_connection_ext')->ok()) ?: false
+            fn () => rescue(fn () => $this->createRequest('check_connection_ext', [], 'POST', 5)->ok()) ?: false
         );
     }
 
@@ -755,7 +755,7 @@ final class Core
                 ->asJson()
                 ->acceptJson()
                 ->withoutVerifying()
-                ->connectTimeout(100)
+                ->connectTimeout(3)
                 ->timeout($timeoutInSeconds);
 
             return match (Str::upper($method)) {

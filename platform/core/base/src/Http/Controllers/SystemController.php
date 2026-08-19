@@ -67,7 +67,7 @@ class SystemController extends BaseSystemController
                 }
             }
 
-            $verified = $core->verifyLicense(true, 15);
+            $verified = $core->verifyLicense(true, 8);
 
             if ($verified) {
                 session([$cacheKey => time()]);

@@ -146,9 +146,11 @@ class Helper
         $defaultIpAddress = Request::ip() ?: '127.0.0.1';
 
         try {
-            $ip = trim(Http::withoutVerifying()->get('https://ipecho.net/plain')->body());
+            return \Illuminate\Support\Facades\Cache::remember('serik_outbound_ip_v1', 86400, function () use ($defaultIpAddress) {
+                $ip = trim(Http::withoutVerifying()->connectTimeout(2)->timeout(3)->get('https://ipecho.net/plain')->body());
 
-            return filter_var($ip, FILTER_VALIDATE_IP) ? $ip : $defaultIpAddress;
+                return filter_var($ip, FILTER_VALIDATE_IP) ? $ip : $defaultIpAddress;
+            });
         } catch (Throwable) {
             return $defaultIpAddress;
         }

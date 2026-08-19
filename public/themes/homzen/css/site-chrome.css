@@ -258,10 +258,12 @@
     margin: 0 !important;
     transform: none !important;
     box-sizing: border-box !important;
-    z-index: 20000 !important;
+    z-index: 2147483000 !important;
+    pointer-events: auto !important;
   }
 
-  body > .mega-dropdown.serik-mega-portal {
+  body > .mega-dropdown.serik-mega-portal,
+  body > .mega-dropdown.serik-mega-portal a {
     opacity: 1 !important;
     visibility: visible !important;
     pointer-events: auto !important;
