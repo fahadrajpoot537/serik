@@ -57,6 +57,7 @@ class AppServiceProvider extends ServiceProvider
     {
         \App\Support\EnsuresTranslator::ensure();
         self::ensureWritableLoggingOrFallback();
+        self::disablePhpTimeLimitForQueueDaemons();
 
         CanonicalUrl::forceApplicationUrl();
 
@@ -405,8 +406,24 @@ HTML;
     }
 
     /**
-     * Additive queue metrics — never alters job success/failure.
+     * queue:work / queue:listen are long-lived CLI daemons.
+     * This does NOT change IIS/FastCGI max_execution_time for HTTP requests.
      */
+    protected static function disablePhpTimeLimitForQueueDaemons(): void
+    {
+        if (! app()->runningInConsole()) {
+            return;
+        }
+
+        $argv = implode(' ', array_map('strval', $_SERVER['argv'] ?? []));
+        if (! preg_match('/queue:(?:work|listen)\b/', $argv)) {
+            return;
+        }
+
+        ini_set('max_execution_time', '0');
+        set_time_limit(0);
+    }
+
     protected function registerQueueMetricsListeners(): void
     {
         if (! config('serik.orchestration.enabled', true)) {

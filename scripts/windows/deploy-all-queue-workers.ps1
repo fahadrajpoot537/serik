@@ -33,7 +33,7 @@ $workers = @(
         Name = 'SerikQueueHigh'
         DisplayName = 'Serik Queue High Worker'
         Description = 'Laravel queue worker for live sync, geocode, history, auth emails (high queue).'
-        Parameters = 'artisan queue:work database --queue=high --sleep=1 --tries=5 --timeout=200 --memory=384 --max-jobs=200 --max-time=3600'
+        Parameters = '-d max_execution_time=0 artisan queue:work database --queue=high --sleep=1 --tries=5 --timeout=200 --memory=384 --max-jobs=200 --max-time=1800'
         Stdout = 'queue-high.log'
         Stderr = 'queue-high-error.log'
     },
@@ -41,7 +41,7 @@ $workers = @(
         Name = 'SerikQueueImages'
         DisplayName = 'Serik Queue Images Worker'
         Description = 'Laravel queue worker for TREB image WebP persistence (images queue).'
-        Parameters = 'artisan queue:work database --queue=images --sleep=3 --tries=3 --timeout=300 --memory=384 --max-jobs=50 --max-time=1800'
+        Parameters = '-d max_execution_time=0 artisan queue:work database --queue=images --sleep=3 --tries=3 --timeout=300 --memory=384 --max-jobs=50 --max-time=1800'
         Stdout = 'queue-images.log'
         Stderr = 'queue-images-error.log'
     },
@@ -51,7 +51,7 @@ $workers = @(
         Description = 'Laravel queue worker for backlog/maintenance; also drains search-index if opted in.'
         # search-index first so dedicated indexing wins when SERIK_QUEUE_SEARCH=search-index
         # timeout=300 aligns with SearchBatchJob::$timeout (was 120 — prematurely killed Meili drains)
-        Parameters = 'artisan queue:work database --queue=search-index,low --sleep=2 --tries=4 --timeout=300 --memory=384 --max-jobs=100 --max-time=3600'
+        Parameters = '-d max_execution_time=0 artisan queue:work database --queue=search-index,low --sleep=2 --tries=4 --timeout=300 --memory=384 --max-jobs=100 --max-time=1800'
         Stdout = 'queue-low.log'
         Stderr = 'queue-low-error.log'
     },
@@ -59,7 +59,7 @@ $workers = @(
         Name = 'SerikQueueImports'
         DisplayName = 'Serik Queue Imports Worker'
         Description = 'Laravel queue worker for TREB archive / sold-history ONLY (imports). Never user-facing.'
-        Parameters = 'artisan queue:work database --queue=imports --sleep=1 --tries=5 --timeout=300 --memory=512 --max-jobs=40 --max-time=3600'
+        Parameters = '-d max_execution_time=0 artisan queue:work database --queue=imports --sleep=1 --tries=5 --timeout=300 --memory=512 --max-jobs=40 --max-time=1800'
         Stdout = 'queue-imports.log'
         Stderr = 'queue-imports-error.log'
     },
@@ -67,7 +67,7 @@ $workers = @(
         Name = 'SerikQueueGhl'
         DisplayName = 'Serik Queue GHL Worker'
         Description = 'Laravel queue worker for GoHighLevel MLS sync (ghl queue).'
-        Parameters = 'artisan queue:work database --queue=ghl --sleep=1 --tries=8 --timeout=180 --memory=256 --max-jobs=100 --max-time=3600'
+        Parameters = '-d max_execution_time=0 artisan queue:work database --queue=ghl --sleep=1 --tries=8 --timeout=180 --memory=256 --max-jobs=100 --max-time=1800'
         Stdout = 'queue-ghl.log'
         Stderr = 'queue-ghl-error.log'
     },
@@ -75,7 +75,7 @@ $workers = @(
         Name = 'SerikQueueAux'
         DisplayName = 'Serik Queue Aux Worker'
         Description = 'Laravel queue worker for critical/default/emails/notifications lanes.'
-        Parameters = 'artisan queue:work database --queue=critical,emails,notifications,default --sleep=2 --tries=5 --timeout=120 --memory=256 --max-jobs=100 --max-time=3600'
+        Parameters = '-d max_execution_time=0 artisan queue:work database --queue=critical,emails,notifications,default --sleep=2 --tries=5 --timeout=120 --memory=256 --max-jobs=100 --max-time=1800'
         Stdout = 'queue-aux.log'
         Stderr = 'queue-aux-error.log'
     },
@@ -83,7 +83,7 @@ $workers = @(
         Name = 'SerikQueueCacheRefresh'
         DisplayName = 'Serik Queue Cache Refresh Worker'
         Description = 'Laravel queue worker for background cache warming (cache-refresh). Never user-facing.'
-        Parameters = 'artisan queue:work database --queue=cache-refresh --sleep=2 --tries=2 --timeout=240 --memory=256 --max-jobs=50 --max-time=3600'
+        Parameters = '-d max_execution_time=0 artisan queue:work database --queue=cache-refresh --sleep=2 --tries=2 --timeout=240 --memory=256 --max-jobs=50 --max-time=1800'
         Stdout = 'queue-cache-refresh.log'
         Stderr = 'queue-cache-refresh-error.log'
     }

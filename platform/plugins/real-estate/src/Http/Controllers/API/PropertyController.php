@@ -24,6 +24,7 @@ use Illuminate\Support\Facades\Cache;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Theme\homzen\Supports\TrebPropertyHelper;
+use App\Jobs\SyncPropertyHistoryJob;
 use Botble\Theme\Facades\Theme;
 
 use Illuminate\Support\Facades\Validator;
@@ -6715,8 +6716,8 @@ class PropertyController extends BaseController
     }
 
     /**
-     * afterResponse AMP address sync without blocking listing-history JSON.
-     * Uses existing TrebPropertyHelper sync + per-listing lock (no new queue system).
+     * Queue AMP address sync. Must not run in the IIS request (FastCGI waits
+     * through PHP shutdown / afterResponse and can hit max_execution_time=300).
      */
     private function scheduleListingHistoryAmpSync(string $listingKey, ?int $propertyId): void
     {
@@ -6735,25 +6736,21 @@ class PropertyController extends BaseController
             return;
         }
 
-        // afterResponse: same process, after JSON is sent — works without workers.
-        // SyncPropertyHistoryJob remains for SyncLiveJob chain (unique + retries).
-        dispatch(function () use ($listingKey, $queuedKey) {
-            $lock = Cache::lock('serik:history-sync:' . $listingKey, 180);
-            if (! $lock->get()) {
-                Cache::forget($queuedKey);
+        $id = $propertyId ? (int) $propertyId : 0;
+        if ($id < 1) {
+            $id = (int) Property::query()->where('external_id', $listingKey)->value('id');
+        }
 
-                return;
-            }
+        if ($id < 1) {
+            Cache::forget($queuedKey);
 
-            try {
-                TrebPropertyHelper::syncAddressHistoryForListing($listingKey, false, 8);
-            } catch (\Throwable $e) {
-                report($e);
-            } finally {
-                optional($lock)->release();
-                Cache::forget($queuedKey);
-            }
-        })->afterResponse();
+            return;
+        }
+
+        // Queue AMP work. IIS FastCGI waits for PHP shutdown including
+        // afterResponse callbacks, so in-request AMP sync can hit the 300s
+        // limit and surface as an HTTP 500.
+        SyncPropertyHistoryJob::dispatch($id, 8, false);
     }
 
     public function getPriceChanges($listingKey)

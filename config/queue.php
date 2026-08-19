@@ -40,8 +40,8 @@ return [
             'connection' => env('DB_QUEUE_CONNECTION'),
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
             'queue' => env('DB_QUEUE', 'default'),
-            // Must exceed longest job timeout (SyncLiveJob ~180s, catch-up wrapper longer).
-            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 300),
+            // Must exceed longest worker --timeout (images/low/imports use 300s).
+            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 360),
             'after_commit' => false,
         ],
 

@@ -17,8 +17,8 @@ use Throwable;
 
 /**
  * HIGH lane: fetch address/listing history AFTER geocode (Bus::chain).
- * Caps sibling AMP imports so workers never stall for 10+ minutes.
- * Also used (via afterResponse) for non-blocking listing-history API refresh.
+ * Caps sibling AMP imports and wall-clock so workers never stall for 10+ minutes.
+ * Listing-history API dispatches this job (never AMP inside the IIS request).
  */
 class SyncPropertyHistoryJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
 {
@@ -39,7 +39,8 @@ class SyncPropertyHistoryJob implements ShouldQueue, ShouldBeUniqueUntilProcessi
 
     public function __construct(
         public int $propertyId,
-        public int $maxSiblings = 8
+        public int $maxSiblings = 8,
+        public bool $requireCoordinates = true,
     ) {
         $this->onQueue(SerikQueue::high());
     }
@@ -53,49 +54,122 @@ class SyncPropertyHistoryJob implements ShouldQueue, ShouldBeUniqueUntilProcessi
     {
         @set_time_limit(90);
 
-        $property = Property::query()->find($this->propertyId);
-        if (! $property) {
-            return;
+        $started = microtime(true);
+        $attempt = (int) ($this->attempts() ?: 1);
+        $uuid = null;
+        try {
+            $uuid = $this->job?->uuid();
+        } catch (Throwable) {
+            $uuid = null;
         }
 
-        // Safety: never sync history if coords are still missing (chain should
-        // already enforce this; this guards manual re-dispatch).
-        $lat = (float) ($property->latitude ?? 0);
-        if ($lat === 0.0) {
-            Log::warning('[SyncPropertyHistoryJob] skipped — missing coords', [
-                'property_id' => $this->propertyId,
-            ]);
+        $op = 'load_property';
+        $listingKey = '';
 
-            return;
-        }
-
-        $listingKey = strtoupper(trim((string) $property->external_id));
-        if ($listingKey === '') {
-            return;
-        }
-
-        $queuedKey = 'serik:history-sync-queued:' . $listingKey;
-        $lock = Cache::lock('serik:history-sync:' . $listingKey, 180);
-        if (! $lock->get()) {
-            return;
-        }
+        Log::info('[SyncPropertyHistoryJob] start', [
+            'uuid' => $uuid,
+            'job_uuid' => $uuid,
+            'property_id' => $this->propertyId,
+            'attempt' => $attempt,
+            'max_siblings' => $this->maxSiblings,
+            'require_coordinates' => $this->requireCoordinates,
+        ]);
 
         try {
-            TrebPropertyHelper::syncAddressHistoryForListing(
-                $listingKey,
-                false,
-                max(1, $this->maxSiblings)
-            );
+            $property = Property::query()->select(['id', 'external_id', 'latitude', 'longitude'])->find($this->propertyId);
+            if (! $property) {
+                Log::info('[SyncPropertyHistoryJob] skipped — property missing', [
+                    'job_uuid' => $uuid,
+                    'property_id' => $this->propertyId,
+                    'attempt' => $attempt,
+                    'duration_ms' => $this->durationMs($started),
+                ]);
+
+                return;
+            }
+
+            $lat = (float) ($property->latitude ?? 0);
+            if ($this->requireCoordinates && $lat === 0.0) {
+                Log::warning('[SyncPropertyHistoryJob] skipped — missing coords', [
+                    'job_uuid' => $uuid,
+                    'property_id' => $this->propertyId,
+                    'attempt' => $attempt,
+                    'duration_ms' => $this->durationMs($started),
+                ]);
+
+                return;
+            }
+
+            $listingKey = strtoupper(trim((string) $property->external_id));
+            if ($listingKey === '') {
+                Log::info('[SyncPropertyHistoryJob] skipped — empty listing key', [
+                    'job_uuid' => $uuid,
+                    'property_id' => $this->propertyId,
+                    'attempt' => $attempt,
+                    'duration_ms' => $this->durationMs($started),
+                ]);
+
+                return;
+            }
+
+            $op = 'acquire_lock';
+            $queuedKey = 'serik:history-sync-queued:' . $listingKey;
+            $lock = Cache::lock('serik:history-sync:' . $listingKey, 180);
+            if (! $lock->get()) {
+                Log::info('[SyncPropertyHistoryJob] skipped — lock held', [
+                    'job_uuid' => $uuid,
+                    'property_id' => $this->propertyId,
+                    'listing_key' => $listingKey,
+                    'attempt' => $attempt,
+                    'duration_ms' => $this->durationMs($started),
+                ]);
+
+                return;
+            }
+
+            try {
+                $op = 'sync_address_history';
+                // Stay under job timeout (90s). Windows does not enforce pcntl job timeout.
+                $stats = TrebPropertyHelper::syncAddressHistoryForListing(
+                    $listingKey,
+                    false,
+                    max(1, $this->maxSiblings),
+                    75
+                );
+
+                Log::info('[SyncPropertyHistoryJob] complete', [
+                    'job_uuid' => $uuid,
+                    'property_id' => $this->propertyId,
+                    'listing_key' => $listingKey,
+                    'attempt' => $attempt,
+                    'duration_ms' => $this->durationMs($started),
+                    'amp_found' => $stats['amp_found'] ?? null,
+                    'imported' => $stats['imported'] ?? null,
+                    'updated' => $stats['updated'] ?? null,
+                    'skipped' => $stats['skipped'] ?? null,
+                    'history_rows' => $stats['history_rows'] ?? null,
+                    'timed_out' => $stats['timed_out'] ?? false,
+                    'last_op' => $stats['last_op'] ?? $op,
+                ]);
+            } finally {
+                optional($lock)->release();
+                Cache::forget($queuedKey);
+            }
         } catch (Throwable $e) {
             Log::warning('[SyncPropertyHistoryJob] failed', [
+                'uuid' => $uuid,
+                'job_uuid' => $uuid,
                 'property_id' => $this->propertyId,
                 'listing_key' => $listingKey,
-                'error' => $e->getMessage(),
+                'attempt' => $attempt,
+                'duration' => $this->durationMs($started),
+                'duration_ms' => $this->durationMs($started),
+                'operation' => $op,
+                'exception_class' => $e::class,
+                'exception' => $e->getMessage(),
+                'exception_message' => $e->getMessage(),
             ]);
             throw $e;
-        } finally {
-            optional($lock)->release();
-            Cache::forget($queuedKey);
         }
     }
 
@@ -103,7 +177,13 @@ class SyncPropertyHistoryJob implements ShouldQueue, ShouldBeUniqueUntilProcessi
     {
         Log::error('[SyncPropertyHistoryJob] failed permanently', [
             'property_id' => $this->propertyId,
+            'exception_class' => $e ? $e::class : null,
             'error' => $e?->getMessage(),
         ]);
+    }
+
+    private function durationMs(float $started): int
+    {
+        return (int) round((microtime(true) - $started) * 1000);
     }
 }

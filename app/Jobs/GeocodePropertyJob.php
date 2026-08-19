@@ -53,7 +53,7 @@ class GeocodePropertyJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
 
     public function handle(GeocodingManager $geocoder, PropertyController $controller): void
     {
-        @set_time_limit(0);
+        @set_time_limit(120);
 
         $lock = Cache::lock(GeocodeState::propertyLockKey($this->propertyId), 180);
         if (! $lock->get()) {

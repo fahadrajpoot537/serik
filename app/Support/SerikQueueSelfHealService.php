@@ -122,6 +122,13 @@ final class SerikQueueSelfHealService
 
         foreach ($rows as $row) {
             $uuid = (string) $row->uuid;
+            $exception = (string) ($row->exception ?? '');
+            if (str_contains($exception, 'MaxAttemptsExceededException')) {
+                // Re-queueing these only repeats the same dead letter until the
+                // original cause (worker death / AMP hang) is fixed.
+                continue;
+            }
+
             $metaKey = 'serik_failed_retry:' . $uuid;
             $attempts = (int) Cache::get($metaKey, 0);
 

@@ -4321,7 +4321,7 @@ class TrebPropertyHelper
      * @param  array<string, mixed>  $record
      * @return array<int, array<string, mixed>>
      */
-    public static function fetchAmpListingsForAddressHistory(array $record): array
+    public static function fetchAmpListingsForAddressHistory(array $record, float $deadline = 0.0): array
     {
         $record = self::enrichRecordAddress($record);
         $streetNumber = trim((string) ($record['StreetNumber'] ?? ''));
@@ -4368,7 +4368,14 @@ class TrebPropertyHelper
 
         $unique = [];
 
+        $ampTimeout = $deadline > 0 ? 12 : 20;
+        $ampRetries = $deadline > 0 ? 1 : 2;
+
         foreach (array_values(array_unique($filters)) as $filter) {
+            if ($deadline > 0 && microtime(true) >= $deadline) {
+                break;
+            }
+
             $url = 'https://query.ampre.ca/odata/Property?'
                 . '$filter=' . rawurlencode($filter)
                 . '&$top=50'
@@ -4378,7 +4385,11 @@ class TrebPropertyHelper
             // Merge AUTH1 + AUTH — live token often returns only the newest row and
             // would short-circuit before historical archive rows are seen.
             foreach (['historical', 'live'] as $profile) {
-                $payload = self::ampGetFresh($url, 20, 2, $profile);
+                if ($deadline > 0 && microtime(true) >= $deadline) {
+                    break 2;
+                }
+
+                $payload = self::ampGetFresh($url, $ampTimeout, $ampRetries, $profile);
 
                 foreach ($payload['value'] ?? [] as $item) {
                     $key = strtoupper(trim((string) ($item['ListingKey'] ?? '')));
@@ -4518,12 +4529,15 @@ class TrebPropertyHelper
     public static function syncAddressHistoryForListing(
         string $listingKey,
         bool $dryRun = false,
-        int $maxSiblings = 0
+        int $maxSiblings = 0,
+        int $maxSeconds = 0
     ): array
     {
         $listingKey = strtoupper(trim($listingKey));
         // 0 = unlimited (manual artisan). Live/queue jobs pass a small cap.
         $maxSiblings = max(0, $maxSiblings);
+        $maxSeconds = max(0, $maxSeconds);
+        $deadline = $maxSeconds > 0 ? microtime(true) + $maxSeconds : 0.0;
 
         $stats = [
             'listing' => $listingKey,
@@ -4533,12 +4547,15 @@ class TrebPropertyHelper
             'skipped' => 0,
             'history_rows' => 0,
             'listing_ids' => [],
+            'timed_out' => false,
+            'last_op' => 'start',
         ];
 
         if ($listingKey === '') {
             return $stats;
         }
 
+        $stats['last_op'] = 'resolve_local_record';
         $local = self::localPropertyArray($listingKey);
         $record = self::resolveFactRecordForDetail($listingKey, $local);
 
@@ -4546,16 +4563,32 @@ class TrebPropertyHelper
             $record = self::enrichRecordAddress(self::recordFromLocal($local ?? [], $listingKey));
         }
 
-        if (! empty($record['ListingKey']) && empty($record['RollNumber'])) {
+        $hasStreet = trim((string) ($record['StreetNumber'] ?? '')) !== ''
+            && trim((string) ($record['StreetName'] ?? '')) !== '';
+
+        // RollNumber is an extra AMP filter. Street is enough for siblings.
+        // Skip the 30s×retry resync when the local row already has an address.
+        if (! empty($record['ListingKey']) && empty($record['RollNumber']) && ! $hasStreet) {
+            $stats['last_op'] = 'fetch_amp_property_resync';
             $raw = self::fetchAmpPropertyForResync($listingKey) ?: self::loadStoredAmpSnapshot($listingKey);
 
             if ($raw && ! empty($raw['RollNumber'])) {
                 $record['RollNumber'] = $raw['RollNumber'];
             }
+        } elseif (! empty($record['ListingKey']) && empty($record['RollNumber'])) {
+            $raw = self::loadStoredAmpSnapshot($listingKey);
+            if ($raw && ! empty($raw['RollNumber'])) {
+                $record['RollNumber'] = $raw['RollNumber'];
+            }
         }
 
-        $candidates = self::fetchAmpListingsForAddressHistory($record);
+        $stats['last_op'] = 'fetch_amp_address_listings';
+        $candidates = self::fetchAmpListingsForAddressHistory($record, $deadline);
         $stats['amp_found'] = count($candidates);
+
+        if ($deadline > 0 && microtime(true) >= $deadline) {
+            $stats['timed_out'] = true;
+        }
 
         // Process the anchor listing first, then a capped set of siblings.
         usort($candidates, function ($a, $b) use ($listingKey) {
@@ -4573,18 +4606,26 @@ class TrebPropertyHelper
 
         $processed = 0;
         foreach ($candidates as $item) {
+            if ($deadline > 0 && microtime(true) >= $deadline) {
+                $stats['timed_out'] = true;
+                $stats['skipped'] += count($candidates) - $processed;
+                break;
+            }
+
             if ($maxSiblings > 0 && $processed >= $maxSiblings) {
                 $stats['skipped'] += count($candidates) - $processed;
                 break;
             }
 
             try {
+                $stats['last_op'] = 'import_sibling:' . strtoupper((string) ($item['ListingKey'] ?? ''));
                 $result = self::importAmpHistoryListing($item, $dryRun);
             } catch (\Throwable $e) {
                 self::safeLog('warning', '[syncAddressHistory] sibling import failed', [
                     'anchor' => $listingKey,
                     'sibling' => $item['ListingKey'] ?? null,
                     'error' => $e->getMessage(),
+                    'exception_class' => $e::class,
                 ]);
                 $stats['skipped']++;
                 $processed++;

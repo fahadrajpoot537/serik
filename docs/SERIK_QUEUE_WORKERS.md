@@ -11,6 +11,8 @@ Four Laravel database queues on the **same** `jobs` table, each with a **dedicat
 
 The scheduler (`schedule:run` every minute) **only dispatches** work. It must **not** run `queue:work` or long `Artisan::call()` for images.
 
+Windows `php.ini` used by IIS often sets `max_execution_time=300`. A `queue:work` daemon that inherits that limit dies in `Worker::sleep()` after 5 minutes. NSSM `AppParameters` therefore start with `-d max_execution_time=0`. Do **not** raise IIS FastCGI timeouts to “fix” the queue.
+
 ---
 
 ## 1. Migrate + `.env`
@@ -23,7 +25,8 @@ php artisan config:clear
 
 ```env
 QUEUE_CONNECTION=database
-DB_QUEUE_RETRY_AFTER=600
+# Must be greater than the largest worker --timeout (images/low/imports = 300).
+DB_QUEUE_RETRY_AFTER=360
 
 SERIK_QUEUE_HIGH=high
 SERIK_QUEUE_DEFAULT=default
@@ -85,7 +88,7 @@ Replace `C:\project\serik` and PHP path with production paths.
 ```bat
 nssm install SerikQueueHigh "C:\xampp\php\php.exe"
 nssm set SerikQueueHigh AppDirectory "C:\project\serik"
-nssm set SerikQueueHigh AppParameters "artisan queue:work database --queue=high --sleep=1 --tries=5 --timeout=200 --memory=384 --max-jobs=200 --max-time=3600"
+nssm set SerikQueueHigh AppParameters "-d max_execution_time=0 artisan queue:work database --queue=high --sleep=1 --tries=5 --timeout=200 --memory=384 --max-jobs=200 --max-time=1800"
 nssm set SerikQueueHigh AppStdout "C:\project\serik\storage\logs\queue-high.log"
 nssm set SerikQueueHigh AppStderr "C:\project\serik\storage\logs\queue-high-error.log"
 nssm set SerikQueueHigh AppRotateFiles 1
@@ -100,7 +103,7 @@ nssm start SerikQueueHigh
 ```bat
 nssm install SerikQueueImages "C:\xampp\php\php.exe"
 nssm set SerikQueueImages AppDirectory "C:\project\serik"
-nssm set SerikQueueImages AppParameters "artisan queue:work database --queue=images --sleep=3 --tries=3 --timeout=300 --memory=384 --max-jobs=50 --max-time=1800"
+nssm set SerikQueueImages AppParameters "-d max_execution_time=0 artisan queue:work database --queue=images --sleep=3 --tries=3 --timeout=300 --memory=384 --max-jobs=50 --max-time=1800"
 nssm set SerikQueueImages AppStdout "C:\project\serik\storage\logs\queue-images.log"
 nssm set SerikQueueImages AppStderr "C:\project\serik\storage\logs\queue-images-error.log"
 nssm set SerikQueueImages AppRotateFiles 1
@@ -113,7 +116,7 @@ nssm start SerikQueueImages
 ```bat
 nssm install SerikQueueLow "C:\xampp\php\php.exe"
 nssm set SerikQueueLow AppDirectory "C:\project\serik"
-nssm set SerikQueueLow AppParameters "artisan queue:work database --queue=low --sleep=2 --tries=4 --timeout=120 --memory=256 --max-jobs=100 --max-time=3600"
+nssm set SerikQueueLow AppParameters "-d max_execution_time=0 artisan queue:work database --queue=search-index,low --sleep=2 --tries=4 --timeout=300 --memory=384 --max-jobs=100 --max-time=1800"
 nssm set SerikQueueLow AppStdout "C:\project\serik\storage\logs\queue-low.log"
 nssm set SerikQueueLow AppStderr "C:\project\serik\storage\logs\queue-low-error.log"
 nssm set SerikQueueLow AppRotateFiles 1
@@ -150,8 +153,10 @@ scripts\windows\verify-serik-queue-workers.cmd
 Task Scheduler every 1 minute:
 
 ```bat
-php -d max_execution_time=120 -d memory_limit=256M artisan schedule:run
+C:\xampp\php\php.exe -d max_execution_time=30 artisan schedule:run
 ```
+
+Working directory must be the Laravel application root. This task must **not** run `queue:work`.
 
 Image backfill is dispatched every 30 minutes as `DispatchTrebImagesWebpJob` (LOW), which queues `PersistTrebImagesJob` rows on **images**. This is **recovery only** — live imports dispatch images immediately via `PersistTrebImagesJob::dispatchForImport()` after each DB commit.
 

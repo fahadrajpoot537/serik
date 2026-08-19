@@ -31,7 +31,8 @@ class SyncLiveJob implements ShouldQueue, ShouldBeUnique
 
     public int $timeout = 180;
 
-    public int $uniqueFor = 120;
+    /** Must exceed $timeout so a second SyncLiveJob cannot overlap the first. */
+    public int $uniqueFor = 240;
 
     public function __construct(
         public bool $force = false,
@@ -51,11 +52,10 @@ class SyncLiveJob implements ShouldQueue, ShouldBeUnique
 
     public function handle(PropertyController $controller): void
     {
-        @set_time_limit(0);
-        @ini_set('max_execution_time', '0');
+        @set_time_limit(180);
         @ini_set('memory_limit', '512M');
 
-        $lock = Cache::lock('serik_sync_live_lock', 150);
+        $lock = Cache::lock('serik_sync_live_lock', 240);
         if (! $this->force && ! $lock->get()) {
             Log::info('[SyncLiveJob] skipped — already running');
 
@@ -163,23 +163,40 @@ class SyncLiveJob implements ShouldQueue, ShouldBeUnique
 
             // Property sync, geocode, and search indexing run independently of images.
 
-            // Geocode + history chain for brand-new listings only.
+            // After the inline geocode pass, only chain Geocode when coords are
+            // still missing. Already-geocoded listings only need history.
+            $stillNeedGeo = array_flip(
+                DB::table('re_properties')
+                    ->whereIn('id', $newIds)
+                    ->where(function ($q) {
+                        $q->where('latitude', 0)->orWhereNull('latitude')->orWhere('latitude', '0');
+                    })
+                    ->pluck('id')
+                    ->map(fn ($id) => (int) $id)
+                    ->all()
+            );
+
             foreach ($newIds as $propertyId) {
                 try {
-                    GeocodeState::markQueued($propertyId);
-
-                    $geoJob = (new GeocodePropertyJob($propertyId))->allOnQueue($high);
                     $histJob = (new SyncPropertyHistoryJob($propertyId, 8))->onQueue($high);
 
-                    Bus::chain([$geoJob, $histJob])
-                        ->onQueue($high)
-                        ->catch(function (Throwable $e) use ($propertyId) {
-                            Log::error('[SyncLiveJob] chain failed', [
-                                'property_id' => $propertyId,
-                                'error' => $e->getMessage(),
-                            ]);
-                        })
-                        ->dispatch();
+                    if (isset($stillNeedGeo[$propertyId])) {
+                        GeocodeState::markQueued($propertyId);
+
+                        $geoJob = (new GeocodePropertyJob($propertyId))->allOnQueue($high);
+
+                        Bus::chain([$geoJob, $histJob])
+                            ->onQueue($high)
+                            ->catch(function (Throwable $e) use ($propertyId) {
+                                Log::error('[SyncLiveJob] chain failed', [
+                                    'property_id' => $propertyId,
+                                    'error' => $e->getMessage(),
+                                ]);
+                            })
+                            ->dispatch();
+                    } else {
+                        Bus::dispatch($histJob);
+                    }
 
                     $historyQueued++;
                 } catch (Throwable $e) {

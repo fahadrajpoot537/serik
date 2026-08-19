@@ -16,7 +16,8 @@ Reproducible NSSM deployment for Laravel `queue:work` services on Windows produc
 
 1. [NSSM](https://nssm.cc/download) installed (`nssm.exe` on PATH or at `C:\nssm\nssm.exe`)
 2. PHP on PATH (or set `SERIK_PHP_EXE`)
-3. Laravel app migrated and `.env` configured (`QUEUE_CONNECTION=database`, `SERIK_QUEUE_IMAGES=images`)
+3. Laravel app migrated and `.env` configured (`QUEUE_CONNECTION=database`, `DB_QUEUE_RETRY_AFTER=360`, `SERIK_QUEUE_IMAGES=images`)
+4. NSSM `AppParameters` must start with `-d max_execution_time=0` (set by the deploy scripts)
 
 ## Fresh server (all workers)
 

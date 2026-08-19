@@ -27,7 +27,7 @@ $Nssm = Find-SerikNssm
 
 $StdoutLog = Join-Path $AppRoot 'storage\logs\queue-images.log'
 $StderrLog = Join-Path $AppRoot 'storage\logs\queue-images-error.log'
-$Parameters = 'artisan queue:work database --queue=images --sleep=3 --tries=3 --timeout=300 --memory=384 --max-jobs=50 --max-time=1800'
+$Parameters = '-d max_execution_time=0 artisan queue:work database --queue=images --sleep=3 --tries=3 --timeout=300 --memory=384 --max-jobs=50 --max-time=1800'
 
 $logsDir = Split-Path $StdoutLog -Parent
 if (-not (Test-Path -LiteralPath $logsDir)) {
