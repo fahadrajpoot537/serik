@@ -740,6 +740,7 @@
         clearTimeout(closeTimer);
         document.documentElement.classList.remove('serik-mega-open');
         document.querySelectorAll('.mega-dropdown').forEach((menu) => {
+            menu._megaLock = false;
             menu.classList.remove('show');
             restoreMega(menu);
         });
@@ -767,6 +768,17 @@
         }
     }
 
+    let lastPointerX = 0;
+    let lastPointerY = 0;
+
+    function pointerOverMega() {
+        const el = document.elementFromPoint(lastPointerX, lastPointerY);
+        if (!el || !el.closest) {
+            return false;
+        }
+        return !!(el.closest('.mega-dropdown') || el.closest('.has-dropdown'));
+    }
+
     function scheduleClose(item) {
         clearTimeout(closeTimer);
         closeTimer = setTimeout(() => {
@@ -774,17 +786,11 @@
             if (panel && panel._megaLock) {
                 return;
             }
-            if (item && (item.matches(':hover') || (panel && panel.matches(':hover')))) {
+            if (pointerOverMega()) {
                 return;
             }
-            document.documentElement.classList.remove('serik-mega-open');
-            if (item) {
-                item.classList.remove('is-active');
-                restoreMega(item._megaPanel);
-            } else {
-                closeMegaMenu();
-            }
-        }, 400);
+            closeMegaMenu();
+        }, 180);
     }
 
     document.querySelectorAll('.has-dropdown > .menu-link').forEach((link) => {
@@ -906,5 +912,30 @@
             closeMegaMenu();
         }
     });
+
+    document.addEventListener('pointermove', (e) => {
+        lastPointerX = e.clientX;
+        lastPointerY = e.clientY;
+        if (!isDesktop() || !document.documentElement.classList.contains('serik-mega-open')) {
+            return;
+        }
+        const t = e.target;
+        if (t instanceof Element && (t.closest('.mega-dropdown') || t.closest('.has-dropdown'))) {
+            clearTimeout(closeTimer);
+            return;
+        }
+        scheduleClose(null);
+    }, { passive: true });
+
+    document.addEventListener('click', (e) => {
+        if (!isDesktop() || !document.documentElement.classList.contains('serik-mega-open')) {
+            return;
+        }
+        const t = e.target;
+        if (t instanceof Element && (t.closest('.mega-dropdown') || t.closest('.has-dropdown'))) {
+            return;
+        }
+        closeMegaMenu();
+    }, true);
 })();
 </script>

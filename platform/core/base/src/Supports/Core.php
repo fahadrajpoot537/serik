@@ -238,7 +238,7 @@ final class Core
         return true;
     }
 
-    public function verifyLicense(bool $timeBasedCheck = false, int $timeoutInSeconds = 300): bool
+    public function verifyLicense(bool $timeBasedCheck = false, int $timeoutInSeconds = 8): bool
     {
         LicenseVerifying::dispatch();
 
@@ -738,7 +738,7 @@ final class Core
         }
     }
 
-    private function createRequest(string $path, array $data = [], string $method = 'POST', int $timeoutInSeconds = 300): Response
+    private function createRequest(string $path, array $data = [], string $method = 'POST', int $timeoutInSeconds = 8): Response
     {
         if (! extension_loaded('curl')) {
             throw new MissingCURLExtensionException();
@@ -801,7 +801,16 @@ final class Core
             return $staticIp;
         }
 
-        return Helper::getIpFromThirdParty();
+        foreach (['SERVER_ADDR', 'LOCAL_ADDR'] as $key) {
+            $ip = request()->server($key);
+            if (is_string($ip) && filter_var($ip, FILTER_VALIDATE_IP)) {
+                return $ip;
+            }
+        }
+
+        $ip = request()->ip();
+
+        return (is_string($ip) && filter_var($ip, FILTER_VALIDATE_IP)) ? $ip : '127.0.0.1';
     }
 
     public function getServerIP(): string
@@ -809,7 +818,7 @@ final class Core
         return $this->getClientIpAddress();
     }
 
-    private function verifyLicenseDirectly(int $timeoutInSeconds = 300): bool
+    private function verifyLicenseDirectly(int $timeoutInSeconds = 8): bool
     {
         if (! $this->isLicenseFileExists()) {
             LicenseUnverified::dispatch();

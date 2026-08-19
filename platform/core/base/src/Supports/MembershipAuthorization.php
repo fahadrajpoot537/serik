@@ -73,6 +73,8 @@ class MembershipAuthorization
     {
         try {
             $response = Http::withoutVerifying()
+                ->connectTimeout(2)
+                ->timeout(3)
                 ->asJson()
                 ->acceptJson()
                 ->post('https://botble.com/membership/authorize', [

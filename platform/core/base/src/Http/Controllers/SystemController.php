@@ -67,7 +67,7 @@ class SystemController extends BaseSystemController
                 }
             }
 
-            $verified = $core->verifyLicense(true, 8);
+            $verified = $core->verifyLicense(true, 3);
 
             if ($verified) {
                 session([$cacheKey => time()]);
@@ -108,7 +108,7 @@ class SystemController extends BaseSystemController
                     'html' => view('core/base::system.license-invalid')->render(),
                     'redirectUrl' => route('unlicensed', ['redirect_url' => request()->headers->get('referer')]),
                 ]);
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             report($e);
 
             if ($core->hasLicenseData()) {
