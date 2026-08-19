@@ -51,11 +51,14 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
+use Throwable;
 
 class HookServiceProvider extends ServiceProvider
 {
@@ -324,9 +327,9 @@ class HookServiceProvider extends ServiceProvider
             }, 150);
 
             add_filter(DASHBOARD_FILTER_ADMIN_LIST, function ($widgets, $widgetSettings) {
-                $items = Property::query()
-                    ->active()
-                    ->count();
+                $items = $this->cachedDashboardCount('serik_admin_widget_active_properties', function () {
+                    return Property::query()->active()->count();
+                });
 
                 return (new DashboardWidgetInstance())
                     ->setType('stats')
@@ -354,10 +357,12 @@ class HookServiceProvider extends ServiceProvider
             }, 2, 2);
 
             add_filter(DASHBOARD_FILTER_ADMIN_LIST, function ($widgets, $widgetSettings) {
-                $items = Property::query()
-                    ->notExpired()
-                    ->where('moderation_status', ModerationStatusEnum::PENDING)
-                    ->count();
+                $items = $this->cachedDashboardCount('serik_admin_widget_pending_properties', function () {
+                    return Property::query()
+                        ->notExpired()
+                        ->where('moderation_status', ModerationStatusEnum::PENDING)
+                        ->count();
+                });
 
                 return (new DashboardWidgetInstance())
                     ->setType('stats')
@@ -385,9 +390,9 @@ class HookServiceProvider extends ServiceProvider
             }, 3, 2);
 
             add_filter(DASHBOARD_FILTER_ADMIN_LIST, function ($widgets, $widgetSettings) {
-                $items = Property::query()
-                    ->expired()
-                    ->count();
+                $items = $this->cachedDashboardCount('serik_admin_widget_expired_properties', function () {
+                    return Property::query()->expired()->count();
+                });
 
                 return (new DashboardWidgetInstance())
                     ->setType('stats')
@@ -415,7 +420,9 @@ class HookServiceProvider extends ServiceProvider
             }, 4, 2);
 
             add_filter(DASHBOARD_FILTER_ADMIN_LIST, function ($widgets, $widgetSettings) {
-                $items = Account::query()->count();
+                $items = $this->cachedDashboardCount('serik_admin_widget_accounts', function () {
+                    return Account::query()->count();
+                });
 
                 return (new DashboardWidgetInstance())
                     ->setType('stats')
@@ -926,6 +933,35 @@ class HookServiceProvider extends ServiceProvider
         }
 
         return $number;
+    }
+
+    /**
+     * Full-table COUNT on re_properties can exceed IIS FastCGI time.
+     * Prefer cache; if missing, cap MySQL at 1.5s so the dashboard never 500s.
+     */
+    protected function cachedDashboardCount(string $key, callable $query): int
+    {
+        $cached = Cache::get($key);
+        if ($cached !== null) {
+            return (int) $cached;
+        }
+
+        try {
+            DB::connection()->getPdo()->exec('SET SESSION MAX_EXECUTION_TIME=1500');
+            $n = (int) $query();
+            Cache::put($key, $n, 600);
+
+            return $n;
+        } catch (Throwable $e) {
+            report($e);
+
+            return (int) Cache::get($key, 0);
+        } finally {
+            try {
+                DB::connection()->getPdo()->exec('SET SESSION MAX_EXECUTION_TIME=0');
+            } catch (Throwable) {
+            }
+        }
     }
 
     public function getMenuItemCount(array $data = []): array

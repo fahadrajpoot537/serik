@@ -39,7 +39,13 @@ class DashboardController extends BaseController
             ->select(['id', 'name'])
             ->get();
 
-        $widgetData = apply_filters(DASHBOARD_FILTER_ADMIN_LIST, [], $widgets);
+        $widgetData = [];
+
+        try {
+            $widgetData = apply_filters(DASHBOARD_FILTER_ADMIN_LIST, [], $widgets);
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
         $availableWidgetIds = collect($widgetData)->pluck('id')->all();
 

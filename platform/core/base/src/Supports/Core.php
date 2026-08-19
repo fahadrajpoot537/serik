@@ -325,10 +325,16 @@ final class Core
     {
         SystemUpdateChecking::dispatch();
 
-        $response = $this->createRequest('check_update', [
-            'product_id' => $this->productId,
-            'current_version' => $this->version,
-        ]);
+        try {
+            $response = $this->createRequest('check_update', [
+                'product_id' => $this->productId,
+                'current_version' => $this->version,
+            ], 'POST', 5);
+        } catch (Throwable) {
+            SystemUpdateChecked::dispatch();
+
+            return false;
+        }
 
         SystemUpdateChecked::dispatch();
 
