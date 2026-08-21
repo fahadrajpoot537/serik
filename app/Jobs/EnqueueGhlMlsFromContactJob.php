@@ -56,26 +56,12 @@ class EnqueueGhlMlsFromContactJob implements ShouldQueue, ShouldBeUniqueUntilPro
 
             $data = $http->get('/contacts/' . $this->contactId);
             $contact = data_get($data, 'contact', $data);
-            $mlsKey = (string) config('gohighlevel.mls_sync.mls_field_key', 'contact.mls_number');
-
-            foreach ((array) data_get($contact, 'customFields', []) as $field) {
-                if (! is_array($field)) {
-                    continue;
-                }
-                $key = (string) ($field['key'] ?? $field['fieldKey'] ?? '');
-                if ($key === $mlsKey || str_ends_with($key, 'mls_number')) {
-                    $mls = strtoupper(trim((string) ($field['value'] ?? $field['field_value'] ?? $field['fieldValue'] ?? '')));
-                    break;
-                }
+            if (! is_array($contact)) {
+                $contact = is_array($data) ? $data : [];
             }
 
-            // Some payloads expose customField as associative map
-            if ($mls === '') {
-                $map = data_get($contact, 'customField');
-                if (is_array($map)) {
-                    $mls = strtoupper(trim((string) ($map[$mlsKey] ?? $map['mls_number'] ?? '')));
-                }
-            }
+            // GHL Contacts API returns customFields as {id, value} without fieldKey.
+            $mls = $pending->extractMlsFromContact($contact);
         }
 
         if ($mls === '') {

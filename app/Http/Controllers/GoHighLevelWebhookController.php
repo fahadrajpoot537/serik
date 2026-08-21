@@ -92,6 +92,7 @@ class GoHighLevelWebhookController extends Controller
             Log::channel('ghl_sync')->info('GoHighLevel webhook ignored: no contact/MLS', [
                 'correlation_id' => $correlationId,
                 'keys' => array_keys($payload),
+                'custom_field_ids' => $this->payloadCustomFieldIds($payload),
             ]);
 
             return response()->json(['ok' => true, 'queued' => false, 'reason' => 'no_mls'], 200)
@@ -120,10 +121,40 @@ class GoHighLevelWebhookController extends Controller
         GoHighLevelMetrics::incrDay('tasks_enqueued');
         GoHighLevelMetrics::observeLatency('webhook_latency', (microtime(true) - $t0) * 1000);
 
+        Log::channel('ghl_sync')->info('GoHighLevel webhook queued contact MLS resolve', [
+            'correlation_id' => $correlationId,
+            'contact_id' => $contactId,
+            'custom_field_ids' => $this->payloadCustomFieldIds($payload),
+        ]);
+
         return response()->json([
             'ok' => true,
             'queued' => true,
             'mode' => 'resolve_contact',
         ], 202)->header('X-Serik-Correlation-Id', $correlationId);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return list<string>
+     */
+    protected function payloadCustomFieldIds(array $payload): array
+    {
+        $ids = [];
+        foreach ([
+            data_get($payload, 'customFields'),
+            data_get($payload, 'contact.customFields'),
+        ] as $fields) {
+            if (! is_array($fields)) {
+                continue;
+            }
+            foreach ($fields as $field) {
+                if (is_array($field) && ! empty($field['id'])) {
+                    $ids[] = (string) $field['id'];
+                }
+            }
+        }
+
+        return array_values(array_unique($ids));
     }
 }

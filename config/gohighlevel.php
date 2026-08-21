@@ -50,7 +50,11 @@ return [
         'webhook_max_skew_seconds' => (int) env('GOHIGHLEVEL_WEBHOOK_MAX_SKEW', 900),
 
         // Trigger custom field key (do not rename)
-        'mls_field_key' => 'contact.mls_number',
+        'mls_field_key' => env('GOHIGHLEVEL_MLS_FIELD_KEY', 'contact.mls_number'),
+
+        // Optional explicit GHL custom field id for MLS (ContactUpdate / API often send id+value only).
+        // When empty, resolved from locations/customFields map for mls_field_key.
+        'mls_field_id' => env('GOHIGHLEVEL_MLS_FIELD_ID'),
 
         // Idempotency: skip GHL update when mapped payload hash unchanged
         'skip_unchanged' => (bool) env('GOHIGHLEVEL_MLS_SKIP_UNCHANGED', true),

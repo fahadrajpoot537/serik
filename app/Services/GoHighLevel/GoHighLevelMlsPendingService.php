@@ -94,22 +94,27 @@ class GoHighLevelMlsPendingService
         $contactId = (string) (
             data_get($payload, 'contact_id')
             ?? data_get($payload, 'contactId')
-            ?? data_get($payload, 'id')
             ?? data_get($payload, 'contact.id')
             ?? data_get($payload, 'customData.contact_id')
+            // GHL ContactCreate/ContactUpdate use top-level id as the contact id.
+            // Prefer contact.* paths above so webhook/event ids are not mistaken for contacts.
+            ?? data_get($payload, 'id')
             ?? ''
         );
 
         $locationId = data_get($payload, 'locationId')
             ?? data_get($payload, 'location_id')
+            ?? data_get($payload, 'contact.locationId')
             ?? data_get($payload, 'customData.location_id');
 
         $mls = (string) (
             data_get($payload, 'mls_number')
             ?? data_get($payload, 'mlsNumber')
             ?? data_get($payload, 'MLS Number')
+            ?? data_get($payload, 'MLS Number ')
             ?? data_get($payload, 'customData.mls_number')
             ?? data_get($payload, 'customData.mlsNumber')
+            ?? data_get($payload, 'customData.MLS Number')
             ?? ''
         );
 
@@ -132,6 +137,26 @@ class GoHighLevelMlsPendingService
     }
 
     /**
+     * Resolve MLS from a GHL contact payload (API GET /contacts/{id} or webhook body).
+     * GHL commonly returns customFields as {id, value} without fieldKey.
+     *
+     * @param  array<string, mixed>  $contact
+     */
+    public function extractMlsFromContact(array $contact): string
+    {
+        $direct = (string) (
+            data_get($contact, 'mls_number')
+            ?? data_get($contact, 'mlsNumber')
+            ?? ''
+        );
+        if (trim($direct) !== '') {
+            return strtoupper(trim($direct));
+        }
+
+        return strtoupper(trim($this->extractMlsFromCustomFields($contact)));
+    }
+
+    /**
      * @param  array<string, mixed>  $payload
      */
     protected function extractMlsFromCustomFields(array $payload): string
@@ -140,9 +165,12 @@ class GoHighLevelMlsPendingService
             data_get($payload, 'customFields'),
             data_get($payload, 'contact.customFields'),
             data_get($payload, 'customField'),
+            data_get($payload, 'attribs'),
+            data_get($payload, 'contact.attribs'),
         ];
 
         $mlsKey = (string) config('gohighlevel.mls_sync.mls_field_key', 'contact.mls_number');
+        $mlsFieldId = $this->resolveMlsFieldId();
 
         foreach ($candidates as $fields) {
             if (! is_array($fields)) {
@@ -150,25 +178,90 @@ class GoHighLevelMlsPendingService
             }
 
             // Associative map: key => value
-            if (array_key_exists($mlsKey, $fields) || array_key_exists('mls_number', $fields)) {
-                return (string) ($fields[$mlsKey] ?? $fields['mls_number'] ?? '');
+            if (array_is_list($fields) === false) {
+                foreach ([$mlsKey, 'mls_number', 'MLS Number', 'MLS Number ', $mlsFieldId] as $mapKey) {
+                    if ($mapKey && array_key_exists($mapKey, $fields)) {
+                        $mapped = $this->stringifyFieldValue($fields[$mapKey]);
+                        if ($mapped !== '') {
+                            return $mapped;
+                        }
+                    }
+                }
             }
 
             foreach ($fields as $field) {
                 if (! is_array($field)) {
                     continue;
                 }
-                $key = (string) ($field['key'] ?? $field['fieldKey'] ?? $field['id'] ?? '');
-                $name = strtolower((string) ($field['name'] ?? ''));
-                if (
-                    $key === $mlsKey
-                    || str_ends_with($key, 'mls_number')
-                    || $name === 'mls number'
-                    || $name === 'mls number '
-                ) {
-                    return (string) ($field['field_value'] ?? $field['value'] ?? $field['fieldValue'] ?? '');
+
+                $key = (string) ($field['key'] ?? $field['fieldKey'] ?? '');
+                $id = (string) ($field['id'] ?? '');
+                $name = strtolower(trim((string) ($field['name'] ?? '')));
+
+                $matchesKey = $key !== '' && ($key === $mlsKey || str_ends_with($key, 'mls_number'));
+                $matchesId = $mlsFieldId !== null && $id !== '' && hash_equals($mlsFieldId, $id);
+                $matchesName = $name === 'mls number' || $name === 'mls';
+
+                if (! $matchesKey && ! $matchesId && ! $matchesName) {
+                    continue;
+                }
+
+                $value = $this->stringifyFieldValue(
+                    $field['field_value'] ?? $field['value'] ?? $field['fieldValue'] ?? null
+                );
+                if ($value !== '') {
+                    return $value;
                 }
             }
+        }
+
+        return '';
+    }
+
+    /**
+     * GHL ContactUpdate / Contacts API often omit fieldKey and send only custom field id.
+     */
+    public function resolveMlsFieldId(): ?string
+    {
+        $configured = trim((string) config('gohighlevel.mls_sync.mls_field_id', ''));
+        if ($configured !== '') {
+            return $configured;
+        }
+
+        try {
+            $mlsKey = (string) config('gohighlevel.mls_sync.mls_field_key', 'contact.mls_number');
+            $ids = app(GoHighLevelShowingFieldMapper::class)->fieldIdMap();
+            $id = trim((string) ($ids[$mlsKey] ?? ''));
+
+            return $id !== '' ? $id : null;
+        } catch (\Throwable $e) {
+            Log::channel('ghl_sync')->warning('GoHighLevel MLS field id resolve failed', [
+                'message' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    protected function stringifyFieldValue(mixed $value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+        if (is_array($value)) {
+            // GHL sometimes wraps TEXT values as a one-element array.
+            $first = $value[0] ?? null;
+            if (is_scalar($first)) {
+                return trim((string) $first);
+            }
+
+            return trim(implode(' ', array_map(
+                static fn ($v) => is_scalar($v) ? (string) $v : '',
+                $value
+            )));
+        }
+        if (is_scalar($value)) {
+            return trim((string) $value);
         }
 
         return '';

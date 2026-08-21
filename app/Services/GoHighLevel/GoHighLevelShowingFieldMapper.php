@@ -394,14 +394,17 @@ class GoHighLevelShowingFieldMapper
         return null;
     }
 
-    protected function ghlDate(mixed $raw): ?int
+    /**
+     * GHL Contact DATE custom fields accept calendar strings (Y-m-d), not epoch ms.
+     */
+    protected function ghlDate(mixed $raw): ?string
     {
         if ($raw === null || $raw === '') {
             return null;
         }
 
         try {
-            return Carbon::parse((string) $raw)->startOfDay()->getTimestampMs();
+            return Carbon::parse((string) $raw)->toDateString();
         } catch (\Throwable) {
             return null;
         }

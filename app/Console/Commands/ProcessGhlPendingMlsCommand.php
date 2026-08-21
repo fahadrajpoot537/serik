@@ -74,7 +74,16 @@ class ProcessGhlPendingMlsCommand extends Command
 
         // Default: dispatch only (never block schedule / website)
         DispatchPendingGhlMlsSyncJob::dispatch($limit)->onQueue(SerikQueue::ghl());
+
+        $depth = (int) \Illuminate\Support\Facades\DB::table('jobs')
+            ->where('queue', SerikQueue::ghl())
+            ->count();
+
         $this->info("Dispatched DispatchPendingGhlMlsSyncJob (limit={$limit}) on queue=" . SerikQueue::ghl());
+        $this->line("ghl queue depth now: {$depth}");
+        if ($depth === 0) {
+            $this->comment('Note: depth 0 usually means a ghl worker already consumed the job, or a unique lock skipped a duplicate DispatchPendingGhlMlsSyncJob still waiting.');
+        }
 
         return self::SUCCESS;
     }
