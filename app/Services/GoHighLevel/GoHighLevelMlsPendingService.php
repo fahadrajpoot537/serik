@@ -125,10 +125,23 @@ class GoHighLevelMlsPendingService
         $contactId = trim($contactId);
         $mls = strtoupper(trim($mls));
 
-        if ($contactId === '' || $mls === '') {
+        // Allow MLS-only payloads: Contact ID may be missing or be a Full Name hint
+        // (resolved on the ghl queue via GoHighLevelContactResolver).
+        if ($mls === '') {
             return null;
         }
 
+        if ($contactId === '') {
+            $contactId = trim((string) (
+                data_get($payload, 'full_name')
+                ?? data_get($payload, 'fullName')
+                ?? data_get($payload, 'contact_name')
+                ?? data_get($payload, 'email')
+                ?? ''
+            ));
+        }
+
+        // Still require some contact hint OR rely on MLS-only resolve (empty hint OK).
         return [
             'contact_id' => $contactId,
             'mls_number' => $mls,

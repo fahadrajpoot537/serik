@@ -43,8 +43,14 @@ class GoHighLevelWebhookController extends Controller
         $payload = $request->all();
         $extracted = $pending->extractFromWebhookPayload($payload);
 
+        // Workflow custom-data often maps contact_id → Full Name (not the GHL id).
+        // Still accept when MLS is present; EnqueueGhlMlsFromContactJob resolves the real id.
         if ($extracted) {
-            if (! $guard->claimIdempotency($extracted['contact_id'], $extracted['mls_number'], $correlationId)) {
+            $idemKey = $extracted['contact_id'] !== ''
+                ? $extracted['contact_id']
+                : ('mls:' . $extracted['mls_number']);
+
+            if (! $guard->claimIdempotency($idemKey, $extracted['mls_number'], $correlationId)) {
                 GoHighLevelMetrics::observeLatency('webhook_latency', (microtime(true) - $t0) * 1000);
 
                 // Same public contract as a successful accept (GHL retries stay happy).
@@ -69,7 +75,7 @@ class GoHighLevelWebhookController extends Controller
 
             Log::channel('ghl_sync')->info('GoHighLevel webhook accepted MLS pending enqueue', [
                 'correlation_id' => $correlationId,
-                'contact_id' => $extracted['contact_id'],
+                'contact_hint_present' => $extracted['contact_id'] !== '',
                 'mls' => $extracted['mls_number'],
             ]);
 

@@ -66,4 +66,31 @@ class GoHighLevelMlsExtractionTest extends TestCase
         $this->assertNotNull($extracted);
         $this->assertSame('X111', $extracted['mls_number']);
     }
+
+    public function test_accepts_workflow_payload_with_full_name_as_contact_id(): void
+    {
+        $pending = app(GoHighLevelMlsPendingService::class);
+
+        $extracted = $pending->extractFromWebhookPayload([
+            'contact_id' => 'Jane Example',
+            'mls_number' => 'N12884704',
+        ]);
+
+        $this->assertNotNull($extracted);
+        $this->assertSame('Jane Example', $extracted['contact_id']);
+        $this->assertSame('N12884704', $extracted['mls_number']);
+    }
+
+    public function test_accepts_mls_only_workflow_payload(): void
+    {
+        $pending = app(GoHighLevelMlsPendingService::class);
+
+        $extracted = $pending->extractFromWebhookPayload([
+            'mls_number' => 'N12884704',
+        ]);
+
+        $this->assertNotNull($extracted);
+        $this->assertSame('', $extracted['contact_id']);
+        $this->assertSame('N12884704', $extracted['mls_number']);
+    }
 }
