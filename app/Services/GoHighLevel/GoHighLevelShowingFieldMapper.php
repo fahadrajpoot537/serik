@@ -27,19 +27,22 @@ class GoHighLevelShowingFieldMapper
             throw new \InvalidArgumentException('MLS number is empty.');
         }
 
-        $record = TrebPropertyHelper::fetchPropertyRecord($mls)
+        // Prefer Serik DB when present; enrich from TREB/AMP for missing keys.
+        $local = $this->recordFromLocalDatabase($mls);
+        $remote = TrebPropertyHelper::fetchPropertyRecord($mls)
             ?: TrebPropertyHelper::fetchPropertyRecordRaw($mls)
             ?: TrebPropertyHelper::fetchAmpPropertyForResync($mls);
 
-        if (! is_array($record) || $record === []) {
-            $record = $this->recordFromLocalDatabase($mls);
-            if ($record !== null) {
-                Log::info('GoHighLevel MLS using local DB fallback after TREB miss', ['mls' => $mls]);
-            }
-        }
-
-        if (! is_array($record) || $record === []) {
-            throw new \RuntimeException('TREB property not found for MLS ' . $mls);
+        if (is_array($local) && $local !== [] && is_array($remote) && $remote !== []) {
+            $record = $this->mergePropertyRecords($local, $remote);
+            Log::info('GoHighLevel MLS using local DB + TREB enrich', ['mls' => $mls]);
+        } elseif (is_array($local) && $local !== []) {
+            $record = $local;
+            Log::info('GoHighLevel MLS using local DB only', ['mls' => $mls]);
+        } elseif (is_array($remote) && $remote !== []) {
+            $record = $remote;
+        } else {
+            throw new \RuntimeException('Property not found for MLS ' . $mls);
         }
 
         $rooms = [];
@@ -53,6 +56,29 @@ class GoHighLevelShowingFieldMapper
         }
 
         return $this->mapRecord($record, $rooms, $mls);
+    }
+
+    /**
+     * Local wins on non-empty values; remote fills gaps (richer AMP attributes).
+     *
+     * @param  array<string, mixed>  $local
+     * @param  array<string, mixed>  $remote
+     * @return array<string, mixed>
+     */
+    protected function mergePropertyRecords(array $local, array $remote): array
+    {
+        $merged = $remote;
+        foreach ($local as $key => $value) {
+            if ($value === null || $value === '') {
+                continue;
+            }
+            if (is_array($value) && $value === []) {
+                continue;
+            }
+            $merged[$key] = $value;
+        }
+
+        return $merged;
     }
 
     /**
@@ -99,6 +125,7 @@ class GoHighLevelShowingFieldMapper
         $set('contact.cross_streets', $this->string($record['CrossStreet'] ?? null));
         $set('contact.public_remarks', $this->string($record['PublicRemarks'] ?? null));
         $set('contact.list_price', $this->moneyText($record['ListPrice'] ?? null));
+        $set('contact.purchase_price', $this->moneyNumber($record['ClosePrice'] ?? null));
         $set('contact.year_built', $this->string($record['YearBuilt'] ?? $record['ApproximateAge'] ?? null));
         $set('contact.tax_year', $this->string($record['TaxYear'] ?? null));
         $set('contact.municipal_tax_amount', $this->moneyText($record['TaxAnnualAmount'] ?? null));
@@ -107,17 +134,36 @@ class GoHighLevelShowingFieldMapper
         $set('contact.lot_depth', $this->string($record['LotDepth'] ?? null));
         $set('contact.garage_spaces', $this->string($record['CoveredSpaces'] ?? $record['ParkingTotal'] ?? null));
         $set('contact.parking_spaces', $this->numeric($record['ParkingSpaces'] ?? $record['ParkingTotal'] ?? null));
-        $set('contact.bedrooms_above_grade', $this->numeric($record['BedroomsAboveGrade'] ?? null));
-        $set('contact.bedrooms_below_grade', $this->numeric($record['BedroomsBelowGrade'] ?? null));
-        $set('contact.bathrooms_above_grade', $this->numeric($record['BathroomsAboveGrade'] ?? null));
-        $set('contact.bathrooms_below_grade', $this->numeric($record['BathroomsBelowGrade'] ?? null));
+
+        $bedsAbove = $this->numeric($record['BedroomsAboveGrade'] ?? null);
+        $bedsBelow = $this->numeric($record['BedroomsBelowGrade'] ?? null);
+        if ($bedsAbove === null && $bedsBelow === null) {
+            $bedsAbove = $this->numeric($record['BedroomsTotal'] ?? $record['BedroomsTotalInteger'] ?? null);
+        }
+        $set('contact.bedrooms_above_grade', $bedsAbove);
+        $set('contact.bedrooms_below_grade', $bedsBelow);
+
+        $bathsAbove = $this->numeric($record['BathroomsAboveGrade'] ?? null);
+        $bathsBelow = $this->numeric($record['BathroomsBelowGrade'] ?? null);
+        if ($bathsAbove === null && $bathsBelow === null) {
+            $bathsAbove = $this->numeric($record['BathroomsTotalInteger'] ?? $record['BathroomsTotal'] ?? null);
+        }
+        $set('contact.bathrooms_above_grade', $bathsAbove);
+        $set('contact.bathrooms_below_grade', $bathsBelow);
+
         $set('contact.kitchens', $this->numeric($record['KitchensTotal'] ?? null));
         $set('contact.seller_name', $this->string($record['ListOfficeName'] ?? null));
         $set('contact.agent_information', $this->string($record['ListOfficeName'] ?? null));
+        $set('contact.builders_phone', $this->normalizePhone(
+            $this->string($record['ListOfficePhone'] ?? $record['ListOfficePhoneNumber'] ?? null)
+        ));
+        $set('contact.commission', $this->string(
+            $record['TransactionBrokerCompensation'] ?? $record['BuyerAgencyCompensation'] ?? null
+        ));
         $set('contact.extras', $this->listToText($record['ExteriorFeatures'] ?? null));
         $set('contact.chattels_included', $this->listToText($record['Appliances'] ?? null));
 
-        $setOption('contact.property_style', $this->firstListValue($record['ArchitecturalStyle'] ?? $record['PropertySubType'] ?? null));
+        $setOption('contact.property_style', $this->firstListValue($record['PropertySubType'] ?? $record['ArchitecturalStyle'] ?? null));
         $setOption('contact.basement', $this->firstListValue($record['Basement'] ?? null));
         $setOption('contact.heating_type', $this->firstListValue($record['HeatType'] ?? null));
         $setOption('contact.heating_fuel', $this->firstListValue($record['HeatSource'] ?? null));
@@ -131,11 +177,16 @@ class GoHighLevelShowingFieldMapper
         $setOption('contact.family_room', $this->ynToYesNo($record['DenFamilyroomYN'] ?? null));
         $setOption('contact.fireplacestove', $this->ynToYesNo($record['FireplaceYN'] ?? null));
         $setOption('contact.pool', $this->firstListValue($record['PoolFeatures'] ?? $record['OtherStructures'] ?? null));
+        $setOption('contact.deal_status', $this->mapListingStatus(
+            $record['MlsStatus'] ?? $record['StandardStatus'] ?? null,
+            $options['contact.deal_status'] ?? []
+        ));
 
-        $listDate = $this->ghlDate($record['ListingContractDate'] ?? $record['OriginalEntryTimestamp'] ?? null);
-        $set('contact.list_date', $listDate);
+        // Contract date = listing contract; sold/closing date from CloseDate.
+        $set('contact.list_date', $this->ghlDate($record['ListingContractDate'] ?? $record['OriginalEntryTimestamp'] ?? null));
         $set('contact.expiry_date', $this->ghlDate($record['ExpirationDate'] ?? null));
-        $set('contact.possession_date', $this->ghlDate($record['PossessionDate'] ?? $record['CloseDate'] ?? null));
+        $set('contact.closing_date', $this->ghlDate($record['CloseDate'] ?? null));
+        $set('contact.possession_date', $this->ghlDate($record['PossessionDate'] ?? null));
 
         $this->mapRooms($rooms, $set, $setOption);
 
@@ -149,8 +200,40 @@ class GoHighLevelShowingFieldMapper
                 'mls' => $mls,
                 'listing_key' => (string) ($record['ListingKey'] ?? $mls),
                 'unparsed_address' => (string) ($record['UnparsedAddress'] ?? ''),
+                'standard_status' => (string) ($record['StandardStatus'] ?? $record['MlsStatus'] ?? ''),
                 'field_count' => count($fields),
+                'core_fields' => $this->coreShowingFieldKeys(),
             ],
+        ];
+    }
+
+    /**
+     * Business "Showings" property fields mapped onto existing Contact custom field keys.
+     * (GHL template keys like custom_objects.showings.* resolve to these contact.* fields.)
+     *
+     * @return list<string>
+     */
+    public function coreShowingFieldKeys(): array
+    {
+        return [
+            'contact.property_address',      // Address
+            'contact.community',             // Community
+            'contact.garage_type',           // Garage Type
+            'contact.list_price',            // Price
+            'contact.bedrooms_above_grade',  // Bedroom
+            'contact.bathrooms_above_grade', // Washroom
+            'contact.kitchens',              // Kitchen
+            'contact.list_date',             // Contract
+            'contact.deal_status',           // Status
+            'contact.property_style',        // Type
+            'contact.closing_date',          // Sold Date
+            'contact.family_room',           // FAM
+            'contact.air_conditioning',      // AC
+            'contact.heating_type',          // Heat
+            'contact.agent_information',     // Listing Brokerage
+            'contact.builders_phone',        // Listing Brokerage Phone
+            'contact.commission',            // Commission
+            'contact.purchase_price',        // Sold Price
         ];
     }
 
@@ -420,6 +503,56 @@ class GoHighLevelShowingFieldMapper
         }
 
         return number_format((float) $raw, 0, '.', '');
+    }
+
+    /**
+     * Monetary custom fields (Purchase Price) accept plain numbers.
+     */
+    protected function moneyNumber(mixed $raw): ?float
+    {
+        if ($raw === null || $raw === '') {
+            return null;
+        }
+        if (! is_numeric($raw)) {
+            $digits = preg_replace('/[^0-9.]/', '', (string) $raw) ?? '';
+            if ($digits === '' || ! is_numeric($digits)) {
+                return null;
+            }
+            $raw = $digits;
+        }
+
+        return round((float) $raw, 2);
+    }
+
+    /**
+     * Map TREB MlsStatus/StandardStatus onto GHL deal_status checkbox options.
+     *
+     * @param  list<string>  $options
+     */
+    protected function mapListingStatus(mixed $raw, array $options): ?string
+    {
+        $value = $this->firstListValue($raw);
+        if ($value === null) {
+            return null;
+        }
+
+        $normalized = $this->normalizeToken($value);
+        $aliases = [
+            'sold' => 'Closed',
+            'closed' => 'Closed',
+            'sld' => 'Closed',
+            'active' => null, // no matching deal_status option
+            'pending' => 'Conditional Deal',
+            'conditional' => 'Conditional Deal',
+            'firm' => 'Firm Deal',
+        ];
+
+        $preferred = $aliases[$normalized] ?? null;
+        if ($preferred !== null) {
+            return $this->matchOption('contact.deal_status', $preferred, $options) ?? $preferred;
+        }
+
+        return $this->matchOption('contact.deal_status', $value, $options);
     }
 
     protected function numeric(mixed $raw): ?float
