@@ -45,7 +45,10 @@ class ProcessGhlPendingMlsCommand extends Command
             $task = $pending->enqueue(trim($contactId), trim($mls));
             $this->info("Enqueued task #{$task->id} ({$task->external_key}) status={$task->status}");
 
-            return self::SUCCESS;
+            // Allow --enqueue=... --sync to process immediately (debug / retry).
+            if (! $this->option('sync')) {
+                return self::SUCCESS;
+            }
         }
 
         $limit = $this->option('limit') !== null

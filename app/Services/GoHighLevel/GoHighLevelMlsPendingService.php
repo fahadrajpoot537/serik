@@ -44,6 +44,7 @@ class GoHighLevelMlsPendingService
                         'status' => GhlMlsSyncTask::STATUS_PENDING,
                         'location_id' => $locationId,
                         'last_error' => null,
+                        'sync_hash' => null, // force re-write on explicit re-enqueue / MLS re-entry
                         'queued_at' => now(),
                         'started_at' => null,
                         'completed_at' => null,
