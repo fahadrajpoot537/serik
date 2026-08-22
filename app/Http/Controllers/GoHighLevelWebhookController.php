@@ -40,7 +40,7 @@ class GoHighLevelWebhookController extends Controller
                 ->header('X-Serik-Correlation-Id', $correlationId);
         }
 
-        $payload = $request->all();
+        $payload = $this->normalizeWebhookPayload($request);
         $extracted = $pending->extractFromWebhookPayload($payload);
 
         // Workflow custom-data often maps contact_id → Full Name (not the GHL id).
@@ -77,6 +77,8 @@ class GoHighLevelWebhookController extends Controller
                 'correlation_id' => $correlationId,
                 'contact_hint_present' => $extracted['contact_id'] !== '',
                 'mls' => $extracted['mls_number'],
+                'content_type' => (string) $request->header('Content-Type', ''),
+                'body_len' => strlen($request->getContent()),
             ]);
 
             return response()->json([
@@ -99,6 +101,8 @@ class GoHighLevelWebhookController extends Controller
                 'correlation_id' => $correlationId,
                 'keys' => array_keys($payload),
                 'custom_field_ids' => $this->payloadCustomFieldIds($payload),
+                'content_type' => (string) $request->header('Content-Type', ''),
+                'body_len' => strlen($request->getContent()),
             ]);
 
             return response()->json(['ok' => true, 'queued' => false, 'reason' => 'no_mls'], 200)
@@ -138,6 +142,59 @@ class GoHighLevelWebhookController extends Controller
             'queued' => true,
             'mode' => 'resolve_contact',
         ], 202)->header('X-Serik-Correlation-Id', $correlationId);
+    }
+
+    /**
+     * GHL Workflow "Custom Webhook" often posts JSON with Content-Type text/plain
+     * (or missing). Laravel then leaves $request->all() empty and MLS extraction fails.
+     *
+     * @return array<string, mixed>
+     */
+    protected function normalizeWebhookPayload(Request $request): array
+    {
+        $payload = $request->all();
+        if (! is_array($payload)) {
+            $payload = [];
+        }
+
+        $raw = trim((string) $request->getContent());
+        if ($raw !== '' && ($payload === [] || ! $this->payloadLooksUseful($payload))) {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                $payload = array_replace($payload, $decoded);
+            }
+        }
+
+        // customData may arrive as a JSON string.
+        $customData = $payload['customData'] ?? null;
+        if (is_string($customData) && $customData !== '') {
+            $decodedCustom = json_decode($customData, true);
+            if (is_array($decodedCustom)) {
+                $payload['customData'] = $decodedCustom;
+                $payload = array_replace($decodedCustom, $payload);
+            }
+        } elseif (is_array($customData)) {
+            $payload = array_replace($customData, $payload);
+        }
+
+        return $payload;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    protected function payloadLooksUseful(array $payload): bool
+    {
+        foreach ([
+            'mls_number', 'mlsNumber', 'MLS Number', 'contact_id', 'contactId', 'id',
+            'customData', 'customFields', 'contact',
+        ] as $key) {
+            if (array_key_exists($key, $payload)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

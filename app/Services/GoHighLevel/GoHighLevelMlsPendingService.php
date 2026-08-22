@@ -119,6 +119,23 @@ class GoHighLevelMlsPendingService
         );
 
         if ($mls === '') {
+            // GHL workflows sometimes use arbitrary custom-data key labels containing "mls".
+            foreach ($payload as $key => $value) {
+                if (! is_string($key) || stripos($key, 'mls') === false) {
+                    continue;
+                }
+                if (is_array($value)) {
+                    continue;
+                }
+                $candidate = $this->stringifyFieldValue($value);
+                if ($candidate !== '') {
+                    $mls = $candidate;
+                    break;
+                }
+            }
+        }
+
+        if ($mls === '') {
             $mls = $this->extractMlsFromCustomFields($payload);
         }
 
