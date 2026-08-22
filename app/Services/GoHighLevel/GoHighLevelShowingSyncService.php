@@ -7,15 +7,16 @@ use App\Support\SerikAuditLog;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Idempotent MLS → GHL Showings (contact custom fields) synchronizer.
- * Updates the existing contact; never creates duplicate contacts/showings.
- * Marks completed only after GET verification of written custom fields.
+ * Idempotent MLS → GHL Custom Object "Showings" synchronizer.
+ * Creates/updates a Showings record and associates it with the contact.
+ * Does NOT write property data into Contact custom fields (inquiry fields stay untouched).
  */
 class GoHighLevelShowingSyncService
 {
     public function __construct(
         protected GoHighLevelHttpClient $http,
-        protected GoHighLevelShowingFieldMapper $mapper,
+        protected GoHighLevelShowingObjectMapper $objectMapper,
+        protected GoHighLevelShowingObjectRepository $objects,
     ) {
     }
 
@@ -35,12 +36,18 @@ class GoHighLevelShowingSyncService
         $task->save();
 
         $previousHash = (string) ($task->sync_hash ?? '');
+        $previousMapped = is_array($task->mapped_fields) ? $task->mapped_fields : [];
+        $previousRecordId = (string) ($previousMapped['_showing_record_id'] ?? '');
 
-        $mapped = $this->mapper->mapFromMls($task->mls_number);
-        $fields = $mapped['fields'];
-        $hash = hash('sha256', json_encode($fields, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '');
+        $mapped = $this->objectMapper->mapFromMls($task->mls_number);
+        $properties = $mapped['properties'];
+        $hash = hash('sha256', json_encode($properties, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '');
 
-        $task->mapped_fields = $fields;
+        $task->mapped_fields = array_merge($properties, [
+            '_meta' => $mapped['meta'],
+            '_showing_record_id' => $previousRecordId !== '' ? $previousRecordId : null,
+        ]);
+        $task->save();
 
         $contact = $this->http->get('/contacts/' . $task->contact_id);
         $existingId = (string) (data_get($contact, 'contact.id') ?? data_get($contact, 'id') ?? '');
@@ -52,6 +59,7 @@ class GoHighLevelShowingSyncService
             config('gohighlevel.mls_sync.skip_unchanged', true)
             && $previousHash !== ''
             && hash_equals($previousHash, $hash)
+            && $previousRecordId !== ''
         ) {
             $task->status = GhlMlsSyncTask::STATUS_COMPLETED;
             $task->completed_at = now();
@@ -59,10 +67,11 @@ class GoHighLevelShowingSyncService
             $task->sync_hash = $hash;
             $task->save();
 
-            Log::channel('ghl_sync')->info('GoHighLevel MLS sync skipped (unchanged)', [
+            Log::channel('ghl_sync')->info('GoHighLevel Showings sync skipped (unchanged)', [
                 'task_id' => $task->id,
                 'contact_id' => $task->contact_id,
                 'mls' => $task->mls_number,
+                'showing_record_id' => $previousRecordId,
             ]);
 
             GoHighLevelMetrics::incrDay('sync_skipped_unchanged');
@@ -72,35 +81,67 @@ class GoHighLevelShowingSyncService
             return $task;
         }
 
-        $customFields = $this->buildCustomFieldsPayload($fields);
-        $attempted = count($customFields);
+        $attempted = count($properties);
         if ($attempted === 0) {
-            throw new \RuntimeException('No GHL custom field IDs resolved for mapped property fields.');
+            throw new \RuntimeException('No Showings properties mapped for MLS ' . $task->mls_number);
         }
+
+        $recordId = $previousRecordId !== ''
+            ? $previousRecordId
+            : (string) ($this->objects->findRecordIdByMls($task->mls_number, $task->contact_id) ?? '');
 
         $httpStatus = 200;
         try {
-            $this->http->put('/contacts/' . $task->contact_id, [
-                'customFields' => $customFields,
-            ]);
+            if ($recordId !== '') {
+                $record = $this->objects->updateRecord($recordId, $properties);
+                $httpStatus = 200;
+            } else {
+                $record = $this->objects->createRecord($properties);
+                $httpStatus = 201;
+                $recordId = (string) ($record['id'] ?? data_get($record, 'record.id') ?? '');
+            }
         } catch (\Throwable $e) {
             if (preg_match('/HTTP\s+(\d{3})/', $e->getMessage(), $m)) {
                 $httpStatus = (int) $m[1];
+            } elseif (str_contains($e->getMessage(), 'unauthorized')) {
+                $httpStatus = 401;
             } else {
                 $httpStatus = 0;
             }
             throw $e;
         }
 
-        $verification = $this->verifyWrittenFields($task->contact_id, $customFields);
+        if ($recordId === '') {
+            $recordId = (string) ($record['id'] ?? '');
+        }
+        if ($recordId === '') {
+            throw new \RuntimeException('Showings record create/update did not return a record id.');
+        }
+
+        try {
+            $this->objects->ensureAssociatedWithContact($recordId, $task->contact_id);
+        } catch (\Throwable $e) {
+            Log::channel('ghl_sync')->warning('GoHighLevel Showings association failed', [
+                'task_id' => $task->id,
+                'contact_id' => $task->contact_id,
+                'showing_record_id' => $recordId,
+                'message' => $e->getMessage(),
+            ]);
+            // Association is required for UI under the contact — fail the task.
+            throw $e;
+        }
+
+        $verification = $this->verifyRecord($recordId, $properties);
         $verified = (int) ($verification['verified'] ?? 0);
         $rejected = (array) ($verification['rejected'] ?? []);
-        $accepted = $attempted; // PUT succeeded without 4xx
+        $accepted = $attempted;
 
-        Log::channel('ghl_sync')->info('GoHighLevel MLS showing sync write+verify', [
+        Log::channel('ghl_sync')->info('GoHighLevel Showings CO write+verify', [
             'task_id' => $task->id,
             'contact_id' => $task->contact_id,
             'mls' => $task->mls_number,
+            'object_key' => $this->objects->objectKey(),
+            'showing_record_id' => $recordId,
             'fields_attempted' => $attempted,
             'fields_accepted' => $accepted,
             'fields_verified' => $verified,
@@ -109,47 +150,33 @@ class GoHighLevelShowingSyncService
             'address' => $mapped['meta']['unparsed_address'] ?? null,
         ]);
 
-        $coreKeys = $this->mapper->coreShowingFieldKeys();
-        $coreSent = 0;
-        $coreVerified = 0;
-        $idToKey = [];
-        foreach ($customFields as $row) {
-            $idToKey[(string) $row['id']] = (string) $row['key'];
-            if (in_array((string) $row['key'], $coreKeys, true)) {
-                $coreSent++;
-            }
-        }
-        foreach ($verification['verified_keys'] ?? [] as $key) {
-            if (in_array($key, $coreKeys, true)) {
-                $coreVerified++;
-            }
-        }
-
-        // Require every field we successfully addressed to GHL to round-trip on GET.
-        // Soft-fail only when GHL omits optional empty-capable fields; core mismatches fail the task.
-        if ($verified < 1 || ($coreSent > 0 && $coreVerified === 0)) {
-            $task->last_error = mb_substr('Verification failed: ' . json_encode([
-                'attempted' => $attempted,
-                'verified' => $verified,
-                'rejected' => $rejected,
-            ]), 0, 2000);
-            $task->save();
-            throw new \RuntimeException(
-                'GHL contact update was not verified after PUT (verified=' . $verified . '/' . $attempted . ').'
-            );
-        }
-
-        if ($rejected !== []) {
-            // Partial success: keep completed only if core showing fields that were sent verified.
-            $coreRejected = array_values(array_filter(
+        if ($verified < 1 || $rejected !== []) {
+            $coreRejected = array_values(array_intersect(
                 array_keys($rejected),
-                static fn (string $k) => in_array($k, $coreKeys, true)
+                ['mls_number', 'address', 'price', 'bedroom', 'status', 'type']
             ));
-            if ($coreRejected !== []) {
-                $task->last_error = mb_substr('Core field verification mismatch: ' . implode(',', $coreRejected), 0, 2000);
+            if ($verified < 1 || $coreRejected !== []) {
+                $task->last_error = mb_substr('Showings verification failed: ' . json_encode([
+                    'attempted' => $attempted,
+                    'verified' => $verified,
+                    'rejected' => $rejected,
+                ]), 0, 2000);
+                $task->mapped_fields = array_merge($properties, [
+                    '_meta' => $mapped['meta'],
+                    '_showing_record_id' => $recordId,
+                    '_verification' => [
+                        'attempted' => $attempted,
+                        'accepted' => $accepted,
+                        'verified' => $verified,
+                        'rejected' => $rejected,
+                        'http_status' => $httpStatus,
+                        'object_key' => $this->objects->objectKey(),
+                        'showing_record_id' => $recordId,
+                    ],
+                ]);
                 $task->save();
                 throw new \RuntimeException(
-                    'GHL core showing fields failed verification: ' . implode(', ', $coreRejected)
+                    'Showings record update was not verified (verified=' . $verified . '/' . $attempted . ').'
                 );
             }
         }
@@ -158,26 +185,28 @@ class GoHighLevelShowingSyncService
         $task->completed_at = now();
         $task->last_error = null;
         $task->sync_hash = $hash;
-        $task->mapped_fields = array_merge($fields, [
+        $task->mapped_fields = array_merge($properties, [
+            '_meta' => $mapped['meta'],
+            '_showing_record_id' => $recordId,
             '_verification' => [
                 'attempted' => $attempted,
                 'accepted' => $accepted,
                 'verified' => $verified,
                 'rejected' => $rejected,
                 'http_status' => $httpStatus,
-                'core_sent' => $coreSent,
-                'core_verified' => $coreVerified,
+                'object_key' => $this->objects->objectKey(),
+                'showing_record_id' => $recordId,
             ],
         ]);
         $task->save();
 
-        Log::channel('ghl_sync')->info('GoHighLevel MLS showing sync completed', [
+        Log::channel('ghl_sync')->info('GoHighLevel Showings CO sync completed', [
             'task_id' => $task->id,
             'contact_id' => $task->contact_id,
             'mls' => $task->mls_number,
+            'showing_record_id' => $recordId,
             'fields' => $attempted,
             'verified' => $verified,
-            'address' => $mapped['meta']['unparsed_address'] ?? null,
         ]);
 
         GoHighLevelMetrics::incrDay('sync_completed');
@@ -187,6 +216,7 @@ class GoHighLevelShowingSyncService
             'task_id' => $task->id,
             'contact_id' => $task->contact_id,
             'mls' => $task->mls_number,
+            'showing_record_id' => $recordId,
             'fields' => $attempted,
             'verified' => $verified,
         ]);
@@ -195,65 +225,25 @@ class GoHighLevelShowingSyncService
     }
 
     /**
-     * @param  array<string, mixed>  $fields  keyed by contact.* fieldKey
-     * @return list<array{id: string, key: string, field_value: mixed}>
-     */
-    protected function buildCustomFieldsPayload(array $fields): array
-    {
-        $ids = $this->mapper->fieldIdMap();
-        $out = [];
-
-        foreach ($fields as $key => $value) {
-            if (str_starts_with((string) $key, '_')) {
-                continue;
-            }
-            $id = $ids[$key] ?? null;
-            if (! $id) {
-                Log::channel('ghl_sync')->info('GoHighLevel field id missing; skipping', ['key' => $key]);
-                continue;
-            }
-
-            $out[] = [
-                'id' => $id,
-                'key' => $key,
-                'field_value' => $value,
-            ];
-        }
-
-        return $out;
-    }
-
-    /**
-     * @param  list<array{id: string, key: string, field_value: mixed}>  $sent
+     * @param  array<string, mixed>  $expected
      * @return array{verified: int, rejected: array<string, string>, verified_keys: list<string>}
      */
-    protected function verifyWrittenFields(string $contactId, array $sent): array
+    protected function verifyRecord(string $recordId, array $expected): array
     {
-        $fresh = $this->http->get('/contacts/' . $contactId);
-        $contact = data_get($fresh, 'contact', $fresh);
-        $custom = is_array($contact) ? (array) data_get($contact, 'customFields', []) : [];
-
-        $byId = [];
-        foreach ($custom as $field) {
-            if (! is_array($field) || empty($field['id'])) {
-                continue;
-            }
-            $byId[(string) $field['id']] = $field['value'] ?? $field['fieldValue'] ?? $field['field_value'] ?? null;
-        }
+        $fresh = $this->objects->getRecord($recordId);
+        $props = (array) ($fresh['properties'] ?? []);
 
         $verified = 0;
         $verifiedKeys = [];
         $rejected = [];
 
-        foreach ($sent as $row) {
-            $id = (string) $row['id'];
-            $key = (string) $row['key'];
-            $expected = $row['field_value'];
-            if (! array_key_exists($id, $byId)) {
+        foreach ($expected as $key => $value) {
+            $actual = $props[$key] ?? $props['custom_objects.showings.' . $key] ?? null;
+            if ($actual === null && ! array_key_exists($key, $props) && ! array_key_exists('custom_objects.showings.' . $key, $props)) {
                 $rejected[$key] = 'missing_on_get';
                 continue;
             }
-            if ($this->fieldValuesMatch($expected, $byId[$id])) {
+            if ($this->valuesMatch($value, $actual)) {
                 $verified++;
                 $verifiedKeys[] = $key;
             } else {
@@ -268,20 +258,18 @@ class GoHighLevelShowingSyncService
         ];
     }
 
-    protected function fieldValuesMatch(mixed $expected, mixed $actual): bool
+    protected function valuesMatch(mixed $expected, mixed $actual): bool
     {
-        if (is_array($actual)) {
+        if (is_array($expected) && isset($expected['value'])) {
+            $expected = $expected['value'];
+        }
+        if (is_array($actual) && isset($actual['value'])) {
+            $actual = $actual['value'];
+        }
+        if (is_array($actual) && ! isset($actual['value'])) {
             $actual = $actual[0] ?? json_encode($actual);
         }
-        if (is_array($expected)) {
-            $expected = $expected[0] ?? json_encode($expected);
-        }
 
-        if ($expected === null && ($actual === null || $actual === '')) {
-            return true;
-        }
-
-        // Numeric / monetary
         if (is_numeric($expected) && is_numeric($actual)) {
             return abs((float) $expected - (float) $actual) < 0.01;
         }
@@ -292,26 +280,21 @@ class GoHighLevelShowingSyncService
             return true;
         }
 
-        // Dates: compare Y-m-d prefixes
         if (preg_match('/^\d{4}-\d{2}-\d{2}/', $e) && preg_match('/^\d{4}-\d{2}-\d{2}/', $a)) {
             return substr($e, 0, 10) === substr($a, 0, 10);
         }
 
-        // Phone: compare digits only
         $ed = preg_replace('/\D+/', '', $e) ?? '';
         $ad = preg_replace('/\D+/', '', $a) ?? '';
         if ($ed !== '' && $ed === $ad) {
             return true;
         }
 
-        // Money text with commas
-        $en = preg_replace('/[^0-9.]/', '', $e) ?? '';
-        $an = preg_replace('/[^0-9.]/', '', $a) ?? '';
-        if ($en !== '' && is_numeric($en) && is_numeric($an)) {
-            return abs((float) $en - (float) $an) < 0.01;
-        }
+        // Option key vs label
+        $en = preg_replace('/[^a-z0-9]+/', '', $e) ?? '';
+        $an = preg_replace('/[^a-z0-9]+/', '', $a) ?? '';
 
-        return false;
+        return $en !== '' && $en === $an;
     }
 
     public function markFailed(GhlMlsSyncTask $task, \Throwable $e): void
@@ -320,7 +303,7 @@ class GoHighLevelShowingSyncService
         $task->last_error = mb_substr($e->getMessage(), 0, 2000);
         $task->save();
 
-        Log::channel('ghl_sync')->warning('GoHighLevel MLS showing sync failed', [
+        Log::channel('ghl_sync')->warning('GoHighLevel Showings CO sync failed', [
             'task_id' => $task->id,
             'contact_id' => $task->contact_id,
             'mls' => $task->mls_number,

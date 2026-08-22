@@ -18,16 +18,17 @@ class GoHighLevelShowingFieldMapper
     }
 
     /**
-     * @return array{fields: array<string, mixed>, meta: array<string, mixed>}
+     * Resolve the raw property record (local DB + TREB enrich) for an MLS number.
+     *
+     * @return array{record: array<string, mixed>, rooms: list<array<string, mixed>>, mls: string}
      */
-    public function mapFromMls(string $mlsNumber): array
+    public function resolvePropertySource(string $mlsNumber): array
     {
         $mls = strtoupper(trim($mlsNumber));
         if ($mls === '') {
             throw new \InvalidArgumentException('MLS number is empty.');
         }
 
-        // Prefer Serik DB when present; enrich from TREB/AMP for missing keys.
         $local = $this->recordFromLocalDatabase($mls);
         $remote = TrebPropertyHelper::fetchPropertyRecord($mls)
             ?: TrebPropertyHelper::fetchPropertyRecordRaw($mls)
@@ -35,10 +36,8 @@ class GoHighLevelShowingFieldMapper
 
         if (is_array($local) && $local !== [] && is_array($remote) && $remote !== []) {
             $record = $this->mergePropertyRecords($local, $remote);
-            Log::info('GoHighLevel MLS using local DB + TREB enrich', ['mls' => $mls]);
         } elseif (is_array($local) && $local !== []) {
             $record = $local;
-            Log::info('GoHighLevel MLS using local DB only', ['mls' => $mls]);
         } elseif (is_array($remote) && $remote !== []) {
             $record = $remote;
         } else {
@@ -55,7 +54,17 @@ class GoHighLevelShowingFieldMapper
             ]);
         }
 
-        return $this->mapRecord($record, $rooms, $mls);
+        return ['record' => $record, 'rooms' => $rooms, 'mls' => $mls];
+    }
+
+    /**
+     * @return array{fields: array<string, mixed>, meta: array<string, mixed>}
+     */
+    public function mapFromMls(string $mlsNumber): array
+    {
+        $source = $this->resolvePropertySource($mlsNumber);
+
+        return $this->mapRecord($source['record'], $source['rooms'], $source['mls']);
     }
 
     /**

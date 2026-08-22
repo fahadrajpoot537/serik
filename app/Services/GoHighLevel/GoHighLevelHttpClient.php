@@ -123,13 +123,23 @@ class GoHighLevelHttpClient
                 }
 
                 if ($response->status() === 401) {
-                    GoHighLevelCircuitBreaker::recordFailure();
+                    $isObjectsScope = str_contains($path, '/objects') || str_contains($path, '/associations');
+                    // Missing Custom Objects scopes are configuration errors — do not trip the circuit
+                    // used by contact/lead traffic.
+                    if (! $isObjectsScope) {
+                        GoHighLevelCircuitBreaker::recordFailure();
+                    }
+                    $scopeHint = $isObjectsScope
+                        ? ' Missing Private Integration scopes (objects/record.readonly, objects/record.write, associations.readonly, associations.write / associations/relation.*).'
+                        : '';
                     Log::channel('ghl_sync')->error('GoHighLevel token unauthorized / expired', [
                         'correlation_id' => $correlationId,
                         'path' => $path,
                         'body' => $this->safeBody($response->body()),
                     ]);
-                    throw new RuntimeException('GoHighLevel API token unauthorized or expired.');
+                    throw new RuntimeException(
+                        'GoHighLevel API token unauthorized or expired.' . $scopeHint
+                    );
                 }
 
                 if (! $response->successful()) {

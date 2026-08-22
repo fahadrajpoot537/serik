@@ -4,12 +4,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | MLS → Showings sync (extends existing Contacts lead upsert; does not replace it)
+    | MLS → Showings Custom Object sync
     |--------------------------------------------------------------------------
     |
-    | GHL stores Showings / property details as Contact custom fields under this
-    | location. The Private Integration Token already has contacts + custom-fields
-    | scopes. Custom Objects API is not required for this sync path.
+    | Property/MLS data is written to GHL Custom Objects → Showings
+    | (custom_objects.showings), associated with the Contact.
+    | Contact custom fields remain for inquiry/lead flows and the MLS trigger
+    | field only — do not repurpose them for property payloads.
+    |
+    | Required Private Integration scopes:
+    | - objects/record.readonly, objects/record.write
+    | - associations.readonly, associations.write (and/or associations/relation.*)
+    | - locations/customFields.readonly (schema field discovery)
+    | - contacts.readonly (contact resolve)
     |
     */
     'mls_sync' => [
@@ -58,6 +65,13 @@ return [
 
         // Idempotency: skip GHL update when mapped payload hash unchanged
         'skip_unchanged' => (bool) env('GOHIGHLEVEL_MLS_SKIP_UNCHANGED', true),
+
+        // MLS property data → Custom Objects → Showings (NOT contact custom fields).
+        // Object key confirmed via GET /custom-fields/object-key/{key}?locationId=...
+        'showings_object_key' => env('GOHIGHLEVEL_SHOWINGS_OBJECT_KEY', 'custom_objects.showings'),
+
+        // Optional association definition id (contact ↔ showings). When empty, resolved at runtime.
+        'showings_contact_association_id' => env('GOHIGHLEVEL_SHOWINGS_CONTACT_ASSOCIATION_ID', ''),
     ],
 
 ];
