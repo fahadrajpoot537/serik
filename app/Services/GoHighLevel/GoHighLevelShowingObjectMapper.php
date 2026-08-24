@@ -238,9 +238,11 @@ class GoHighLevelShowingObjectMapper
             $raw = $digits;
         }
 
-        // MONETORY fields commonly accept {currency, value}
+        // GHL Custom Object MONETORY fields reject ISO codes that are not
+        // enabled on the location (CAD → 400). Official shape is {currency, value}
+        // with currency "default" (location business currency).
         return [
-            'currency' => 'CAD',
+            'currency' => 'default',
             'value' => round((float) $raw, 2),
         ];
     }

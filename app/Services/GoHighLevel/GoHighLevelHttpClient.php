@@ -16,6 +16,13 @@ use Throwable;
  */
 class GoHighLevelHttpClient
 {
+    protected ?int $lastStatus = null;
+
+    public function lastStatus(): ?int
+    {
+        return $this->lastStatus;
+    }
+
     public function enabled(): bool
     {
         return (bool) config('services.gohighlevel.enabled')
@@ -41,18 +48,19 @@ class GoHighLevelHttpClient
      * @param  array<string, mixed>  $body
      * @return array<string, mixed>
      */
-    public function post(string $path, array $body = []): array
+    public function post(string $path, array $body = [], array $query = []): array
     {
-        return $this->request('post', $path, body: $body);
+        return $this->request('post', $path, query: $query, body: $body);
     }
 
     /**
      * @param  array<string, mixed>  $body
+     * @param  array<string, mixed>  $query
      * @return array<string, mixed>
      */
-    public function put(string $path, array $body = []): array
+    public function put(string $path, array $body = [], array $query = []): array
     {
-        return $this->request('put', $path, body: $body);
+        return $this->request('put', $path, query: $query, body: $body);
     }
 
     /**
@@ -72,6 +80,9 @@ class GoHighLevelHttpClient
         }
 
         $url = rtrim((string) config('services.gohighlevel.base_url'), '/') . '/' . ltrim($path, '/');
+        if ($query !== [] && strtolower($method) !== 'get') {
+            $url .= (str_contains($url, '?') ? '&' : '?') . http_build_query($query);
+        }
         $timeout = (int) config('gohighlevel.mls_sync.http_timeout', 25);
         $retries = max(1, (int) config('gohighlevel.mls_sync.http_retries', 3));
         $sleepMs = max(100, (int) config('gohighlevel.mls_sync.http_retry_sleep_ms', 750));
@@ -101,10 +112,13 @@ class GoHighLevelHttpClient
                 /** @var Response $response */
                 $response = match (strtolower($method)) {
                     'get' => $pending->get($url, $query),
-                    'post' => $pending->post($url, $body),
-                    'put' => $pending->put($url, $body),
+                    // Nested Custom Object payloads must be JSON. Form encoding makes GHL
+                    // drop locationId and return a misleading 404 "Custom Object not found".
+                    'post' => $pending->asJson()->post($url, $body),
+                    'put' => $pending->asJson()->put($url, $body),
                     default => throw new RuntimeException('Unsupported HTTP method: ' . $method),
                 };
+                $this->lastStatus = $response->status();
 
                 if ($this->shouldRetryStatus($response->status())) {
                     $lastError = 'HTTP ' . $response->status();
@@ -143,8 +157,10 @@ class GoHighLevelHttpClient
                 }
 
                 if (! $response->successful()) {
-                    // 4xx (except 408/429) are not retried
-                    if ($response->status() >= 400 && $response->status() < 500) {
+                    $isObjectsScope = str_contains($path, '/objects') || str_contains($path, '/associations');
+                    // 4xx on Custom Objects/associations are config/payload errors — do not trip
+                    // the circuit used by contact/lead traffic.
+                    if (! $isObjectsScope && $response->status() >= 400 && $response->status() < 500) {
                         GoHighLevelCircuitBreaker::recordFailure();
                     }
                     throw new RuntimeException(

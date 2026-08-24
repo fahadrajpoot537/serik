@@ -72,7 +72,10 @@ class GoHighLevelShowingObjectRepository
             'properties' => $properties,
         ];
 
-        $data = $this->http->post('/objects/' . $this->objectKey() . '/records', $payload);
+        $data = $this->http->post(
+            '/objects/' . $this->objectKey() . '/records',
+            $payload
+        );
         $record = data_get($data, 'record', $data);
 
         return is_array($record) ? $record : [];
@@ -88,7 +91,11 @@ class GoHighLevelShowingObjectRepository
             'properties' => $properties,
         ];
 
-        $data = $this->http->put('/objects/' . $this->objectKey() . '/records/' . $recordId, $payload);
+        $data = $this->http->put(
+            '/objects/' . $this->objectKey() . '/records/' . $recordId,
+            $payload,
+            ['locationId' => $this->http->locationId()]
+        );
         $record = data_get($data, 'record', $data);
 
         return is_array($record) ? $record : [];
@@ -99,7 +106,9 @@ class GoHighLevelShowingObjectRepository
      */
     public function getRecord(string $recordId): array
     {
-        $data = $this->http->get('/objects/' . $this->objectKey() . '/records/' . $recordId);
+        $data = $this->http->get('/objects/' . $this->objectKey() . '/records/' . $recordId, [
+            'locationId' => $this->http->locationId(),
+        ]);
         $record = data_get($data, 'record', $data);
 
         return is_array($record) ? $record : [];
@@ -116,12 +125,15 @@ class GoHighLevelShowingObjectRepository
         }
 
         try {
-            $data = $this->http->post('/objects/' . $this->objectKey() . '/records/search', [
-                'locationId' => $this->http->locationId(),
-                'page' => 1,
-                'pageLimit' => 20,
-                'query' => $mls,
-            ]);
+            $data = $this->http->post(
+                '/objects/' . $this->objectKey() . '/records/search',
+                [
+                    'locationId' => $this->http->locationId(),
+                    'page' => 1,
+                    'pageLimit' => 20,
+                    'query' => $mls,
+                ]
+            );
         } catch (\Throwable $e) {
             Log::channel('ghl_sync')->warning('GoHighLevel Showings search failed', [
                 'mls' => $mls,
@@ -148,7 +160,7 @@ class GoHighLevelShowingObjectRepository
             $props = (array) ($record['properties'] ?? []);
             $value = (string) (
                 $props['mls_number']
-                ?? $props['custom_objects.showings.mls_number']
+                ?? $props[$this->objectKey() . '.mls_number']
                 ?? ''
             );
             if (strtoupper(trim($value)) !== $mls) {
@@ -156,7 +168,7 @@ class GoHighLevelShowingObjectRepository
             }
             $id = (string) ($record['id'] ?? '');
             if ($id !== '') {
-                $matches[] = $id;
+                $matches[$id] = count($props);
             }
         }
 
@@ -165,14 +177,16 @@ class GoHighLevelShowingObjectRepository
         }
 
         if ($contactId && count($matches) > 1) {
-            foreach ($matches as $id) {
+            foreach (array_keys($matches) as $id) {
                 if ($this->isAssociatedWithContact($id, $contactId)) {
                     return $id;
                 }
             }
         }
 
-        return $matches[0];
+        arsort($matches);
+
+        return (string) array_key_first($matches);
     }
 
     public function ensureAssociatedWithContact(string $recordId, string $contactId): void
@@ -252,7 +266,7 @@ class GoHighLevelShowingObjectRepository
         }
 
         $ttl = max(300, (int) config('gohighlevel.mls_sync.field_cache_ttl', 3600));
-        $cacheKey = 'ghl_showings_contact_assoc_v1_' . md5($this->objectKey() . '|' . $this->http->locationId());
+        $cacheKey = 'ghl_showings_contact_assoc_v2_' . md5($this->objectKey() . '|' . $this->http->locationId());
 
         return SerikCache::remember($cacheKey, $ttl, function () {
             try {
@@ -273,6 +287,7 @@ class GoHighLevelShowingObjectRepository
             }
 
             $objectKey = $this->objectKey();
+            $candidates = [];
             foreach ($rows as $row) {
                 if (! is_array($row)) {
                     continue;
@@ -283,14 +298,26 @@ class GoHighLevelShowingObjectRepository
                 sort($pair);
                 $want = ['contact', strtolower($objectKey)];
                 sort($want);
-                if ($pair === $want) {
-                    $id = (string) ($row['id'] ?? $row['associationId'] ?? '');
+                if ($pair !== $want) {
+                    continue;
+                }
+                $id = (string) ($row['id'] ?? $row['associationId'] ?? '');
+                if ($id === '') {
+                    continue;
+                }
+                $key = strtolower((string) ($row['key'] ?? $row['associationKey'] ?? ''));
+                $candidates[] = ['id' => $id, 'key' => $key];
+            }
 
-                    return $id !== '' ? $id : null;
+            foreach (['showing_buyertenant', 'showing_buyer', 'buyer'] as $preferred) {
+                foreach ($candidates as $candidate) {
+                    if ($candidate['key'] === $preferred || str_contains($candidate['key'], $preferred)) {
+                        return $candidate['id'];
+                    }
                 }
             }
 
-            return null;
+            return $candidates[0]['id'] ?? null;
         });
     }
 }

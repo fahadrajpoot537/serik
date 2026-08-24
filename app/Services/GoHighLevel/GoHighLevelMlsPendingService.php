@@ -39,6 +39,7 @@ class GoHighLevelMlsPendingService
                     GhlMlsSyncTask::STATUS_COMPLETED,
                     GhlMlsSyncTask::STATUS_FAILED,
                     GhlMlsSyncTask::STATUS_PENDING,
+                    GhlMlsSyncTask::STATUS_PROCESSING,
                 ], true)) {
                     $existing->fill([
                         'status' => GhlMlsSyncTask::STATUS_PENDING,

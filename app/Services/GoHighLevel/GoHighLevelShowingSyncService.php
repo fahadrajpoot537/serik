@@ -94,10 +94,10 @@ class GoHighLevelShowingSyncService
         try {
             if ($recordId !== '') {
                 $record = $this->objects->updateRecord($recordId, $properties);
-                $httpStatus = 200;
+                $httpStatus = $this->http->lastStatus() ?? 200;
             } else {
                 $record = $this->objects->createRecord($properties);
-                $httpStatus = 201;
+                $httpStatus = $this->http->lastStatus() ?? 201;
                 $recordId = (string) ($record['id'] ?? data_get($record, 'record.id') ?? '');
             }
         } catch (\Throwable $e) {
@@ -127,20 +127,22 @@ class GoHighLevelShowingSyncService
                 'showing_record_id' => $recordId,
                 'message' => $e->getMessage(),
             ]);
-            // Association is required for UI under the contact — fail the task.
-            throw $e;
+            // Record write/verify is the completion gate. Association write can
+            // 401 when associations/relation.write is missing; do not fail the task.
         }
 
         $verification = $this->verifyRecord($recordId, $properties);
         $verified = (int) ($verification['verified'] ?? 0);
         $rejected = (array) ($verification['rejected'] ?? []);
         $accepted = $attempted;
+        $objectId = (string) ($verification['object_id'] ?? '');
 
         Log::channel('ghl_sync')->info('GoHighLevel Showings CO write+verify', [
             'task_id' => $task->id,
             'contact_id' => $task->contact_id,
             'mls' => $task->mls_number,
             'object_key' => $this->objects->objectKey(),
+            'object_id' => $objectId !== '' ? $objectId : null,
             'showing_record_id' => $recordId,
             'fields_attempted' => $attempted,
             'fields_accepted' => $accepted,
@@ -171,6 +173,7 @@ class GoHighLevelShowingSyncService
                         'rejected' => $rejected,
                         'http_status' => $httpStatus,
                         'object_key' => $this->objects->objectKey(),
+                        'object_id' => $objectId !== '' ? $objectId : null,
                         'showing_record_id' => $recordId,
                     ],
                 ]);
@@ -195,6 +198,7 @@ class GoHighLevelShowingSyncService
                 'rejected' => $rejected,
                 'http_status' => $httpStatus,
                 'object_key' => $this->objects->objectKey(),
+                'object_id' => $objectId !== '' ? $objectId : null,
                 'showing_record_id' => $recordId,
             ],
         ]);
@@ -226,7 +230,7 @@ class GoHighLevelShowingSyncService
 
     /**
      * @param  array<string, mixed>  $expected
-     * @return array{verified: int, rejected: array<string, string>, verified_keys: list<string>}
+     * @return array{verified: int, rejected: array<string, string>, verified_keys: list<string>, object_id: string, object_key: string}
      */
     protected function verifyRecord(string $recordId, array $expected): array
     {
@@ -238,8 +242,9 @@ class GoHighLevelShowingSyncService
         $rejected = [];
 
         foreach ($expected as $key => $value) {
-            $actual = $props[$key] ?? $props['custom_objects.showings.' . $key] ?? null;
-            if ($actual === null && ! array_key_exists($key, $props) && ! array_key_exists('custom_objects.showings.' . $key, $props)) {
+            $prefixed = $this->objects->objectKey() . '.' . $key;
+            $actual = $props[$key] ?? $props[$prefixed] ?? null;
+            if ($actual === null && ! array_key_exists($key, $props) && ! array_key_exists($prefixed, $props)) {
                 $rejected[$key] = 'missing_on_get';
                 continue;
             }
@@ -255,6 +260,8 @@ class GoHighLevelShowingSyncService
             'verified' => $verified,
             'rejected' => $rejected,
             'verified_keys' => $verifiedKeys,
+            'object_id' => (string) ($fresh['objectId'] ?? $fresh['object_id'] ?? ''),
+            'object_key' => (string) ($fresh['objectKey'] ?? $fresh['object_key'] ?? $this->objects->objectKey()),
         ];
     }
 
