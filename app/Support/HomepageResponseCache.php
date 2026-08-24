@@ -132,9 +132,23 @@ final class HomepageResponseCache
     /**
      * Shared anonymous homepage HTML — no session/auth required.
      */
-    public static function getSharedHtml(): ?string
+    public static function getSharedHtml(?Request $request = null): ?string
     {
-        return self::extractHtml(Cache::get(self::sharedKey()));
+        $html = self::extractHtml(Cache::get(self::sharedKey($request)));
+
+        if ($html === null || $html === '') {
+            return null;
+        }
+
+        $request ??= request();
+        if ($request instanceof Request) {
+            $html = self::alignLoopbackOrigins($html, $request);
+            if (! self::htmlMatchesRequestOrigin($html, $request)) {
+                return null;
+            }
+        }
+
+        return $html;
     }
 
     /**
@@ -173,14 +187,56 @@ final class HomepageResponseCache
 
     public static function cacheKey(Request $request): string
     {
-        return self::sharedKey();
+        return self::sharedKey($request);
     }
 
-    private static function sharedKey(): string
+    private static function sharedKey(?Request $request = null): string
     {
         $locale = app()->getLocale();
+        $request ??= request();
+        $origin = '';
+        if ($request instanceof Request) {
+            $origin = strtolower(rtrim($request->getSchemeAndHttpHost() . $request->getBaseUrl(), '/'));
+        }
 
-        return self::KEY_PREFIX . self::version() . ':' . $locale . ':shared';
+        return self::KEY_PREFIX . self::version() . ':' . $locale . ':' . sha1($origin) . ':shared';
+    }
+
+    /**
+     * Cached HTML baked on :8000 must not be served on Apache :80 (or localhost vs 127.0.0.1).
+     * Absolute CSS hrefs would be cross-origin and CSP style-src 'self' would block them.
+     */
+    public static function htmlMatchesRequestOrigin(string $html, Request $request): bool
+    {
+        if (! preg_match('#https?://(?:127\.0\.0\.1|localhost)(?::\d+)?#i', $html, $match)) {
+            return true;
+        }
+
+        return strtolower($match[0]) === strtolower($request->getSchemeAndHttpHost());
+    }
+
+    /**
+     * Fragment HTML can be baked on another local port (php -S :8000 vs :8010).
+     * Those absolute http://127.0.0.1:PORT URLs are a different origin, so CSP
+     * img-src 'self' blocks them. Rewrite loopback origins to this request.
+     * Production HTML (https://serik.ca) is unchanged.
+     */
+    public static function alignLoopbackOrigins(string $html, Request $request): string
+    {
+        if ($html === '') {
+            return $html;
+        }
+
+        $target = rtrim($request->getSchemeAndHttpHost(), '/');
+        if ($target === '') {
+            return $html;
+        }
+
+        return preg_replace(
+            '#https?://(?:127\.0\.0\.1|localhost|\[::1\])(?::\d+)?#i',
+            $target,
+            $html
+        ) ?? $html;
     }
 
     public static function get(Request $request): ?string
@@ -189,7 +245,17 @@ final class HomepageResponseCache
             return null;
         }
 
-        return self::extractHtml(Cache::get(self::cacheKey($request)));
+        $html = self::extractHtml(Cache::get(self::cacheKey($request)));
+        if ($html === null || $html === '') {
+            return null;
+        }
+
+        $html = self::alignLoopbackOrigins($html, $request);
+        if (! self::htmlMatchesRequestOrigin($html, $request)) {
+            return null;
+        }
+
+        return $html;
     }
 
     public static function getEtag(Request $request): ?string
@@ -213,6 +279,8 @@ final class HomepageResponseCache
         if (! self::isCacheableRequest($request) || $html === '') {
             return;
         }
+
+        $html = self::alignLoopbackOrigins($html, $request);
 
         Cache::put(self::cacheKey($request), self::packEntry($html), self::ttl());
     }

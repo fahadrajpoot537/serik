@@ -439,8 +439,16 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
             $page = max(1, (int) request()->input('page', 1));
             $perPage = max(12, (int) request()->input('per_page', 12));
             $meiliCityLimit = min(8000, max(800, ($page * $perPage) + 1500));
+            $pagedBrowse = $isBrowseListing && (($params['paginate']['type'] ?? '') === 'simplePaginate');
 
-            if (
+            if ($pagedBrowse && $locationSearch !== '') {
+                // Listing pages hydrate 12 Meili IDs in browsePageIdsViaMeili.
+                // Skip 800–8000 city whereIn (and JSON district scans) on TTFB.
+                // Meili down: FULLTEXT city pin so SQL LIMIT 12 stays in-city.
+                if (! $search->isAvailable()) {
+                    $search->constrainQueryToCityViaLocation($this->model, $locationSearch, true);
+                }
+            } elseif (
                 ! $skipMeiliCity
                 && $locationSearch !== ''
                 && $search->constrainQueryToCity($this->model, $locationSearch, $meiliCityLimit, true, $cityOpts)
@@ -724,27 +732,32 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
         $cacheKey = 'serik_browse_count:' . md5(json_encode($this->browseListingCountSignature($filters)));
         $ttl = $unfiltered ? 600 : 300;
 
-        $total = (int) SerikCache::remember($cacheKey, $ttl, function () use ($query, $filters, $unfiltered) {
-            $meiliTotal = $this->estimateBrowseTotalViaMeili($filters);
-            if ($meiliTotal !== null) {
-                if ($unfiltered) {
-                    Cache::put('serik_active_listing_count_v1', $meiliTotal, 600);
-                    Cache::put('serik_active_listing_count_v1:last', $meiliTotal, 86400);
-                }
+        $cachedTotal = Cache::get($cacheKey);
+        if ($cachedTotal !== null) {
+            return (int) $cachedTotal;
+        }
 
-                return $meiliTotal;
-            }
-
-            $mysqlTotal = (int) (clone $query)->toBase()->count('re_properties.id');
+        $meiliTotal = $this->estimateBrowseTotalViaMeili($filters);
+        if ($meiliTotal !== null) {
+            Cache::put($cacheKey, $meiliTotal, $ttl);
             if ($unfiltered) {
-                Cache::put('serik_active_listing_count_v1', $mysqlTotal, 600);
-                Cache::put('serik_active_listing_count_v1:last', $mysqlTotal, 86400);
+                Cache::put('serik_active_listing_count_v1', $meiliTotal, 600);
+                Cache::put('serik_active_listing_count_v1:last', $meiliTotal, 86400);
             }
 
-            return $mysqlTotal;
-        }, 45);
+            return $meiliTotal;
+        }
 
-        return $total;
+        $lastKnown = Cache::get($cacheKey . ':last');
+        if ($lastKnown !== null) {
+            return (int) $lastKnown;
+        }
+
+        // Never COUNT(*) on the request path. Filtered Toronto+house scans ~90k
+        // MLS rows and was timing the SEO landing out at 120s when Meili is down.
+        $perPage = max(12, (int) request()->input('per_page', 12));
+
+        return $perPage + 1;
     }
 
     /**

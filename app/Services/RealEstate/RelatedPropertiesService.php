@@ -64,14 +64,32 @@ class RelatedPropertiesService
                 return $computed;
             });
         } catch (\Throwable) {
-            $payload = $this->computeFast($model, $isProject, $soldStatuses);
-            \Illuminate\Support\Facades\Cache::put($cacheKey, [
-                'ids' => $payload['relatedProperties']->pluck('id')->all(),
-                'sectionTitle' => $payload['sectionTitle'],
-            ], $ttl);
+            $again = \Illuminate\Support\Facades\Cache::get($cacheKey);
+            if (is_array($again) && array_key_exists('ids', $again)) {
+                return [
+                    'relatedProperties' => $this->hydrateByIds($again['ids'] ?? []),
+                    'sectionTitle' => (string) ($again['sectionTitle'] ?? $this->buildSectionTitle($model)),
+                ];
+            }
+
+            // Lock timeout / cache store without locks: do not stampede the
+            // city LIKE scan. Caller may defer similar homes to the existing API.
+            return [
+                'relatedProperties' => collect(),
+                'sectionTitle' => $this->buildSectionTitle($model),
+            ];
         }
 
         return $payload;
+    }
+
+    public function hasCached(Model $model): bool
+    {
+        $isProject = $model instanceof Project;
+        $cacheKey = 'serik_related_props_v6_' . $model->getKey() . '_' . ($isProject ? 'project' : 'property');
+        $cached = \Illuminate\Support\Facades\Cache::get($cacheKey);
+
+        return is_array($cached) && array_key_exists('ids', $cached);
     }
 
     /**

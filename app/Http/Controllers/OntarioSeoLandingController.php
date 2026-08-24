@@ -2,17 +2,24 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\OntarioSeoPageCache;
 use App\Support\SeoLandingParser;
 use Botble\RealEstate\Http\Controllers\Fronts\PublicController;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
+use Symfony\Component\HttpFoundation\Response;
 
 class OntarioSeoLandingController extends Controller
 {
-    private const PAGE_CACHE_TTL = 1800; // Reduce MISS frequency; nav personalization is async.
-
     public function show(Request $request, string $seo)
     {
+        $cacheKey = $this->pageCacheKey($request, $seo);
+        if ($cacheKey !== null) {
+            $cached = OntarioSeoPageCache::get($cacheKey);
+            if ($cached !== null) {
+                return $this->cachedResponse($cached, 'HIT');
+            }
+        }
+
         // Capture client intent BEFORE SEO defaults touch the request.
         $explicitType = strtolower(trim((string) $request->input('type', '')));
         $explicitStatus = strtolower(trim((string) $request->input('status', '')));
@@ -49,20 +56,6 @@ class OntarioSeoLandingController extends Controller
             $request->merge(['per_page' => 12]);
         }
 
-        $cacheKey = $this->pageCacheKey($request, $seo);
-        if ($cacheKey !== null) {
-            $cached = Cache::get($cacheKey);
-            if (is_string($cached) && $cached !== '') {
-                return response($cached, 200, [
-                    'Content-Type' => 'text/html; charset=UTF-8',
-                    'X-Serik-Ontario-Cache' => 'HIT',
-                    // Auth chrome differs by Cookie; never let bfcache/CDN reuse guest HTML.
-                    'Cache-Control' => 'private, no-cache, no-store, must-revalidate',
-                    'Vary' => 'Cookie',
-                ]);
-            }
-        }
-
         $result = app(PublicController::class)->getProperties($request);
 
         if ($cacheKey === null) {
@@ -72,7 +65,7 @@ class OntarioSeoLandingController extends Controller
         $html = null;
         if (is_string($result)) {
             $html = $result;
-        } elseif ($result instanceof \Symfony\Component\HttpFoundation\Response) {
+        } elseif ($result instanceof Response) {
             $html = $result->getContent();
         } elseif (is_object($result) && method_exists($result, '__toString')) {
             $html = (string) $result;
@@ -82,11 +75,16 @@ class OntarioSeoLandingController extends Controller
             return $result;
         }
 
-        Cache::put($cacheKey, $html, self::PAGE_CACHE_TTL);
+        OntarioSeoPageCache::put($cacheKey, $html);
 
+        return $this->cachedResponse($html, 'MISS');
+    }
+
+    private function cachedResponse(string $html, string $cacheStatus): Response
+    {
         return response($html, 200, [
             'Content-Type' => 'text/html; charset=UTF-8',
-            'X-Serik-Ontario-Cache' => 'MISS',
+            'X-Serik-Ontario-Cache' => $cacheStatus,
             'Cache-Control' => 'private, no-cache, no-store, must-revalidate',
             'Vary' => 'Cookie',
         ]);
@@ -94,28 +92,10 @@ class OntarioSeoLandingController extends Controller
 
     private function pageCacheKey(Request $request, string $seo): ?string
     {
-        if (! $request->isMethod('GET') || $request->ajax() || $request->wantsJson()) {
-            return null;
-        }
-
-        // Render output differs for authenticated users (e.g. sold card gating), so keep separate caches.
         $accountAuthed = is_plugin_active('real-estate') ? auth('account')->check() : false;
         $isAuthed = (bool) ($request->user() || $accountAuthed || auth()->check());
         $authPart = $isAuthed ? ':auth' : ':anon';
 
-        // Cache SEO landings including common filter query params (fast repeat visits).
-        $allowed = [
-            'open_house', 'status', 'community', 'home_types', 'subtypes', 'page', 'bedroom', 'k',
-            'type', 'per_page', 'min_price', 'max_price', 'bathroom', 'min_square', 'sort_by',
-            'location', // toolbar / lease-sale switches always send location=
-        ];
-        foreach ($request->query() as $key => $value) {
-            if (! in_array($key, $allowed, true)) {
-                return null;
-            }
-        }
-
-        // v13: Vary/Cookie + no-store on HTML; invalidate guest HTML that predated auth-nav sync.
-        return 'ontario_seo_html_v13' . $authPart . ':' . md5(strtolower($seo) . '|' . $request->getQueryString());
+        return OntarioSeoPageCache::key($request, $seo, $authPart);
     }
 }

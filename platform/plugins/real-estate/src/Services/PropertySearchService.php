@@ -340,12 +340,8 @@ class PropertySearchService
     protected function resolveCityIdsUncached(string $city, int $limit, array $opts): ?array
     {
         if (! $this->isAvailable()) {
-            // District / geo fallbacks still work without Meili.
-            $districtIds = $this->searchDistrictCityIds($city, $limit);
-            if ($districtIds !== null) {
-                return $districtIds;
-            }
-
+            // Do not JSON-scan meta_boxes here — that query is 10–30s+ on a cold
+            // MLS table. Callers fall back to FULLTEXT location (fast enough).
             return null;
         }
 
@@ -526,11 +522,19 @@ class PropertySearchService
             return false;
         }
 
-        // Escape LIKE wildcards in city names (e.g. odd punctuation).
-        $safe = addcslashes($city, '%_\\');
-        $pattern = '%, ' . $safe . ', ON%';
+        // FULLTEXT + ORDER BY id DESC was 37s on Toronto (huge hit set, filesort).
+        // Restrict to recent MLS ids (PRIMARY range) then pin city with a suffix LIKE
+        // so page-1 SEO landings stay in-city without scanning the whole table.
+        $maxId = (int) Cache::remember('serik_re_properties_max_id_v1', 120, static function () {
+            return (int) DB::table('re_properties')->max('id');
+        });
+        $window = 60000;
+        if ($maxId > $window) {
+            $query->where('re_properties.id', '>=', $maxId - $window);
+        }
 
-        $query->where('location', 'like', $pattern);
+        $safe = addcslashes($city, '%_\\');
+        $query->where('location', 'like', '%, ' . $safe . ', ON%');
 
         return true;
     }
@@ -1003,9 +1007,15 @@ class PropertySearchService
     private function client(): Client
     {
         if ($this->client === null) {
+            $http = new \GuzzleHttp\Client([
+                'timeout' => 0.8,
+                'connect_timeout' => 0.2,
+                'http_errors' => false,
+            ]);
             $this->client = new Client(
                 (string) config('scout.meilisearch.host'),
-                config('scout.meilisearch.key')
+                config('scout.meilisearch.key'),
+                $http
             );
         }
 

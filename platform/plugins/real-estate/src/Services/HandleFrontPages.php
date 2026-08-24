@@ -171,14 +171,18 @@ class HandleFrontPages
                 // Map iframe: skip similar listings entirely on first paint (hydrate via API).
                 // Also skip the after-response warm — rapid pin switching was queueing
                 // many related builds and making modal opens feel stuck/slow.
-                if ($request->boolean('iframe')) {
+                $relatedService = app(RelatedPropertiesService::class);
+                if ($request->boolean('iframe') || ! $relatedService->hasCached($property)) {
+                    // Same similar-homes payload as RelatedPropertiesService::build(),
+                    // loaded via existing GET /api/v1/related-properties/{id} so the
+                    // HTML request does not wait on a cold city query (p95 was ~10s).
                     $relatedPropertiesPayload = [
                         'relatedProperties' => collect(),
                         'sectionTitle' => __('Similar Properties'),
                         'deferPropertyId' => (int) $property->getKey(),
                     ];
                 } else {
-                    $relatedPropertiesPayload = app(RelatedPropertiesService::class)->build($property);
+                    $relatedPropertiesPayload = $relatedService->build($property);
                 }
 
                 return [
@@ -260,7 +264,16 @@ class HandleFrontPages
                     }
                 }
 
-                $relatedPropertiesPayload = app(RelatedPropertiesService::class)->build($project);
+                $relatedService = app(RelatedPropertiesService::class);
+                if ($relatedService->hasCached($project)) {
+                    $relatedPropertiesPayload = $relatedService->build($project);
+                } else {
+                    $relatedPropertiesPayload = [
+                        'relatedProperties' => collect(),
+                        'sectionTitle' => __('Similar Properties'),
+                        'deferPropertyId' => (int) $project->getKey(),
+                    ];
+                }
 
                 return [
                     'view' => 'real-estate.project',

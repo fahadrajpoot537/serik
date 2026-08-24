@@ -23,6 +23,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
         \App\Console\Commands\SerikQueueRecoverFailedCommand::class,
         \App\Console\Commands\SerikReliabilityValidateCommand::class,
         \App\Console\Commands\SerikProductionOptimizeCommand::class,
+        \App\Console\Commands\SerikRedisStatusCommand::class,
     ])
     ->withRouting(
         web: __DIR__ . '/../routes/web.php',

@@ -18,6 +18,7 @@ return [
             $theme->asset()->usePath()->add('animate', 'css/animate.min.css');
             $theme->asset()->usePath()->add('swiper', 'plugins/swiper/swiper-bundle.min.css');
             $theme->asset()->usePath()->add('style', 'css/style.css', version: $version);
+            $theme->asset()->usePath()->add('site-chrome', 'css/site-chrome.css', version: $version . '-sc20');
 
             $theme->asset()->container('footer')->usePath()->add('jquery', 'js/jquery.min.js');
             $theme->asset()->container('footer')->usePath()->add('popper', 'js/popper.min.js', ['jquery']);
@@ -26,6 +27,7 @@ return [
             $theme->asset()->container('footer')->usePath()->add('swiper', 'plugins/swiper/swiper-bundle.min.js');
             $theme->asset()->usePath()->add('visitor-location', 'js/visitor-location.js', version: $version);
             $theme->asset()->container('footer')->usePath()->add('script', 'js/script.js', ['jquery'], version: $version);
+            $theme->asset()->container('footer')->usePath()->add('keyboard-a11y', 'js/keyboard-a11y.js', ['script'], version: $version);
 
             if (is_plugin_active('social-login')) {
                 $theme->asset()

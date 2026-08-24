@@ -172,10 +172,12 @@ return [
             'password' => env('REDIS_PASSWORD'),
             'port' => env('REDIS_PORT', '6379'),
             'database' => env('REDIS_DB', '0'),
-            // Memurai / Redis: fail fast on network blips; retries below recover.
-            'timeout' => (float) env('REDIS_TIMEOUT', 2.0),
-            'read_timeout' => (float) env('REDIS_READ_TIMEOUT', 2.0),
-            'max_retries' => env('REDIS_MAX_RETRIES', 3),
+            // Predis connection params — fail fast (do not wait on Windows TCP ~21s).
+            'timeout' => (float) env('REDIS_TIMEOUT', 1.5),
+            'read_write_timeout' => (float) env('REDIS_READ_TIMEOUT', 1.5),
+            // phpredis only (Predis ignores these); keep retries low.
+            'read_timeout' => (float) env('REDIS_READ_TIMEOUT', 1.5),
+            'max_retries' => (int) env('REDIS_MAX_RETRIES', 1),
             'backoff_algorithm' => env('REDIS_BACKOFF_ALGORITHM', 'decorrelated_jitter'),
             'backoff_base' => env('REDIS_BACKOFF_BASE', 100),
             'backoff_cap' => env('REDIS_BACKOFF_CAP', 1000),
@@ -189,9 +191,10 @@ return [
             'port' => env('REDIS_PORT', '6379'),
             // Dedicated DB for cache (keeps locks/queues isolated on default DB).
             'database' => env('REDIS_CACHE_DB', '1'),
-            'timeout' => (float) env('REDIS_TIMEOUT', 2.0),
-            'read_timeout' => (float) env('REDIS_READ_TIMEOUT', 2.0),
-            'max_retries' => env('REDIS_MAX_RETRIES', 3),
+            'timeout' => (float) env('REDIS_TIMEOUT', 1.5),
+            'read_write_timeout' => (float) env('REDIS_READ_TIMEOUT', 1.5),
+            'read_timeout' => (float) env('REDIS_READ_TIMEOUT', 1.5),
+            'max_retries' => (int) env('REDIS_MAX_RETRIES', 1),
             'backoff_algorithm' => env('REDIS_BACKOFF_ALGORITHM', 'decorrelated_jitter'),
             'backoff_base' => env('REDIS_BACKOFF_BASE', 100),
             'backoff_cap' => env('REDIS_BACKOFF_CAP', 1000),

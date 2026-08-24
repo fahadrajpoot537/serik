@@ -198,13 +198,13 @@ class TrebArchiveImportService
                     $hasMore = false;
                     break;
                 }
-                $year = (int) ($progress['year'] ?? $progress['from_year']);
+        $year = (int) ($progress['year'] ?? $progress['from_year']);
                 $afterListingKey = $this->normalizeListingKey($progress['after_listing_key'] ?? null);
                 $pagingMode = (string) ($progress['paging_mode'] ?? 'skip');
                 if ($pagingMode === 'keyset' && $afterListingKey !== null) {
                     $skip = 0;
                 } else {
-                    $skip = (int) ($progress['skip'] ?? 0);
+        $skip = (int) ($progress['skip'] ?? 0);
                     if ($this->skipWouldExceedAmpLimit($skip, $pageChunk)) {
                         // Switch to keyset before requesting an illegal $skip.
                         $boot = $this->bootstrapKeysetCursor($token, $year, $pageChunk, $afterListingKey);
@@ -219,23 +219,23 @@ class TrebArchiveImportService
                 }
             }
 
-            $log->info('Archive batch started', [
-                'year' => $year,
-                'skip' => $skip,
+        $log->info('Archive batch started', [
+            'year' => $year,
+            'skip' => $skip,
                 'batch' => $pageChunk,
                 'after_listing_key' => $afterListingKey,
                 'paging_mode' => $afterListingKey ? 'keyset' : 'skip',
                 'lease_id' => $leaseId,
                 'page_in_job' => $page + 1,
-                'dry_run' => $dryRun,
+            'dry_run' => $dryRun,
                 'memory_mb' => round(memory_get_usage(true) / 1048576, 2),
-            ]);
+        ]);
 
             $apiStarted = microtime(true);
-            try {
+        try {
                 $payload = $this->fetchArchivePage($token, $year, $skip, $pageChunk, $afterListingKey);
                 $this->onApiSuccess((int) round((microtime(true) - $apiStarted) * 1000));
-            } catch (Throwable $e) {
+        } catch (Throwable $e) {
                 $this->onApiFailure($e);
                 $lastError = $e->getMessage();
 
@@ -290,12 +290,12 @@ class TrebArchiveImportService
                 } else {
                     $progress = $this->readProgress();
                     $progress['last_error'] = $lastError;
-                    $progress['last_run_at'] = now()->toIso8601String();
-                    $this->writeProgress($progress);
+            $progress['last_run_at'] = now()->toIso8601String();
+            $this->writeProgress($progress);
                 }
-                $log->error('Archive API failed; progress kept for next run.', [
-                    'year' => $year,
-                    'skip' => $skip,
+            $log->error('Archive API failed; progress kept for next run.', [
+                'year' => $year,
+                'skip' => $skip,
                     'lease_id' => $leaseId,
                     'error' => $lastError,
                     'api_ms' => (int) round((microtime(true) - $apiStarted) * 1000),
@@ -311,10 +311,10 @@ class TrebArchiveImportService
                     'elapsed_ms' => (int) round((microtime(true) - $started) * 1000),
                     'pages' => $totals['pages'],
                     'success' => false,
-                ]);
+            ]);
 
-                return [
-                    'ok' => false,
+            return [
+                'ok' => false,
                     'error' => $lastError,
                     'has_more' => true,
                     'progress' => $this->readProgress(),
@@ -323,26 +323,26 @@ class TrebArchiveImportService
                     'updated' => $totals['updated'],
                     'skipped' => $totals['skipped'],
                     'pages' => $totals['pages'],
-                    'elapsed_ms' => (int) round((microtime(true) - $started) * 1000),
+                'elapsed_ms' => (int) round((microtime(true) - $started) * 1000),
                     'memory_mb' => round(memory_get_usage(true) / 1048576, 2),
-                ];
-            }
+            ];
+        }
 
             $apiMs = (int) round((microtime(true) - $apiStarted) * 1000);
             $totals['api_ms'] += $apiMs;
 
-            $rows = is_array($payload['value'] ?? null) ? $payload['value'] : [];
-            $fetched = count($rows);
+        $rows = is_array($payload['value'] ?? null) ? $payload['value'] : [];
+        $fetched = count($rows);
             $totals['fetched'] += $fetched;
             $totals['pages']++;
 
-            $imported = 0;
-            $updated = 0;
-            $skipped = 0;
+        $imported = 0;
+        $updated = 0;
+        $skipped = 0;
             $duplicates = 0;
             $dbMs = 0;
 
-            if ($fetched > 0 && ! $dryRun) {
+        if ($fetched > 0 && ! $dryRun) {
                 $dbStarted = microtime(true);
                 [$imported, $updated, $skipped, $duplicates] = $this->persistRowsBulk($rows);
                 $dbMs = (int) round((microtime(true) - $dbStarted) * 1000);
@@ -351,9 +351,9 @@ class TrebArchiveImportService
                 $totals['updated'] += $updated;
                 $totals['skipped'] += $skipped;
                 $totals['duplicates'] += $duplicates;
-            } elseif ($fetched > 0 && $dryRun) {
-                $imported = $fetched;
-            }
+        } elseif ($fetched > 0 && $dryRun) {
+            $imported = $fetched;
+        }
 
             $pageHasMore = $fetched >= $pageChunk;
             $lastListingKey = $this->lastListingKeyFromRows($rows);
@@ -368,14 +368,14 @@ class TrebArchiveImportService
                 'used_keyset' => $afterListingKey !== null,
             ];
 
-            if ($dryRun) {
+        if ($dryRun) {
                 $log->info('Archive dry-run page finished (progress not advanced)', [
-                    'year' => $year,
-                    'skip' => $skip,
-                    'fetched' => $fetched,
+                'year' => $year,
+                'skip' => $skip,
+                'fetched' => $fetched,
                     'api_ms' => $apiMs,
-                ]);
-                unset($rows, $payload);
+            ]);
+            unset($rows, $payload);
                 $hasMore = $pageHasMore;
 
                 break;
@@ -385,7 +385,7 @@ class TrebArchiveImportService
                 if ($allocator->isCancelled($leaseId)) {
                     // Data upsert already applied (safe); skip cursor mutation.
                     $allocator->complete($leaseId, $fetched, $stats);
-                } else {
+        } else {
                     $allocator->complete($leaseId, $fetched, $stats);
                 }
                 $progress = $this->readProgress();
@@ -405,15 +405,15 @@ class TrebArchiveImportService
                         $progress['year_eof'][(string) $year] = true;
                         $progress['after_listing_key'] = null;
                         $progress['paging_mode'] = 'skip';
-                        $nextYear = $year + 1;
-                        if ($nextYear > $toYear) {
-                            $progress['completed'] = true;
-                            $progress['skip'] = 0;
-                            $progress['year'] = $year;
+            $nextYear = $year + 1;
+            if ($nextYear > $toYear) {
+                $progress['completed'] = true;
+                $progress['skip'] = 0;
+                $progress['year'] = $year;
                             $hasMore = false;
-                        } else {
-                            $progress['year'] = $nextYear;
-                            $progress['skip'] = 0;
+            } else {
+                $progress['year'] = $nextYear;
+                $progress['skip'] = 0;
                             $hasMore = true;
                         }
                     }
@@ -443,40 +443,40 @@ class TrebArchiveImportService
                         $progress['year'] = $nextYear;
                         $progress['skip'] = 0;
                         $hasMore = true;
-                    }
-                }
+            }
+        }
 
-                $progress['total_fetched'] = (int) ($progress['total_fetched'] ?? 0) + $fetched;
-                $progress['total_imported'] = (int) ($progress['total_imported'] ?? 0) + $imported;
-                $progress['total_updated'] = (int) ($progress['total_updated'] ?? 0) + $updated;
-                $progress['total_skipped'] = (int) ($progress['total_skipped'] ?? 0) + $skipped;
-                $progress['last_error'] = null;
-                $progress['last_run_at'] = now()->toIso8601String();
-                $progress['last_batch'] = [
-                    'year' => $year,
-                    'skip' => $skip,
-                    'fetched' => $fetched,
-                    'imported' => $imported,
-                    'updated' => $updated,
-                    'skipped' => $skipped,
+        $progress['total_fetched'] = (int) ($progress['total_fetched'] ?? 0) + $fetched;
+        $progress['total_imported'] = (int) ($progress['total_imported'] ?? 0) + $imported;
+        $progress['total_updated'] = (int) ($progress['total_updated'] ?? 0) + $updated;
+        $progress['total_skipped'] = (int) ($progress['total_skipped'] ?? 0) + $skipped;
+        $progress['last_error'] = null;
+        $progress['last_run_at'] = now()->toIso8601String();
+        $progress['last_batch'] = [
+            'year' => $year,
+            'skip' => $skip,
+            'fetched' => $fetched,
+            'imported' => $imported,
+            'updated' => $updated,
+            'skipped' => $skipped,
                     'duplicates' => $duplicates,
                     'api_ms' => $apiMs,
                     'db_ms' => $dbMs,
                     'last_listing_key' => $lastListingKey,
-                    'next_year' => $progress['year'] ?? $year,
-                    'next_skip' => $progress['skip'] ?? 0,
-                    'has_more' => $hasMore,
-                ];
-                $this->writeProgress($progress);
+            'next_year' => $progress['year'] ?? $year,
+            'next_skip' => $progress['skip'] ?? 0,
+            'has_more' => $hasMore,
+        ];
+        $this->writeProgress($progress);
             }
 
             $progressAfter = $this->readProgress();
-            $log->info('Archive batch finished', [
-                'year' => $year,
-                'fetched' => $fetched,
-                'imported' => $imported,
-                'updated' => $updated,
-                'skipped' => $skipped,
+        $log->info('Archive batch finished', [
+            'year' => $year,
+            'fetched' => $fetched,
+            'imported' => $imported,
+            'updated' => $updated,
+            'skipped' => $skipped,
                 'duplicates' => $duplicates,
                 'api_ms' => $apiMs,
                 'db_ms' => $dbMs,
@@ -487,7 +487,7 @@ class TrebArchiveImportService
                 'memory_mb' => round(memory_get_usage(true) / 1048576, 2),
             ]);
 
-            unset($rows, $payload);
+        unset($rows, $payload);
 
             if (! $hasMore || ! empty($progressAfter['completed'])) {
                 break;
@@ -893,31 +893,31 @@ class TrebArchiveImportService
         $now = now()->toDateTimeString();
         $payloadByKey = [];
 
-        foreach ($rows as $item) {
-            $listingKey = strtoupper((string) ($item['ListingKey'] ?? ''));
-            if ($listingKey === '') {
-                $skipped++;
+                foreach ($rows as $item) {
+                    $listingKey = strtoupper((string) ($item['ListingKey'] ?? ''));
+                    if ($listingKey === '') {
+                        $skipped++;
 
-                continue;
-            }
+                        continue;
+                    }
 
-            $subtype = rtrim((string) ($item['PropertySubType'] ?? ''));
-            if ($subtype !== '' && in_array($subtype, self::EXCLUDED_SUBTYPES, true)) {
-                $skipped++;
+                    $subtype = rtrim((string) ($item['PropertySubType'] ?? ''));
+                    if ($subtype !== '' && in_array($subtype, self::EXCLUDED_SUBTYPES, true)) {
+                        $skipped++;
 
-                continue;
-            }
+                        continue;
+                    }
 
             if (isset($payloadByKey[$listingKey])) {
                 $duplicates++;
-            }
+                        }
 
-            $listPrice = (float) ($item['ListPrice'] ?? 0);
-            $closePrice = (float) ($item['ClosePrice'] ?? 0);
-            $closeDate = $this->parseDate($item['CloseDate'] ?? null);
-            $purchaseDate = $this->parseDate($item['PurchaseContractDate'] ?? null);
-            $modified = $this->parseDate($item['ModificationTimestamp'] ?? null);
-            $contract = $this->parseDate($item['ListingContractDate'] ?? $item['OriginalEntryTimestamp'] ?? null);
+                        $listPrice = (float) ($item['ListPrice'] ?? 0);
+                        $closePrice = (float) ($item['ClosePrice'] ?? 0);
+                        $closeDate = $this->parseDate($item['CloseDate'] ?? null);
+                        $purchaseDate = $this->parseDate($item['PurchaseContractDate'] ?? null);
+                        $modified = $this->parseDate($item['ModificationTimestamp'] ?? null);
+                        $contract = $this->parseDate($item['ListingContractDate'] ?? $item['OriginalEntryTimestamp'] ?? null);
             $touchAt = ($purchaseDate ?? $closeDate ?? $modified)?->toDateTimeString() ?? $now;
 
             $payloadByKey[$listingKey] = [
@@ -940,7 +940,7 @@ class TrebArchiveImportService
                 'number_bedroom' => (int) ($item['BedroomsAboveGrade'] ?? $item['BedroomsTotal'] ?? 0),
                 'BedroomsBelowGrade' => (int) ($item['BedroomsBelowGrade'] ?? 0),
                 'number_bathroom' => (int) ($item['BathroomsTotalInteger'] ?? 0),
-                'moderation_status' => ModerationStatusEnum::APPROVED,
+                            'moderation_status' => ModerationStatusEnum::APPROVED,
                 'status' => 'published',
                 'close_date' => $closeDate?->toDateString(),
                 'listing_contract_date' => $contract?->toDateString(),
@@ -972,10 +972,10 @@ class TrebArchiveImportService
             if ($current === null) {
                 $changedPayloadByKey[$key] = $payload;
                 $searchKeys[] = $key;
-                $imported++;
+                            $imported++;
             } elseif ($this->archivePayloadChanged($payload, $current)) {
                 $changedPayloadByKey[$key] = $payload;
-                $updated++;
+                            $updated++;
                 if ($this->archiveSearchPayloadChanged($payload, $current)) {
                     $searchKeys[] = $key;
                 }
@@ -1203,9 +1203,9 @@ class TrebArchiveImportService
         $ok = \App\Support\SerikAtomicFile::writeJson($path, $progress);
         if (! $ok) {
             // Last-resort non-atomic write (keeps importer moving if rename fails).
-            file_put_contents(
+        file_put_contents(
                 $path,
-                json_encode($progress, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
+            json_encode($progress, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
             );
             Log::channel('treb_archive')->warning('Archive progress atomic write failed; used fallback');
         }

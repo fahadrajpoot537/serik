@@ -658,14 +658,14 @@
                         <div class="mobile-search-panel" id="mobileSearchPanel">
 
                             <div class="mobile-search-header">
-                                <span  id="closeMobileSearch">✕</span>
+                                <span id="closeMobileSearch" role="button" tabindex="0" aria-label="{{ __('Close search') }}">✕</span>
                             </div>
 
                                <div class="smart-search">
                                 <div class="search-box">
                                      <x-core::icon name="ti ti-search" />
                                     <input type="text" id="smartInput" placeholder="Address, Street Name and MLS">
-                                    <span class="clear-btn" id="clearBtn">✕</span>
+                                    <span class="clear-btn" id="clearBtn" role="button" tabindex="0" aria-label="{{ __('Clear search') }}">✕</span>
                                 </div>
         
                                     <div class="search-dropdown" id="searchDropdown">
@@ -673,21 +673,21 @@
                                         
                                         <div class="filter-group">
         
-                                            <button class="filter-btn" data-type="transaction" data-value="For Sale">
+                                            <button type="button" class="filter-btn" data-type="transaction" data-value="For Sale">
                                                 For Sale
                                             </button>
                                         
-                                            <button class="filter-btn" data-type="transaction" data-value="For Lease">
+                                            <button type="button" class="filter-btn" data-type="transaction" data-value="For Lease">
                                                 For Lease
                                             </button>
                                         
                                             |
                                         
-                                            <button class="filter-btn" data-type="status" data-value="New">
+                                            <button type="button" class="filter-btn" data-type="status" data-value="New">
                                                 Active
                                             </button>
                                         
-                                            <button class="filter-btn" data-type="status" data-value="Sold">
+                                            <button type="button" class="filter-btn" data-type="status" data-value="Sold">
                                                 Sold
                                             </button>
                                         
@@ -737,7 +737,7 @@
                             @endif
                         </div>
                         
-                        <div class="mobile-nav-toggler mobile-button">
+                        <div class="mobile-nav-toggler mobile-button" role="button" tabindex="0" aria-label="{{ __('Open menu') }}" aria-expanded="false">
                            
                             <x-core::icon name="ti ti-menu-2" />
                         </div>
@@ -751,7 +751,7 @@
    
     
 
-    <div class="close-btn">
+    <div class="close-btn" role="button" tabindex="0" aria-label="{{ __('Close menu') }}">
         <x-core::icon name="ti ti-x" />
     </div>
 
@@ -802,7 +802,7 @@
 
                         <!-- BUY MENU -->
                         <div class="dropdown-item">
-                            <div class="dropdown-toggle">Buy</div>
+                            <div class="dropdown-toggle" role="button" tabindex="0" aria-expanded="false">Buy</div>
                             <div class="dropdown-menu">
                                 <a href="{{ url('/on/houses-for-sale-in-brampton/map') }}" class="main-city">Houses for Sale in Brampton</a>
                                   <a href="{{ url('/on/houses-for-sale-in-mississauga/map') }}" class="main-city" >Houses for Sale in Mississauga</a>
@@ -818,7 +818,7 @@
                     
                         <!-- SELL MENU -->
                         <div class="dropdown-item">
-                            <div class="dropdown-toggle">Sell</div>
+                            <div class="dropdown-toggle" role="button" tabindex="0" aria-expanded="false">Sell</div>
                             <div class="dropdown-menu">
                                
                             
@@ -831,7 +831,7 @@
                         
                         
                          <div class="dropdown-item">
-                            <div class="dropdown-toggle">Upsize</div>
+                            <div class="dropdown-toggle" role="button" tabindex="0" aria-expanded="false">Upsize</div>
                             <div class="dropdown-menu">
                                 <a href="https://serik.ca/appointment-scheduler" class="my-wishlist-link main-city">
                                 {{ __('Upsize with Serik Realty') }}
@@ -1556,7 +1556,7 @@ dropdown.addEventListener('keydown', function (e) {
         return;
     }
 
-    const item = e.target.closest('.city-item, .community-item');
+    const item = e.target.closest('.city-item, .community-item, .place-item');
     if (!item) {
         return;
     }

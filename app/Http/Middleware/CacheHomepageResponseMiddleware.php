@@ -43,7 +43,9 @@ class CacheHomepageResponseMiddleware
             && $response->getStatusCode() === 200
             && str_contains((string) $response->headers->get('Content-Type'), 'text/html')
         ) {
-            HomepageResponseCache::put($request, (string) $response->getContent());
+            $html = HomepageResponseCache::alignLoopbackOrigins((string) $response->getContent(), $request);
+            $response->setContent($html);
+            HomepageResponseCache::put($request, $html);
             $response->headers->set('X-Serik-Homepage-Cache', 'MISS');
             $response->headers->set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
             $response->headers->set('Vary', 'Cookie');

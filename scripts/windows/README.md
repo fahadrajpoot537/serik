@@ -18,6 +18,14 @@ Reproducible NSSM deployment for Laravel `queue:work` services on Windows produc
 2. PHP on PATH (or set `SERIK_PHP_EXE`)
 3. Laravel app migrated and `.env` configured (`QUEUE_CONNECTION=database`, `DB_QUEUE_RETRY_AFTER=360`, `SERIK_QUEUE_IMAGES=images`)
 4. NSSM `AppParameters` must start with `-d max_execution_time=0` (set by the deploy scripts)
+5. Memurai or Redis Windows service on port 6379 — harden once as Administrator:
+
+```bat
+scripts\windows\configure-serik-redis-service.cmd
+php artisan serik:redis:status
+```
+
+This sets Automatic startup + restart-on-failure (5s / 15s / 30s), and hardens conf (`bind 127.0.0.1`, `maxmemory 256mb`, `volatile-lru`, light RDB `save 900 1`). Does not install a second Redis. See `docs/SERIK_REDIS_MEMURAI.md`.
 
 ## Fresh server (all workers)
 

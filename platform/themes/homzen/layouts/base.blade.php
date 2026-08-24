@@ -124,12 +124,21 @@
         {{-- Favicons are emitted by Theme::header() (Google-compliant ≥48×48 root icons) --}}
         @stack('header')
         {!! Theme::header() !!}
+@php
+    $serikThemeCss = static function (string $file): string {
+        $url = asset('themes/' . \Botble\Theme\Facades\Theme::getPublicThemeName() . '/css/' . $file);
+        $path = parse_url($url, PHP_URL_PATH);
+
+        return (is_string($path) && $path !== '') ? $path : $url;
+    };
+@endphp
 @if ($isSerikHomepage)
 {{-- MUST load AFTER Theme::header() so redesign beats style.css --}}
-<link rel="stylesheet" href="{{ Theme::asset()->url('css/homepage-premium.css') }}?v={{ get_cms_version() }}-hp45">
+{{-- Path-only href so CSS stays same-origin (CSP 'self') on :8000, localhost, or XAMPP. --}}
+<link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp45">
 @endif
 {{-- Site chrome last: shared navbar/footer + compact laptop scaling --}}
-<link rel="stylesheet" href="{{ Theme::asset()->url('css/site-chrome.css') }}?v={{ get_cms_version() }}-sc17">
+<link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc20">
         <script type="text/javascript">
             (function(c,l,a,r,i,t,y){
                 c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
@@ -200,6 +209,7 @@
     </head>
 
     <body {!! Theme::bodyAttributes() !!}>
+        <a class="serik-skip-link" href="#wrapper">{{ __('Skip to content') }}</a>
         
       
         
@@ -210,7 +220,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         
         {!! apply_filters(THEME_FRONT_BODY, null) !!}
 
-        <div id="wrapper">
+        <div id="wrapper" tabindex="-1">
             <div class="clearfix">
                 @yield('content')
             </div>

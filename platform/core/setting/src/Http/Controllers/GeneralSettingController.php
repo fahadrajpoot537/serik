@@ -47,7 +47,16 @@ class GeneralSettingController extends SettingController
             $data['locale'] = $locale;
         }
 
-        cache()->forget('core.base.boot_settings');
+        try {
+            cache()->store('file')->forget('core.base.boot_settings');
+        } catch (\Throwable) {
+            //
+        }
+        try {
+            cache()->forget('core.base.boot_settings');
+        } catch (\Throwable) {
+            //
+        }
 
         return $this->performUpdate($data);
     }

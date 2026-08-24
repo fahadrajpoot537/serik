@@ -360,7 +360,8 @@
 
             <a href="{{ $row->has_child ? '#' : \App\Support\MenuUrl::resolve($row->url) }}"
                target="{{ $row->target }}"
-               class="menu-link">
+               class="menu-link"
+               @if($row->has_child) aria-haspopup="true" aria-expanded="false" @endif>
                 {!! BaseHelper::clean($row->icon_html) !!}
                 {{ $row->title }}
 
@@ -371,7 +372,7 @@
 
             @if ($row->has_child && $row->title=='Buy')
                 <div class="mega-dropdown" >
-<div class="mega-close">✕ Close</div>
+<div class="mega-close" role="button" tabindex="0" aria-label="{{ __('Close menu') }}">✕ Close</div>
                     <div class="mega-wrapper">
 
                         {{-- LEFT --}}
@@ -593,7 +594,7 @@
                 </div>
              @elseif ($row->has_child && $row->title=='Sell')    
                  <div class="mega-dropdown">
-<div class="mega-close">✕ Close</div>
+<div class="mega-close" role="button" tabindex="0" aria-label="{{ __('Close menu') }}">✕ Close</div>
                     <div class="mega-wrapper">
 
                         {{-- LEFT --}}
@@ -620,7 +621,7 @@
                 </div>   
             @elseif ($row->has_child)
                 <div class="mega-dropdown">
-<div class="mega-close">✕ Close</div>
+<div class="mega-close" role="button" tabindex="0" aria-label="{{ __('Close menu') }}">✕ Close</div>
                     <div class="mega-wrapper">
 
                         {{-- LEFT --}}
@@ -736,7 +737,11 @@
         document.documentElement.classList.add('serik-mega-open');
     }
 
-    function closeMegaMenu() {
+    function closeMegaMenu(options) {
+        const restoreFocus = options && options.restoreFocus;
+        const trigger = restoreFocus
+            ? document.querySelector('.has-dropdown.is-active > .menu-link, .has-dropdown.is-open > .menu-link')
+            : null;
         clearTimeout(closeTimer);
         document.documentElement.classList.remove('serik-mega-open');
         document.querySelectorAll('.mega-dropdown').forEach((menu) => {
@@ -746,10 +751,17 @@
         });
         document.querySelectorAll('.has-dropdown').forEach((item) => {
             item.classList.remove('is-open', 'is-active');
+            const link = item.querySelector(':scope > .menu-link');
+            if (link) {
+                link.setAttribute('aria-expanded', 'false');
+            }
         });
         const overlay = document.querySelector('.mega-overlay');
         if (overlay) {
             overlay.classList.remove('show');
+        }
+        if (trigger && typeof trigger.focus === 'function') {
+            trigger.focus();
         }
     }
 
@@ -760,10 +772,18 @@
             if (el !== item) {
                 el.classList.remove('is-active');
                 restoreMega(el._megaPanel);
+                const prev = el.querySelector(':scope > .menu-link');
+                if (prev) {
+                    prev.setAttribute('aria-expanded', 'false');
+                }
             }
         });
         if (item) {
             item.classList.add('is-active');
+            const link = item.querySelector(':scope > .menu-link');
+            if (link) {
+                link.setAttribute('aria-expanded', 'true');
+            }
             portalMega(item);
         }
     }
@@ -815,6 +835,28 @@
             }
             if (overlay) {
                 overlay.classList.add('show');
+            }
+            this.setAttribute('aria-expanded', 'true');
+        });
+
+        link.addEventListener('keydown', function (e) {
+            if (!isDesktop()) {
+                return;
+            }
+            if (e.key !== 'ArrowDown' && e.key !== 'Enter' && e.key !== ' ') {
+                return;
+            }
+            e.preventDefault();
+            const parent = this.closest('.has-dropdown');
+            if (!parent) {
+                return;
+            }
+            setActiveMegaItem(parent);
+            this.setAttribute('aria-expanded', 'true');
+            const panel = parent._megaPanel;
+            const first = panel && panel.querySelector('a[href]');
+            if (first) {
+                first.focus();
             }
         });
     });
@@ -909,7 +951,11 @@
 
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
-            closeMegaMenu();
+            const open = document.querySelector('.has-dropdown.is-active, .has-dropdown.is-open, html.serik-mega-open');
+            if (open) {
+                e.preventDefault();
+                closeMegaMenu({ restoreFocus: true });
+            }
         }
     });
 

@@ -1052,3 +1052,51 @@
     max-height: 36px !important;
   }
 }
+
+/* Keyboard focus — visible without changing mouse/touch design */
+.serik-skip-link {
+  position: absolute;
+  left: 12px;
+  top: -48px;
+  z-index: 100000;
+  padding: 8px 14px;
+  background: #0b4c9f;
+  color: #fff !important;
+  font-weight: 700;
+  border-radius: 6px;
+  text-decoration: none;
+}
+.serik-skip-link:focus {
+  top: 12px;
+  color: #fff !important;
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+a:focus-visible,
+button:focus-visible,
+[role="button"]:focus-visible,
+[role="menuitem"]:focus-visible,
+[tabindex]:not([tabindex="-1"]):focus-visible,
+.filter-btn:focus-visible,
+.menu-link:focus-visible,
+.nav-item:focus-visible,
+.hs-m-status:focus-visible,
+.hs-m-txn:focus-visible {
+  outline: 2px solid #0b4c9f !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 3px rgba(11, 76, 159, 0.22) !important;
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid #0b4c9f !important;
+  outline-offset: 1px !important;
+}
+
+.maplibregl-canvas:focus-visible,
+.maplibregl-canvas:focus {
+  outline: 2px solid #0b4c9f !important;
+  outline-offset: 2px !important;
+}

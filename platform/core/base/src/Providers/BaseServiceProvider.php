@@ -45,6 +45,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
+use Throwable;
 
 class BaseServiceProvider extends ServiceProvider
 {
@@ -307,13 +308,24 @@ class BaseServiceProvider extends ServiceProvider
          */
         $setting = $this->app[SettingStore::class];
 
+        // File store only — never touch Redis/Memurai during boot.
+        // Default CACHE_STORE=redis would otherwise connect on every Artisan command
+        // (config:clear, view:clear, optimize:clear, …) and hang when Memurai is down.
         $cacheKey = 'core.base.boot_settings';
-        $bootSettings = cache()->remember($cacheKey, 3600, function () use ($setting, $config) {
+        $loadBootSettings = static function () use ($setting, $config): array {
             return [
                 'timezone' => $setting->get('time_zone', $config->get('app.timezone')),
                 'locale' => $setting->get('locale', $config->get('app.locale')),
             ];
-        });
+        };
+        try {
+            $bootSettings = cache()->store('file')->remember($cacheKey, 3600, $loadBootSettings);
+        } catch (Throwable) {
+            $bootSettings = $loadBootSettings();
+        }
+        if (! is_array($bootSettings)) {
+            $bootSettings = $loadBootSettings();
+        }
 
         $timezone = $bootSettings['timezone'];
         $locale = $bootSettings['locale'];

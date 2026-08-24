@@ -17,6 +17,15 @@ Local DB is the source of truth. Users never wait on TREB during browsing.
 
 Redis is intentionally optional/postponed. File cache + sync/database queues work.
 
+**Production (serik.ca):** use Memurai/Redis for `CACHE_STORE` and `SESSION_DRIVER`. Queue stays `database`. Harden the Windows service once:
+
+```bat
+scripts\windows\configure-serik-redis-service.cmd
+php artisan serik:redis:status
+```
+
+Boot settings (timezone/locale) use the **file** cache store so Artisan maintenance commands do not hang when Memurai is briefly down. Application cache/session/locks still use Redis when configured.
+
 ---
 
 ## 2. First-time Install

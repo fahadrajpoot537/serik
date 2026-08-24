@@ -19,8 +19,12 @@ class EarlyHomepageCacheMiddleware
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if ($request->method() !== 'GET' || $request->getPathInfo() !== '/') {
+        if ($request->method() !== 'GET') {
             return $next($request);
+        }
+
+        if ($request->getPathInfo() !== '/') {
+            return $this->maybeOntarioSeoHit($request, $next);
         }
 
         if ($request->ajax() || $request->wantsJson()) {
@@ -35,13 +39,13 @@ class EarlyHomepageCacheMiddleware
             return $next($request);
         }
 
-        $etag = HomepageResponseCache::getSharedEtag();
-        $cached = HomepageResponseCache::getSharedHtml();
+        $cached = HomepageResponseCache::getSharedHtml($request);
         if ($cached === null || $cached === '') {
             return $next($request);
         }
 
-        $etag = $etag ?: ('"' . sha1($cached) . '"');
+        // Hash the HTML we actually serve (loopback origins may have been aligned).
+        $etag = '"' . sha1($cached) . '"';
         if (trim((string) $request->headers->get('If-None-Match')) === $etag) {
             $notModified = response('', 304, [
                 'ETag' => $etag,
@@ -85,5 +89,35 @@ class EarlyHomepageCacheMiddleware
         }
 
         return false;
+    }
+
+    private function maybeOntarioSeoHit(Request $request, Closure $next): Response
+    {
+        if (! preg_match('#^/ontario/([a-z0-9\-]+)$#i', $request->getPathInfo(), $matches)) {
+            return $next($request);
+        }
+
+        if ($request->ajax() || $request->wantsJson()) {
+            return $next($request);
+        }
+
+        if ($this->shouldBypassEarlyCache($request)) {
+            return $next($request);
+        }
+
+        $key = \App\Support\OntarioSeoPageCache::key($request, $matches[1], ':anon');
+        $cached = \App\Support\OntarioSeoPageCache::get($key);
+        if ($cached === null) {
+            return $next($request);
+        }
+
+        $response = response($cached, 200, [
+            'Content-Type' => 'text/html; charset=UTF-8',
+            'X-Serik-Ontario-Cache' => 'HIT-EARLY',
+            'Cache-Control' => 'private, no-cache, no-store, must-revalidate',
+            'Vary' => 'Cookie',
+        ]);
+
+        return \App\Support\SerikSecurityHeaders::apply($response, $request);
     }
 }

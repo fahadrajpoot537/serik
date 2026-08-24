@@ -44,4 +44,57 @@
             </div>
         </div>
     </section>
+    <script>
+    (function () {
+        var section = document.getElementById('similarProperties');
+        if (!section || !section.getAttribute('data-related-defer') || window.__serikRelatedDeferBound) {
+            return;
+        }
+        window.__serikRelatedDeferBound = true;
+        var propertyId = section.getAttribute('data-related-defer');
+        fetch('/api/v1/related-properties/' + encodeURIComponent(propertyId), {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        }).then(function (r) { return r.ok ? r.json() : null; }).then(function (data) {
+            if (!data || !data.success || !data.html) {
+                section.remove();
+                return;
+            }
+            var titleEl = section.querySelector('.section-title');
+            if (titleEl && data.sectionTitle) {
+                titleEl.textContent = data.sectionTitle;
+            }
+            var status = section.querySelector('.hs-related-defer-status');
+            if (status) {
+                status.remove();
+            }
+            var swiperRoot = section.querySelector('.swiper.tf-latest-property');
+            var wrapper = swiperRoot && swiperRoot.querySelector('.swiper-wrapper');
+            if (!swiperRoot || !wrapper) {
+                section.remove();
+                return;
+            }
+            wrapper.innerHTML = data.html;
+            swiperRoot.hidden = false;
+            section.classList.remove('is-loading');
+            section.removeAttribute('aria-busy');
+            section.removeAttribute('data-related-defer');
+            if (window.Swiper && !swiperRoot.swiper) {
+                try {
+                    new Swiper(swiperRoot, {
+                        slidesPerView: 1.15,
+                        spaceBetween: 16,
+                        loop: data.count > 2,
+                        breakpoints: {
+                            576: { slidesPerView: 2, spaceBetween: 20 },
+                            992: { slidesPerView: 3, spaceBetween: 30 }
+                        }
+                    });
+                } catch (e) {}
+            }
+        }).catch(function () {
+            section.remove();
+        });
+    })();
+    </script>
 @endif

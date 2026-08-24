@@ -609,6 +609,10 @@ body:has(.map-housesigma) .progress-wrap,
     width:100%;
     font-size:16px;
 }
+.search-box input:focus-visible {
+    outline: 2px solid #0b4c9f;
+    outline-offset: 2px;
+}
 .clear-btn {
     cursor:pointer;
     opacity:.6;
@@ -3549,6 +3553,21 @@ position: absolute;
     color: var(--hs-primary);
     text-decoration: none;
 }
+.hs-view-bar-btn:focus-visible,
+.hs-m-status:focus-visible,
+.hs-m-txn:focus-visible,
+.filter-btn:focus-visible,
+.hs-m-option:focus-visible,
+.hs-m-radio-option:focus-visible,
+.dropdown-item:focus-visible,
+.location-item:focus-visible,
+.listing-item:focus-visible,
+.hs-list-item:focus-visible,
+.hs-cluster-list-item:focus-visible,
+.hs-m-chips li:focus-visible {
+    outline: 2px solid #0b4c9f;
+    outline-offset: 2px;
+}
 
 .hs-view-bar-btn.active {
     color: var(--hs-primary);
@@ -4741,7 +4760,7 @@ position: absolute;
                         <div class="search-box">
                             <i class="icon">🔍</i>
                             <input type="text" id="mapSmartInput" placeholder="Address, Street Name and MLS">
-                            <span class="clear-btn" id="mapClearBtn">✕</span>
+                            <span class="clear-btn" id="mapClearBtn" role="button" tabindex="0" aria-label="{{ __('Clear search') }}">✕</span>
                         </div>
 
                             <div class="search-dropdown" id="mapSearchDropdown">
@@ -4807,12 +4826,12 @@ position: absolute;
                 <!-- Sale Type -->
                 <div class="filter-group">
                    <div class="dropdown">
-                        <button class="filter-btn dropdown-toggle active"  id="transactionDropdown">
+                        <button type="button" class="filter-btn dropdown-toggle active"  id="transactionDropdown">
                             For Sale 
                         </button>
-                        <div class="dropdown-menu">
-                            <div class="dropdown-item transaction-item" data-transaction="For Sale">For Sale</div>
-                            <div class="dropdown-item transaction-item" data-transaction="For Lease">For Lease</div>
+                        <div class="dropdown-menu" role="menu">
+                            <div class="dropdown-item transaction-item" data-transaction="For Sale" role="menuitem" tabindex="-1">For Sale</div>
+                            <div class="dropdown-item transaction-item" data-transaction="For Lease" role="menuitem" tabindex="-1">For Lease</div>
                         </div>
                     </div>
             
@@ -5345,7 +5364,7 @@ position: absolute;
                 <button type="button" class="hs-m-txn active" data-transaction="For Sale">For Sale</button>
                 <button type="button" class="hs-m-txn" data-transaction="For Lease">For Lease</button>
             </div>
-            <div class="hs-map-status-bar">
+            <div class="hs-map-status-bar" role="group" aria-label="Listing status">
                 <button type="button" class="hs-m-status active" data-status="Active">For Sale</button>
                 <button type="button" class="hs-m-status" data-status="Sold">Sold</button>
                 <button type="button" class="hs-m-status" data-status="Expired">De-listed</button>
@@ -7052,6 +7071,10 @@ function syncSoldLeasedUiLabels() {
     if (plainSold) plainSold.textContent = label;
     const mSold = document.querySelector('.hs-m-status[data-status="Sold"]');
     if (mSold) mSold.textContent = label;
+    const mActive = document.querySelector('.hs-m-status[data-status="Active"]');
+    if (mActive) {
+        mActive.textContent = selectedTransaction === 'For Lease' ? 'For Lease' : 'For Sale';
+    }
     document.querySelectorAll('.hs-m-txn').forEach((btn) => {
         btn.classList.toggle('active', btn.dataset.transaction === selectedTransaction);
     });
@@ -12770,7 +12793,7 @@ function buildHsDateColumns() {
                 yearHeadingAdded = true;
             }
             const label = String(val).startsWith('year_') ? String(val).replace('year_', '') : (HS_DATE_LABELS[val] || val);
-            html += '<div class="hs-m-radio-option' + (val === selected ? ' selected' : '') + '" data-date-group="' + group + '" data-value="' + val + '">';
+            html += '<div class="hs-m-radio-option' + (val === selected ? ' selected' : '') + '" data-date-group="' + group + '" data-value="' + val + '" role="button" tabindex="0">';
             html += '<span class="dot"></span><span>' + label + '</span></div>';
         });
         return html + '</div>';
@@ -12786,7 +12809,7 @@ function buildHsPropertyOptions() {
     const current = selectedSubTypes.length === 1 ? selectedSubTypes[0] : '';
     container.innerHTML = HS_MOBILE_PROPERTY_TYPES.map((item) => {
         const active = item.value === current || (!item.value && !current) ? ' activated' : '';
-        return '<p class="hs-m-option' + active + '" data-value="' + item.value + '">' + item.label + '</p>';
+        return '<p class="hs-m-option' + active + '" data-value="' + item.value + '" role="button" tabindex="0">' + item.label + '</p>';
     }).join('');
 }
 
@@ -12830,6 +12853,7 @@ function closeMobileSheets() {
         document.body.style.overflow = '';
     }
 }
+window.closeMobileSheets = closeMobileSheets;
 
 function initMobileFilters() {
     buildHsPropertyOptions();
@@ -13890,6 +13914,8 @@ function renderSmartSearchResults(keyword, reset, cityHTML, data, isMlsKey) {
 
         addressHTML += `
             <div class="location-item address-item"
+                role="button"
+                tabindex="0"
                 ${buildMapSearchResultDataAttrs(item, listingStatus)}>
                 📍 ${item.UnparsedAddress}
             </div>
@@ -13898,6 +13924,8 @@ function renderSmartSearchResults(keyword, reset, cityHTML, data, isMlsKey) {
    listingsHTML += `
              ${mapLoginGateHtml(item.MlsStatus, gateProps)}
                 <div class="listing-item ${mapBlurClass(item.MlsStatus, gateProps)}" style="width: 100%"
+                role="button"
+                tabindex="0"
                 ${buildMapSearchResultDataAttrs(item, listingStatus)}
                  data-parking="${mapEscapeHtml(garageCount)}"
                 >

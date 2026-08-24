@@ -17,11 +17,12 @@ class UseRequestRootUrlInLocal
         }
 
         if (app()->environment('local')) {
-            $host = (string) ($request->server('HTTP_HOST') ?: $request->header('Host'));
-
-            if ($host !== '') {
-                $scheme = $request->isSecure() ? 'https' : 'http';
-                URL::forceRootUrl($scheme . '://' . $host);
+            // Use the full request root (host + subdirectory like /SERIK-01-06-2026/public),
+            // not host-only. Host-only made CSS hrefs http://127.0.0.1/themes/... (404)
+            // or a different port, which CSP style-src 'self' then blocks.
+            $root = rtrim((string) $request->root(), '/');
+            if ($root !== '') {
+                URL::forceRootUrl($root);
             }
         }
 

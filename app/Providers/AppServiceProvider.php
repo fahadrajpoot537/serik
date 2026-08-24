@@ -65,13 +65,16 @@ class AppServiceProvider extends ServiceProvider
         $this->registerQueueMetricsListeners();
 
         // New CMS uploads → WebP (TREB images use a separate proxy; untouched).
-        try {
-            if (! Cache::get('serik_media_webp_enabled_v1') && ! (bool) setting('media_convert_image_to_webp', false)) {
-                setting()->set(['media_convert_image_to_webp' => '1'])->save();
-                Cache::forever('serik_media_webp_enabled_v1', 1);
+        // Skip Redis on console so Artisan maintenance does not hang when Memurai is down.
+        if (! $this->app->runningInConsole()) {
+            try {
+                if (! Cache::get('serik_media_webp_enabled_v1') && ! (bool) setting('media_convert_image_to_webp', false)) {
+                    setting()->set(['media_convert_image_to_webp' => '1'])->save();
+                    Cache::forever('serik_media_webp_enabled_v1', 1);
+                }
+            } catch (\Throwable) {
+                // Settings/Redis may be unavailable during early install/migrate.
             }
-        } catch (\Throwable) {
-            // Settings table may be unavailable during early install/migrate.
         }
 
         add_filter('core_media_image', function ($html, $url = null) {

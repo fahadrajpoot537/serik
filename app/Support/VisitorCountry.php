@@ -31,9 +31,37 @@ final class VisitorCountry
             return null;
         }
 
-        return Cache::remember('geoip_country_v2_' . md5($ip), 86400, function () use ($ip) {
-            return self::lookupIp($ip);
-        });
+        $cacheKey = 'geoip_country_v2_' . md5($ip);
+        $cached = Cache::get($cacheKey);
+        if (is_string($cached) && $cached !== '') {
+            return $cached;
+        }
+        if ($cached === '') {
+            return null;
+        }
+
+        $lock = Cache::lock('geoip_country_lock_' . md5($ip), 12);
+        try {
+            $lock->block(3);
+            $cached = Cache::get($cacheKey);
+            if (is_string($cached) && $cached !== '') {
+                return $cached;
+            }
+            if ($cached === '') {
+                return null;
+            }
+
+            $value = self::lookupIp($ip);
+            Cache::put($cacheKey, $value ?? '', 86400);
+
+            return $value;
+        } catch (\Throwable) {
+            $cached = Cache::get($cacheKey);
+
+            return is_string($cached) && $cached !== '' ? $cached : null;
+        } finally {
+            optional($lock)->release();
+        }
     }
 
     public static function clientIp(Request $request): ?string

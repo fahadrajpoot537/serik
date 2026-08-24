@@ -120,7 +120,12 @@ final class HomepageFragmentCache
     }
 
     $version = self::version($fragment);
-    $key = self::CACHE_PREFIX . $fragment . ':' . $version . ':' . $suffix;
+    $origin = '';
+    $request = request();
+    if ($request instanceof \Illuminate\Http\Request) {
+        $origin = sha1(strtolower(rtrim($request->getSchemeAndHttpHost() . $request->getBaseUrl(), '/')));
+    }
+    $key = self::CACHE_PREFIX . $fragment . ':' . $version . ':' . $origin . ':' . $suffix;
 
     return SerikCache::remember($key, self::ttl(), static fn (): string => self::stringify($render()));
   }
