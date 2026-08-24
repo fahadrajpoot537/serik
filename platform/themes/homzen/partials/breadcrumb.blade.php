@@ -5,6 +5,11 @@
 
     $backgroundImage = $backgroundImage ? RvMedia::getImageUrl($backgroundImage) : null;
 
+    $mappedHero = \App\Support\PageHeroImage::urlForRequest();
+    if ($mappedHero) {
+        $backgroundImage = $mappedHero;
+    }
+
     $showBreadcrumb = Theme::get('breadcrumbEnabled', 'yes');
     $breadcrumbStyle = Theme::get('breadcrumbStyle', 'default');
     $pageH1 = \App\Support\PageH1::resolve();
@@ -104,7 +109,7 @@
     @style([
         "background-color: $backgroundColor",
         "color: $textColor",
-        "background-image: url($backgroundImage); background-size: cover; background-position: center !important" => $backgroundImage,
+        "background-image: url('{$backgroundImage}'); background-size: cover; background-position: center !important" => $backgroundImage,
     ])>
 
         @if ($useHeroStyle)
