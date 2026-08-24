@@ -34,10 +34,10 @@
 .top-header .serik-hp-topbar__account,
 .top-header .serik-hp-topbar__auth { flex-shrink: 0; }
 @media (max-width: 1199.98px) {
-    .top-header .serik-hp-topbar__tools a:nth-child(n+3) { display: none; }
+    .top-header .serik-hp-topbar__tools a:nth-child(n+4) { display: none; }
 }
 @media (max-width: 991.98px) {
-    .top-header .serik-hp-topbar__tools a:nth-child(n+2) { display: none; }
+    .top-header .serik-hp-topbar__tools a:nth-child(n+3) { display: none; }
     .top-header .top-header-left .top-header-item:nth-child(n+2) { display: none; }
 }
 </style>
@@ -70,6 +70,7 @@
 
         <div class="top-header-right serik-hp-topbar__right">
             <nav class="serik-hp-topbar__tools" aria-label="{{ __('Quick tools') }}">
+                <a href="http://pre-con.serik.ca/" class="my-wishlist-link serik-hp-topbar__link">{{ __('Pre-Construction') }}</a>
                 <a href="{{ url('/map') }}" class="my-wishlist-link serik-hp-topbar__link">{{ __('Map Search') }}</a>
                 <a href="{{ url('mortgage-calculator') }}" class="my-wishlist-link serik-hp-topbar__link">{{ __('Mortgage Calculator') }}</a>
                 <a href="{{ url('cash-back-calculator') }}" class="my-wishlist-link serik-hp-topbar__link">{{ __('Cash Back Calculator') }}</a>
