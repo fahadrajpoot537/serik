@@ -126,7 +126,20 @@ function Install-OrUpdateWorker {
     Set-SerikNssmService -Nssm $Nssm -ServiceName $name -Key 'AppRestartDelay' -Value '5000'
     Set-SerikNssmService -Nssm $Nssm -ServiceName $name -Key 'AppThrottle' -Value '15000'
 
-    if ($null -ne $existing -and $existing.Status -eq 'Running') {
+    # nssm start does not unpause a PAUSED service. queue:restart can also
+    # trip NSSM throttle and leave workers paused.
+    $existing = Get-Service -Name $name -ErrorAction SilentlyContinue
+    $status = if ($existing) { [string]$existing.Status } else { 'Stopped' }
+
+    if ($status -eq 'Paused') {
+        Write-Host "Unpausing $name..." -ForegroundColor Yellow
+        sc.exe continue $name | Out-Null
+        Start-Sleep -Seconds 2
+        $existing = Get-Service -Name $name -ErrorAction SilentlyContinue
+        $status = if ($existing) { [string]$existing.Status } else { 'Stopped' }
+    }
+
+    if ($status -eq 'Running') {
         Invoke-SerikNssm -Nssm $Nssm -Arguments @('restart', $name)
     } else {
         Invoke-SerikNssm -Nssm $Nssm -Arguments @('start', $name)
@@ -147,11 +160,36 @@ foreach ($worker in $workers) {
 $restartFlag = Join-Path $AppRoot 'storage\framework\queue-restart.flag'
 Set-Content -LiteralPath $restartFlag -Value (Get-Date).ToString('o') -Encoding ascii
 
-Start-Sleep -Seconds 3
+Start-Sleep -Seconds 8
 
 Push-Location $AppRoot
 try {
     & $PhpExe artisan queue:restart | Out-Null
+} finally {
+    Pop-Location
+}
+
+# queue:restart makes workers exit; NSSM AppThrottle may PAUSE them if they
+# respawn too quickly. Wait, then continue any paused lanes.
+Start-Sleep -Seconds 16
+foreach ($worker in $workers) {
+    $svc = Get-Service -Name $worker.Name -ErrorAction SilentlyContinue
+    if ($null -eq $svc) {
+        continue
+    }
+    if ([string]$svc.Status -eq 'Paused') {
+        Write-Host "Unpausing $($worker.Name) after queue:restart..." -ForegroundColor Yellow
+        sc.exe continue $worker.Name | Out-Null
+    } elseif ([string]$svc.Status -ne 'Running') {
+        Write-Host "Starting $($worker.Name) ($($svc.Status))..." -ForegroundColor Yellow
+        Invoke-SerikNssm -Nssm $Nssm -Arguments @('start', $worker.Name)
+    }
+}
+
+Start-Sleep -Seconds 3
+
+Push-Location $AppRoot
+try {
     & $PhpExe artisan serik:queue:status
     if ($LASTEXITCODE -ne 0) {
         throw "serik:queue:status failed with exit code $LASTEXITCODE"
