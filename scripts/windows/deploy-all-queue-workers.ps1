@@ -3,7 +3,7 @@
 .SYNOPSIS
     Install or update Serik NSSM queue workers.
 
-    Lanes (isolated — imports NEVER share a process with user-facing queues):
+    Lanes (isolated - imports NEVER share a process with user-facing queues):
       high              SerikQueueHigh
       images            SerikQueueImages
       low               SerikQueueLow          (also drains search-index when used)
@@ -50,7 +50,7 @@ $workers = @(
         DisplayName = 'Serik Queue Low Worker'
         Description = 'Laravel queue worker for backlog/maintenance; also drains search-index if opted in.'
         # search-index first so dedicated indexing wins when SERIK_QUEUE_SEARCH=search-index
-        # timeout=300 aligns with SearchBatchJob::$timeout (was 120 — prematurely killed Meili drains)
+        # timeout=300 aligns with SearchBatchJob::$timeout (was 120 - prematurely killed Meili drains)
         Parameters = '-d max_execution_time=0 artisan queue:work database --queue=search-index,low --sleep=2 --tries=4 --timeout=300 --memory=384 --max-jobs=100 --max-time=1800'
         Stdout = 'queue-low.log'
         Stderr = 'queue-low-error.log'
@@ -143,7 +143,7 @@ foreach ($worker in $workers) {
     Install-OrUpdateWorker -Worker $worker
 }
 
-# Deployment self-heal marker — schedule heal / queue:restart picks this up
+# Deployment self-heal marker - schedule heal / queue:restart picks this up
 $restartFlag = Join-Path $AppRoot 'storage\framework\queue-restart.flag'
 Set-Content -LiteralPath $restartFlag -Value (Get-Date).ToString('o') -Encoding ascii
 
@@ -162,4 +162,4 @@ try {
 
 Write-Host ""
 Write-Host "SUCCESS: All queue workers deployed (high/images/low/imports/ghl/aux/cache-refresh)." -ForegroundColor Green
-Write-Host "Imports are isolated — they cannot block high/low/ghl/emails/cache-refresh." -ForegroundColor Green
+Write-Host "Imports are isolated - they cannot block high/low/ghl/emails/cache-refresh." -ForegroundColor Green
