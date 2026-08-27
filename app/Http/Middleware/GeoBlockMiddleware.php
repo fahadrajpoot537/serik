@@ -71,6 +71,7 @@ class GeoBlockMiddleware
             'iftheynopaysmywages',
             'paidmywagesthanks',
             'up',
+            'webhooks/gohighlevel',
             'storage/properties/treb',
             'ajax/render-ui-blocks',
             'ajax/render-ui-blocks-batch',

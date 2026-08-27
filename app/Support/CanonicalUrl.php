@@ -32,6 +32,13 @@ class CanonicalUrl
             return false;
         }
 
+        // GHL (and other) webhook POSTs must not be 301'd to https/www — clients
+        // typically drop the body or convert POST to GET, so MLS never enqueues.
+        $path = ltrim((string) $request->path(), '/');
+        if (str_starts_with($path, 'webhooks/')) {
+            return false;
+        }
+
         if (str_ends_with($host, '.test') || str_ends_with($host, '.local')) {
             return false;
         }

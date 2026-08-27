@@ -45,6 +45,10 @@ $app = Application::configure(basePath: dirname(__DIR__))
                 try {
                     @set_time_limit(30);
                     Artisan::call($command, $arguments);
+                    $output = trim((string) Artisan::output());
+                    if ($output !== '') {
+                        echo $output . PHP_EOL;
+                    }
                 } catch (\Throwable $e) {
                     Log::error('[schedule-safe] ' . $command . ' failed: ' . $e->getMessage());
                 }

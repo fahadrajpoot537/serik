@@ -7,6 +7,7 @@ use App\Models\GhlMlsSyncTask;
 use App\Services\GoHighLevel\GoHighLevelMlsPendingService;
 use App\Services\GoHighLevel\GoHighLevelShowingSyncService;
 use App\Support\SerikQueue;
+use App\Support\SerikWindowsService;
 use Illuminate\Console\Command;
 
 class ProcessGhlPendingMlsCommand extends Command
@@ -100,6 +101,13 @@ class ProcessGhlPendingMlsCommand extends Command
         $this->line("ghl queue depth now: {$depth}");
         if ($depth === 0) {
             $this->comment('Note: depth 0 usually means a ghl worker already consumed the job, or a unique lock skipped a duplicate DispatchPendingGhlMlsSyncJob still waiting.');
+        }
+
+        if (SerikWindowsService::isWindows()
+            && ! SerikWindowsService::isRunning(SerikWindowsService::QUEUE_SERVICES['ghl'])) {
+            $this->warn('SerikQueueGhl is not RUNNING — auto MLS push will sit in the ghl queue.');
+            $this->comment('Fix: run scripts\\windows\\deploy-all-queue-workers.cmd as Administrator');
+            $this->comment('Or process now: php artisan serik:ghl:process-pending-mls --sync');
         }
 
         return self::SUCCESS;

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\EnqueueGhlMlsFromContactJob;
+use App\Services\GoHighLevel\GoHighLevelContactResolver;
 use App\Services\GoHighLevel\GoHighLevelMetrics;
 use App\Services\GoHighLevel\GoHighLevelMlsPendingService;
 use App\Services\GoHighLevel\GoHighLevelWebhookGuard;
@@ -61,7 +62,11 @@ class GoHighLevelWebhookController extends Controller
                 ], 202)->header('X-Serik-Correlation-Id', $correlationId);
             }
 
-            // Fast path: MLS present — create pending row then return (no TREB/GHL write).
+            // Persist the pending row now so the 05:15 processor has work even if
+            // the ghl worker is down (EnqueueGhlMlsFromContactJob would otherwise sit).
+            $this->persistPendingIfContactIdKnown($pending, $extracted, $payload);
+
+            // Fast path: MLS present — also queue contact resolve / upsert (no TREB/GHL write).
             EnqueueGhlMlsFromContactJob::dispatch(
                 $extracted['contact_id'],
                 $extracted['mls_number'],
@@ -219,5 +224,33 @@ class GoHighLevelWebhookController extends Controller
         }
 
         return array_values(array_unique($ids));
+    }
+
+    /**
+     * @param  array{contact_id: string, mls_number: string, location_id: ?string}  $extracted
+     * @param  array<string, mixed>  $payload
+     */
+    protected function persistPendingIfContactIdKnown(
+        GoHighLevelMlsPendingService $pending,
+        array $extracted,
+        array $payload,
+    ): void {
+        $contactId = trim($extracted['contact_id']);
+        if ($contactId === '' || ! app(GoHighLevelContactResolver::class)->looksLikeGhlContactId($contactId)) {
+            return;
+        }
+
+        try {
+            $pending->enqueue(
+                $contactId,
+                $extracted['mls_number'],
+                $extracted['location_id'],
+                $payload,
+            );
+        } catch (\Throwable $e) {
+            Log::channel('ghl_sync')->warning('GoHighLevel webhook inline pending failed', [
+                'message' => $e->getMessage(),
+            ]);
+        }
     }
 }
