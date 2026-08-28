@@ -161,34 +161,6 @@ class AddSitemapListener
             return;
         }
 
-        $properties = Property::query()
-            ->selectRaw('YEAR(updated_at) as updated_year, MONTH(updated_at) as updated_month, MAX(updated_at) as updated_at')
-            ->active()
-            ->groupBy('updated_year', 'updated_month')
-            ->orderBy('updated_year', 'desc')
-            ->orderBy('updated_month', 'desc')
-            ->get();
-
-        foreach ($properties as $property) {
-            $key = sprintf('properties-%s-%s', $property->updated_year, str_pad($property->updated_month, 2, '0', STR_PAD_LEFT));
-            SiteMapManager::addSitemap(SiteMapManager::route($key), $property->updated_at);
-        }
-
-        if (RealEstateHelper::isEnabledProjects()) {
-            $projects = Project::query()
-                ->selectRaw('YEAR(updated_at) as updated_year, MONTH(updated_at) as updated_month, MAX(updated_at) as updated_at')
-                ->active()
-                ->groupBy('updated_year', 'updated_month')
-                ->orderBy('updated_year', 'desc')
-                ->orderBy('updated_month', 'desc')
-                ->get();
-
-            foreach ($projects as $project) {
-                $key = sprintf('projects-%s-%s', $project->updated_year, str_pad($project->updated_month, 2, '0', STR_PAD_LEFT));
-                SiteMapManager::addSitemap(SiteMapManager::route($key), $project->updated_at);
-            }
-        }
-
         if (! RealEstateHelper::isDisabledPublicProfile()) {
             $agentLastUpdated = Account::query()
                 ->latest('updated_at')

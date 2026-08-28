@@ -376,9 +376,10 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
                 ? trim($locationData[0])
                 : trim($filters['location']);
 
-            // open_house listings are often older IDs; Meili city caps (newest N)
-            // would drop them. City is applied inside the open_house filter instead.
-            $skipMeiliCity = filter_var($filters['open_house'] ?? false, FILTER_VALIDATE_BOOLEAN);
+            // open_house / community listings are often outside the newest-N city
+            // Meili window. City is applied inside those filters instead.
+            $skipMeiliCity = filter_var($filters['open_house'] ?? false, FILTER_VALIDATE_BOOLEAN)
+                || trim((string) ($filters['community'] ?? '')) !== '';
 
             $search = app(\Botble\RealEstate\Services\PropertySearchService::class);
             $cityOpts = [
@@ -705,8 +706,21 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
             $opts['min_bathrooms'] = (int) $filters['bathroom'];
         }
 
-        return app(\Botble\RealEstate\Services\PropertySearchService::class)
+        $community = trim((string) ($filters['community'] ?? ''));
+        if ($community !== '') {
+            $label = \Theme\homzen\Supports\TrebPropertyHelper::formatRegionLabel($community);
+            $opts['community'] = $label !== '' ? $label : $community;
+        }
+
+        $ids = app(\Botble\RealEstate\Services\PropertySearchService::class)
             ->searchIds('', $opts);
+
+        // Empty Meili page for a community must not hide SQL-matched listings.
+        if (is_array($ids) && $ids === [] && $community !== '') {
+            return null;
+        }
+
+        return $ids;
     }
 
     protected function resolveBrowseListingTotal(Builder $query, array $filters): int
@@ -887,6 +901,12 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
         }
         if (! empty($filters['bathroom'])) {
             $opts['min_bathrooms'] = (int) $filters['bathroom'];
+        }
+
+        $community = trim((string) ($filters['community'] ?? ''));
+        if ($community !== '') {
+            $label = \Theme\homzen\Supports\TrebPropertyHelper::formatRegionLabel($community);
+            $opts['community'] = $label !== '' ? $label : $community;
         }
 
         return app(\Botble\RealEstate\Services\PropertySearchService::class)

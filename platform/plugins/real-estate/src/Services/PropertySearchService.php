@@ -644,13 +644,13 @@ class PropertySearchService
             }
         }
 
-        $cacheKey = 'serik_community_ids_v4:' . md5(mb_strtolower($community) . '|' . mb_strtolower(trim((string) $city)) . '|' . $limit);
+        $cacheKey = 'serik_community_ids_v5:' . md5(mb_strtolower($community) . '|' . mb_strtolower(trim((string) $city)) . '|' . $limit);
 
         return Cache::remember($cacheKey, 1800, function () use ($community, $city, $limit, $opts) {
             // Prefer Meili filter (community/city) — MySQL JSON_EXTRACT on
             // meta_boxes.amp_snapshot was measuring 0.7–2.2s per community.
             $meiliIds = $this->searchIds('', $opts);
-            if (is_array($meiliIds)) {
+            if (is_array($meiliIds) && $meiliIds !== []) {
                 return array_values(array_map('intval', $meiliIds));
             }
 

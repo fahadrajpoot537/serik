@@ -210,7 +210,7 @@ class PublicController extends BaseController
 
         $ajaxCacheKey = null;
         if ($request->ajax() && ! $request->query('minimal')) {
-            $ajaxCacheKey = 'serik_props_ajax_html_v6:' . md5(json_encode($request->except(['_token', '_method'])));
+            $ajaxCacheKey = 'serik_props_ajax_html_v7:' . md5(json_encode($request->except(['_token', '_method'])));
             $cachedAjax = \Illuminate\Support\Facades\Cache::get($ajaxCacheKey);
             if (is_array($cachedAjax) && isset($cachedAjax['html'])) {
                 $response = $this->httpResponse()->setData($cachedAjax['html']);

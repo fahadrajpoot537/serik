@@ -105,37 +105,6 @@ class PublicController extends BaseController
     
     
     public function getSiteMapIndex(?string $key = null, string $extension = 'xml')
-{
-    if ($key == 'sitemap') {
-        $key = null;
-    }
-
-    $allowed = [
-        'properties-2026-05',
-        'properties-2026-04',
-        'properties-2026-03',
-        'properties-2026-02',
-        'blog-posts-2026-03',
-        'pages',
-        'blog-posts-2025-11',
-        'agents',
-    ];
-
-    // block unwanted sitemap pages
-    if ($key && ! in_array($key, $allowed)) {
-        abort(404);
-    }
-
-    if (! SiteMapManager::init($key, $extension)->isCached()) {
-        event(new RenderingSiteMapEvent($key));
-    }
-
-    return SiteMapManager::render(
-        $key ? $extension : 'sitemapindex'
-    );
-}
-
-  /*  public function getSiteMapIndex(?string $key = null, string $extension = 'xml')
     {
         if ($key == 'sitemap') {
             $key = null;
@@ -147,7 +116,7 @@ class PublicController extends BaseController
 
         // show your site map (options: 'xml' (default), 'xml-mobile', 'html', 'txt', 'ror-rss', 'ror-rdf', 'google-news')
         return SiteMapManager::render($key ? $extension : 'sitemapindex');
-    }*/
+    }
 
     public function getViewWithPrefix(string $prefix, ?string $slug = null)
     {

@@ -29,6 +29,12 @@ class OntarioSeoLandingController extends Controller
         // Never let city_id / city slug blank MLS results (city_id is unset on listings).
         unset($parsed['city_id'], $parsed['city']);
 
+        // Neighborhood pages (?community=) must list that community, not SEO house-only
+        // subtypes (Waterfront C1 is almost all condos — house filter shows 0 cards).
+        if ($request->filled('community')) {
+            unset($parsed['home_types']);
+        }
+
         // SEO slug supplies defaults only. Explicit query/body params must win
         // (AJAX For Lease on a …-for-sale landing sends type=rent).
         $seoDefaults = [];
