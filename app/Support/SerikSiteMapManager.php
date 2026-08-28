@@ -3,28 +3,34 @@
 namespace App\Support;
 
 use Botble\Theme\Supports\SiteMapManager;
+use DateTimeInterface;
 
 class SerikSiteMapManager extends SiteMapManager
 {
-    public function add(string $url, ?string $date = null, string $priority = '1.0', string $sequence = 'daily'): self
+    public function add(string $url, mixed $date = null, string $priority = '1.0', string $sequence = 'daily'): self
     {
         if (! SerikSitemap::shouldInclude($url)) {
             return $this;
         }
 
-        return parent::add($url, $date, $priority, $sequence);
+        return parent::add($url, $this->toSitemapDate($date), $priority, $sequence);
     }
 
-    public function addSitemap(string $url, ?string $date = null): self
+    public function addSitemap(string $url, mixed $date = null): self
     {
-        $path = trim((string) parse_url($url, PHP_URL_PATH), '/');
-        $key = basename($path);
+        return parent::addSitemap($url, $this->toSitemapDate($date));
+    }
 
-        // Exclude monthly individual-property sitemap chunks.
-        if (preg_match('/^properties-\d{4}-\d{2}$/', $key)) {
-            return $this;
+    protected function toSitemapDate(mixed $date): ?string
+    {
+        if ($date instanceof DateTimeInterface) {
+            return $date->format('Y-m-d H:i:s');
         }
 
-        return parent::addSitemap($url, $date);
+        if (is_string($date) && $date !== '') {
+            return $date;
+        }
+
+        return null;
     }
 }

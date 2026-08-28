@@ -126,9 +126,8 @@ if (request()->is('blog-posts-*.xml')) {
     
     
     @foreach ($items as $item)
-    
-    
-    
+        @continue(empty($item['loc'] ?? null))
+
         <url>
             <loc>{{ $item['loc'] }}</loc>
             @if (!empty($item['translations']))
@@ -151,15 +150,18 @@ if (request()->is('blog-posts-*.xml')) {
                 @endforeach
             @endif
 
-            @if ($item['priority'] !== null)
+            @if (($item['priority'] ?? null) !== null)
                 <priority>{{ $item['priority'] }}</priority>
             @endif
 
-            @if ($item['lastmod'] !== null)
-                <lastmod>{{ date('Y-m-d\TH:i:sP', strtotime($item['lastmod'])) }}</lastmod>
+            @if (!empty($item['lastmod']))
+                @php($lastmodTs = strtotime((string) $item['lastmod']))
+                @if ($lastmodTs)
+                    <lastmod>{{ date('Y-m-d\TH:i:sP', $lastmodTs) }}</lastmod>
+                @endif
             @endif
 
-            @if ($item['freq'] !== null)
+            @if (($item['freq'] ?? null) !== null)
                 <changefreq>{{ $item['freq'] }}</changefreq>
             @endif
 

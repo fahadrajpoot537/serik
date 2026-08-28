@@ -37,7 +37,7 @@ class SiteMapManager
         $this->siteMap = app('sitemap');
         // set cache (key (string), duration in minutes (Carbon|Datetime|int), turn on/off (boolean))
         // by default cache is disabled
-        $this->siteMap->setCache('cache_site_map_key_v2' . $prefix . $extension, setting('cache_time_site_map', 60), setting('enable_cache_site_map', true));
+        $this->siteMap->setCache('cache_site_map_key_v3' . $prefix . $extension, setting('cache_time_site_map', 60), setting('enable_cache_site_map', true));
 
         if ($prefix == 'pages' && ! BaseHelper::getHomepageId()) {
             $this->add(BaseHelper::getHomepageUrl(), Carbon::now()->toDateTimeString());
@@ -52,12 +52,12 @@ class SiteMapManager
         return $this;
     }
 
-    public function addSitemap(string $loc, ?string $lastModified = null): self
+    public function addSitemap(string $loc, mixed $lastModified = null): self
     {
         $removedLoc = array_map(fn ($item) => $this->route($item), $this->removedKeys);
 
         if (! $this->isCached() && ! in_array($loc, $removedLoc)) {
-            $this->siteMap->addSitemap($loc, $lastModified ?: $this->defaultDate);
+            $this->siteMap->addSitemap($loc, $this->stringifySitemapDate($lastModified) ?: $this->defaultDate);
         }
 
         return $this;
@@ -68,10 +68,10 @@ class SiteMapManager
         return route('public.sitemap.index', [$key, $this->extension]);
     }
 
-    public function add(string $url, ?string $date = null, string $priority = '1.0', string $sequence = 'daily'): self
+    public function add(string $url, mixed $date = null, string $priority = '1.0', string $sequence = 'daily'): self
     {
         if (! $this->isCached()) {
-            $this->siteMap->add($url, $date ?: $this->defaultDate, $priority, $sequence);
+            $this->siteMap->add($url, $this->stringifySitemapDate($date) ?: $this->defaultDate, $priority, $sequence);
         }
 
         return $this;
@@ -234,8 +234,9 @@ class SiteMapManager
     /**
      * Create paginated sitemaps for a collection with many items
      */
-    public function createPaginatedSitemaps(string $baseKey, int $totalItems, ?string $lastModified = null): void
+    public function createPaginatedSitemaps(string $baseKey, int $totalItems, mixed $lastModified = null): void
     {
+        $lastModified = $this->stringifySitemapDate($lastModified);
         $totalPages = ceil($totalItems / $this->getItemsPerPage());
 
         if ($totalPages <= 1) {
@@ -248,6 +249,19 @@ class SiteMapManager
                 $this->addSitemap($this->route($paginatedKey), $lastModified);
             }
         }
+    }
+
+    protected function stringifySitemapDate(mixed $date): ?string
+    {
+        if ($date instanceof \DateTimeInterface) {
+            return $date->format('Y-m-d H:i:s');
+        }
+
+        if (is_string($date) && $date !== '') {
+            return $date;
+        }
+
+        return null;
     }
 
     /**

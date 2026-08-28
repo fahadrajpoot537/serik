@@ -11,11 +11,16 @@ use Botble\RealEstate\Models\Project;
 use Botble\RealEstate\Models\Property;
 use Botble\Theme\Events\RenderingSiteMapEvent;
 use Botble\Theme\Facades\SiteMapManager;
+use Carbon\Carbon;
 use Illuminate\Support\Arr;
 use Theme\homzen\Supports\TrebPropertyHelper;
 
 class AddSitemapListener
 {
+    private const PROPERTY_SITEMAP_MONTHS = 24;
+
+    private const PROPERTY_SITEMAP_MAX_URLS = 4000;
+
     /**
      * Property subtypes excluded from properties-*.xml sitemaps.
      *
@@ -50,10 +55,10 @@ class AddSitemapListener
 
                     SiteMapManager::add(route('public.agents'), $agentLastUpdated, '0.4', 'monthly');
 
-                    $items = Account::query()
-                        ->latest('created_at')
+                    Account::query()
                         ->select(['id', 'first_name', 'last_name', 'username', 'updated_at', 'created_at'])
                         ->with(['slugable'])
+                        ->orderBy('id')
                         ->chunkById(200, function ($accounts): void {
                             foreach ($accounts as $item) {
                                 if (! $item->slugable) {
@@ -75,6 +80,10 @@ class AddSitemapListener
                         ->get();
 
                     foreach ($items as $item) {
+                        if (! $item->slugable) {
+                            continue;
+                        }
+
                         SiteMapManager::add($item->url, $item->updated_at, '0.8');
                     }
 
@@ -88,6 +97,10 @@ class AddSitemapListener
                         ->get();
 
                     foreach ($items as $item) {
+                        if (! $item->slug) {
+                            continue;
+                        }
+
                         SiteMapManager::add(route('public.properties-by-city', $item->slug), $item->updated_at, '0.8');
                     }
 
@@ -104,6 +117,10 @@ class AddSitemapListener
                         ->get();
 
                     foreach ($items as $item) {
+                        if (! $item->slug) {
+                            continue;
+                        }
+
                         SiteMapManager::add(route('public.projects-by-city', $item->slug), $item->updated_at, '0.8');
                     }
 
@@ -112,48 +129,31 @@ class AddSitemapListener
 
             if (preg_match('/^properties-((?:19|20|21|22)\d{2})-(0?[1-9]|1[012])$/', $key, $matches)) {
                 if (($year = Arr::get($matches, 1)) && ($month = Arr::get($matches, 2))) {
-                    Property::query()
-                        ->active()
-                        ->whereYear('updated_at', $year)
-                        ->whereMonth('updated_at', $month)
-                        ->where(function ($query): void {
-                            $query->whereNull('PropertySubType')
-                                ->orWhereNotIn('PropertySubType', $this->excludedPropertySubTypes());
-                        })
-                        ->latest('updated_at')
-                        ->select(['id', 'name', 'updated_at'])
-                        ->with(['slugable'])
-                        ->chunkById(250, function ($properties): void {
-                            foreach ($properties as $property) {
-                                if (! $property->slugable) {
-                                    continue;
-                                }
-
-                                SiteMapManager::add($property->url, $property->updated_at, '0.8');
-                            }
-                        });
+                    $this->addPropertyMonthUrls((int) $year, (int) $month);
                 }
             }
 
             if (RealEstateHelper::isEnabledProjects()) {
                 if (preg_match('/^projects-((?:19|20|21|22)\d{2})-(0?[1-9]|1[012])$/', $key, $matches)) {
                     if (($year = Arr::get($matches, 1)) && ($month = Arr::get($matches, 2))) {
-                        $projects = Project::query()
+                        $start = Carbon::create((int) $year, (int) $month, 1)->startOfMonth();
+                        $end = $start->copy()->endOfMonth();
+
+                        Project::query()
                             ->active()
-                            ->whereYear('updated_at', $year)
-                            ->whereMonth('updated_at', $month)
-                            ->latest('updated_at')
+                            ->whereBetween('updated_at', [$start, $end])
                             ->select(['id', 'name', 'updated_at'])
                             ->with(['slugable'])
-                            ->get();
+                            ->orderBy('id')
+                            ->chunkById(250, function ($projects): void {
+                                foreach ($projects as $project) {
+                                    if (! $project->slugable) {
+                                        continue;
+                                    }
 
-                        foreach ($projects as $project) {
-                            if (! $project->slugable) {
-                                continue;
-                            }
-
-                            SiteMapManager::add($project->url, $project->updated_at, '0.8');
-                        }
+                                    SiteMapManager::add($project->url, $project->updated_at, '0.8');
+                                }
+                            });
                     }
                 }
             }
@@ -179,5 +179,57 @@ class AddSitemapListener
         if (RealEstateHelper::isEnabledProjects()) {
             SiteMapManager::addSitemap(SiteMapManager::route('projects-city'), $cityLastUpdated);
         }
+
+        $this->addPropertyMonthIndexes();
+    }
+
+    private function addPropertyMonthIndexes(): void
+    {
+        $cursor = now()->startOfMonth();
+        $oldest = now()->startOfMonth()->subMonths(self::PROPERTY_SITEMAP_MONTHS - 1);
+
+        while ($cursor->gte($oldest)) {
+            $key = sprintf('properties-%s', $cursor->format('Y-m'));
+            SiteMapManager::addSitemap(
+                SiteMapManager::route($key),
+                $cursor->copy()->endOfMonth()->toDateTimeString()
+            );
+            $cursor->subMonth();
+        }
+    }
+
+    private function addPropertyMonthUrls(int $year, int $month): void
+    {
+        $start = Carbon::create($year, $month, 1)->startOfMonth();
+        $end = $start->copy()->endOfMonth();
+        $added = 0;
+        $max = self::PROPERTY_SITEMAP_MAX_URLS;
+
+        Property::query()
+            ->active()
+            ->whereBetween('updated_at', [$start, $end])
+            ->where(function ($query): void {
+                $query->whereNull('PropertySubType')
+                    ->orWhereNotIn('PropertySubType', $this->excludedPropertySubTypes());
+            })
+            ->select(['id', 'name', 'updated_at'])
+            ->with(['slugable'])
+            ->orderBy('id')
+            ->chunkById(250, function ($properties) use (&$added, $max): bool {
+                foreach ($properties as $property) {
+                    if (! $property->slugable) {
+                        continue;
+                    }
+
+                    SiteMapManager::add($property->url, $property->updated_at, '0.8');
+                    $added++;
+
+                    if ($added >= $max) {
+                        return false;
+                    }
+                }
+
+                return true;
+            });
     }
 }

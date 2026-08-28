@@ -20,6 +20,10 @@ class RenderingSiteMapListener
             $pages = RepositoryHelper::applyBeforeExecuteQuery($pages, new Page())->get();
 
             foreach ($pages as $page) {
+                if (! $page->url) {
+                    continue;
+                }
+
                 SiteMapManager::add($page->url, $page->updated_at, '0.8');
             }
         }

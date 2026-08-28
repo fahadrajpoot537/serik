@@ -43,12 +43,8 @@ final class SerikSitemap
             }
         }
 
-        if (preg_match('#^on/.+/map/[^/]+$#', $lower)) {
-            return false;
-        }
-
-        // Individual property detail pages — index city/listing pages only.
-        if (preg_match('#^properties/[^/?#]+$#', $lower)) {
+        // Legacy map pin URLs — not canonical listing pages.
+        if (preg_match('~^on/.+/map/[^/]+$~', $lower)) {
             return false;
         }
 

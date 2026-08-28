@@ -110,6 +110,9 @@ class PublicController extends BaseController
             $key = null;
         }
 
+        @set_time_limit(120);
+        @ini_set('memory_limit', '512M');
+
         if (! SiteMapManager::init($key, $extension)->isCached()) {
             event(new RenderingSiteMapEvent($key));
         }
