@@ -8,9 +8,10 @@ return [
     |--------------------------------------------------------------------------
     |
     | Property/MLS data is written to GHL Custom Objects → Showings
-    | (custom_objects.showings), associated with the Contact.
-    | Contact custom fields remain for inquiry/lead flows and the MLS trigger
-    | field only — do not repurpose them for property payloads.
+    | (custom_objects.showings). Production trigger is a Showings-object
+    | workflow (record created / mls_number changed), not Contact MLS.
+    | Contact custom fields remain for inquiry/lead flows — do not
+    | repurpose them for property payloads.
     |
     | Required Private Integration scopes:
     | - objects/record.readonly, objects/record.write

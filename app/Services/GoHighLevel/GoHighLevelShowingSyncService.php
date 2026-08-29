@@ -37,7 +37,14 @@ class GoHighLevelShowingSyncService
 
         $previousHash = (string) ($task->sync_hash ?? '');
         $previousMapped = is_array($task->mapped_fields) ? $task->mapped_fields : [];
-        $previousRecordId = (string) ($previousMapped['_showing_record_id'] ?? '');
+        $explicitShowingId = trim((string) ($task->showing_record_id ?? ''));
+        if ($explicitShowingId === '') {
+            $explicitShowingId = app(GoHighLevelMlsPendingService::class)
+                ->extractShowingRecordIdFromPayload(is_array($task->source_payload) ? $task->source_payload : []);
+        }
+        $previousRecordId = $explicitShowingId !== ''
+            ? $explicitShowingId
+            : (string) ($previousMapped['_showing_record_id'] ?? '');
 
         $mapped = $this->objectMapper->mapFromMls($task->mls_number);
         $properties = $mapped['properties'];
@@ -49,11 +56,7 @@ class GoHighLevelShowingSyncService
         ]);
         $task->save();
 
-        $contact = $this->http->get('/contacts/' . $task->contact_id);
-        $existingId = (string) (data_get($contact, 'contact.id') ?? data_get($contact, 'id') ?? '');
-        if ($existingId === '') {
-            throw new \RuntimeException('GHL contact not found: ' . $task->contact_id);
-        }
+        $this->ensureContactIfPresent($task, $previousRecordId);
 
         if (
             config('gohighlevel.mls_sync.skip_unchanged', true)
@@ -88,13 +91,15 @@ class GoHighLevelShowingSyncService
 
         $recordId = $previousRecordId !== ''
             ? $previousRecordId
-            : (string) ($this->objects->findRecordIdByMls($task->mls_number, $task->contact_id) ?? '');
+            : (string) ($this->objects->findRecordIdByMls($task->mls_number, $this->realContactId($task, $previousRecordId)) ?? '');
 
         $httpStatus = 200;
         try {
             if ($recordId !== '') {
                 $record = $this->objects->updateRecord($recordId, $properties);
                 $httpStatus = $this->http->lastStatus() ?? 200;
+            } elseif ($explicitShowingId !== '') {
+                throw new \RuntimeException('Showings record id was supplied but could not be updated: ' . $explicitShowingId);
             } else {
                 $record = $this->objects->createRecord($properties);
                 $httpStatus = $this->http->lastStatus() ?? 201;
@@ -119,7 +124,10 @@ class GoHighLevelShowingSyncService
         }
 
         try {
-            $this->objects->ensureAssociatedWithContact($recordId, $task->contact_id);
+            $contactId = $this->realContactId($task, $recordId);
+            if ($contactId !== null) {
+                $this->objects->ensureAssociatedWithContact($recordId, $contactId);
+            }
         } catch (\Throwable $e) {
             Log::channel('ghl_sync')->warning('GoHighLevel Showings association failed', [
                 'task_id' => $task->id,
@@ -188,6 +196,9 @@ class GoHighLevelShowingSyncService
         $task->completed_at = now();
         $task->last_error = null;
         $task->sync_hash = $hash;
+        if ($recordId !== '') {
+            $task->showing_record_id = $recordId;
+        }
         $task->mapped_fields = array_merge($properties, [
             '_meta' => $mapped['meta'],
             '_showing_record_id' => $recordId,
@@ -302,6 +313,52 @@ class GoHighLevelShowingSyncService
         $an = preg_replace('/[^a-z0-9]+/', '', $a) ?? '';
 
         return $en !== '' && $en === $an;
+    }
+
+    /**
+     * Contact lookup is optional for Showings-object webhooks. Contact/Inquiry
+     * records are never written here.
+     */
+    protected function ensureContactIfPresent(GhlMlsSyncTask $task, string $showingRecordId): void
+    {
+        $contactId = $this->realContactId($task, $showingRecordId);
+        if ($contactId === null) {
+            return;
+        }
+
+        try {
+            $contact = $this->http->get('/contacts/' . $contactId);
+            $existingId = (string) (data_get($contact, 'contact.id') ?? data_get($contact, 'id') ?? '');
+            if ($existingId === '') {
+                throw new \RuntimeException('GHL contact not found: ' . $contactId);
+            }
+        } catch (\Throwable $e) {
+            if ($showingRecordId !== '') {
+                Log::channel('ghl_sync')->info('GoHighLevel contact lookup skipped; updating Showings record directly', [
+                    'task_id' => $task->id,
+                    'contact_id' => $contactId,
+                    'showing_record_id' => $showingRecordId,
+                    'message' => $e->getMessage(),
+                ]);
+
+                return;
+            }
+
+            throw $e;
+        }
+    }
+
+    protected function realContactId(GhlMlsSyncTask $task, string $showingRecordId): ?string
+    {
+        $contactId = trim((string) $task->contact_id);
+        if ($contactId === '' || str_starts_with($contactId, 'showing:')) {
+            return null;
+        }
+        if ($showingRecordId !== '' && strcasecmp($contactId, $showingRecordId) === 0) {
+            return null;
+        }
+
+        return $contactId;
     }
 
     public function markFailed(GhlMlsSyncTask $task, \Throwable $e): void

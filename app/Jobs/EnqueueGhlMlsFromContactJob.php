@@ -43,6 +43,20 @@ class EnqueueGhlMlsFromContactJob implements ShouldQueue, ShouldBeUniqueUntilPro
 
     public function uniqueId(): string
     {
+        $showing = '';
+        if ($this->payload !== []) {
+            $showing = (string) (
+                $this->payload['showing_record_id']
+                ?? $this->payload['showingRecordId']
+                ?? $this->payload['record_id']
+                ?? $this->payload['recordId']
+                ?? ''
+            );
+        }
+        if (trim($showing) !== '') {
+            return 'ghl-enqueue-showing-' . md5(strtolower(trim($showing)) . '|' . strtoupper(trim((string) $this->mlsNumber)));
+        }
+
         return 'ghl-enqueue-' . md5(strtolower(trim($this->contactId)) . '|' . strtoupper(trim((string) $this->mlsNumber)));
     }
 
@@ -57,6 +71,41 @@ class EnqueueGhlMlsFromContactJob implements ShouldQueue, ShouldBeUniqueUntilPro
 
         $mls = strtoupper(trim((string) $this->mlsNumber));
         $hint = trim($this->contactId);
+        $showingId = '';
+
+        if ($this->payload !== []) {
+            $fromPayload = $pending->extractFromWebhookPayload($this->payload);
+            if ($fromPayload) {
+                $showingId = trim((string) ($fromPayload['showing_record_id'] ?? ''));
+                if ($mls === '') {
+                    $mls = $fromPayload['mls_number'];
+                }
+                if ($hint === '') {
+                    $hint = trim($fromPayload['contact_id']);
+                }
+            }
+        }
+
+        // Showings Custom Object webhook: MLS + record id are enough.
+        // Do not require (or look up) a Contact MLS field.
+        if ($showingId !== '' && $mls !== '') {
+            $resolvedId = null;
+            if ($hint !== '' && $resolver->looksLikeGhlContactId($hint) && $hint !== $showingId) {
+                $resolvedId = $resolver->resolve($hint, null, $this->payload);
+            }
+
+            $task = $pending->enqueue(
+                $resolvedId ?: $showingId,
+                $mls,
+                $this->locationId,
+                $this->payload,
+                $showingId,
+            );
+            $pending->dispatchSyncJob($task);
+            GoHighLevelMetrics::incrDay('tasks_enqueued');
+
+            return;
+        }
 
         // Prefer MLS already present in the webhook body; otherwise load from contact later.
         if ($mls === '' && $hint !== '' && $resolver->looksLikeGhlContactId($hint)) {

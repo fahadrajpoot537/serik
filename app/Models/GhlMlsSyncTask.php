@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property int $id
  * @property string $contact_id
  * @property string $mls_number
+ * @property string|null $showing_record_id
  * @property string|null $location_id
  * @property string $status
  * @property string|null $external_key
@@ -35,6 +36,7 @@ class GhlMlsSyncTask extends Model
     protected $fillable = [
         'contact_id',
         'mls_number',
+        'showing_record_id',
         'location_id',
         'status',
         'external_key',
@@ -67,8 +69,13 @@ class GhlMlsSyncTask extends Model
         return $query->whereIn('status', [self::STATUS_PENDING, self::STATUS_FAILED]);
     }
 
-    public static function makeExternalKey(string $contactId, string $mlsNumber): string
+    public static function makeExternalKey(string $contactId, string $mlsNumber, ?string $showingRecordId = null): string
     {
+        $showing = strtolower(trim((string) $showingRecordId));
+        if ($showing !== '') {
+            return 'showing:' . $showing . ':' . strtoupper(trim($mlsNumber));
+        }
+
         return strtolower(trim($contactId)) . ':' . strtoupper(trim($mlsNumber));
     }
 }

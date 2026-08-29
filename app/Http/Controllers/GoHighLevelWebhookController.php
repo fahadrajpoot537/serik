@@ -58,9 +58,12 @@ class GoHighLevelWebhookController extends Controller
         // Workflow custom-data often maps contact_id → Full Name (not the GHL id).
         // Still accept when MLS is present; EnqueueGhlMlsFromContactJob resolves the real id.
         if ($extracted) {
-            $idemKey = $extracted['contact_id'] !== ''
-                ? $extracted['contact_id']
-                : ('mls:' . $extracted['mls_number']);
+            $showingId = trim((string) ($extracted['showing_record_id'] ?? ''));
+            $idemKey = $showingId !== ''
+                ? ('showing:' . $showingId)
+                : ($extracted['contact_id'] !== ''
+                    ? $extracted['contact_id']
+                    : ('mls:' . $extracted['mls_number']));
 
             if (! $guard->claimIdempotency($idemKey, $extracted['mls_number'], $correlationId)) {
                 GoHighLevelMetrics::observeLatency('webhook_latency', (microtime(true) - $t0) * 1000);
@@ -75,7 +78,7 @@ class GoHighLevelWebhookController extends Controller
 
             // Persist the pending row now so the 05:15 processor has work even if
             // the ghl worker is down (EnqueueGhlMlsFromContactJob would otherwise sit).
-            $this->persistPendingIfContactIdKnown($pending, $extracted, $payload);
+            $this->persistPendingFromExtracted($pending, $extracted, $payload);
 
             // Fast path: MLS present — also queue contact resolve / upsert (no TREB/GHL write).
             EnqueueGhlMlsFromContactJob::dispatch(
@@ -92,6 +95,7 @@ class GoHighLevelWebhookController extends Controller
             Log::channel('ghl_sync')->info('GoHighLevel webhook accepted MLS pending enqueue', [
                 'correlation_id' => $correlationId,
                 'contact_hint_present' => $extracted['contact_id'] !== '',
+                'showing_record_id' => $extracted['showing_record_id'] !== '' ? $extracted['showing_record_id'] : null,
                 'mls' => $extracted['mls_number'],
                 'content_type' => (string) $request->header('Content-Type', ''),
                 'body_len' => strlen($request->getContent()),
@@ -221,6 +225,8 @@ class GoHighLevelWebhookController extends Controller
         foreach ([
             'mls_number', 'mlsNumber', 'MLS Number', 'contact_id', 'contactId', 'Contact ID',
             'id', 'customData', 'customFields', 'contact', 'data',
+            'showing_record_id', 'showingRecordId', 'record_id', 'recordId',
+            'objectKey', 'object_key', 'properties',
         ] as $key) {
             if (array_key_exists($key, $payload)) {
                 return true;
@@ -260,25 +266,35 @@ class GoHighLevelWebhookController extends Controller
     }
 
     /**
-     * @param  array{contact_id: string, mls_number: string, location_id: ?string}  $extracted
+     * Persist immediately when MLS is present and we already know the Showings
+     * record id and/or a real GHL contact id. Name/email hints still wait for
+     * EnqueueGhlMlsFromContactJob.
+     *
+     * @param  array{contact_id: string, mls_number: string, location_id: ?string, showing_record_id?: string}  $extracted
      * @param  array<string, mixed>  $payload
      */
-    protected function persistPendingIfContactIdKnown(
+    protected function persistPendingFromExtracted(
         GoHighLevelMlsPendingService $pending,
         array $extracted,
         array $payload,
     ): void {
+        $showingId = trim((string) ($extracted['showing_record_id'] ?? ''));
         $contactId = trim($extracted['contact_id']);
-        if ($contactId === '' || ! app(GoHighLevelContactResolver::class)->looksLikeGhlContactId($contactId)) {
+        $validContact = $contactId !== ''
+            && app(GoHighLevelContactResolver::class)->looksLikeGhlContactId($contactId)
+            && ($showingId === '' || $contactId !== $showingId);
+
+        if ($showingId === '' && ! $validContact) {
             return;
         }
 
         try {
             $task = $pending->enqueue(
-                $contactId,
+                $validContact ? $contactId : $showingId,
                 $extracted['mls_number'],
                 $extracted['location_id'],
                 $payload,
+                $showingId !== '' ? $showingId : null,
             );
             $pending->dispatchSyncJob($task);
         } catch (\Throwable $e) {
