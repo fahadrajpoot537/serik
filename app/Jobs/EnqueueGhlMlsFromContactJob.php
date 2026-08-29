@@ -112,7 +112,8 @@ class EnqueueGhlMlsFromContactJob implements ShouldQueue, ShouldBeUniqueUntilPro
             return;
         }
 
-        $pending->enqueue($resolvedId, $mls, $this->locationId, $this->payload);
+        $task = $pending->enqueue($resolvedId, $mls, $this->locationId, $this->payload);
+        $pending->dispatchSyncJob($task);
         GoHighLevelMetrics::incrDay('tasks_enqueued');
     }
 }

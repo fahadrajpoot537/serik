@@ -17,7 +17,8 @@ Route::redirect('/terms-conditions', '/term-and-conditions', 301);
 Route::redirect('/terms', '/term-and-conditions', 301);
 
 // GoHighLevel inbound webhook / workflow hook — pending MLS enqueue only (ghl queue).
-Route::post('/webhooks/gohighlevel', GoHighLevelWebhookController::class)
+// GET is accepted because GHL Custom Webhook Event=GET sends query params and no body.
+Route::match(['GET', 'POST'], '/webhooks/gohighlevel', GoHighLevelWebhookController::class)
     ->name('webhooks.gohighlevel')
     ->withoutMiddleware([VerifyCsrfToken::class, GeoBlockMiddleware::class]);
 

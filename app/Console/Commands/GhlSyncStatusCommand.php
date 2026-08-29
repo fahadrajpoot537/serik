@@ -79,8 +79,12 @@ class GhlSyncStatusCommand extends Command
 
         $hour = $payload['metrics']['hour'] ?? [];
         $this->table(['Hourly metric', 'Value'], [
+            ['webhook_received', $hour['webhook_received'] ?? 0],
             ['webhook_accepted', $hour['webhook_accepted'] ?? 0],
             ['webhook_duplicate', $hour['webhook_duplicate'] ?? 0],
+            ['webhook_unauthorized', $hour['webhook_unauthorized'] ?? 0],
+            ['webhook_ignored_no_mls', $hour['webhook_ignored_no_mls'] ?? 0],
+            ['tasks_enqueued', $hour['tasks_enqueued'] ?? 0],
             ['sync_completed', $hour['sync_completed'] ?? 0],
             ['sync_failed', $hour['sync_failed'] ?? 0],
             ['http_retries', $hour['http_retries'] ?? 0],

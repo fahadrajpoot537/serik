@@ -2,7 +2,9 @@
 
 namespace App\Services\GoHighLevel;
 
+use App\Jobs\ProcessGhlMlsSyncTaskJob;
 use App\Models\GhlMlsSyncTask;
+use App\Support\SerikQueue;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -86,6 +88,15 @@ class GoHighLevelMlsPendingService
     }
 
     /**
+     * Queue the actual Showings write. Webhooks must not wait until 05:15.
+     */
+    public function dispatchSyncJob(GhlMlsSyncTask $task): void
+    {
+        ProcessGhlMlsSyncTaskJob::dispatch((int) $task->id)
+            ->onQueue(SerikQueue::ghl());
+    }
+
+    /**
      * Extract contact + MLS from GHL webhook / workflow payloads.
      *
      * @param  array<string, mixed>  $payload
@@ -93,21 +104,18 @@ class GoHighLevelMlsPendingService
      */
     public function extractFromWebhookPayload(array $payload): ?array
     {
-        $contactId = (string) (
-            data_get($payload, 'contact_id')
-            ?? data_get($payload, 'contactId')
-            ?? data_get($payload, 'contact.id')
-            ?? data_get($payload, 'customData.contact_id')
-            // GHL ContactCreate/ContactUpdate use top-level id as the contact id.
-            // Prefer contact.* paths above so webhook/event ids are not mistaken for contacts.
-            ?? data_get($payload, 'id')
-            ?? ''
-        );
+        $wrapped = $payload['data'] ?? null;
+        if (is_array($wrapped) && $wrapped !== []) {
+            $payload = array_replace($wrapped, $payload);
+        }
+
+        $contactId = $this->extractContactIdHint($payload);
 
         $locationId = data_get($payload, 'locationId')
             ?? data_get($payload, 'location_id')
             ?? data_get($payload, 'contact.locationId')
-            ?? data_get($payload, 'customData.location_id');
+            ?? data_get($payload, 'customData.location_id')
+            ?? data_get($payload, 'data.locationId');
 
         $mls = (string) (
             data_get($payload, 'mls_number')
@@ -117,8 +125,22 @@ class GoHighLevelMlsPendingService
             ?? data_get($payload, 'customData.mls_number')
             ?? data_get($payload, 'customData.mlsNumber')
             ?? data_get($payload, 'customData.MLS Number')
+            ?? data_get($payload, 'data.mls_number')
             ?? ''
         );
+
+        // GHL Custom Webhook often uses the custom-field id as the JSON/form key.
+        if (trim($mls) === '') {
+            $mlsFieldId = $this->resolveMlsFieldId();
+            if ($mlsFieldId) {
+                $mls = $this->stringifyFieldValue(
+                    data_get($payload, $mlsFieldId)
+                    ?? data_get($payload, 'customData.' . $mlsFieldId)
+                    ?? data_get($payload, 'data.' . $mlsFieldId)
+                    ?? data_get($payload, 'customFields.' . $mlsFieldId)
+                );
+            }
+        }
 
         if ($mls === '') {
             // GHL workflows sometimes use arbitrary custom-data key labels containing "mls".
@@ -196,6 +218,7 @@ class GoHighLevelMlsPendingService
         $candidates = [
             data_get($payload, 'customFields'),
             data_get($payload, 'contact.customFields'),
+            data_get($payload, 'data.customFields'),
             data_get($payload, 'customField'),
             data_get($payload, 'attribs'),
             data_get($payload, 'contact.attribs'),
@@ -239,11 +262,61 @@ class GoHighLevelMlsPendingService
                 }
 
                 $value = $this->stringifyFieldValue(
-                    $field['field_value'] ?? $field['value'] ?? $field['fieldValue'] ?? null
+                    $field['field_value']
+                    ?? $field['value']
+                    ?? $field['fieldValue']
+                    ?? $field['fieldValueString']
+                    ?? $field['field_value_string']
+                    ?? null
                 );
                 if ($value !== '') {
                     return $value;
                 }
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    protected function extractContactIdHint(array $payload): string
+    {
+        $raw = data_get($payload, 'contact_id')
+            ?? data_get($payload, 'contactId')
+            ?? data_get($payload, 'Contact ID')
+            ?? data_get($payload, 'Contact Id')
+            ?? data_get($payload, 'Contact_ID')
+            ?? data_get($payload, 'contact.id')
+            ?? data_get($payload, 'customData.contact_id')
+            ?? data_get($payload, 'customData.contactId')
+            ?? data_get($payload, 'customData.Contact ID')
+            ?? data_get($payload, 'data.contact_id')
+            ?? data_get($payload, 'data.contactId')
+            ?? data_get($payload, 'data.id')
+            ?? data_get($payload, 'data.contact.id')
+            // GHL ContactCreate/ContactUpdate use top-level id as the contact id.
+            ?? data_get($payload, 'id')
+            ?? '';
+
+        $hint = trim($this->stringifyFieldValue($raw));
+        if ($hint !== '') {
+            return $hint;
+        }
+
+        // PHP parse_str / form-urlencoded converts "Contact ID" → "Contact_ID".
+        foreach ($payload as $key => $value) {
+            if (! is_string($key)) {
+                continue;
+            }
+            $norm = strtolower(str_replace([' ', '-'], '_', $key));
+            if (! in_array($norm, ['contact_id', 'contactid'], true)) {
+                continue;
+            }
+            $candidate = trim($this->stringifyFieldValue($value));
+            if ($candidate !== '') {
+                return $candidate;
             }
         }
 

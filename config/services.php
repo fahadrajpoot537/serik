@@ -61,6 +61,12 @@ return [
         'delay_ms' => (int) env('GOOGLE_MAPS_GEOCODING_DELAY_MS', 50),
     ],
 
+    // CARTO raster basemaps (map search Voyager tiles). Required or tiles show
+    // "API KEY REQUIRED" watermark. Free key: https://carto.com/basemaps/apikey
+    'carto' => [
+        'basemap_key' => env('CARTO_BASEMAP_KEY'),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | GoHighLevel (LeadConnector)

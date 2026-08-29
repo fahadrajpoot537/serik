@@ -13,6 +13,7 @@ class WagesMaintenanceMiddleware
         'iftheynopaysmywages',
         'paidmywagesthanks',
         'up',
+        'webhooks/gohighlevel',
     ];
 
     public function handle(Request $request, Closure $next): Response

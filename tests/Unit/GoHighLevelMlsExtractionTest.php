@@ -93,4 +93,73 @@ class GoHighLevelMlsExtractionTest extends TestCase
         $this->assertSame('', $extracted['contact_id']);
         $this->assertSame('N12884704', $extracted['mls_number']);
     }
+
+    public function test_extracts_mls_from_custom_field_id_as_payload_key(): void
+    {
+        config(['gohighlevel.mls_sync.mls_field_id' => 'HsXi089pYk6OwbHXgUMf']);
+
+        $pending = app(GoHighLevelMlsPendingService::class);
+
+        $extracted = $pending->extractFromWebhookPayload([
+            'Contact ID' => 'aHLNhFyN7yBpsZSqKQhd',
+            'HsXi089pYk6OwbHXgUMf' => 'W13722054',
+        ]);
+
+        $this->assertNotNull($extracted);
+        $this->assertSame('aHLNhFyN7yBpsZSqKQhd', $extracted['contact_id']);
+        $this->assertSame('W13722054', $extracted['mls_number']);
+    }
+
+    public function test_extracts_mls_from_field_value_string(): void
+    {
+        config(['gohighlevel.mls_sync.mls_field_id' => 'HsXi089pYk6OwbHXgUMf']);
+
+        $pending = app(GoHighLevelMlsPendingService::class);
+
+        $extracted = $pending->extractFromWebhookPayload([
+            'contactId' => 'aHLNhFyN7yBpsZSqKQhd',
+            'customFields' => [
+                ['id' => 'HsXi089pYk6OwbHXgUMf', 'fieldValueString' => 'W13722054'],
+            ],
+        ]);
+
+        $this->assertNotNull($extracted);
+        $this->assertSame('W13722054', $extracted['mls_number']);
+    }
+
+    public function test_extracts_from_wrapped_data_payload(): void
+    {
+        config(['gohighlevel.mls_sync.mls_field_id' => 'HsXi089pYk6OwbHXgUMf']);
+
+        $pending = app(GoHighLevelMlsPendingService::class);
+
+        $extracted = $pending->extractFromWebhookPayload([
+            'data' => [
+                'id' => 'aHLNhFyN7yBpsZSqKQhd',
+                'customFields' => [
+                    ['id' => 'HsXi089pYk6OwbHXgUMf', 'value' => 'W13722054'],
+                ],
+            ],
+        ]);
+
+        $this->assertNotNull($extracted);
+        $this->assertSame('aHLNhFyN7yBpsZSqKQhd', $extracted['contact_id']);
+        $this->assertSame('W13722054', $extracted['mls_number']);
+    }
+
+    public function test_extracts_contact_id_from_form_urlencoded_underscore_key(): void
+    {
+        config(['gohighlevel.mls_sync.mls_field_id' => 'HsXi089pYk6OwbHXgUMf']);
+
+        $pending = app(GoHighLevelMlsPendingService::class);
+
+        $extracted = $pending->extractFromWebhookPayload([
+            'Contact_ID' => 'aHLNhFyN7yBpsZSqKQhd',
+            'HsXi089pYk6OwbHXgUMf' => 'W13722054',
+        ]);
+
+        $this->assertNotNull($extracted);
+        $this->assertSame('aHLNhFyN7yBpsZSqKQhd', $extracted['contact_id']);
+        $this->assertSame('W13722054', $extracted['mls_number']);
+    }
 }

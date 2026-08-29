@@ -60,8 +60,8 @@ return [
         'mls_field_key' => env('GOHIGHLEVEL_MLS_FIELD_KEY', 'contact.mls_number'),
 
         // Optional explicit GHL custom field id for MLS (ContactUpdate / API often send id+value only).
-        // When empty, resolved from locations/customFields map for mls_field_key.
-        'mls_field_id' => env('GOHIGHLEVEL_MLS_FIELD_ID'),
+        // Default is this location's "MLS Number" field; override via env if GHL recreates it.
+        'mls_field_id' => env('GOHIGHLEVEL_MLS_FIELD_ID', 'HsXi089pYk6OwbHXgUMf'),
 
         // Idempotency: skip GHL update when mapped payload hash unchanged
         'skip_unchanged' => (bool) env('GOHIGHLEVEL_MLS_SKIP_UNCHANGED', true),

@@ -5570,6 +5570,7 @@ position: absolute;
 
 window.SERIK_IS_MAP_SEARCH_PAGE = @json($isMapSearchPageView);
 window.SERIK_CANONICAL_ORIGIN = @json(rtrim(\App\Support\CanonicalUrl::normalize(url('/')), '/'));
+window.SERIK_CARTO_BASEMAP_KEY = @json(trim((string) config('services.carto.basemap_key', '')));
 
 // CARTO Voyager raster shows neighbourhood/area labels from ~zoom 12+.
 const HS_MAP_DEFAULT_ZOOM = 15;
@@ -6893,6 +6894,11 @@ async function showCityBoundary(cityName, fallbackCoords = null) {
         window.SerikVisitorLocation.saveSessionLocation(location);
     });
 
+    const hsCartoKey = (typeof window.SERIK_CARTO_BASEMAP_KEY === 'string')
+        ? window.SERIK_CARTO_BASEMAP_KEY.trim()
+        : '';
+    const hsCartoKeyQuery = hsCartoKey !== '' ? ('?key=' + encodeURIComponent(hsCartoKey)) : '';
+
     const map = new maplibregl.Map({
         container: mapContainer,
         style: {
@@ -6902,10 +6908,10 @@ async function showCityBoundary(cityName, fallbackCoords = null) {
                 'carto-voyager': {
                     type: 'raster',
                     tiles: [
-                        'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
-                        'https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
-                        'https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
-                        'https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+                        'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png' + hsCartoKeyQuery,
+                        'https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png' + hsCartoKeyQuery,
+                        'https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png' + hsCartoKeyQuery,
+                        'https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png' + hsCartoKeyQuery,
                     ],
                     tileSize: 256,
                     maxzoom: 20,

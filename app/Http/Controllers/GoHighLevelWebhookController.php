@@ -35,6 +35,7 @@ class GoHighLevelWebhookController extends Controller
             Log::channel('ghl_sync')->warning('GoHighLevel webhook unauthorized', [
                 'correlation_id' => $correlationId,
                 'ip' => $request->ip(),
+                'method' => $request->method(),
             ]);
 
             return response()->json(['ok' => false, 'error' => 'unauthorized'], 401)
@@ -42,6 +43,16 @@ class GoHighLevelWebhookController extends Controller
         }
 
         $payload = $this->normalizeWebhookPayload($request);
+        GoHighLevelMetrics::incrDay('webhook_received');
+        Log::channel('ghl_sync')->info('GoHighLevel webhook received', [
+            'correlation_id' => $correlationId,
+            'method' => $request->method(),
+            'content_type' => (string) $request->header('Content-Type', ''),
+            'body_len' => strlen($request->getContent()),
+            'keys' => array_keys($payload),
+            'query_keys' => array_keys($request->query()),
+        ]);
+
         $extracted = $pending->extractFromWebhookPayload($payload);
 
         // Workflow custom-data often maps contact_id → Full Name (not the GHL id).
@@ -109,6 +120,7 @@ class GoHighLevelWebhookController extends Controller
                 'content_type' => (string) $request->header('Content-Type', ''),
                 'body_len' => strlen($request->getContent()),
             ]);
+            GoHighLevelMetrics::incrDay('webhook_ignored_no_mls');
 
             return response()->json(['ok' => true, 'queued' => false, 'reason' => 'no_mls'], 200)
                 ->header('X-Serik-Correlation-Id', $correlationId);
@@ -167,7 +179,23 @@ class GoHighLevelWebhookController extends Controller
             $decoded = json_decode($raw, true);
             if (is_array($decoded)) {
                 $payload = array_replace($payload, $decoded);
+            } elseif (str_contains($raw, '=')) {
+                $parsed = [];
+                parse_str($raw, $parsed);
+                if (is_array($parsed) && $parsed !== []) {
+                    $payload = array_replace($payload, $parsed);
+                }
             }
+        }
+
+        $query = $request->query();
+        if (is_array($query) && $query !== []) {
+            $payload = array_replace($query, $payload);
+        }
+
+        $wrapped = $payload['data'] ?? null;
+        if (is_array($wrapped) && $wrapped !== []) {
+            $payload = array_replace($wrapped, $payload);
         }
 
         // customData may arrive as a JSON string.
@@ -191,12 +219,17 @@ class GoHighLevelWebhookController extends Controller
     protected function payloadLooksUseful(array $payload): bool
     {
         foreach ([
-            'mls_number', 'mlsNumber', 'MLS Number', 'contact_id', 'contactId', 'id',
-            'customData', 'customFields', 'contact',
+            'mls_number', 'mlsNumber', 'MLS Number', 'contact_id', 'contactId', 'Contact ID',
+            'id', 'customData', 'customFields', 'contact', 'data',
         ] as $key) {
             if (array_key_exists($key, $payload)) {
                 return true;
             }
+        }
+
+        $mlsFieldId = trim((string) config('gohighlevel.mls_sync.mls_field_id', ''));
+        if ($mlsFieldId !== '' && array_key_exists($mlsFieldId, $payload)) {
+            return true;
         }
 
         return false;
@@ -241,12 +274,13 @@ class GoHighLevelWebhookController extends Controller
         }
 
         try {
-            $pending->enqueue(
+            $task = $pending->enqueue(
                 $contactId,
                 $extracted['mls_number'],
                 $extracted['location_id'],
                 $payload,
             );
+            $pending->dispatchSyncJob($task);
         } catch (\Throwable $e) {
             Log::channel('ghl_sync')->warning('GoHighLevel webhook inline pending failed', [
                 'message' => $e->getMessage(),

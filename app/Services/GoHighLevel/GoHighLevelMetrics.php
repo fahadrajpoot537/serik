@@ -77,9 +77,11 @@ final class GoHighLevelMetrics
 
         return [
             'hour' => [
+                'webhook_received' => $get('webhook_received', $hour),
                 'webhook_accepted' => $get('webhook_accepted', $hour),
                 'webhook_duplicate' => $get('webhook_duplicate', $hour),
                 'webhook_unauthorized' => $get('webhook_unauthorized', $hour),
+                'webhook_ignored_no_mls' => $get('webhook_ignored_no_mls', $hour),
                 'tasks_enqueued' => $get('tasks_enqueued', $hour),
                 'sync_completed' => $get('sync_completed', $hour),
                 'sync_skipped_unchanged' => $get('sync_skipped_unchanged', $hour),
