@@ -103,7 +103,7 @@ final class HomepageFragmentCache
 
   public static function rememberMenu(string $location, callable $render): string
   {
-    $suffix = app()->getLocale() . ':' . $location . ':mega-v5';
+    $suffix = app()->getLocale() . ':' . $location . ':mega-v7';
 
     return self::remember('header_menu', $render, $suffix);
   }

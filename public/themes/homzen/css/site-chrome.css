@@ -266,6 +266,33 @@
   body > .mega-dropdown.serik-mega-portal a {
     pointer-events: auto !important;
   }
+
+  html.serik-header-search-active .mega-dropdown,
+  html.serik-header-search-active .mega-dropdown.serik-mega-portal,
+  html.serik-header-search-active .mega-dropdown.serik-mega-portal.is-mega-open,
+  html.serik-header-search-active .has-dropdown.is-active > .mega-dropdown,
+  html.serik-header-search-active body > .mega-dropdown,
+  html.serik-header-search-active body > .mega-dropdown.serik-mega-portal,
+  html.serik-header-search-active body > .mega-dropdown.serik-mega-portal.is-mega-open,
+  html.serik-header-search-active body > .mega-dropdown a,
+  html.serik-header-search-active .mega-dropdown a,
+  html.serik-header-search-active body > .mega-dropdown.serik-mega-portal a,
+  html.serik-header-search-active #page-home .mega-dropdown {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+
+  html.serik-header-search-active .main-header .main-menu .navigation > li:hover > ul,
+  html.serik-header-search-active .main-header .main-menu .navigation > li:focus-within > ul,
+  html.serik-header-search-active .main-header .main-menu .navigation > li.dropdown2:hover > ul,
+  html.serik-header-search-active #page-home .main-header .main-menu .navigation > li:hover > ul,
+  html.serik-header-search-active #page-home .main-header .main-menu .navigation > li:focus-within > ul,
+  html.serik-header-search-active #page-home .main-header .main-menu .navigation > li.dropdown2:hover > ul {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
 }
 
 .main-header .main-menu .navigation > li > ul {

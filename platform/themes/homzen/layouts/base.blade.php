@@ -138,7 +138,7 @@
 <link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp57">
 @endif
 {{-- Site chrome last: shared navbar/footer + compact laptop scaling --}}
-<link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc20">
+<link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc22">
         <script type="text/javascript">
             (function(c,l,a,r,i,t,y){
                 c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};

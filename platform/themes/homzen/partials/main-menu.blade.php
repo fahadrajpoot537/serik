@@ -161,26 +161,61 @@
         z-index: 2147483000 !important;
     }
 
-    /* Hover bridge so the pointer can leave the nav item into the panel. */
+    /* Tiny gap only — a tall full-width bridge covers sibling nav items and sticks the previous menu. */
     .has-dropdown.is-active .mega-dropdown::before,
-    .mega-dropdown.serik-mega-portal::before {
+    .mega-dropdown.serik-mega-portal.is-mega-open::before {
         content: '';
         position: absolute;
         left: 0;
         right: 0;
         bottom: 100%;
-        height: 48px;
+        height: 10px;
+        pointer-events: none;
     }
 
-    /* Only one dropdown open at a time — JS controls .is-active (no :hover) */
-    .has-dropdown.is-active .mega-dropdown,
-    .mega-dropdown.serik-mega-portal,
-    body > .mega-dropdown.serik-mega-portal,
-    .mega-dropdown.serik-mega-portal a {
+    .mega-dropdown:not(.is-mega-open),
+    .mega-dropdown.serik-mega-portal:not(.is-mega-open),
+    body > .mega-dropdown.serik-mega-portal:not(.is-mega-open) {
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+    }
+
+    /* Only one dropdown open at a time — JS controls .is-active / .is-mega-open (no :hover). */
+    .has-dropdown.is-active > .mega-dropdown,
+    .mega-dropdown.serik-mega-portal.is-mega-open,
+    body > .mega-dropdown.serik-mega-portal.is-mega-open,
+    .mega-dropdown.serik-mega-portal.is-mega-open a {
         opacity: 1;
         visibility: visible;
         pointer-events: auto !important;
         transform: none !important;
+    }
+
+    #header.main-header .main-menu .navigation > li.menu-item > a.menu-link:hover,
+    #header.main-header .main-menu .navigation > li.menu-item.is-active > a.menu-link {
+        color: #fff !important;
+        background: rgba(255, 255, 255, 0.16) !important;
+        box-shadow: inset 0 -2px 0 #fff;
+    }
+
+    #header.main-header .main-menu .navigation > li.menu-item.current > a.menu-link {
+        color: #fff !important;
+        box-shadow: inset 0 -2px 0 #fff;
+    }
+
+    #header.main-header .main-menu .navigation > li.menu-item.current.is-active > a.menu-link,
+    #header.main-header .main-menu .navigation > li.menu-item.current:hover > a.menu-link {
+        background: rgba(255, 255, 255, 0.16) !important;
+    }
+
+    #header.main-header .main-menu .navigation > li.menu-item > a.menu-link:focus-visible {
+        color: #fff !important;
+        background: rgba(255, 255, 255, 0.2) !important;
+        outline: 2px solid #fff !important;
+        outline-offset: 3px !important;
+        box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.35) !important;
+        border-radius: 4px;
     }
 
     html.serik-mega-open iframe[title*="chat"],
@@ -222,6 +257,23 @@
 
     .menu-arrow {
         display: none;
+    }
+
+    /* Header property search is open — keep mega panels fully suppressed (JS also blocks activation). */
+    html.serik-header-search-active .mega-dropdown,
+    html.serik-header-search-active .has-dropdown.is-active > .mega-dropdown,
+    html.serik-header-search-active .mega-dropdown.serik-mega-portal,
+    html.serik-header-search-active .mega-dropdown.serik-mega-portal.is-mega-open,
+    html.serik-header-search-active body > .mega-dropdown,
+    html.serik-header-search-active body > .mega-dropdown.serik-mega-portal,
+    html.serik-header-search-active body > .mega-dropdown.serik-mega-portal.is-mega-open,
+    html.serik-header-search-active body > .mega-dropdown a,
+    html.serik-header-search-active .mega-dropdown a,
+    html.serik-header-search-active body > .mega-dropdown.serik-mega-portal a,
+    html.serik-header-search-active body > .mega-dropdown.serik-mega-portal.is-mega-open a {
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
     }
 }
 
@@ -351,27 +403,43 @@
 
 <ul {!! BaseHelper::clean($options) !!} class="main-menu">
     @foreach ($menu_nodes as $row)
+        @php
+            $menuKey = \Illuminate\Support\Str::slug((string) $row->title);
+            if ($menuKey === '') {
+                $menuKey = 'item-' . (string) ($row->id ?? 'x');
+            }
+            $titleNorm = mb_strtolower(trim((string) $row->title));
+            $isBlogsItem = in_array($titleNorm, ['blog', 'blogs'], true);
+            $childCount = ($row->has_child && isset($row->child) && is_countable($row->child))
+                ? count($row->child)
+                : 0;
+            $showMega = (bool) $row->has_child && ! ($isBlogsItem && $childCount === 0);
+            $panelId = $showMega ? 'serik-mega-' . $menuKey . '-' . (string) ($row->id ?? $menuKey) : null;
+            $parentHref = \App\Support\MenuUrl::resolve($row->url);
+        @endphp
         <li @class([
             'menu-item',
-            'has-dropdown' => $row->has_child,
+            'has-dropdown' => $showMega,
             'current' => $row->active,
             $row->css_class
-        ])>
+        ])
+            @if($showMega) data-menu-key="{{ $menuKey }}" @endif>
 
-            <a href="{{ $row->has_child ? '#' : \App\Support\MenuUrl::resolve($row->url) }}"
+            <a href="{{ $parentHref }}"
                target="{{ $row->target }}"
                class="menu-link"
-               @if($row->has_child) aria-haspopup="true" aria-expanded="false" @endif>
+               @if($row->active) aria-current="page" @endif
+               @if($showMega) aria-haspopup="true" aria-expanded="false" aria-controls="{{ $panelId }}" @endif>
                 {!! BaseHelper::clean($row->icon_html) !!}
                 {{ $row->title }}
 
-                @if (!$row->has_child)
+                @if (!$showMega)
                     <span class="menu-arrow"></span>
                 @endif
             </a>
 
-            @if ($row->has_child && $row->title=='Buy')
-                <div class="mega-dropdown" >
+            @if ($showMega && $row->title=='Buy')
+                <div class="mega-dropdown" id="{{ $panelId }}" data-menu-parent="{{ $menuKey }}">
 <div class="mega-close" role="button" tabindex="0" aria-label="{{ __('Close menu') }}">✕ Close</div>
                     <div class="mega-wrapper">
 
@@ -592,8 +660,8 @@
 
                     </div>
                 </div>
-             @elseif ($row->has_child && $row->title=='Sell')    
-                 <div class="mega-dropdown">
+             @elseif ($showMega && $row->title=='Sell')    
+                 <div class="mega-dropdown" id="{{ $panelId }}" data-menu-parent="{{ $menuKey }}">
 <div class="mega-close" role="button" tabindex="0" aria-label="{{ __('Close menu') }}">✕ Close</div>
                     <div class="mega-wrapper">
 
@@ -619,8 +687,8 @@
 
                     </div>
                 </div>   
-            @elseif ($row->has_child)
-                <div class="mega-dropdown">
+            @elseif ($showMega)
+                <div class="mega-dropdown" id="{{ $panelId }}" data-menu-parent="{{ $menuKey }}">
 <div class="mega-close" role="button" tabindex="0" aria-label="{{ __('Close menu') }}">✕ Close</div>
                     <div class="mega-wrapper">
 
@@ -664,6 +732,33 @@
         return window.innerWidth >= DESKTOP_BP;
     }
 
+    function isHeaderSearchPanelOpen() {
+        const dropdown = document.getElementById('searchDropdown');
+        if (!dropdown || dropdown.style.display !== 'block') {
+            return false;
+        }
+        try {
+            return window.getComputedStyle(dropdown).display === 'block';
+        } catch (err) {
+            return true;
+        }
+    }
+
+    function isHeaderSearchActive() {
+        if (document.documentElement.classList.contains('serik-header-search-active')) {
+            return true;
+        }
+        const header = document.getElementById('header');
+        if (header && header.classList.contains('serik-header-search-active')) {
+            return true;
+        }
+        const input = document.getElementById('smartInput');
+        if (input && document.activeElement === input) {
+            return true;
+        }
+        return isHeaderSearchPanelOpen();
+    }
+
     function updateMegaTop() {
         const header = document.getElementById('header');
         if (!header) {
@@ -687,7 +782,7 @@
             return;
         }
         const home = dropdown._megaHome;
-        dropdown.classList.remove('serik-mega-portal');
+        dropdown.classList.remove('serik-mega-portal', 'is-mega-open');
         dropdown.style.removeProperty('position');
         dropdown.style.removeProperty('left');
         dropdown.style.removeProperty('right');
@@ -708,7 +803,7 @@
 
     function portalMega(item) {
         const dropdown = item && item._megaPanel;
-        if (!dropdown || !isDesktop()) {
+        if (!dropdown || !isDesktop() || isHeaderSearchActive()) {
             return;
         }
 
@@ -720,7 +815,7 @@
 
         const top = updateMegaTop();
         document.body.appendChild(dropdown);
-        dropdown.classList.add('serik-mega-portal');
+        dropdown.classList.add('serik-mega-portal', 'is-mega-open');
         dropdown.style.position = 'fixed';
         dropdown.style.left = '0';
         dropdown.style.right = '0';
@@ -768,6 +863,10 @@
     window.closeMegaMenu = closeMegaMenu;
 
     function setActiveMegaItem(item) {
+        if (isHeaderSearchActive()) {
+            closeMegaMenu();
+            return;
+        }
         document.querySelectorAll('.has-dropdown.is-active').forEach((el) => {
             if (el !== item) {
                 el.classList.remove('is-active');
@@ -815,6 +914,11 @@
 
     document.querySelectorAll('.has-dropdown > .menu-link').forEach((link) => {
         link.addEventListener('click', function (e) {
+            if (isDesktop() && isHeaderSearchActive()) {
+                e.preventDefault();
+                closeMegaMenu();
+                return;
+            }
             if (isDesktop()) {
                 e.preventDefault();
                 return;
@@ -840,7 +944,7 @@
         });
 
         link.addEventListener('keydown', function (e) {
-            if (!isDesktop()) {
+            if (!isDesktop() || isHeaderSearchActive()) {
                 return;
             }
             if (e.key !== 'ArrowDown' && e.key !== 'Enter' && e.key !== ' ') {
@@ -866,6 +970,10 @@
             if (!isDesktop()) {
                 return;
             }
+            if (isHeaderSearchActive()) {
+                closeMegaMenu();
+                return;
+            }
             clearTimeout(closeTimer);
             setActiveMegaItem(item);
         });
@@ -886,6 +994,10 @@
     document.querySelectorAll('.mega-dropdown').forEach((dropdown) => {
         dropdown.addEventListener('mouseenter', () => {
             if (!isDesktop()) {
+                return;
+            }
+            if (isHeaderSearchActive()) {
+                closeMegaMenu();
                 return;
             }
             clearTimeout(closeTimer);

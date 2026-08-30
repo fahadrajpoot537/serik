@@ -18,7 +18,7 @@ return [
             $theme->asset()->usePath()->add('animate', 'css/animate.min.css');
             $theme->asset()->usePath()->add('swiper', 'plugins/swiper/swiper-bundle.min.css');
             $theme->asset()->usePath()->add('style', 'css/style.css', version: $version);
-            $theme->asset()->usePath()->add('site-chrome', 'css/site-chrome.css', version: $version . '-sc20');
+            $theme->asset()->usePath()->add('site-chrome', 'css/site-chrome.css', version: $version . '-sc22');
 
             $theme->asset()->container('footer')->usePath()->add('jquery', 'js/jquery.min.js');
             $theme->asset()->container('footer')->usePath()->add('popper', 'js/popper.min.js', ['jquery']);

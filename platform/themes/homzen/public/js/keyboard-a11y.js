@@ -162,6 +162,9 @@
         }
         if (closeSearchDropdowns()) {
             closed = true;
+            if (typeof window.serikHeaderSearchSync === 'function') {
+                window.serikHeaderSearchSync();
+            }
         }
         var panel = document.getElementById('mobileSearchPanel');
         if (panel && panel.classList.contains('active')) {
