@@ -145,6 +145,7 @@ Route::group([
     });
 
     Route::get('propertiesName', 'PropertyController@fetchProperties');
+    Route::get('home-evaluation', 'PropertyController@evaluateHome');
     Route::get('testApi', 'PropertyController@testapi');
     Route::get('syncMissingDescriptions', 'PropertyController@syncMissingDescriptions');
     Route::get('sync-status', 'PropertyController@syncStatus');

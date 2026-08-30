@@ -2670,61 +2670,396 @@ class PropertyController extends BaseController
 
     public function fetchProperties(Request $request)
     {
-        $keyword = trim($request->keyword ?? '');
+        $keyword = trim((string) ($request->keyword ?? ''));
 
-        if ($keyword === '') {
+        if (mb_strlen($keyword) < 3) {
             return response()->json([]);
         }
 
         try {
+            $cacheKey = 'eval_addr_v3:' . md5(mb_strtolower($keyword));
 
+            $records = Cache::remember($cacheKey, 90, function () use ($keyword) {
+                return $this->localEvaluationAddressSuggestions($keyword);
+            });
 
-
-
-            //Build AMP filter safely
-            $filterQuery = $this->buildFilterQuery($keyword);
-
-            $url = "https://query.ampre.ca/odata/Property?"
-                . "\$filter={$filterQuery}"
-                . "&\$top=5"
-                . "&\$select=UnparsedAddress,BedroomsAboveGrade,BedroomsBelowGrade,BathroomsTotalInteger,ParkingTotal,LivingAreaRange,PropertySubType,TaxAnnualAmount,LotWidth,LotDepth";
-
-            //dd($url);
-            dd($this->ampCurl($url));
-            $response = Cache::remember(
-                'amp_search_' . md5($url),
-                30,
-                fn() => $this->ampCurl($url)
-            );
-
-
-            dd($response);
-
-
-            $data = json_decode($response, true);
-            $records = $data['value'] ?? [];
-
-            if (!is_array($records)) {
-                return response()->json([]);
-            }
-
-
-
-
-
-            return response()->json($records);
-
+            return response()->json(array_values($records ?: []));
         } catch (\Throwable $e) {
-
             \Log::error('AMP Fetch Properties Error', [
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ]);
 
             return response()->json([]);
         }
     }
 
+    public function evaluateHome(Request $request)
+    {
+        $address = trim((string) $request->input('address', ''));
+        $beds = max(0, (int) $request->input('bedrooms', 0));
+        $type = trim((string) $request->input('property_type', ''));
 
+        if (mb_strlen($address) < 3) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Please enter a property address.',
+            ]);
+        }
+
+        $cacheKey = 'home_eval_v5:' . md5(mb_strtolower($address) . '|' . $beds . '|' . mb_strtolower($type));
+
+        try {
+            $payload = Cache::remember($cacheKey, 180, function () use ($address, $beds, $type) {
+                return $this->buildHomeEvaluation($address, $beds, $type);
+            });
+
+            return response()->json($payload);
+        } catch (\Throwable $e) {
+            \Log::error('Home evaluation error', ['message' => $e->getMessage()]);
+
+            return response()->json([
+                'ok' => false,
+                'message' => 'We could not calculate an estimate right now. Please try again.',
+            ]);
+        }
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function localEvaluationAddressSuggestions(string $keyword): array
+    {
+        $parsed = $this->parseAddressSearchKeyword($keyword);
+        $meiliHealthy = Cache::get('serik_meili_health_v2');
+
+        if ($meiliHealthy) {
+            $opts = [
+                'limit' => $parsed ? 16 : 8,
+                'offset' => 0,
+                'residential_only' => true,
+            ];
+            $meiliKeyword = $keyword;
+            if ($parsed) {
+                $opts['street_number'] = $parsed['street_number'];
+                $meiliKeyword = trim($parsed['street_number'] . ' ' . ($parsed['street_name'] ?? $parsed['street_part']));
+            }
+
+            $ids = app(\Botble\RealEstate\Services\PropertySearchService::class)->searchIds($meiliKeyword, $opts);
+            if (is_array($ids) && $ids !== []) {
+                $mapped = $this->mapEvaluationSuggestionsByIds($ids, $parsed);
+                if ($mapped !== []) {
+                    return $mapped;
+                }
+            }
+        }
+
+        return $this->fulltextEvaluationAddressSuggestions($keyword, $parsed);
+    }
+
+    /**
+     * @param  list<int>  $ids
+     * @return array<int, array<string, mixed>>
+     */
+    private function mapEvaluationSuggestionsByIds(array $ids, ?array $parsed = null): array
+    {
+        $ids = array_values(array_filter(array_map('intval', $ids)));
+        if ($ids === []) {
+            return [];
+        }
+
+        $rowsById = DB::table('re_properties')
+            ->select($this->evaluationSuggestionColumns())
+            ->whereIn('id', $ids)
+            ->where('moderation_status', 'approved')
+            ->get()
+            ->keyBy('id');
+
+        $rows = [];
+        foreach ($ids as $id) {
+            $item = $rowsById->get($id);
+            if ($item) {
+                $rows[] = $this->mapEvaluationSuggestionRow($item);
+            }
+        }
+
+        return $this->uniqueEvaluationSuggestionRows($rows, $parsed);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function fulltextEvaluationAddressSuggestions(string $keyword, ?array $parsed): array
+    {
+        $query = PropertyFulltextSearch::baseQuery($this->evaluationSuggestionColumns());
+
+        if ($parsed) {
+            PropertyFulltextSearch::applyRequiredTokensFulltext(
+                $query,
+                (string) $parsed['street_number'],
+                (string) ($parsed['street_part'] ?? $parsed['street_name'] ?? '')
+            );
+        } else {
+            PropertyFulltextSearch::applyKeywordFulltext($query, $keyword);
+        }
+
+        $items = $query->limit(16)->get();
+        if ($items->isEmpty() && $parsed) {
+            $query = PropertyFulltextSearch::baseQuery($this->evaluationSuggestionColumns());
+            PropertyFulltextSearch::applyKeywordFulltext($query, $keyword);
+            $items = $query->limit(16)->get();
+        }
+        $rows = [];
+        foreach ($items as $item) {
+            $rows[] = $this->mapEvaluationSuggestionRow($item);
+        }
+
+        return $this->uniqueEvaluationSuggestionRows($rows, $parsed);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function uniqueEvaluationSuggestionRows(array $rows, ?array $parsed = null): array
+    {
+        $filterByStreet = $parsed && ! empty($parsed['street_number']) && ! empty($parsed['street_name']);
+
+        $collapse = function (array $source, bool $matchStreet) use ($parsed): array {
+            $seen = [];
+            $out = [];
+            foreach ($source as $row) {
+                if ($matchStreet && ! $this->addressMatchesParsedSearch((string) ($row['UnparsedAddress'] ?? ''), $parsed)) {
+                    continue;
+                }
+                $key = mb_strtolower(trim((string) ($row['UnparsedAddress'] ?? '')));
+                if ($key === '' || isset($seen[$key])) {
+                    continue;
+                }
+                $seen[$key] = true;
+                $out[] = $row;
+                if (count($out) >= 5) {
+                    break;
+                }
+            }
+
+            return $out;
+        };
+
+        $matched = $collapse($rows, (bool) $filterByStreet);
+
+        return $matched !== [] ? $matched : $collapse($rows, false);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function evaluationSuggestionColumns(): array
+    {
+        return [
+            'id',
+            'name',
+            'external_id',
+            'number_bedroom',
+            'number_bathroom',
+            'BedroomsBelowGrade',
+            'ParkingSpaces',
+            'CoveredSpaces',
+            'PropertySubType',
+            'type',
+            'square',
+            'price',
+            'ClosePrice',
+            'MlsStatus',
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildHomeEvaluation(string $address, int $beds, string $type): array
+    {
+        $parsed = $this->parseAddressSearchKeyword($address);
+        $subjectRows = $this->localEvaluationAddressSuggestions($address);
+        if ($parsed && ! empty($parsed['street_number']) && ! empty($parsed['street_name'])) {
+            $subjectRows = array_values(array_filter(
+                $subjectRows,
+                fn (array $row) => $this->addressMatchesParsedSearch((string) ($row['UnparsedAddress'] ?? ''), $parsed)
+            ));
+        }
+        $subject = null;
+        $subjectPrice = 0.0;
+
+        foreach ($subjectRows as $row) {
+            $status = strtolower((string) ($row['MlsStatus'] ?? ''));
+            if (str_contains($status, 'leas')) {
+                continue;
+            }
+            $salePrice = (float) ($row['ClosePrice'] ?? 0);
+            if ($salePrice < 50000) {
+                $salePrice = (float) ($row['ListPrice'] ?? 0);
+            }
+            if ($salePrice < 50000) {
+                continue;
+            }
+            $subject = $row;
+            $subjectPrice = $salePrice;
+            break;
+        }
+
+        if ($subject === null && $subjectRows !== []) {
+            $subject = $subjectRows[0];
+        }
+
+        $location = TrebPropertyHelper::parseLocationPartsFromAddress($address);
+        $city = trim((string) ($location['City'] ?? ''));
+        $streetPart = trim((string) ($parsed['street_part'] ?? $parsed['street_name'] ?? ''));
+
+        $compPrices = [];
+        if ($subjectPrice < 50000 && $streetPart !== '') {
+            $compPrices = $this->evaluationCompPrices($streetPart, $city, $beds, $type);
+        }
+
+        $median = $this->medianPrice($compPrices);
+        $estimate = $subjectPrice >= 50000 ? $subjectPrice : $median;
+
+        if ($estimate <= 0) {
+            return [
+                'ok' => false,
+                'message' => 'No recent comparable sales were found for this home. Send us the details and we will prepare a full evaluation.',
+            ];
+        }
+
+        $low = $estimate * 0.92;
+        $high = $estimate * 1.08;
+        if ($median > 0) {
+            $low = min($low, $median * 0.92);
+            $high = max($high, $median * 1.08);
+        }
+
+        return [
+            'ok' => true,
+            'estimate' => (int) round($estimate),
+            'low' => (int) round($low),
+            'high' => (int) round($high),
+            'comps' => count($compPrices),
+            'city' => $city,
+            'address' => is_array($subject) ? ($subject['UnparsedAddress'] ?? $address) : $address,
+        ];
+    }
+
+    /**
+     * @return list<float>
+     */
+    private function evaluationCompPrices(string $streetPart, string $city, int $beds, string $type): array
+    {
+        $phrase = trim($streetPart . ' ' . $city);
+        if (mb_strlen($phrase) < 3) {
+            return [];
+        }
+
+        $sold = ['Sold', 'Sold Conditional', 'Sold Conditional Escape'];
+        $query = PropertyFulltextSearch::baseQuery([
+            'id',
+            'name',
+            'ClosePrice',
+            'MlsStatus',
+            'TransactionType',
+            'number_bedroom',
+            'PropertySubType',
+            'close_date',
+        ]);
+        PropertyFulltextSearch::applyKeywordFulltext($query, $phrase);
+        $since = now()->subMonths(18)->timestamp;
+        $type = trim($type);
+        $typeNeedle = mb_strtolower($type);
+        $cityNeedle = mb_strtolower($city);
+        $prices = [];
+
+        foreach ($query->limit(80)->get() as $row) {
+            $status = trim((string) ($row->MlsStatus ?? ''));
+            if (! in_array($status, $sold, true)) {
+                continue;
+            }
+            if (strcasecmp((string) ($row->TransactionType ?? ''), 'For Sale') !== 0) {
+                continue;
+            }
+            $price = (float) ($row->ClosePrice ?? 0);
+            if ($price < 50000) {
+                continue;
+            }
+            if (! empty($row->close_date)) {
+                $closed = strtotime((string) $row->close_date);
+                if ($closed && $closed < $since) {
+                    continue;
+                }
+            }
+            if ($beds > 0) {
+                $rowBeds = (int) ($row->number_bedroom ?? 0);
+                if ($rowBeds < max(0, $beds - 1) || $rowBeds > $beds + 1) {
+                    continue;
+                }
+            }
+            if ($typeNeedle !== '') {
+                $rowType = mb_strtolower(trim((string) ($row->PropertySubType ?? '')));
+                if ($rowType !== '' && ! str_starts_with($rowType, $typeNeedle)) {
+                    continue;
+                }
+            }
+            if ($cityNeedle !== '' && ! str_contains(mb_strtolower((string) $row->name), $cityNeedle)) {
+                continue;
+            }
+            $prices[] = $price;
+            if (count($prices) >= 40) {
+                break;
+            }
+        }
+
+        return $prices;
+    }
+
+    /**
+     * @param  list<float>  $prices
+     */
+    private function medianPrice(array $prices): float
+    {
+        $prices = array_values(array_filter($prices, static fn ($p) => $p > 0));
+        sort($prices);
+        $n = count($prices);
+        if ($n === 0) {
+            return 0.0;
+        }
+        $mid = intdiv($n, 2);
+        if ($n % 2 === 1) {
+            return (float) $prices[$mid];
+        }
+
+        return ((float) $prices[$mid - 1] + (float) $prices[$mid]) / 2;
+    }
+
+    private function mapEvaluationSuggestionRow(object $item): array
+    {
+        $record = TrebPropertyHelper::enrichRecordAddress([
+            'UnparsedAddress' => $item->name ?? '',
+            'name' => $item->name ?? '',
+        ]);
+
+        return [
+            'UnparsedAddress' => TrebPropertyHelper::formatDisplayAddress($record) ?: ($item->name ?? ''),
+            'ListingKey' => $item->external_id ?? '',
+            'BedroomsAboveGrade' => (int) ($item->number_bedroom ?? 0),
+            'BedroomsBelowGrade' => (int) ($item->BedroomsBelowGrade ?? 0),
+            'BathroomsTotalInteger' => (int) ($item->number_bathroom ?? 0),
+            'ParkingTotal' => (int) ($item->CoveredSpaces ?? 0) + (int) ($item->ParkingSpaces ?? 0),
+            'LivingAreaRange' => $item->square ?? '0',
+            'PropertySubType' => trim((string) ($item->PropertySubType ?? $item->type ?? '')),
+            'TaxAnnualAmount' => $item->TaxAnnualAmount ?? '0',
+            'LotWidth' => $item->LotWidth ?? '0',
+            'LotDepth' => $item->LotDepth ?? '0',
+            'ListPrice' => (float) ($item->price ?? 0),
+            'ClosePrice' => (float) ($item->ClosePrice ?? 0),
+            'MlsStatus' => $item->MlsStatus ?? '',
+        ];
+    }
 
 
     private function applyLocalOntarioResidentialScope($query): void

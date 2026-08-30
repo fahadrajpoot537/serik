@@ -130,12 +130,59 @@
 
 
 
+.prop-address-wrap {
+    position: relative;
+}
 #address-suggestions {
     position: absolute;
-    width: 800px;
+    left: 0;
+    right: 0;
+    width: auto;
     z-index: 9999;
     max-height: 250px;
     overflow-y: auto;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+}
+#address-suggestions .suggestion-item {
+    cursor: pointer;
+}
+#address-suggestions .suggestion-item:hover {
+    background: #f3f7fc;
+    color: #0255a1;
+}
+.estimate-result {
+    display: none;
+    margin-top: 20px;
+    padding: 20px;
+    border-radius: 10px;
+    background: #f3f7fc;
+    border: 1px solid #c5d8ef;
+}
+.estimate-result.is-visible {
+    display: block;
+}
+.estimate-result .estimate-price {
+    font-size: 32px;
+    font-weight: 700;
+    color: #0255a1;
+    margin: 8px 0;
+}
+.estimate-result .estimate-range {
+    font-size: 16px;
+    color: #333;
+    margin-bottom: 8px;
+}
+.estimate-result .estimate-note {
+    font-size: 13px;
+    color: #666;
+    margin: 0;
+}
+.estimate-result.is-error {
+    background: #fff6f6;
+    border-color: #f0c7c7;
 }
 
 
@@ -444,8 +491,10 @@ $faqs = collect([
                         <h3 class="mb-3">Home Details</h3>
               <form id="prop-name" >     
                         <label class="mb-2">Please enter your property address</label>
-                        <input type="text" name="prop-address" id="prop-address" class="form-control mb-2">
+                        <div class="prop-address-wrap">
+                        <input type="text" name="prop-address" id="prop-address" class="form-control mb-2" autocomplete="off">
                         <div id="address-suggestions" class="list-group"></div>
+                        </div>
                         
                         <div class="row g-3 mb-4">
                         
@@ -543,7 +592,8 @@ $faqs = collect([
                     Note that Sigma Estimate is still under beta testing. There might be inaccuracy or inconsistency in our estimated value. Please use this information only as a starting point for property valuation.
                     </div-->
                     <br>
-                    <button class="btn btn-main w-100">Get Estimate</button>
+                    <button type="submit" class="btn btn-main w-100" id="get-estimate-btn">Get Estimate</button>
+                    <div id="estimate-result" class="estimate-result" role="status" aria-live="polite"></div>
                  </form>    
                     </div>
                 </div>
@@ -853,95 +903,166 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const input = document.getElementById("prop-address");
     const suggestionBox = document.getElementById("address-suggestions");
+    const form = document.getElementById("prop-name");
+    const resultBox = document.getElementById("estimate-result");
+    const estimateBtn = document.getElementById("get-estimate-btn");
+
+    if (!input || !suggestionBox) {
+        return;
+    }
 
     let debounceTimer;
     let results = [];
+    let selectedListing = null;
+    let suggestAbort = null;
 
-    input.addEventListener("keyup", function () {
+    function money(value) {
+        return new Intl.NumberFormat('en-CA', {
+            style: 'currency',
+            currency: 'CAD',
+            maximumFractionDigits: 0
+        }).format(Number(value) || 0);
+    }
 
+    function matchPropertyType(value) {
+        const propertyType = document.getElementById("property-type");
+        if (!propertyType) {
+            return;
+        }
+        const want = String(value || '').trim().toLowerCase();
+        if (!want) {
+            return;
+        }
+        for (const option of propertyType.options) {
+            const opt = option.value.trim().toLowerCase();
+            if (opt === want || opt.replace(/\s+/g, '') === want.replace(/\s+/g, '') || want.indexOf(opt) === 0 || opt.indexOf(want) === 0) {
+                propertyType.value = option.value;
+                return;
+            }
+        }
+    }
+
+    function showEstimate(payload) {
+        if (!resultBox) {
+            return;
+        }
+        resultBox.classList.add('is-visible');
+        if (!payload || !payload.ok) {
+            resultBox.classList.add('is-error');
+            resultBox.innerHTML = `<p class="estimate-note">${payload && payload.message ? payload.message : 'No estimate available yet.'}</p>`;
+            return;
+        }
+        resultBox.classList.remove('is-error');
+        const cityLine = payload.city ? ` in ${payload.city}` : '';
+        const compsLine = payload.comps
+            ? `Based on ${payload.comps} comparable sale${payload.comps === 1 ? '' : 's'}${cityLine}.`
+            : 'Based on this property’s current market data.';
+        resultBox.innerHTML = `
+            <div>Estimated home value</div>
+            <div class="estimate-price">${money(payload.estimate)}</div>
+            <div class="estimate-range">${money(payload.low)} – ${money(payload.high)}</div>
+            <p class="estimate-note">${compsLine}</p>
+        `;
+        resultBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    input.addEventListener("input", function () {
+        selectedListing = null;
         clearTimeout(debounceTimer);
-
         const keyword = this.value.trim();
-
         if (keyword.length < 3) {
             suggestionBox.innerHTML = "";
+            results = [];
             return;
         }
 
         debounceTimer = setTimeout(() => {
-
-            fetch(`/api/v1/propertiesName?keyword=${encodeURIComponent(keyword)}`)
+            if (suggestAbort) {
+                suggestAbort.abort();
+            }
+            suggestAbort = new AbortController();
+            fetch(`/api/v1/propertiesName?keyword=${encodeURIComponent(keyword)}`, { signal: suggestAbort.signal })
                 .then(res => res.json())
                 .then(data => {
-
-                    results = data;
+                    results = Array.isArray(data) ? data : [];
                     suggestionBox.innerHTML = "";
-
-                    if (!data.length) {
-                        suggestionBox.innerHTML = `<div class="list-group-item">No results</div>`;
+                    if (!results.length) {
+                        suggestionBox.innerHTML = `<div class="list-group-item">No matching listings</div>`;
                         return;
                     }
-
-                    data.forEach((item, index) => {
-
+                    results.forEach((item, index) => {
                         const div = document.createElement("div");
                         div.className = "list-group-item suggestion-item";
-                        div.textContent = item.UnparsedAddress;
-                        div.dataset.index = index;
-
+                        div.textContent = item.UnparsedAddress || '';
+                        div.dataset.index = String(index);
                         suggestionBox.appendChild(div);
                     });
-
+                })
+                .catch((err) => {
+                    if (err && err.name === 'AbortError') {
+                        return;
+                    }
+                    results = [];
+                    suggestionBox.innerHTML = "";
                 });
-
-        }, 300);
-
+        }, 180);
     });
 
-    // CLICK EVENT (event delegation)
+    suggestionBox.addEventListener("click", function (e) {
+        if (!e.target.classList.contains("suggestion-item")) return;
+        const data = results[e.target.dataset.index];
+        if (!data) {
+            return;
+        }
+        selectedListing = data;
+        document.getElementById("prop-address").value = data.UnparsedAddress || '';
+        document.getElementById("bedrooms").value = data.BedroomsAboveGrade ?? 0;
+        document.getElementById("bedrooms-below").value = data.BedroomsBelowGrade ?? 0;
+        document.getElementById("bathrooms").value = data.BathroomsTotalInteger ?? 0;
+        document.getElementById("garage").value = data.ParkingTotal ?? 0;
+        document.getElementById("sqft").value = data.LivingAreaRange ?? '0';
+        document.getElementById("tax").value = data.TaxAnnualAmount ?? '0';
+        matchPropertyType(data.PropertySubType);
+        document.getElementById("lot-width").value = data.LotWidth ?? '0';
+        document.getElementById("lot-depth").value = data.LotDepth ?? '0';
+        suggestionBox.innerHTML = "";
+    });
 
-suggestionBox.addEventListener("click", function (e) {
-
-    if (!e.target.classList.contains("suggestion-item")) return;
-
-    const index = e.target.dataset.index;
-    const data = results[index];
-
-    console.log("Selected Data:", data); // debug
-
-    // ✅ Address
-    document.getElementById("prop-address").value = data.UnparsedAddress || '';
-
-    // ✅ Bedrooms
-    document.getElementById("bedrooms").value = data.BedroomsAboveGrade ?? 0;
-    document.getElementById("bedrooms-below").value = data.BedroomsBelowGrade ?? 0;
-
-    // ✅ Bathrooms
-    document.getElementById("bathrooms").value = data.BathroomsTotalInteger ?? 0;
-
-    // ✅ Garage
-    document.getElementById("garage").value = data.ParkingTotal ?? 0;
-
-    // ✅ Square Footage
-    document.getElementById("sqft").value = data.LivingAreaRange ?? '0';
-
-    // ✅ Tax
-    document.getElementById("tax").value = data.TaxAnnualAmount ?? '0';
-
-    // ✅ Property Type (match option)
-    const propertyType = document.getElementById("property-type");
-    if (propertyType) {
-        propertyType.value = data.PropertySubType || '';
+    if (form) {
+        form.addEventListener("submit", function (e) {
+            e.preventDefault();
+            const address = input.value.trim();
+            if (address.length < 3) {
+                showEstimate({ ok: false, message: 'Please enter a property address.' });
+                return;
+            }
+            if (estimateBtn) {
+                estimateBtn.disabled = true;
+                estimateBtn.textContent = 'Calculating...';
+            }
+            if (resultBox) {
+                resultBox.classList.add('is-visible');
+                resultBox.classList.remove('is-error');
+                resultBox.innerHTML = '<p class="estimate-note">Calculating your home value...</p>';
+            }
+            const params = new URLSearchParams({
+                address: address,
+                bedrooms: document.getElementById("bedrooms")?.value || '0',
+                bathrooms: document.getElementById("bathrooms")?.value || '0',
+                property_type: document.getElementById("property-type")?.value || ''
+            });
+            fetch(`/api/v1/home-evaluation?${params.toString()}`)
+                .then(res => res.json())
+                .then(showEstimate)
+                .catch(() => showEstimate({ ok: false, message: 'We could not calculate an estimate right now. Please try again.' }))
+                .finally(() => {
+                    if (estimateBtn) {
+                        estimateBtn.disabled = false;
+                        estimateBtn.textContent = 'Get Estimate';
+                    }
+                });
+        });
     }
-
-    // ✅ Lot sizes
-    document.getElementById("lot-width").value = data.LotWidth ?? '0';
-    document.getElementById("lot-depth").value = data.LotDepth ?? '0';
-
-    // ✅ Clear dropdown
-    suggestionBox.innerHTML = "";
-
-});
 
 
 // FAQ toggle (namespaced)
