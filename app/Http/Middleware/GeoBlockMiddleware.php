@@ -113,7 +113,7 @@ class GeoBlockMiddleware
     protected function isSitemapOrSeoPath(string $path): bool
     {
         return (bool) preg_match(
-            '#^(?:sitemap\.xml|agents\.xml|pages\.xml|robots\.txt|properties-\d{4}-\d{2}\.xml|blog-posts-(?:\d{4}-\d{2}|.*)\.xml)$#i',
+            '#^(?:sitemap\\.xml|agents\\.xml|pages\\.xml|featured-properties\\.xml|robots\\.txt|blog-posts-(?:\\d{4}-\\d{2}|.*)\\.xml)$#i',
             $path
         );
     }

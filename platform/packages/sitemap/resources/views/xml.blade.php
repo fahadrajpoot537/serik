@@ -25,40 +25,35 @@ if (request()->is('pages.xml')) {
 
     $items = collect($items)
         ->map(function ($item) {
+            $url = (string) ($item['loc'] ?? '');
+            $path = strtolower(trim((string) parse_url($url, PHP_URL_PATH), '/'));
 
-            $url = $item['loc'];
-
-            // match:
-            // /houses-for-sale-in-kwc
-            if (
-                preg_match(
-                    '#https://serik\.ca/([a-z0-9\-]+)$#i',
-                    $url,
-                    $match
-                )
-            ) {
-
-                $slug = $match[1];
-
-                // only convert listing pages
-                if (
-                    str_contains($slug, '-for-sale-in-') ||
-                    str_contains($slug, '-for-lease-in-')
-                ) {
-
-                    $item['loc'] =
-                        url(
-                            "on/{$slug}/map"
-                        );
-                }
+            if ($path === 'fthb') {
+                $item['loc'] = url('first-time-house-buyer');
             }
 
             return $item;
+        })
+        ->filter(function ($item) {
+            $url = (string) ($item['loc'] ?? '');
+            if ($url === '') {
+                return false;
+            }
 
+            $path = strtolower(trim((string) parse_url($url, PHP_URL_PATH), '/'));
+
+            if (preg_match('#^on/.+/map(?:/.*)?$#', $path)) {
+                return false;
+            }
+
+            if (str_contains($path, '-for-sale-in-') || str_contains($path, '-for-lease-in-')) {
+                return false;
+            }
+
+            return \App\Support\SerikSitemap::shouldInclude($url);
         })
         ->values();
-        
-        
+
       $hiddenUrls = [
             url('/register-thanks'),
             url('/contact-thanks'),

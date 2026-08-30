@@ -18,6 +18,10 @@ class SerikSiteMapManager extends SiteMapManager
 
     public function addSitemap(string $url, mixed $date = null): self
     {
+        if (! SerikSitemap::shouldIncludeIndex($url)) {
+            return $this;
+        }
+
         return parent::addSitemap($url, $this->toSitemapDate($date));
     }
 

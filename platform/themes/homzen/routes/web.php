@@ -37,6 +37,7 @@ Route::middleware(['web', 'core'])->group(function (): void {
     Route::redirect('/frequently-asked-questions', '/faqs', 301);
     Route::redirect('/blog', '/blogs', 301);
     Route::redirect('/agents/sadaqat', '/agents', 301);
+    Route::redirect('/fthb', '/first-time-house-buyer', 301);
 
     Route::get('/blogs', function () {
         $blogPageId = (int) theme_option('blog_page_id', setting('blog_page_id'));

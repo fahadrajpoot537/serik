@@ -578,12 +578,9 @@ class RealEstateServiceProvider extends ServiceProvider
         $this->app->register(CommandServiceProvider::class);
 
         SiteMapManager::registerKey([
-            'properties-((?:19|20|21|22)\d{2})-(0?[1-9]|1[012])',
-            'projects-((?:19|20|21|22)\d{2})-(0?[1-9]|1[012])',
+            'featured-properties',
             'property-categories',
             'agents',
-            'properties-city',
-            'projects-city',
         ]);
 
         if (defined('LANGUAGE_MODULE_SCREEN_NAME')) {

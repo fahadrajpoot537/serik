@@ -76,7 +76,6 @@ class BlogServiceProvider extends ServiceProvider
         $this->app['events']->listen(ThemeRoutingBeforeEvent::class, function (): void {
             SiteMapManager::registerKey([
                 'blog-categories',
-                'blog-tags',
                 'blog-posts',
             ]);
 

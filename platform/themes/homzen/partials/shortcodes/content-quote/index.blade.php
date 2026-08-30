@@ -120,7 +120,8 @@
     
     
     function isHomePage() {
-    return window.location.pathname === '/fthb';
+    return window.location.pathname === '/fthb'
+        || window.location.pathname === '/first-time-house-buyer';
 }
 
 

@@ -4,7 +4,6 @@ namespace Botble\Blog\Listeners;
 
 use Botble\Blog\Models\Category;
 use Botble\Blog\Models\Post;
-use Botble\Blog\Models\Tag;
 use Botble\Theme\Events\RenderingSiteMapEvent;
 use Botble\Theme\Facades\SiteMapManager;
 use Illuminate\Support\Arr;
@@ -28,16 +27,6 @@ class RenderingSiteMapListener
 
                     break;
                 case 'blog-tags':
-                    $tags = Tag::query()
-                        ->with('slugable')
-                        ->wherePublished()->latest()
-                        ->select(['id', 'name', 'updated_at'])
-                        ->get();
-
-                    foreach ($tags as $tag) {
-                        SiteMapManager::add($tag->url, $tag->updated_at, '0.3', 'weekly');
-                    }
-
                     break;
             }
 
@@ -100,15 +89,6 @@ class RenderingSiteMapListener
 
         if ($categoryLastUpdated) {
             SiteMapManager::addSitemap(SiteMapManager::route('blog-categories'), $categoryLastUpdated);
-        }
-
-        $tagLastUpdated = Tag::query()
-            ->wherePublished()
-            ->latest('updated_at')
-            ->value('updated_at');
-
-        if ($tagLastUpdated) {
-            SiteMapManager::addSitemap(SiteMapManager::route('blog-tags'), $tagLastUpdated);
         }
     }
 }

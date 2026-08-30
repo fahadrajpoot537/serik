@@ -37,7 +37,7 @@ class SiteMapManager
         $this->siteMap = app('sitemap');
         // set cache (key (string), duration in minutes (Carbon|Datetime|int), turn on/off (boolean))
         // by default cache is disabled
-        $this->siteMap->setCache('cache_site_map_key_v3' . $prefix . $extension, setting('cache_time_site_map', 60), setting('enable_cache_site_map', true));
+        $this->siteMap->setCache('cache_site_map_key_v4' . $prefix . $extension, setting('cache_time_site_map', 60), setting('enable_cache_site_map', true));
 
         if ($prefix == 'pages' && ! BaseHelper::getHomepageId()) {
             $this->add(BaseHelper::getHomepageUrl(), Carbon::now()->toDateTimeString());
