@@ -41,7 +41,7 @@
         {!! apply_filters('before_consult_form', null, $model) !!}
 
         {!! \Botble\RealEstate\Forms\Fronts\ConsultForm::create()
-            ->formClass('contact-form')
+            ->formClass('contact-form serik-schedule-viewing')
             ->setFormInputWrapperClass('ip-group')
             ->modify('content', 'textarea', ['attr' => ['class' => 'form-control']])
             ->modify('submit', 'submit', ['attr' => ['class' => 'tf-btn primary w-100'], 'label' => __('Schedule Viewing')])

@@ -316,6 +316,15 @@ class Property extends BaseModel
                 return Html::tag('span', $label, ['class' => 'flag-tag primary status-sold'])->toHtml();
             }
 
+            $mls = \App\Support\MlsStatus::forProperty($this);
+            if ($mls['is_delisted']) {
+                return Html::tag(
+                    'span',
+                    e($mls['compact_label']),
+                    ['class' => 'flag-tag primary status-sold', 'aria-label' => __('MLS status') . ': ' . $mls['display_label']]
+                )->toHtml();
+            }
+
             if ($this->MlsStatus === 'New' && $this->TransactionType) {
                 $activeLabel = $this->TransactionType === 'For Lease' ? __('For Lease') : __('For Sale');
 
@@ -620,6 +629,7 @@ class Property extends BaseModel
             'property_sub_type' => (string) $this->PropertySubType,
             'transaction_type' => (string) $this->TransactionType,
             'mls_status' => (string) $this->MlsStatus,
+            'expire_date' => optional($this->expire_date)->toDateString(),
             'status' => is_object($this->getAttribute('status'))
                 ? (string) $this->getRawOriginal('status')
                 : (string) $this->getAttribute('status'),

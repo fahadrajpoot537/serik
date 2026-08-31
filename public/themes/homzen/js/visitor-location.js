@@ -137,6 +137,12 @@
         if (payload.city) {
             saveCity(payload.city);
         }
+
+        try {
+            window.dispatchEvent(new CustomEvent('serik:visitor-location', { detail: payload }));
+        } catch (e) {
+            // ignore
+        }
     }
 
     function getSessionCountry() {

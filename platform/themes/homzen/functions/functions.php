@@ -395,6 +395,10 @@ app()->booted(function (): void {
                     ]
                 );
 
+            \App\Support\MortgageCalculatorFormContext::applyToContactForm($form);
+            \App\Support\ServiceInquiryFormContext::applyToContactForm($form);
+            \App\Support\AgentInquiryFormContext::applyToContactForm($form);
+
             // Same Google reCAPTCHA stack as login modal (RecaptchaHelper).
             // Do NOT use Botble Captcha::display() — it loads a second api.js
             // onload callback and breaks login verification site-wide.
@@ -410,7 +414,20 @@ app()->booted(function (): void {
             }
         });
 
-        add_filter('contact_request_rules', function (array $rules): array {
+        add_filter('contact_request_rules', function (array $rules, $request = null): array {
+            $rules = \App\Support\MortgageCalculatorFormContext::applyValidationRules(
+                $rules,
+                $request instanceof \Illuminate\Http\Request ? $request : request()
+            );
+            $rules = \App\Support\ServiceInquiryFormContext::applyValidationRules(
+                $rules,
+                $request instanceof \Illuminate\Http\Request ? $request : request()
+            );
+            $rules = \App\Support\AgentInquiryFormContext::applyValidationRules(
+                $rules,
+                $request instanceof \Illuminate\Http\Request ? $request : request()
+            );
+
             $rules['g-recaptcha-response'] = [
                 'required',
                 'string',
@@ -422,7 +439,7 @@ app()->booted(function (): void {
             ];
 
             return $rules;
-        });
+        }, 10, 2);
     }
 
     if (is_plugin_active('newsletter')) {

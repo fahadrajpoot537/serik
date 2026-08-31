@@ -76,6 +76,12 @@ class PropertyResource extends JsonResource
                 return $plan;
             })->toArray(),
             'expire_date' => $this->expire_date?->toISOString(),
+            'mls_status' => $this->MlsStatus,
+            'mls_status_label' => \App\Support\MlsStatus::forProperty($this->resource)['display_label'],
+            'mls_status_date' => \App\Support\MlsStatus::publicDateString(
+                $this->MlsStatus,
+                $this->expire_date ?? null
+            ),
             'auto_renew' => $this->auto_renew,
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),

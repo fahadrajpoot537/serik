@@ -35,7 +35,7 @@ final class PropertySearchSync
      */
     public function schedule(int $propertyId): void
     {
-        Log::debug('[PropertySearchSync] schedule', [
+        \App\Support\SerikSafeLog::write('debug', '[PropertySearchSync] schedule', [
             'property_id' => $propertyId,
         ]);
 

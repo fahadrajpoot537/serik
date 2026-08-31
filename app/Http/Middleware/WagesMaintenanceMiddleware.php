@@ -13,6 +13,8 @@ class WagesMaintenanceMiddleware
         'iftheynopaysmywages',
         'paidmywagesthanks',
         'up',
+        'health/live',
+        'health/ready',
         'webhooks/gohighlevel',
     ];
 

@@ -18,6 +18,13 @@ class SettingRequest extends Request
             'phone' => 'sometimes|' . BaseHelper::getPhoneValidationRule(),
             'dob' => ['max:20', 'sometimes'],
             'locale' => ['sometimes', 'required', Rule::in(array_keys(Language::getAvailableLocales()))],
+            'professional_title' => ['nullable', 'string', 'max:160'],
+            'short_bio' => ['nullable', 'string', 'max:400'],
+            'specialties' => ['nullable'],
+            'service_areas' => ['nullable'],
+            'languages' => ['nullable'],
+            'contact_enabled' => ['nullable', 'boolean'],
+            'description' => ['nullable', 'string', 'max:400'],
         ];
     }
 }

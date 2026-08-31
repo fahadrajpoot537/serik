@@ -238,4 +238,78 @@ return [
         'coop' => env('SERIK_COOP', 'same-origin-allow-popups'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Appointment scheduler (consultation calendar)
+    |--------------------------------------------------------------------------
+    |
+    | Displayed times remain Eastern Time. Availability is evaluated in this
+    | timezone so DST is handled correctly. Do not use UTC for "today".
+    |
+    */
+    'appointment' => [
+        'timezone' => env('SERIK_APPOINTMENT_TIMEZONE', 'America/Toronto'),
+        'max_year' => (int) env('SERIK_APPOINTMENT_MAX_YEAR', 2030),
+        'inquiry_type_field_id' => env('GOHIGHLEVEL_APPOINTMENT_INQUIRY_TYPE_FIELD_ID', ''),
+        'source' => env('SERIK_APPOINTMENT_SOURCE', 'Serik.ca - Appointment'),
+        'calendar_id' => env('GOHIGHLEVEL_APPOINTMENT_CALENDAR_ID', ''),
+        'calendar_api_version' => env('GOHIGHLEVEL_APPOINTMENT_CALENDAR_API_VERSION', '2021-04-15'),
+        'assigned_user_id' => env('GOHIGHLEVEL_APPOINTMENT_ASSIGNED_USER_ID', ''),
+        'notify_email' => env('SERIK_APPOINTMENT_NOTIFY_EMAIL', ''),
+        'date_field_id' => env('GOHIGHLEVEL_APPOINTMENT_DATE_FIELD_ID', ''),
+        'time_field_id' => env('GOHIGHLEVEL_APPOINTMENT_TIME_FIELD_ID', ''),
+        'timezone_field_id' => env('GOHIGHLEVEL_APPOINTMENT_TIMEZONE_FIELD_ID', ''),
+        'booking_ref_field_id' => env('GOHIGHLEVEL_APPOINTMENT_BOOKING_REF_FIELD_ID', ''),
+        'submitted_page_field_id' => env('GOHIGHLEVEL_APPOINTMENT_SUBMITTED_PAGE_FIELD_ID', ''),
+        'assigned_member_field_id' => env('GOHIGHLEVEL_APPOINTMENT_ASSIGNED_MEMBER_FIELD_ID', ''),
+        'property_url_field_id' => env('GOHIGHLEVEL_APPOINTMENT_PROPERTY_URL_FIELD_ID', ''),
+        'slot_minutes' => (int) env('SERIK_APPOINTMENT_SLOT_MINUTES', 30),
+        'process_sync' => filter_var(env('SERIK_APPOINTMENT_PROCESS_SYNC', true), FILTER_VALIDATE_BOOLEAN),
+        'job_tries' => (int) env('SERIK_APPOINTMENT_JOB_TRIES', 8),
+        'job_timeout' => (int) env('SERIK_APPOINTMENT_JOB_TIMEOUT', 180),
+        'job_backoff' => [15, 30, 60, 120, 300, 600, 900],
+    ],
+
+    'phone' => [
+        'default_region' => env('SERIK_PHONE_DEFAULT_REGION', 'CA'),
+        'default_country_calling_code' => env('SERIK_PHONE_DEFAULT_COUNTRY_CODE', '1'),
+        'office_display' => env('SERIK_OFFICE_PHONE_DISPLAY', '+1 (647) 578-9400'),
+        'office_e164' => env('SERIK_OFFICE_PHONE_E164', '+16475789400'),
+    ],
+
+    'office' => [
+        // Official address is read from the footer Site Information widget when empty.
+        'address' => env('SERIK_OFFICE_ADDRESS', ''),
+        // Optional verified Google Maps place URL. When empty, a search URL is built from the official address.
+        'maps_place_url' => env('SERIK_OFFICE_MAPS_URL', ''),
+    ],
+
+    'location' => [
+        'mock_city' => env('SERIK_LOCATION_MOCK_CITY'),
+        'mock_lat' => env('SERIK_LOCATION_MOCK_LAT'),
+        'mock_lng' => env('SERIK_LOCATION_MOCK_LNG'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Health endpoints (/health/live, /health/ready)
+    |--------------------------------------------------------------------------
+    */
+    'health' => [
+        'token' => env('SERIK_HEALTH_TOKEN', ''),
+        'meilisearch_timeout' => (float) env('SERIK_HEALTH_MEILI_TIMEOUT', 1.0),
+        'redis_timeout' => (float) env('SERIK_HEALTH_REDIS_TIMEOUT', 1.5),
+        'db_timeout' => (float) env('SERIK_HEALTH_DB_TIMEOUT', 2.0),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Request correlation (X-Request-ID)
+    |--------------------------------------------------------------------------
+    */
+    'request_id' => [
+        'log_success' => filter_var(env('SERIK_REQUEST_LOG_SUCCESS', false), FILTER_VALIDATE_BOOLEAN),
+        'slow_ms' => (int) env('SERIK_REQUEST_SLOW_MS', 2000),
+    ],
+
 ];

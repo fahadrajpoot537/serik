@@ -14,6 +14,15 @@
             @if($account->company)
                 <p class="agent-company">{!! BaseHelper::clean(__('Company Agent at :company', ['company' => "<strong>$account->company</strong>"])) !!}</p>
             @endif
+            @php
+                $agentTitle = \App\Support\AgentProfile::title($account);
+                $agentSpecialties = \App\Support\AgentProfile::listFrom($account, 'specialties');
+                $agentAreas = \App\Support\AgentProfile::listFrom($account, 'service_areas');
+                $agentLanguages = \App\Support\AgentProfile::listFrom($account, 'languages');
+            @endphp
+            @if($agentTitle !== '' && $agentTitle !== trim((string) $account->company))
+                <p class="serik-agent-meta__title">{{ $agentTitle }}</p>
+            @endif
             <!--div class="agent-contact-info">
                 @if($account->phone && ! setting('real_estate_hide_agency_phone', false))
                     <a href="tel:{{ $account->phone }}" class="agent-info-item">
@@ -36,11 +45,15 @@
             {!! Theme::partial('shortcodes.agents.partials.social-links', compact('account')) !!}
 
            
-                <div class="agent-whatsapp-section mt-3">
-                    <a href="https://serik.ca/contact-us" target="_blank" class="tf-btn primary">
-                        
-                        {{ __('Contact Us') }}
-                    </a>
+                <div class="agent-whatsapp-section mt-3 serik-agent-meta__ctas">
+                    @php
+                        $agentContactUrl = \App\Support\AgentInquiryFormContext::contactUrl($account);
+                    @endphp
+                    @if($agentContactUrl)
+                        <a href="{{ $agentContactUrl }}" class="tf-btn primary">{{ __('Contact') }}</a>
+                    @else
+                        <p class="serik-agent-meta__unavailable" role="status">{{ __('Contact is currently unavailable for this agent.') }}</p>
+                    @endif
                 </div>
             
         </div>
@@ -50,6 +63,15 @@
         <div class="agent-about-section">
             <h5>{{ __('About Agent') }}</h5>
             <p class="agent-description">{!! BaseHelper::clean($account->description) !!}</p>
+            @if($agentSpecialties !== [])
+                <p class="serik-agent-meta__row"><span class="serik-agent-meta__label">{{ __('Specialties') }}:</span> {{ implode(', ', $agentSpecialties) }}</p>
+            @endif
+            @if($agentAreas !== [])
+                <p class="serik-agent-meta__row"><span class="serik-agent-meta__label">{{ __('Service areas') }}:</span> {{ implode(', ', $agentAreas) }}</p>
+            @endif
+            @if($agentLanguages !== [])
+                <p class="serik-agent-meta__row"><span class="serik-agent-meta__label">{{ __('Languages') }}:</span> {{ implode(', ', $agentLanguages) }}</p>
+            @endif
         </div>
     @endif
 

@@ -47,6 +47,9 @@ return [
     'meilisearch' => [
         'host' => env('MEILISEARCH_HOST', 'http://localhost:7700'),
         'key' => env('MEILISEARCH_KEY'),
+        // Fail fast so a downed search engine cannot stall public pages.
+        'timeout' => (float) env('MEILISEARCH_TIMEOUT', 0.8),
+        'connect_timeout' => (float) env('MEILISEARCH_CONNECT_TIMEOUT', 0.2),
 
         'index-settings' => [
             Property::class => [

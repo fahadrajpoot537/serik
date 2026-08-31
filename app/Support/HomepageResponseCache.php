@@ -3,19 +3,18 @@
 namespace App\Support;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 
 /**
  * Versioned full-page HTML cache for GET / (anonymous).
  *
- * Entry format (v5): ['html' => string, 'etag' => string, 'gz' => ?string]
- * Legacy v4 string entries are still readable until TTL expiry.
+ * Entry format (v6): ['html' => string, 'etag' => string, 'gz' => ?string]
+ * Legacy v4/v5 string entries are still readable until TTL expiry.
  */
 final class HomepageResponseCache
 {
     private const VERSION_KEY = 'homepage_response_cache_version_v4';
 
-    private const KEY_PREFIX = 'homepage_html_v5:';
+    private const KEY_PREFIX = 'homepage_html_v6:';
 
     private const TRACKING_QUERY_KEYS = [
         'utm_source',
@@ -31,7 +30,7 @@ final class HomepageResponseCache
 
     public static function version(): int
     {
-        return (int) Cache::get(self::VERSION_KEY, 1);
+        return (int) SerikCache::get(self::VERSION_KEY, 1);
     }
 
     public static function ttl(): int
@@ -47,20 +46,23 @@ final class HomepageResponseCache
         // Also forget legacy v4 keys if present.
         $legacyKey = 'homepage_html_v4:' . $oldVersion . ':' . $locale . ':shared';
 
-        Cache::forever(self::VERSION_KEY, $oldVersion + 1);
+        SerikCache::forever(self::VERSION_KEY, $oldVersion + 1);
 
-        Cache::forget($oldKey);
-        Cache::forget($legacyKey);
-        Cache::forget(self::KEY_PREFIX . self::version() . ':' . $locale . ':shared');
-        Cache::forget('homepage_html_v4:' . self::version() . ':' . $locale . ':shared');
+        SerikCache::forget($oldKey);
+        SerikCache::forget($legacyKey);
+        SerikCache::forget('homepage_html_v5:' . $oldVersion . ':' . $locale . ':shared');
+        SerikCache::forget(self::KEY_PREFIX . self::version() . ':' . $locale . ':shared');
+        SerikCache::forget('homepage_html_v4:' . self::version() . ':' . $locale . ':shared');
+        SerikCache::forget('homepage_html_v5:' . self::version() . ':' . $locale . ':shared');
     }
 
     public static function forget(): void
     {
         $locale = app()->getLocale();
         $version = self::version();
-        Cache::forget(self::KEY_PREFIX . $version . ':' . $locale . ':shared');
-        Cache::forget('homepage_html_v4:' . $version . ':' . $locale . ':shared');
+        SerikCache::forget(self::KEY_PREFIX . $version . ':' . $locale . ':shared');
+        SerikCache::forget('homepage_html_v4:' . $version . ':' . $locale . ':shared');
+        SerikCache::forget('homepage_html_v5:' . $version . ':' . $locale . ':shared');
     }
 
     /**
@@ -134,7 +136,7 @@ final class HomepageResponseCache
      */
     public static function getSharedHtml(?Request $request = null): ?string
     {
-        $html = self::extractHtml(Cache::get(self::sharedKey($request)));
+        $html = self::extractHtml(SerikCache::get(self::sharedKey($request)));
 
         if ($html === null || $html === '') {
             return null;
@@ -156,7 +158,7 @@ final class HomepageResponseCache
      */
     public static function getSharedEtag(): ?string
     {
-        $entry = Cache::get(self::sharedKey());
+        $entry = SerikCache::get(self::sharedKey());
         if (is_array($entry) && ! empty($entry['etag']) && is_string($entry['etag'])) {
             return $entry['etag'];
         }
@@ -245,7 +247,7 @@ final class HomepageResponseCache
             return null;
         }
 
-        $html = self::extractHtml(Cache::get(self::cacheKey($request)));
+        $html = self::extractHtml(SerikCache::get(self::cacheKey($request)));
         if ($html === null || $html === '') {
             return null;
         }
@@ -264,7 +266,7 @@ final class HomepageResponseCache
             return null;
         }
 
-        $entry = Cache::get(self::cacheKey($request));
+        $entry = SerikCache::get(self::cacheKey($request));
         if (is_array($entry) && ! empty($entry['etag']) && is_string($entry['etag'])) {
             return $entry['etag'];
         }
@@ -282,7 +284,7 @@ final class HomepageResponseCache
 
         $html = self::alignLoopbackOrigins($html, $request);
 
-        Cache::put(self::cacheKey($request), self::packEntry($html), self::ttl());
+        SerikCache::put(self::cacheKey($request), self::packEntry($html), self::ttl());
     }
 
     /**

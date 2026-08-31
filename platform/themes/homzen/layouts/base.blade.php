@@ -135,10 +135,10 @@
 @if ($isSerikHomepage)
 {{-- MUST load AFTER Theme::header() so redesign beats style.css --}}
 {{-- Path-only href so CSS stays same-origin (CSP 'self') on :8000, localhost, or XAMPP. --}}
-<link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp57">
+<link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp60">
 @endif
 {{-- Site chrome last: shared navbar/footer + compact laptop scaling --}}
-<link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc22">
+<link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc30">
         <script type="text/javascript">
             (function(c,l,a,r,i,t,y){
                 c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};

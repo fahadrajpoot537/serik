@@ -75,4 +75,21 @@ return [
         'showings_contact_association_id' => env('GOHIGHLEVEL_SHOWINGS_CONTACT_ASSOCIATION_ID', ''),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Contact / Mortgage Calculator custom field IDs
+    |--------------------------------------------------------------------------
+    |
+    | Do not hardcode IDs in controllers, Blade, or JavaScript. Set these env
+    | values to GHL *Contact* custom field IDs that accept the mapped values.
+    | When empty, values are still stored on the native source field, tag, and
+    | inquiry note — they are not silently discarded.
+    |
+    */
+    'contact_forms' => [
+        'inquiry_type_field_id' => env('GOHIGHLEVEL_CONTACT_INQUIRY_TYPE_FIELD_ID', ''),
+        'lead_source_field_id' => env('GOHIGHLEVEL_CONTACT_LEAD_SOURCE_FIELD_ID', ''),
+        'subject_field_id' => env('GOHIGHLEVEL_CONTACT_SUBJECT_FIELD_ID', ''),
+    ],
+
 ];

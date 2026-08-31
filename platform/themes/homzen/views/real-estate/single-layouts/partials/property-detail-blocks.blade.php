@@ -365,7 +365,8 @@
         $coopInactiveStatuses = [
             'Sold', 'Sold Conditional', 'Sold Conditional Escape',
             'Leased', 'Leased Conditional',
-            'Terminated', 'Expired', 'Suspended', 'Draft', 'Unavailable',
+            'Terminated', 'Expired', 'Suspended', 'Cancelled', 'Canceled', 'Withdrawn',
+            'Draft', 'Unavailable',
         ];
         $showCoopCommission = $coopModel
             && $coopTx === 'For Sale'

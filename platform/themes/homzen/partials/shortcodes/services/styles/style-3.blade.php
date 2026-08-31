@@ -76,10 +76,13 @@
                                 class="w-100 h-100 object-fit-cover">
                             <a href="https://serik.ca/storage/videoplayback.mp4"
                                data-fancybox="gallery2"
-                               class="btn-video"
+                               class="btn-video serik-hp-play"
                                data-type="video"
                                aria-label="{{ __('Play video') }}">
-                                <span class="icon icon-play" style="font-size: 50px;"></span>
+                                <span class="serik-hp-play__ring" aria-hidden="true"></span>
+                                <svg class="serik-hp-play__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
+                                    <path fill="currentColor" d="M8.2 5.2v13.6L19.4 12 8.2 5.2z"></path>
+                                </svg>
                             </a>
                         </div>
                     </div>

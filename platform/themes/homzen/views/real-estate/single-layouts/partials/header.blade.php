@@ -10,6 +10,7 @@
         'TransactionType' => $model->TransactionType,
         'PropertySubType' => $model->PropertySubType,
     ];
+    $mlsDisplay = \App\Support\MlsStatus::forProperty($model);
     $factRecord = [];
     $displayName = $model->name ?? '';
     $displayLocation = '';
@@ -99,15 +100,12 @@
 
                     Sold On : <span id="soldDate"></span>
 
-                @elseif($model->MlsStatus == 'Expired' || $model->MlsStatus == 'Terminated')
-
+                @elseif(! empty($mlsDisplay['is_delisted']))
+                    <span class="flag-tag primary status-sold d-inline-block mb-2" aria-label="{{ __('MLS status') }}: {{ $mlsDisplay['display_label'] }}">{{ \App\Support\MlsStatus::detailLine($mlsDisplay) }}</span>
+                    <br>
                     <span style="text-decoration: line-through; color: gray;">
                         {{ $model->price_html ?? $model->formatted_price }}
                     </span>
-                    @if($model->MlsStatus == 'Terminated')
-                        <br>
-                        <span class="flag-tag primary status-sold d-inline-block mb-2">{{ $model->MlsStatus }}</span>
-                    @endif
 
                 @else
                     Listed For :

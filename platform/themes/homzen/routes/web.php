@@ -90,6 +90,12 @@ Route::middleware(['web', 'core'])->group(function (): void {
 
     Route::get('/ajax/seo-city-navigation', \App\Http\Controllers\SeoCityNavigationController::class)
         ->name('public.ajax.seo-city-navigation');
+    Route::get('/ajax/homepage-featured-properties', \App\Http\Controllers\HomepageFeaturedPropertiesController::class)
+        ->name('public.ajax.homepage-featured-properties');
+    Route::get('/ajax/wishlist/state', [\App\Http\Controllers\AccountWishlistController::class, 'state'])
+        ->name('public.ajax.wishlist.state');
+    Route::post('/ajax/wishlist/toggle', [\App\Http\Controllers\AccountWishlistController::class, 'toggle'])
+        ->name('public.ajax.wishlist.toggle');
 });
 
 Route::middleware(['web', 'core', RequiresJsonRequestMiddleware::class, ShortcodePerformanceMiddleware::class])

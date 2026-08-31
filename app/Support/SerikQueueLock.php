@@ -62,7 +62,7 @@ final class SerikQueueLock
      */
     public static function wasRecentlyDispatched(string $key, int $cooldownSeconds = 55): bool
     {
-        return Cache::has('serik_qdispatch:' . $key);
+        return SerikCache::has('serik_qdispatch:' . $key);
     }
 
     /**
@@ -70,7 +70,7 @@ final class SerikQueueLock
      */
     public static function markDispatched(string $key, int $cooldownSeconds = 55): void
     {
-        Cache::put('serik_qdispatch:' . $key, 1, max(5, $cooldownSeconds));
+        SerikCache::put('serik_qdispatch:' . $key, 1, max(5, $cooldownSeconds));
     }
 
     /**

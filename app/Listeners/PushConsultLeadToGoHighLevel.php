@@ -4,6 +4,7 @@ namespace App\Listeners;
 
 use App\Events\ConsultSubmitted;
 use App\Services\GoHighLevel\GoHighLevelLeadService;
+use App\Support\PhoneNumberNormalizer;
 
 class PushConsultLeadToGoHighLevel
 {
@@ -14,11 +15,12 @@ class PushConsultLeadToGoHighLevel
     public function handle(ConsultSubmitted $event): void
     {
         $consult = $event->consult;
+        $phone = PhoneNumberNormalizer::normalize((string) ($consult->phone ?? '')) ?? '';
 
         $this->ghl->pushAfterResponse([
             'name' => (string) ($consult->name ?? ''),
             'email' => (string) ($consult->email ?? ''),
-            'phone' => (string) ($consult->phone ?? ''),
+            'phone' => $phone,
             'message' => (string) ($consult->content ?? ''),
             'property_name' => $event->propertyName,
             'property_url' => $event->propertyUrl,

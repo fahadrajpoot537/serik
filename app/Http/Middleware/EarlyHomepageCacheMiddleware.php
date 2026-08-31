@@ -50,10 +50,8 @@ class EarlyHomepageCacheMiddleware
             $notModified = response('', 304, [
                 'ETag' => $etag,
                 'X-Serik-Homepage-Cache' => 'HIT-EARLY-304',
-                // no-store: block bfcache restoring guest nav after login.
-                'Cache-Control' => 'private, no-cache, no-store, must-revalidate',
-                'Vary' => 'Cookie',
             ]);
+            \App\Support\SerikHtmlCacheHeaders::apply($notModified, $request);
 
             return \App\Support\SerikSecurityHeaders::apply($notModified, $request);
         }
@@ -62,10 +60,8 @@ class EarlyHomepageCacheMiddleware
             'Content-Type' => 'text/html; charset=UTF-8',
             'ETag' => $etag,
             'X-Serik-Homepage-Cache' => 'HIT-EARLY',
-            // private + no-store + Vary: Cookie — never reuse guest HTML after login.
-            'Cache-Control' => 'private, no-cache, no-store, must-revalidate',
-            'Vary' => 'Cookie',
         ]);
+        \App\Support\SerikHtmlCacheHeaders::apply($response, $request);
 
         return \App\Support\SerikSecurityHeaders::apply($response, $request);
     }
@@ -114,9 +110,8 @@ class EarlyHomepageCacheMiddleware
         $response = response($cached, 200, [
             'Content-Type' => 'text/html; charset=UTF-8',
             'X-Serik-Ontario-Cache' => 'HIT-EARLY',
-            'Cache-Control' => 'private, no-cache, no-store, must-revalidate',
-            'Vary' => 'Cookie',
         ]);
+        \App\Support\SerikHtmlCacheHeaders::apply($response, $request);
 
         return \App\Support\SerikSecurityHeaders::apply($response, $request);
     }

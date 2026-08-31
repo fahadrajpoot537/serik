@@ -22,6 +22,11 @@
         <div class="swiper-wrapper">
             <div class="swiper-slide">
                 <div class="slider-home2 img-animation wow">
+                    <img src="{{ asset('pictures/happy-customers-cashback.png') }}" alt="{{ img_alt(null, 'happy-customers-cashback.png', __('Happy customers of Serik Realty')) }}">
+                </div>
+            </div>
+            <div class="swiper-slide">
+                <div class="slider-home2 img-animation wow">
                     <img src="https://serik.ca/storage/p1055739jpg-1.jpeg" alt="{{ img_alt(null, 'p1055739jpg-1.jpeg', __('Customer testimonial')) }}">
                 </div>
             </div>

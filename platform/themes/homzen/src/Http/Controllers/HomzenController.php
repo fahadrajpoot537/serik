@@ -2,6 +2,7 @@
 
 namespace Theme\homzen\Http\Controllers;
 
+use Botble\Base\Facades\BaseHelper;
 use Botble\Base\Http\Responses\BaseHttpResponse;
 use Botble\Blog\Models\Category;
 use Botble\Blog\Repositories\Interfaces\PostInterface;
@@ -227,11 +228,25 @@ class homzenController extends PublicController
     {
         abort_unless(RealEstateHelper::isEnabledWishlist(), 404);
 
+        if (! auth('account')->check()) {
+            $request->session()->put('url.intended', route('public.wishlist'));
+            $request->session()->flash('serik_open_login', true);
+
+            $previous = url()->previous();
+            $fallback = BaseHelper::getHomepageUrl();
+            $target = ($previous && $previous !== $request->fullUrl()) ? $previous : $fallback;
+
+            return redirect()->to($target);
+        }
+
         SeoHelper::setTitle(__('Wishlist'))
             ->setDescription(__('Wishlist'));
 
-        $propertyWishlist = isset($_COOKIE['wishlist']) ? explode(',', $_COOKIE['wishlist']) : [];
-        $propertyWishlist = array_filter($propertyWishlist);
+        $accountId = (int) auth('account')->id();
+        $cookiePropertyIds = isset($_COOKIE['wishlist']) ? explode(',', (string) $_COOKIE['wishlist']) : [];
+        \App\Support\AccountWishlist::importPropertyIds($accountId, $cookiePropertyIds);
+
+        $propertyWishlist = \App\Support\AccountWishlist::propertyIdsFor($accountId);
         $projectWishlist = isset($_COOKIE['project_wishlist']) ? explode(',', $_COOKIE['project_wishlist']) : [];
         $projectWishlist = array_filter($projectWishlist);
 

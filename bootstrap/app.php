@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\HealthController;
 use App\Jobs\RunArtisanOnLowQueueJob;
 use App\Support\SerikQueue;
 use App\Support\SerikScheduler;
@@ -9,6 +10,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Route;
 
 $app = Application::configure(basePath: dirname(__DIR__))
     ->withCommands([
@@ -29,6 +31,10 @@ $app = Application::configure(basePath: dirname(__DIR__))
         web: __DIR__ . '/../routes/web.php',
         commands: __DIR__ . '/../routes/console.php',
         health: '/up',
+        then: function (): void {
+            Route::get('/health/live', [HealthController::class, 'live'])->name('health.live');
+            Route::get('/health/ready', [HealthController::class, 'ready'])->name('health.ready');
+        },
     )
     ->withSchedule(function (Schedule $schedule): void {
         /*
@@ -274,16 +280,32 @@ $app = Application::configure(basePath: dirname(__DIR__))
         $middleware->prepend(\App\Http\Middleware\EarlyHomepageCacheMiddleware::class);
         // Must run BEFORE EarlyHomepageCache so blocked countries never get a cache HIT.
         $middleware->prepend(\App\Http\Middleware\GeoBlockMiddleware::class);
-        // Outermost: security headers on every response (including EarlyHomepageCache HIT).
+        // Outermost wrappers: security headers, then request ID (last prepend = first on the way in).
         $middleware->prepend(\App\Http\Middleware\SerikSecurityHeadersMiddleware::class);
+        $middleware->prepend(\App\Http\Middleware\RequestCorrelationMiddleware::class);
+        \Illuminate\Foundation\Http\Middleware\PreventRequestsDuringMaintenance::except('/health/live');
+        \Illuminate\Foundation\Http\Middleware\PreventRequestsDuringMaintenance::except('/health/ready');
         $middleware->appendToGroup('web', \App\Http\Middleware\CacheHomepageResponseMiddleware::class);
         $middleware->appendToGroup('web', \App\Http\Middleware\RequestProfilerMiddleware::class);
         $middleware->prependToGroup('web', \App\Http\Middleware\UseRequestRootUrlInLocal::class);
         $middleware->prependToGroup('web', \App\Http\Middleware\DetectVisitorCityMiddleware::class);
         $middleware->appendToGroup('web', \App\Http\Middleware\PropertyNoIndexHeaders::class);
+        $middleware->appendToGroup('web', \App\Http\Middleware\ApplyMortgageCalculatorFormContext::class);
+        $middleware->appendToGroup('web', \App\Http\Middleware\ApplyServiceInquiryFormContext::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->context(function (): array {
+            $request = request();
+            if (! $request) {
+                return [];
+            }
+
+            return array_filter([
+                'request_id' => $request->attributes->get('request_id') ?: $request->headers->get('X-Request-ID'),
+                'method' => $request->method(),
+                'path' => $request->path(),
+            ]);
+        });
     })
     ->create();
 

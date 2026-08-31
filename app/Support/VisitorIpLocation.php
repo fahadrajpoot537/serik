@@ -18,7 +18,7 @@ final class VisitorIpLocation
             return null;
         }
 
-        return Cache::remember('serik_visitor_ip_loc_v1_' . md5($ip), 1800, function () use ($ip) {
+        return Cache::remember(self::cacheKey($ip), 1800, function () use ($ip) {
             $inOntario = static function (float $lat, float $lng, ?string $region, string $country): bool {
                 if (strtoupper($country) !== 'CA') {
                     return false;
@@ -83,6 +83,18 @@ final class VisitorIpLocation
 
             return null;
         });
+    }
+
+    private static function cacheKey(string $ip): string
+    {
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+            $parts = explode('.', $ip);
+            $network = ($parts[0] ?? '0') . '.' . ($parts[1] ?? '0') . '.' . ($parts[2] ?? '0') . '.0';
+
+            return 'serik_visitor_ip_loc_v2_' . md5($network);
+        }
+
+        return 'serik_visitor_ip_loc_v2_' . md5(substr($ip, 0, 19));
     }
 
     public static function defaultPayload(): array

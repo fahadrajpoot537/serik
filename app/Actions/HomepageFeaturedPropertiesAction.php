@@ -10,7 +10,6 @@ use Botble\RealEstate\Services\PropertySearchService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Log;
 use Theme\homzen\Supports\TrebPropertyHelper;
-use Theme\homzen\Supports\VisitorCityHelper;
 use Throwable;
 
 /**
@@ -27,7 +26,7 @@ class HomepageFeaturedPropertiesAction
 
     private const INACTIVE_STATUSES = [
         'Sold', 'Leased', 'Sold Conditional', 'Sold Conditional Escape', 'Leased Conditional',
-        'Expired', 'Terminated', 'Suspended',
+        'Expired', 'Terminated', 'Suspended', 'Cancelled', 'Canceled', 'Withdrawn',
     ];
 
     private const SOLD_STATUSES = [
@@ -44,28 +43,57 @@ class HomepageFeaturedPropertiesAction
     public function handle(int $limit = 8): array
     {
         $limit = max(8, min(24, $limit));
-        $visitorCity = null;
 
         try {
-            $visitorCity = class_exists(VisitorCityHelper::class)
-                ? VisitorCityHelper::get()
-                : null;
-        } catch (Throwable) {
+            return $this->handleForLocation($limit, \App\Support\ResolvedLocation::ontarioFallback());
+        } catch (Throwable $e) {
+            $this->safeLog('error', '[homepage-featured] FAILED: '.$e->getMessage());
+
+            return [
+                'propertiesForSale' => new Collection,
+                'propertiesSold' => new Collection,
+                'visitorCity' => null,
+                'locationLabel' => 'Ontario',
+                'locationSource' => 'fallback',
+            ];
+        }
+    }
+
+    /**
+     * Location-aware fetch used by the homepage AJAX hydrate (not shared full-page HTML).
+     *
+     * @return array{
+     *   propertiesForSale: Collection,
+     *   propertiesSold: Collection,
+     *   visitorCity: ?string,
+     *   locationLabel: string,
+     *   locationSource: string
+     * }
+     */
+    public function handleForLocation(int $limit, \App\Support\ResolvedLocation $location): array
+    {
+        $limit = max(8, min(24, $limit));
+        $visitorCity = $location->isFallback() ? null : $location->city;
+        if ($visitorCity && in_array(strtolower($visitorCity), ['ontario', 'on'], true)) {
             $visitorCity = null;
         }
-
+        $lat = $location->latitude;
+        $lng = $location->longitude;
         $cityKey = $visitorCity ? strtolower((string) $visitorCity) : 'ontario';
+        $geoKey = round($lat, 2) . ':' . round($lng, 2);
         $version = HomepageFeaturedCache::version();
-        $cacheKey = "homepage_featured_props_v5:{$version}:{$cityKey}:{$limit}";
+        $cacheKey = "homepage_featured_props_v7:{$version}:{$cityKey}:{$geoKey}:{$limit}";
 
         try {
-            return \App\Support\SerikCache::remember($cacheKey, self::cacheTtl(), function () use ($limit, $visitorCity) {
-                $idPayload = $this->resolveIds($limit, $visitorCity);
+            return \App\Support\SerikCache::remember($cacheKey, self::cacheTtl(), function () use ($limit, $visitorCity, $lat, $lng, $location) {
+                $idPayload = $this->resolveIds($limit, $visitorCity, $lat, $lng);
 
                 return [
                     'propertiesForSale' => $this->hydrate($idPayload['sale'] ?? [], $limit),
                     'propertiesSold' => $this->hydrate($idPayload['sold'] ?? [], $limit),
                     'visitorCity' => $visitorCity,
+                    'locationLabel' => $location->publicLabel(),
+                    'locationSource' => $location->source,
                 ];
             });
         } catch (Throwable $e) {
@@ -75,6 +103,8 @@ class HomepageFeaturedPropertiesAction
                 'propertiesForSale' => new Collection,
                 'propertiesSold' => new Collection,
                 'visitorCity' => $visitorCity,
+                'locationLabel' => $location->publicLabel(),
+                'locationSource' => $location->source,
             ];
         }
     }
@@ -82,40 +112,13 @@ class HomepageFeaturedPropertiesAction
     /**
      * @return array{sale: list<int>, sold: list<int>, source: string}
      */
-    private function resolveIds(int $limit, ?string $visitorCity): array
+    private function resolveIds(int $limit, ?string $visitorCity, ?float $lat = null, ?float $lng = null): array
     {
         try {
             $search = app(PropertySearchService::class);
             if ($search->isAvailable()) {
-                $meiliOpts = [
-                    'limit' => $limit,
-                    'residential_only' => true,
-                    'sort' => ['listing_contract_ts:desc'],
-                ];
-
-                if ($visitorCity && strcasecmp($visitorCity, 'ontario') !== 0 && strcasecmp($visitorCity, 'on') !== 0) {
-                    $meiliOpts['city'] = ucwords(strtolower($visitorCity));
-                }
-
-                $saleIds = $search->searchIds('', array_merge($meiliOpts, [
-                    'exclude_statuses' => self::INACTIVE_STATUSES,
-                ]));
-
-                $soldIds = $search->searchIds('', array_merge($meiliOpts, [
-                    'status' => 'Sold',
-                    'sort' => ['close_ts:desc', 'listing_contract_ts:desc'],
-                ]));
-
-                if ($saleIds === [] && isset($meiliOpts['city'])) {
-                    unset($meiliOpts['city']);
-                    $saleIds = $search->searchIds('', array_merge($meiliOpts, [
-                        'exclude_statuses' => self::INACTIVE_STATUSES,
-                    ]));
-                    $soldIds = $search->searchIds('', array_merge($meiliOpts, [
-                        'status' => 'Sold',
-                        'sort' => ['close_ts:desc', 'listing_contract_ts:desc'],
-                    ]));
-                }
+                $saleIds = $this->searchNear($search, false, $limit, $visitorCity, $lat, $lng);
+                $soldIds = $this->searchNear($search, true, $limit, $visitorCity, $lat, $lng);
 
                 if ($saleIds !== null || $soldIds !== null) {
                     return [
@@ -180,6 +183,85 @@ class HomepageFeaturedPropertiesAction
             ->pluck('id')
             ->map(static fn ($id) => (int) $id)
             ->all();
+    }
+
+    /**
+     * Progressive geo radius, then city name, then Ontario-wide.
+     *
+     * @return list<int>|null
+     */
+    private function searchNear(
+        PropertySearchService $search,
+        bool $sold,
+        int $limit,
+        ?string $visitorCity,
+        ?float $lat,
+        ?float $lng
+    ): ?array {
+        $base = [
+            'limit' => $limit,
+            'residential_only' => true,
+        ];
+
+        if ($sold) {
+            $base['status'] = 'Sold';
+            $base['sort'] = ['close_ts:desc', 'listing_contract_ts:desc'];
+        } else {
+            $base['exclude_statuses'] = self::INACTIVE_STATUSES;
+            $base['transaction'] = 'For Sale';
+            $base['sort'] = ['listing_contract_ts:desc'];
+        }
+
+        $radii = [15, 30, 60, 120];
+        if ($lat !== null && $lng !== null && abs($lat) > 0.01 && abs($lng) > 0.01) {
+            $geoSort = [sprintf('_geoPoint(%F, %F):asc', $lat, $lng)];
+            if ($sold) {
+                $geoSort[] = 'close_ts:desc';
+            } else {
+                $geoSort[] = 'listing_contract_ts:desc';
+            }
+
+            $best = null;
+            foreach ($radii as $km) {
+                $ids = $search->searchIds('', array_merge($base, [
+                    'geo_lat' => $lat,
+                    'geo_lng' => $lng,
+                    'geo_radius_km' => $km,
+                    'sort' => $geoSort,
+                ]));
+                if (! is_array($ids) || $ids === []) {
+                    continue;
+                }
+                if (count($ids) >= $limit) {
+                    return $ids;
+                }
+                $best = $ids;
+            }
+
+            if (is_array($best) && $best !== []) {
+                return $best;
+            }
+
+            // Radius filter can miss sold/leased docs without _geo. Sort by
+            // distance anyway so homepage sold is still nearest-first.
+            $nearIds = $search->searchIds('', array_merge($base, [
+                'sort' => $geoSort,
+            ]));
+            if (is_array($nearIds) && $nearIds !== []) {
+                return $nearIds;
+            }
+        }
+
+        if ($visitorCity && strcasecmp($visitorCity, 'ontario') !== 0 && strcasecmp($visitorCity, 'on') !== 0) {
+            $ids = $search->searchIds('', array_merge($base, [
+                'city' => ucwords(strtolower($visitorCity)),
+            ]));
+            if (is_array($ids) && $ids !== []) {
+                return $ids;
+            }
+        }
+
+        return $search->searchIds('', $base);
     }
 
     /**

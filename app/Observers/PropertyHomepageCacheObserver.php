@@ -38,6 +38,7 @@ class PropertyHomepageCacheObserver
                 'is_featured',
                 'featured_priority',
                 'MlsStatus',
+                'expire_date',
                 'price',
                 'images',
                 'image_val',

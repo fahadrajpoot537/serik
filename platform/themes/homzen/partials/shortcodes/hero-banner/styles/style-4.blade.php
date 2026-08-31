@@ -2087,6 +2087,21 @@ button {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 8px;
+    align-items: start;
+}
+.hs-map-form-field {
+    min-width: 0;
+}
+.hs-map-form-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: #334155;
+    margin: 0 0 4px;
+}
+.hs-map-form-label.required:after {
+    content: " *";
+    color: #fc655e;
 }
 .hs-map-form-row .hs-map-form-input {
     margin: 0;
@@ -2115,6 +2130,18 @@ button {
     outline: none;
     border-color: #0255a1;
     box-shadow: 0 0 0 3px rgba(2, 85, 161, 0.12);
+}
+.hs-map-form-input.is-invalid {
+    border-color: #dc3545;
+}
+.hs-map-form-submit:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+.hs-map-field-error {
+    font-size: 11px;
+    color: #dc3545;
+    margin-top: 4px;
 }
 .hs-map-form-submit {
     background: #0255a1;
@@ -3443,6 +3470,22 @@ position: absolute;
     font-weight: 700;
     font-size: 16px;
     line-height: 1.25;
+}
+
+.hs-list-card-status {
+    display: inline-block;
+    margin-top: 3px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: #475569;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.25;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .hs-list-card-stats {
@@ -5570,7 +5613,73 @@ position: absolute;
 
 window.SERIK_IS_MAP_SEARCH_PAGE = @json($isMapSearchPageView);
 window.SERIK_CANONICAL_ORIGIN = @json(rtrim(\App\Support\CanonicalUrl::normalize(url('/')), '/'));
+window.SERIK_MLS_STATUS = @json(\App\Support\MlsStatus::frontendConfig());
 window.SERIK_CARTO_BASEMAP_KEY = @json(trim((string) config('services.carto.basemap_key', '')));
+
+window.serikMlsKey = function (raw) {
+    return String(raw || '').trim().toLowerCase().replace(/\s+/g, ' ');
+};
+window.serikMlsDelistedQuery = function () {
+    const cfg = window.SERIK_MLS_STATUS || {};
+    if (Array.isArray(cfg.delisted_query) && cfg.delisted_query.length) {
+        return cfg.delisted_query.slice();
+    }
+    return ['Expired', 'Suspended', 'Cancelled', 'Canceled', 'Terminated', 'Withdrawn'];
+};
+window.serikMlsFormatDate = function (ymd) {
+    const m = String(ymd || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return null;
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const month = months[parseInt(m[2], 10) - 1];
+    if (!month) return null;
+    return month + ' ' + parseInt(m[3], 10) + ', ' + m[1];
+};
+window.serikMlsResolve = function (raw, opts) {
+    opts = opts || {};
+    const cfg = window.SERIK_MLS_STATUS || {};
+    const map = cfg.map || {};
+    const rawStatus = String(raw || '').trim();
+    const key = window.serikMlsKey(rawStatus);
+    const sold = (cfg.sold || []).map(function (s) { return String(s).toLowerCase(); });
+    const leased = (cfg.leased || []).map(function (s) { return String(s).toLowerCase(); });
+    const active = (cfg.active || []).map(function (s) { return String(s).toLowerCase(); });
+    const isSold = sold.indexOf(key) !== -1 || key.indexOf('sold') === 0;
+    const isLeased = leased.indexOf(key) !== -1;
+    const isActive = active.indexOf(key) !== -1;
+    const mapped = map[key] || null;
+    let display = mapped;
+    let isDelisted = !!mapped;
+    if (!display) {
+        if (isLeased) display = 'Leased';
+        else if (isSold) display = 'Sold';
+        else if (isActive) {
+            const tx = String(opts.transaction || '').trim();
+            display = (tx === 'For Lease' || tx === 'For Sub-Lease') ? 'For Lease' : 'For Sale';
+        } else if (rawStatus) {
+            display = cfg.unavailable || 'Unavailable';
+            isDelisted = true;
+        } else {
+            display = 'For Sale';
+        }
+    }
+    let dateLabel = null;
+    if (isDelisted && display === 'Expired' && opts.status_date) {
+        dateLabel = window.serikMlsFormatDate(opts.status_date);
+    }
+    return {
+        raw_status: rawStatus,
+        display_label: display,
+        is_delisted: isDelisted,
+        is_active: isActive && !isDelisted && !isSold && !isLeased,
+        is_sold: isSold,
+        is_leased: isLeased,
+        status_date_label: dateLabel,
+        compact_label: dateLabel ? (display + ' · ' + dateLabel) : display,
+    };
+};
+window.serikMlsIsDelisted = function (raw) {
+    return window.serikMlsResolve(raw).is_delisted === true;
+};
 
 // CARTO Voyager raster shows neighbourhood/area labels from ~zoom 12+.
 const HS_MAP_DEFAULT_ZOOM = 15;
@@ -6051,7 +6160,9 @@ document.addEventListener("DOMContentLoaded", function () {
             || raw === 'suspended'
             || raw === 'deal fell through'
             || raw === 'cancelled'
+            || raw === 'canceled'
             || raw === 'withdrawn'
+            || raw === 'unavailable'
         ) {
             return false;
         }
@@ -7099,7 +7210,7 @@ function updateSplitFilterLabels() {
     syncSoldLeasedUiLabels();
 
     const soldStatuses = ['Sold', 'Sold Conditional', 'Sold Conditional Escape', 'Leased', 'Leased Conditional'];
-    const delistedStatuses = ['Expired', 'Terminated', 'Suspended'];
+    const delistedStatuses = typeof serikMlsDelistedQuery === 'function' ? serikMlsDelistedQuery() : ['Expired', 'Terminated', 'Suspended'];
     const current = selectedStatus || [];
     const isSold = current.some((s) => soldStatuses.includes(s));
     const isDelisted = current.some((s) => delistedStatuses.includes(s));
@@ -7175,7 +7286,18 @@ function initFromUrl() {
     const urlParams = new URLSearchParams(window.location.search);
 
     if (!selectedTransaction) {
-        selectedTransaction = pathFilters.transaction || 'For Sale';
+        const queryTransaction = (urlParams.get('transaction') || '').replace(/\+/g, ' ');
+        let decodedTransaction = '';
+        try {
+            decodedTransaction = decodeURIComponent(queryTransaction).trim();
+        } catch (e) {
+            decodedTransaction = queryTransaction.trim();
+        }
+        if (decodedTransaction === 'For Sale' || decodedTransaction === 'For Lease') {
+            selectedTransaction = decodedTransaction;
+        } else {
+            selectedTransaction = pathFilters.transaction || 'For Sale';
+        }
     }
 
     selectedMinPrice = parseInt(urlParams.get('min_price') || 0);
@@ -7295,7 +7417,7 @@ if (isMapSearchPage()) {
 function syncFilterUiFromState() {
     const activeStatuses = ['New', 'Price Change', 'Extension', 'Previous Status'];
     const soldStatuses = ['Sold', 'Sold Conditional', 'Sold Conditional Escape', 'Leased', 'Leased Conditional'];
-    const delistedStatuses = ['Expired', 'Terminated', 'Suspended'];
+    const delistedStatuses = typeof serikMlsDelistedQuery === 'function' ? serikMlsDelistedQuery() : ['Expired', 'Terminated', 'Suspended'];
     const current = selectedStatus || [];
 
     document.querySelectorAll('[data-type="status"]').forEach((btn) => btn.classList.remove('active'));
@@ -7861,13 +7983,13 @@ map.on('mouseleave', 'unclustered-exact-dot', () => {
 
     function isSoldOrDelistedStatus() {
         const soldStatuses = ['Sold', 'Sold Conditional', 'Sold Conditional Escape', 'Leased', 'Leased Conditional'];
-        const delistedStatuses = ['Expired', 'Terminated', 'Suspended'];
+        const delistedStatuses = typeof serikMlsDelistedQuery === 'function' ? serikMlsDelistedQuery() : ['Expired', 'Terminated', 'Suspended'];
         const current = selectedStatus || [];
         return current.some((s) => soldStatuses.includes(s) || delistedStatuses.includes(s));
     }
 
     function isDelistedStatus() {
-        const delistedStatuses = ['Expired', 'Terminated', 'Suspended'];
+        const delistedStatuses = typeof serikMlsDelistedQuery === 'function' ? serikMlsDelistedQuery() : ['Expired', 'Terminated', 'Suspended'];
         return (selectedStatus || []).some((s) => delistedStatuses.includes(s));
     }
 
@@ -7899,7 +8021,7 @@ map.on('mouseleave', 'unclustered-exact-dot', () => {
        const value = this.dataset.value;
 
         if (value === 'Expired') {
-            selectedStatus = ['Expired', 'Terminated', 'Suspended'];
+            selectedStatus = typeof serikMlsDelistedQuery === 'function' ? serikMlsDelistedQuery() : ['Expired', 'Terminated', 'Suspended'];
         }
         
         else if (value === 'Sold') {
@@ -10371,7 +10493,7 @@ function mapMovedEnoughToRefetch() {
         if (isMapSoldListing(status, props) && props.ClosePrice) {
             return `<span style="text-decoration:line-through;color:gray;">$${Number(props.price || 0).toLocaleString()}</span> <span style="margin-left:8px;color:#ff7b0a;">$${Number(props.ClosePrice).toLocaleString()}</span>`;
         }
-        const strike = ['Expired', 'Terminated', 'Suspended'].includes(status);
+        const strike = typeof serikMlsIsDelisted === 'function' && serikMlsIsDelisted(props.mls_status || status);
         return `<span style="${strike ? 'text-decoration:line-through;color:gray;' : ''}">$${Number(props.price || 0).toLocaleString()}</span>`;
     }
 
@@ -10484,12 +10606,19 @@ function mapMovedEnoughToRefetch() {
         }
         return `
             <div class="hs-map-inquiry-card">
-                <form class="hs-map-consult-form" data-property-id="${escapeMapHtml(propertyId)}">
+                <form class="hs-map-consult-form serik-schedule-viewing" data-property-id="${escapeMapHtml(propertyId)}" novalidate>
                     <div class="hs-map-form-title">Contact Us</div>
                     <p class="hs-map-form-subtitle">Interested in this property? Send us a message and we'll get back to you shortly.</p>
                     <div class="hs-map-form-row">
-                        <input type="text" name="name" placeholder="Your name *" required class="hs-map-form-input" autocomplete="name">
-                        <input type="tel" name="phone" placeholder="Phone number" class="hs-map-form-input" autocomplete="tel">
+                        <div class="hs-map-form-field">
+                            <label class="hs-map-form-label required" for="map-consult-name">Name <span class="visually-hidden">Required</span></label>
+                            <input id="map-consult-name" type="text" name="name" placeholder="Your name" required class="hs-map-form-input" autocomplete="name">
+                        </div>
+                        <div class="hs-map-form-field">
+                            <label class="hs-map-form-label required" for="map-consult-phone">Phone <span class="visually-hidden">Required</span></label>
+                            <input id="map-consult-phone" type="tel" name="phone" placeholder="Phone number" required class="hs-map-form-input" autocomplete="tel" inputmode="tel" aria-required="true">
+                            <div id="map-consult-phone-error" class="hs-map-field-error" hidden></div>
+                        </div>
                     </div>
                     <input type="email" name="email" placeholder="Email address" class="hs-map-form-input" autocomplete="email">
                     <textarea name="content" class="hs-map-form-input" rows="4" required placeholder="I'm interested in ${escapeMapHtml(propertyName)}…"></textarea>
@@ -10523,6 +10652,12 @@ function mapMovedEnoughToRefetch() {
             || props.transaction_type
             || ''
         ).trim();
+        const mlsResolved = typeof serikMlsResolve === 'function'
+            ? serikMlsResolve(mlsStatusValue, {
+                transaction: transactionTypeValue || props.transaction,
+                status_date: props.status_date,
+            })
+            : { display_label: statusLabel, compact_label: statusLabel, is_delisted: false };
         const isLeaseListing = transactionTypeValue === 'For Lease'
             || transactionTypeValue === 'For Sub-Lease'
             || mlsStatusValue === 'Leased'
@@ -10530,22 +10665,7 @@ function mapMovedEnoughToRefetch() {
             || String(props.transaction || '').toLowerCase().includes('lease')
             || (typeof selectedTransaction !== 'undefined' && selectedTransaction === 'For Lease');
 
-        // Derive badge from actual MLS status.
-        if (mlsStatusValue === 'Terminated') {
-            statusLabel = 'Terminated';
-        } else if (mlsStatusValue === 'Expired') {
-            statusLabel = 'Expired';
-        } else if (mlsStatusValue === 'Suspended') {
-            statusLabel = 'Suspended';
-        } else if (mlsStatusValue === 'Leased' || mlsStatusValue === 'Leased Conditional') {
-            statusLabel = 'Leased';
-        } else if (String(mlsStatusValue).toLowerCase().includes('sold')) {
-            statusLabel = 'Sold';
-        } else if (isLeaseListing) {
-            statusLabel = 'For Lease';
-        } else {
-            statusLabel = 'For Sale';
-        }
+        statusLabel = mlsResolved.compact_label || mlsResolved.display_label || statusLabel;
 
         const displayName = detail?.display_address || props.name || 'Property';
         const displayLocation = detail?.display_location || '';
@@ -10583,7 +10703,7 @@ function mapMovedEnoughToRefetch() {
                     <div class="map-popup-price">${buildMapPriceHtml(props, status, soldLocked)}</div>
                     <div class="map-popup-date">${escapeMapHtml(relativeListedLabel(props.date, 'Listed'))}</div>
                 </div>
-                ${mlsStatusValue === 'Terminated' ? `<div style="margin:4px 0 8px;"><span class="flag-tag primary status-sold d-inline-block">${escapeMapHtml(mlsStatusValue)}</span></div>` : ''}
+                ${mlsResolved.is_delisted ? `<div style="margin:4px 0 8px;"><span class="flag-tag primary status-sold d-inline-block" aria-label="MLS status: ${escapeMapHtml(mlsResolved.display_label)}">${escapeMapHtml(mlsResolved.compact_label)}</span></div>` : ''}
                 ${!soldLocked && !isMapSoldListing(status, props) && !isLeaseListing ? '<div class="js-purchase-only-info" style="color:#e63946;font-size:14px;margin:4px 0 8px;">Cash back upto 1.5% of purchase price<br>(*Some Terms and Conditions Apply)</div>' : ''}
                 <div class="map-popup-detail-header">${escapeMapHtml(displayName)}</div>
                 ${displayLocation ? `<div class="map-popup-detail-location">${escapeMapHtml(displayLocation)}</div>` : ''}
@@ -12353,7 +12473,13 @@ function buildHsListCardHtml(props, geometry) {
     const locked = mapBlurClass(status, props);
     const gate = mapLoginGateHtml(status, props);
     const isSold = isMapSoldListing(status, props);
-    const isDelisted = props.transaction === 'Expired' || props.transaction === 'Terminated';
+    const mlsResolved = typeof serikMlsResolve === 'function'
+        ? serikMlsResolve(props.mls_status || status, {
+            transaction: props.transaction,
+            status_date: props.status_date,
+        })
+        : { is_delisted: false, compact_label: '', display_label: '' };
+    const isDelisted = mlsResolved.is_delisted === true;
     let priceHtml;
     if (locked) {
         priceHtml = '<span style="color:#888;font-weight:600;">Login to view</span>';
@@ -12410,6 +12536,9 @@ function buildHsListCardHtml(props, geometry) {
             : '<div class="hs-list-card-img hs-img-empty" style="width:100px;min-width:100px;height:76px;border-radius:8px;"><div class="hs-img-empty-fill"></div></div>') +
         '<div class="hs-list-card-body">' +
         '<div class="hs-list-card-price">' + priceHtml + '</div>' +
+        (!locked && isDelisted
+            ? '<div class="hs-list-card-status" aria-label="MLS status: ' + escapeMapHtml(mlsResolved.display_label) + '">' + escapeMapHtml(mlsResolved.compact_label) + '</div>'
+            : '') +
         (stats ? '<div class="hs-list-card-stats">' + escapeMapHtml(stats) + '</div>' : '') +
         '<div class="hs-list-card-addr">' + escapeMapHtml(address) + '</div>' +
         (mlsParts.length ? '<div class="hs-list-card-mls">' + escapeMapHtml(mlsParts.join(' · ')) + '</div>' : '') +
@@ -12927,7 +13056,7 @@ function initMobileFilters() {
             const wasHistory = typeof isHistoryClosedStatus === 'function' && isHistoryClosedStatus();
             const value = this.dataset.status;
             if (value === 'Expired') {
-                selectedStatus = ['Expired', 'Terminated', 'Suspended'];
+                selectedStatus = typeof serikMlsDelistedQuery === 'function' ? serikMlsDelistedQuery() : ['Expired', 'Terminated', 'Suspended'];
             } else if (value === 'Sold') {
                 selectedStatus = getClosedStatusValues();
                 hsMobileDateSold = hsMobileDateSold || 'all';
@@ -13146,41 +13275,105 @@ document.addEventListener('submit', function (e) {
     const propertyId = form.dataset.propertyId;
     const submitBtn = form.querySelector('.hs-map-form-submit');
     const msgEl = form.querySelector('.hs-map-form-msg');
+    const phoneInput = form.querySelector('[name="phone"]');
+    const phoneErrorEl = form.querySelector('#map-consult-phone-error') || form.querySelector('.hs-map-field-error');
     const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
     if (!propertyId) return;
+    if (form.dataset.serikSubmitting === '1') return;
+
+    const clearPhoneError = () => {
+        if (phoneInput) {
+            phoneInput.classList.remove('is-invalid');
+            phoneInput.removeAttribute('aria-invalid');
+            phoneInput.removeAttribute('aria-describedby');
+        }
+        if (phoneErrorEl) {
+            phoneErrorEl.hidden = true;
+            phoneErrorEl.textContent = '';
+        }
+    };
+
+    const showPhoneError = (message) => {
+        if (!phoneInput) return;
+        phoneInput.classList.add('is-invalid');
+        phoneInput.setAttribute('aria-invalid', 'true');
+        if (phoneErrorEl) {
+            const errId = phoneErrorEl.id || 'map-consult-phone-error';
+            phoneErrorEl.id = errId;
+            phoneErrorEl.hidden = false;
+            phoneErrorEl.textContent = message;
+            phoneInput.setAttribute('aria-describedby', errId);
+        }
+        phoneInput.focus();
+    };
+
+    const phoneValue = phoneInput ? phoneInput.value : '';
+    const phoneDigits = String(phoneValue || '').replace(/\D+/g, '');
+    if (phoneDigits === '') {
+        clearPhoneError();
+        showPhoneError('Phone number is required.');
+        return;
+    }
+    const original = String(phoneValue || '').trim();
+    const plusCount = (original.match(/\+/g) || []).length;
+    const looksValid = !(/[A-Za-z]/.test(original) || plusCount > 1)
+        && phoneDigits.length > 0
+        && phoneDigits.length <= 15
+        && (
+            (original.charAt(0) === '+' && phoneDigits.charAt(0) !== '0' && phoneDigits.length >= 8)
+            || (phoneDigits.length === 10 && phoneDigits.charAt(0) !== '0' && phoneDigits.charAt(0) !== '1' && phoneDigits.charAt(3) !== '0' && phoneDigits.charAt(3) !== '1')
+            || (phoneDigits.length === 11 && phoneDigits.charAt(0) === '1' && phoneDigits.charAt(1) !== '0' && phoneDigits.charAt(1) !== '1' && phoneDigits.charAt(4) !== '0' && phoneDigits.charAt(4) !== '1')
+        );
+    if (!looksValid) {
+        clearPhoneError();
+        showPhoneError('Please enter a valid phone number.');
+        return;
+    }
+    clearPhoneError();
 
     const fd = new FormData();
     fd.append('name', form.querySelector('[name="name"]')?.value || '');
     fd.append('email', form.querySelector('[name="email"]')?.value || '');
-    fd.append('phone', form.querySelector('[name="phone"]')?.value || '');
+    fd.append('phone', phoneValue || '');
     fd.append('content', form.querySelector('[name="content"]')?.value || '');
     fd.append('type', 'property');
     fd.append('data_id', propertyId);
 
+    form.dataset.serikSubmitting = '1';
     if (submitBtn) submitBtn.disabled = true;
     if (msgEl) { msgEl.hidden = true; msgEl.className = 'hs-map-form-msg'; }
 
     fetch('/send-consult', {
         method: 'POST',
         body: fd,
-        headers: { 'X-CSRF-TOKEN': csrf, 'X-Requested-With': 'XMLHttpRequest' },
+        headers: { 'X-CSRF-TOKEN': csrf, 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
     })
-        .then((res) => res.json().then((data) => ({ ok: res.ok, data })).catch(() => ({ ok: res.ok, data: {} })))
-        .then(({ ok, data }) => {
+        .then((res) => res.json().then((data) => ({ ok: res.ok, status: res.status, data })).catch(() => ({ ok: res.ok, status: res.status, data: {} })))
+        .then(({ ok, status, data }) => {
+            const phoneErrors = data?.errors?.phone;
+            const phoneMessage = Array.isArray(phoneErrors) ? phoneErrors[0] : phoneErrors;
+            if (!ok) {
+                if (phoneMessage) {
+                    showPhoneError(phoneMessage);
+                }
+                if (msgEl) {
+                    msgEl.hidden = false;
+                    msgEl.textContent = (typeof data?.message === 'string' && !phoneMessage)
+                        ? data.message
+                        : (phoneMessage || 'Could not send inquiry. Please try again.');
+                    msgEl.classList.add('error');
+                }
+                return;
+            }
             if (msgEl) {
                 msgEl.hidden = false;
-                if (ok || data?.message) {
-                    msgEl.textContent = data?.message || 'Thank you! We will contact you shortly.';
-                    msgEl.classList.add('success');
-                    form.reset();
-                    // Google Ads: fire only on successful consult response (not validation errors).
-                    if (ok && !(data && data.error) && typeof window.serikTrackAdsContactConversion === 'function') {
-                        window.serikTrackAdsContactConversion();
-                    }
-                } else {
-                    msgEl.textContent = data?.message || 'Could not send inquiry. Please try again.';
-                    msgEl.classList.add('error');
+                msgEl.textContent = data?.message || 'Thank you! We will contact you shortly.';
+                msgEl.classList.add('success');
+                form.reset();
+                clearPhoneError();
+                if (!(data && data.error) && typeof window.serikTrackAdsContactConversion === 'function') {
+                    window.serikTrackAdsContactConversion();
                 }
             }
         })
@@ -13191,7 +13384,10 @@ document.addEventListener('submit', function (e) {
                 msgEl.classList.add('error');
             }
         })
-        .finally(() => { if (submitBtn) submitBtn.disabled = false; });
+        .finally(() => {
+            delete form.dataset.serikSubmitting;
+            if (submitBtn) submitBtn.disabled = false;
+        });
 });
 
 document.addEventListener('click', function (e) {
@@ -13779,7 +13975,7 @@ function loadResults(keyword, reset = false){
         : fetchCommunitySuggestions(keyword, requestController.signal);
     loadResults._activeKeyword = keyword;
     const isMlsKey = isMlsSearchKeyword(keyword);
-    const searchTimeoutId = setTimeout(() => requestController.abort(), isMlsKey ? 45000 : 12000);
+    const searchTimeoutId = setTimeout(() => requestController.abort(), isMlsKey ? 20000 : 12000);
 
     const searchUrl = buildSmartSearchUrl(keyword);
 

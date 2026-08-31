@@ -118,13 +118,21 @@
   if (!mount || !mount.dataset.url || mount.dataset.loaded === '1') return;
   mount.dataset.loaded = '1';
   var url = mount.dataset.url;
-  try {
-    var city = (document.cookie.match(/(?:^|;\s*)serik_visitor_city=([^;]+)/) || [])[1];
-    if (city) {
-      city = decodeURIComponent(city.replace(/\+/g, ' '));
-      url += (url.indexOf('?') >= 0 ? '&' : '?') + 'city=' + encodeURIComponent(city.toLowerCase().replace(/\s+/g, '-'));
-    }
-  } catch (e) {}
+  function cityFromVisitor() {
+    try {
+      var cookie = (document.cookie.match(/(?:^|;\s*)serik_visitor_city=([^;]+)/) || [])[1];
+      if (cookie) return decodeURIComponent(cookie.replace(/\+/g, ' '));
+    } catch (e) {}
+    try {
+      var loc = window.SerikVisitorLocation && window.SerikVisitorLocation.getSessionLocation && window.SerikVisitorLocation.getSessionLocation();
+      if (loc && loc.city && loc.source !== 'default') return String(loc.city);
+    } catch (e2) {}
+    return '';
+  }
+  var city = cityFromVisitor();
+  if (city) {
+    url += (url.indexOf('?') >= 0 ? '&' : '?') + 'city=' + encodeURIComponent(city.toLowerCase().replace(/\s+/g, '-'));
+  }
 
   function enhanceAccordion(root) {
     if (!root) return;

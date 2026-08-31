@@ -79,45 +79,17 @@ class PropertyController extends BaseController
 
     public function bookAppointment(Request $request)
     {
+        return \App\Support\AppointmentScheduler::book($request);
+    }
 
-        $validator = Validator::make($request->all(), [
+    public function appointmentSlots(Request $request)
+    {
+        return \App\Support\AppointmentScheduler::slotsResponse($request);
+    }
 
-            'name' => 'required|string|max:255',
-            'email' => 'required|email',
-            'phone' => 'required',
-            'date' => 'required',
-            'time' => 'required',
-            'subject' => 'required'
-
-        ]);
-
-        if ($validator->fails()) {
-
-            return response()->json([
-                'status' => false,
-                'message' => $validator->errors()
-            ], 422);
-        }
-
-        $remarks = "Appointment Date: " . $request->date . " Time: " . $request->time;
-
-        DB::table('contacts')->insert([
-            'name' => $request->name,
-            'email' => $request->email,
-            'phone' => $request->phone,
-            'address' => $request->address,
-            'subject' => $request->subject,
-            'content' => $remarks,
-            'status' => 0,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        return response()->json([
-            'status' => true,
-            'message' => 'Appointment booked successfully'
-        ]);
-
+    public function appointmentStatus(Request $request)
+    {
+        return \App\Support\AppointmentScheduler::statusResponse($request);
     }
 
 
@@ -2741,7 +2713,8 @@ class PropertyController extends BaseController
             $meiliKeyword = $keyword;
             if ($parsed) {
                 $opts['street_number'] = $parsed['street_number'];
-                $meiliKeyword = trim($parsed['street_number'] . ' ' . ($parsed['street_name'] ?? $parsed['street_part']));
+                $opts['matching_strategy'] = 'all';
+                $meiliKeyword = \App\Support\AddressNormalizer::meiliQuery($parsed);
             }
 
             $ids = app(\Botble\RealEstate\Services\PropertySearchService::class)->searchIds($meiliKeyword, $opts);
@@ -2846,8 +2819,9 @@ class PropertyController extends BaseController
         };
 
         $matched = $collapse($rows, (bool) $filterByStreet);
+        $strictTokens = count($parsed['significant_tokens'] ?? []) >= 2;
 
-        return $matched !== [] ? $matched : $collapse($rows, false);
+        return ($matched !== [] || $strictTokens) ? $matched : $collapse($rows, false);
     }
 
     /**
@@ -3214,89 +3188,37 @@ class PropertyController extends BaseController
 
     private function parseAddressSearchKeyword(string $keyword): ?array
     {
-        $keyword = trim(preg_replace('/\s+/', ' ', $keyword) ?? '');
-
-        if ($keyword === '') {
-            return null;
-        }
-
-        // Drop city/region tails: "390 Bank St Ottawa - Centre Town" → "390 Bank St"
-        if (str_contains($keyword, ',')) {
-            $keyword = trim(explode(',', $keyword, 2)[0]);
-        }
-        if (str_contains($keyword, ' - ')) {
-            $keyword = trim(explode(' - ', $keyword, 2)[0]);
-        }
-        // Strip trailing province / "Ontario"
-        $keyword = trim(preg_replace('/\b(ON|Ontario|QC|Quebec|BC|AB|MB|SK|NS|NB|NL|PE|YT|NT|NU)\b.*$/i', '', $keyword) ?? $keyword);
-
-        if (! preg_match('/^(\d+[A-Za-z]?)\s+(.+)$/', $keyword, $matches)) {
-            return null;
-        }
-
-        $streetNumber = $matches[1];
-        $rest = trim($matches[2]);
-        $tokens = preg_split('/\s+/', $rest) ?: [];
-        $streetTokens = [];
-
-        foreach ($tokens as $token) {
-            $streetTokens[] = $token;
-            if (TrebPropertyHelper::isStreetSuffixWord($token)) {
-                break;
-            }
-            // Without a suffix, keep at most 2 name tokens ("Bank", "Queen Mary")
-            if (count($streetTokens) >= 2) {
-                break;
-            }
-        }
-
-        if ($streetTokens === []) {
-            return null;
-        }
-
-        $streetPart = implode(' ', $streetTokens);
-        $streetName = '';
-        foreach ($streetTokens as $token) {
-            if (! TrebPropertyHelper::isStreetSuffixWord($token)) {
-                $streetName = $token;
-                break;
-            }
-        }
-
-        if ($streetName === '') {
-            $streetName = $streetTokens[0];
-        }
-
-            return [
-            'street_number' => $streetNumber,
-            'street_part' => $streetPart,
-            'street_name' => $streetName,
-        ];
+        return \App\Support\AddressNormalizer::parseQuery($keyword);
     }
 
     /**
-     * Require street number + street name so "390 Bank" does not return "390 Cherry".
+     * Require street number + every significant street-name token
+     * so "110 Queen" does not match "110 Queen Isabella Crescent" as equal,
+     * and "Queen Street" cannot satisfy "Queen Isabella".
      */
     private function addressMatchesParsedSearch(string $address, array $parsed): bool
     {
-        $address = strtolower(trim($address));
-        if ($address === '') {
-            return false;
+        return \App\Support\AddressNormalizer::addressMatches($address, $parsed);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function filterAndRankAddressRows(array $rows, array $parsed): array
+    {
+        $filtered = [];
+        foreach ($rows as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $addr = (string) ($row['UnparsedAddress'] ?? $row['name'] ?? '');
+            if (\App\Support\AddressNormalizer::addressMatches($addr, $parsed)) {
+                $filtered[] = $row;
+            }
         }
 
-        $number = strtolower(trim((string) ($parsed['street_number'] ?? '')));
-        $name = strtolower(trim((string) ($parsed['street_name'] ?? '')));
-
-        if ($number === '' || $name === '') {
-            return false;
-        }
-
-        if (! preg_match('/\b' . preg_quote($number, '/') . '\b/', $address)) {
-            return false;
-        }
-
-        // Whole-word street name (Bank ≠ Cherry). Allow "Bank Street" / "Bank St".
-        return (bool) preg_match('/\b' . preg_quote($name, '/') . '\b/', $address);
+        return \App\Support\AddressNormalizer::sortRows($filtered, $parsed);
     }
 
     private function scoreSearchRelevance(array $item, string $keyword): int
@@ -3369,8 +3291,8 @@ class PropertyController extends BaseController
             }
         }
 
-        $searchCacheKey = 'smart_search_v1:' . md5(
-            strtolower($keyword) . '|' . $skip . '|' . ($request->input('transaction', '')) . '|' . ($request->input('status', ''))
+        $searchCacheKey = 'smart_search_v2:' . md5(
+            strtolower($keyword) . '|' . $skip . '|' . ($request->input('transaction', '')) . '|' . ($request->input('status', '')) . '|addr2|a=' . ((auth('account')->check() || auth()->check()) ? '1' : '0')
         );
         if (! $isListingKey && mb_strlen($keyword) >= 3 && preg_match('/\d/', $keyword)) {
             $cachedSearch = Cache::get($searchCacheKey);
@@ -3441,6 +3363,53 @@ class PropertyController extends BaseController
         $meiliTried = false;
         $meiliUnavailable = false;
 
+        if ($isListingKey) {
+            try {
+                $meiliTried = true;
+                $search = app(\Botble\RealEstate\Services\PropertySearchService::class);
+                $mlsIds = $search->searchIds(strtoupper($keyword), [
+                    'limit' => $top,
+                    'residential_only' => true,
+                ]);
+                if (is_array($mlsIds) && $mlsIds !== []) {
+                    $ordered = $this->hydrateSmartSearchRows($mlsIds, $top, false);
+                    if ($ordered !== []) {
+                        return response()->json(
+                            $rememberSearch(TrebPropertyHelper::groupListingsByBuilding($ordered))
+                        );
+                    }
+                }
+                if ($mlsIds === null) {
+                    $meiliUnavailable = true;
+                }
+            } catch (\Throwable $e) {
+                $meiliUnavailable = true;
+                \Log::warning('Meili MLS smartSearch failed: ' . $e->getMessage());
+            }
+
+            $mlsHit = DB::table('re_properties')
+                ->select(PropertyFulltextSearch::SEARCH_COLUMNS)
+                ->where('moderation_status', 'approved')
+                ->where('external_id', strtoupper($keyword))
+                ->limit(1)
+                ->first();
+            if (
+                $mlsHit
+                && class_exists(TrebPropertyHelper::class)
+                && TrebPropertyHelper::isCommercialSubType($mlsHit->PropertySubType ?? null)
+            ) {
+                $mlsHit = null;
+            }
+            if ($mlsHit) {
+                $mappedMls = $this->mapLocalSearchCollection(collect([$mlsHit]));
+                if ($mappedMls !== []) {
+                    return response()->json(
+                        $rememberSearch(TrebPropertyHelper::groupListingsByBuilding($mappedMls))
+                    );
+                }
+            }
+        }
+
         if (! $isListingKey) {
             try {
                 $meiliTried = true;
@@ -3462,10 +3431,19 @@ class PropertyController extends BaseController
                 if ($parsed) {
                     $meiliOpts['street_number'] = $parsed['street_number'];
                     $meiliOpts['limit'] = max($top * 5, 50);
-                    $meiliKeyword = trim($parsed['street_number'] . ' ' . ($parsed['street_name'] ?? $parsed['street_part']));
+                    $meiliOpts['matching_strategy'] = 'all';
+                    $meiliKeyword = \App\Support\AddressNormalizer::meiliQuery($parsed);
                 }
 
                 $ids = $search->searchIds($meiliKeyword, $meiliOpts);
+
+                // Older indexes may not filter on street_number — retry without it
+                // before treating Meili as down (that path was paying AMP 10–45s).
+                if ($ids === null && $parsed && isset($meiliOpts['street_number'])) {
+                    $retryOpts = $meiliOpts;
+                    unset($retryOpts['street_number']);
+                    $ids = $search->searchIds($meiliKeyword, $retryOpts);
+                }
 
                 if ($ids === null) {
                     $meiliUnavailable = true;
@@ -3476,8 +3454,28 @@ class PropertyController extends BaseController
                         $retryIds = $search->searchIds($meiliKeyword, $retryOpts);
                         if ($retryIds === null) {
                             $meiliUnavailable = true;
+                        } elseif ($retryIds === []) {
+                            $fuzzyOpts = $retryOpts;
+                            $fuzzyOpts['matching_strategy'] = 'last';
+                            $fuzzyIds = $search->searchIds($meiliKeyword, $fuzzyOpts);
+                            if ($fuzzyIds === null) {
+                                $meiliUnavailable = true;
+                            } else {
+                                $ids = $fuzzyIds;
+                            }
                         } else {
                             $ids = $retryIds;
+                        }
+                    }
+
+                    if ($ids === [] && $parsed && ! $meiliUnavailable) {
+                        $fuzzyOpts = $meiliOpts;
+                        $fuzzyOpts['matching_strategy'] = 'last';
+                        $fuzzyIds = $search->searchIds($meiliKeyword, $fuzzyOpts);
+                        if ($fuzzyIds === null) {
+                            $meiliUnavailable = true;
+                        } else {
+                            $ids = $fuzzyIds;
                         }
                     }
 
@@ -3493,19 +3491,18 @@ class PropertyController extends BaseController
                     } elseif (! $meiliUnavailable && $ids !== []) {
                         $ordered = $this->hydrateSmartSearchRows($ids, max($top * 3, 30), false);
                         if ($parsed) {
-                            $ordered = array_values(array_filter(
-                                $ordered,
-                                fn (array $row) => $this->addressMatchesParsedSearch(
-                                    (string) ($row['UnparsedAddress'] ?? ''),
-                                    $parsed
-                                )
-                            ));
+                            $ranked = $this->filterAndRankAddressRows($ordered, $parsed);
+                            // Keep Meili hits when the strict ranker empties them —
+                            // falling through to AMP made address search look broken.
+                            if ($ranked !== []) {
+                                $ordered = $ranked;
+                            }
                         }
 
                         $merged = $this->mergeSmartSearchRows($communityRows, $ordered, $top);
                         if ($merged !== [] || ! $parsed) {
                             return response()->json(
-                                $rememberSearch(TrebPropertyHelper::groupListingsByBuilding($merged))
+                                $rememberSearch(TrebPropertyHelper::groupListingsByBuilding($merged !== [] ? $merged : $ordered))
                             );
                         }
                     }
@@ -3564,10 +3561,11 @@ class PropertyController extends BaseController
             $matchParsed = fn ($item) => $this->addressMatchesParsedSearch((string) ($item->name ?? ''), $parsed);
 
             $ftQuery = PropertyFulltextSearch::baseQuery(PropertyFulltextSearch::SEARCH_COLUMNS);
-            PropertyFulltextSearch::applyParsedAddressFulltext(
+            PropertyFulltextSearch::applyRequiredTokensFulltext(
                 $ftQuery,
-                $parsed['street_number'],
-                $parsed['street_name'] ?? $parsed['street_part']
+                (string) $parsed['street_number'],
+                (string) ($parsed['street_name'] ?? ''),
+                (string) ($parsed['street_suffix'] ?? $parsed['street_part'] ?? '')
             );
             $this->applyResidentialSubTypeScope($ftQuery);
             $applySearchFilters($ftQuery);
@@ -3594,6 +3592,9 @@ class PropertyController extends BaseController
         }
 
         $mappedLocal = $this->mapLocalSearchCollection($localResults);
+        if ($parsed && $mappedLocal !== []) {
+            $mappedLocal = $this->filterAndRankAddressRows($mappedLocal, $parsed);
+        }
 
         // Exact MLS hit from local DB — residential only.
         if ($isListingKey && $mappedLocal !== []) {
@@ -3616,13 +3617,16 @@ class PropertyController extends BaseController
         // were indexed locally. Cache short-lived so typing the same address
         // does not re-pay the AMP round-trip.
         if ($parsed && $mappedLocal === []) {
-            $ampCacheKey = 'smart_search_amp_addr_v1:' . md5(strtolower(
-                ($parsed['street_number'] ?? '') . '|' . ($parsed['street_name'] ?? $parsed['street_part'] ?? '')
+            $ampCacheKey = 'smart_search_amp_addr_v2:' . md5(strtolower(
+                ($parsed['street_number'] ?? '') . '|' . ($parsed['street_name'] ?? $parsed['street_part'] ?? '') . '|' . ($parsed['municipality'] ?? '')
             ));
             $cachedAmpIds = Cache::get($ampCacheKey);
             if (is_array($cachedAmpIds)) {
                 if ($cachedAmpIds !== []) {
-                    $ordered = $this->hydrateSmartSearchRows($cachedAmpIds, $top, false);
+                    $ordered = $this->filterAndRankAddressRows(
+                        $this->hydrateSmartSearchRows($cachedAmpIds, $top, false),
+                        $parsed
+                    );
 
                     return response()->json($rememberSearch(TrebPropertyHelper::groupListingsByBuilding($ordered)));
                 }
@@ -3631,7 +3635,10 @@ class PropertyController extends BaseController
                     ->ingestAddressSearchHits($parsed, $top);
                 Cache::put($ampCacheKey, $ingestedIds, 120);
                 if ($ingestedIds !== []) {
-                    $ordered = $this->hydrateSmartSearchRows($ingestedIds, $top, false);
+                    $ordered = $this->filterAndRankAddressRows(
+                        $this->hydrateSmartSearchRows($ingestedIds, $top, false),
+                        $parsed
+                    );
 
                     return response()->json($rememberSearch(TrebPropertyHelper::groupListingsByBuilding($ordered)));
                 }
@@ -4619,7 +4626,7 @@ class PropertyController extends BaseController
             return $statuses;
         }
 
-        $delistedStatuses = ['Expired', 'Terminated', 'Suspended'];
+        $delistedStatuses = \App\Support\MlsStatus::delistedQueryValues();
         if (! empty(array_intersect($statuses, $delistedStatuses))) {
             return $statuses;
         }
@@ -4669,7 +4676,7 @@ class PropertyController extends BaseController
 
         $daysMap = $this->mapDateDaysMap();
         $moreThanMap = $this->mapDateMoreThanMap();
-        $delistedStatuses = ['Expired', 'Terminated', 'Suspended'];
+        $delistedStatuses = \App\Support\MlsStatus::delistedQueryValues();
         $isDelisted = $statuses !== [] && ! empty(array_intersect($statuses, $delistedStatuses));
 
         if (isset($daysMap[$finalDate])) {
@@ -5845,7 +5852,7 @@ class PropertyController extends BaseController
             $cutoff = now()->subDays($daysMap[$finalDate]);
 
             if ($usesSoldDate) {
-                $delistedStatuses = ['Expired', 'Terminated', 'Suspended'];
+                $delistedStatuses = \App\Support\MlsStatus::delistedQueryValues();
                 $isDelisted = $statuses !== [] && ! empty(array_intersect($statuses, $delistedStatuses));
 
                 if ($isDelisted) {
@@ -6003,7 +6010,7 @@ class PropertyController extends BaseController
         $common = $this->trebMapCommonConditions($city, $transaction, $subtypes);
         $keys = [];
 
-        $delistedStatuses = ['Expired', 'Terminated', 'Suspended'];
+        $delistedStatuses = \App\Support\MlsStatus::delistedQueryValues();
         $soldStatuses = ['Sold', 'Sold Conditional', 'Sold Conditional Escape', 'Leased', 'Leased Conditional'];
         $maxCloseYear = (int) date('Y') + 1;
 
@@ -6119,7 +6126,7 @@ class PropertyController extends BaseController
             // stale Meili hits cannot leak Sold pins onto Active map (and vice versa).
             $meiliAuth = (auth('account')->check() || auth()->check()) ? '1' : '0';
             // v15: For Lease + closed coerces MlsStatus to Leased* only.
-            $meiliCacheKey = 'map_meili_v15_' . md5(implode('|', [
+            $meiliCacheKey = 'map_meili_v16_' . md5(implode('|', [
                 round($south, 4), round($north, 4), round($west, 4), round($east, 4),
                 $this->mapFilterSignature($request),
                 'a=' . $meiliAuth,
@@ -6147,7 +6154,7 @@ class PropertyController extends BaseController
         }
 
         // v30: For Lease + closed coerces MlsStatus to Leased* only.
-        $cacheKey = 'map_v30_' . md5(implode('|', [
+        $cacheKey = 'map_v31_' . md5(implode('|', [
             round($south, 4), round($north, 4), round($west, 4), round($east, 4),
             $this->mapFilterSignature($request),
         ]));
@@ -6180,7 +6187,8 @@ class PropertyController extends BaseController
                     'ParkingSpaces',
                     'CoveredSpaces',
                     'created_at',
-                    'updated_at'
+                    'updated_at',
+                    'expire_date',
                 ])
                 ->where('moderation_status', 'approved')
                 ->whereNotNull('latitude')
@@ -6263,7 +6271,7 @@ class PropertyController extends BaseController
 
             $activeStatuses = ['New', 'Price Change', 'Extension', 'Previous Status'];
             $soldStatuses = ['Sold', 'Sold Conditional', 'Sold Conditional Escape', 'Leased', 'Leased Conditional'];
-            $delistedStatuses = ['Expired', 'Terminated', 'Suspended'];
+            $delistedStatuses = \App\Support\MlsStatus::delistedQueryValues();
             $isSoldOrDelistedFilter = $statuses !== [] && ! empty(array_intersect($statuses, array_merge($soldStatuses, $delistedStatuses)));
             $isActiveFilter = $statuses !== []
                 && empty(array_diff($activeStatuses, $statuses))
@@ -6520,6 +6528,10 @@ class PropertyController extends BaseController
                             'date' => $displayDate ? date('Y-m-d', strtotime((string) $displayDate)) : null,
                             'area' => $property->square,
                             'agency' => $property->broker,
+                            'status_date' => \App\Support\MlsStatus::publicDateString(
+                                $property->MlsStatus,
+                                $property->expire_date ?? null
+                            ),
                             // Use 0/1 — MapLibre may stringify booleans; "false" is truthy in JS.
                             'requires_login' => 0,
                         ]
@@ -6559,7 +6571,7 @@ class PropertyController extends BaseController
             is_string($transaction) ? $transaction : null
         );
         $soldStatuses = ['Sold', 'Sold Conditional', 'Sold Conditional Escape', 'Leased', 'Leased Conditional'];
-        $delistedStatuses = ['Expired', 'Terminated', 'Suspended'];
+        $delistedStatuses = \App\Support\MlsStatus::delistedQueryValues();
         $soldOrDelisted = array_merge($soldStatuses, $delistedStatuses);
         $subtypes = trim((string) $request->input('subtypes', ''));
         $isSoldOrDelistedFilter = $statuses !== [] && ! empty(array_intersect($statuses, $soldOrDelisted));
@@ -6725,6 +6737,7 @@ class PropertyController extends BaseController
                         ? (($h['transaction_type'] ?? '') === 'For Lease' ? 'For Lease' : 'For Sale')
                         : $mls,
                     'mls_status' => $mls,
+                    'status_date' => \App\Support\MlsStatus::publicDateString($mls, $h['expire_date'] ?? null),
                     'image' => '',
                     'price' => $h['price'] ?? 0,
                     'ClosePrice' => $h['close_price'] ?? null,
@@ -6776,6 +6789,7 @@ class PropertyController extends BaseController
                         'price',
                         'ClosePrice',
                         'external_id',
+                        'expire_date',
                     ])
                     ->keyBy('id');
 
@@ -6837,6 +6851,10 @@ class PropertyController extends BaseController
                         $feature['properties']['transaction'] = $dbMls === 'New'
                             ? (((string) ($row->TransactionType ?? '') === 'For Lease') ? 'For Lease' : 'For Sale')
                             : $dbMls;
+                        $feature['properties']['status_date'] = \App\Support\MlsStatus::publicDateString(
+                            $dbMls,
+                            $row->expire_date ?? null
+                        );
                     }
 
                     if ($isSoldHistory && ! $canViewSold) {

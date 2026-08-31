@@ -68,24 +68,71 @@ h2 {
   text-align: center;
 }
 
+.days > span {
+  min-height: 44px;
+}
+
 .weekdays span {
   font-weight: 600;
   color: #666;
 }
 
-.days span {
+.days .cal-day {
   padding: 12px;
   cursor: pointer;
   border-radius: 50%;
+  border: 2px solid transparent;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  min-width: 44px;
+  min-height: 44px;
 }
 
-.days span:hover {
+.days .cal-day:hover:not(:disabled):not([aria-disabled="true"]) {
   background: #eee;
 }
 
-.days .selected {
+.days .cal-day:focus-visible {
+  outline: 3px solid #0b5cab;
+  outline-offset: 2px;
+}
+
+.days .cal-day.is-today {
+  box-shadow: inset 0 0 0 2px #0b5cab;
+  font-weight: 700;
+}
+
+.days .cal-day.is-today .cal-day-today-label {
+  display: block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  line-height: 1;
+  color: #0b5cab;
+  text-transform: uppercase;
+}
+
+.days .cal-day.selected {
   background: #e82c2c;
   color: #fff;
+  box-shadow: none;
+}
+
+.days .cal-day.is-today.selected {
+  box-shadow: inset 0 0 0 2px #0b5cab;
+}
+
+.days .cal-day.is-today.selected .cal-day-today-label {
+  color: #fff;
+}
+
+.days .cal-day.is-unavailable,
+.days .cal-day:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  text-decoration: line-through;
+  pointer-events: none;
 }
 
 .times {
@@ -95,16 +142,80 @@ h2 {
 }
 
 .time {
-  padding: 12px;
+  padding: 12px 8px;
   background: #f2f2f4;
   border-radius: 10px;
   text-align: center;
   cursor: pointer;
+  border: 2px solid transparent;
+  font: inherit;
+  color: inherit;
+  white-space: nowrap;
+}
+
+.time:focus-visible {
+  outline: 3px solid #0b5cab;
+  outline-offset: 2px;
 }
 
 .time.selected {
   background: #e82c2c;
   color: #fff;
+}
+
+.time.is-unavailable,
+.time:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+
+.times-status {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #4b5563;
+}
+
+.appointment-error {
+  color: #b42318;
+  margin: 12px 0 0;
+  min-height: 1.2em;
+}
+
+.consult-type-fieldset {
+  border: 1px solid #d0d5dd;
+  border-radius: 12px;
+  padding: 18px 16px 10px;
+  margin: 0;
+}
+
+.consult-type-fieldset legend {
+  padding: 0 8px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.consult-type-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.consult-type-options label {
+  position: static;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  color: #111;
+  font-weight: 500;
+  background: none;
+  padding: 4px 0;
+}
+
+.consult-type-options input {
+  width: auto;
+  height: auto;
 }
 
 .timezone {
@@ -296,12 +407,12 @@ h2 {
 <select id="year" class="form-control"></select>
 </div>
 
-<div class="weekdays">
+<div class="weekdays" aria-hidden="true">
 <span>M</span><span>Tu</span><span>W</span>
 <span>Th</span><span>Fri</span><span>Sa</span><span>Su</span>
 </div>
 
-<div id="calendar-days" class="days"></div>
+<div id="calendar-days" class="days" role="grid" aria-label="Appointment calendar"></div>
 
 </div>
 
@@ -309,7 +420,8 @@ h2 {
 <h2 class="mt-4">Pick a time</h2>
 
 <div class="time-card">
-<div id="times" class="times"></div>
+<div id="times" class="times" role="listbox" aria-label="Available appointment times"></div>
+<p id="times-status" class="times-status" aria-live="polite"></p>
 </div>
 
 <p class="timezone">All Times are in Eastern Time - US & Canada</p>
@@ -339,22 +451,21 @@ h2 {
 <input type="tel" name="phone" class="form-control" placeholder="+1 (___) ___-____" required>
 </div>
 
-<div class="field">
-<label>Property Address</label>
-<input type="text" name="address" class="form-control" placeholder="Toronto, ON">
+<fieldset class="field consult-type-fieldset">
+<legend id="consultation-type-legend">Consultation Type</legend>
+<div class="consult-type-options" role="radiogroup" aria-required="true" aria-labelledby="consultation-type-legend">
+@foreach(\App\Support\AppointmentScheduler::CONSULTATION_TYPES as $consultType)
+<label>
+<input type="radio" name="consultation_type" value="{{ $consultType }}" required>
+<span>{{ $consultType }}</span>
+</label>
+@endforeach
 </div>
+</fieldset>
 
-<div class="field">
-<label>You are looking to?</label>
-<select name="subject" class="form-control" required>
-<option value="">Select option</option>
-<option value="Sell your property">Sell your property</option>
-<option value="Buy a property">Buy a property</option>
-<option value="Rent">Rent</option>
-</select>
-</div>
+<p id="appointment-form-errors" class="appointment-error" role="alert" aria-live="assertive"></p>
 
-<button type="submit" class="btn primary mt-3">Book Appointment</button>
+<button type="submit" class="btn primary mt-3" id="appointment-submit">Book Appointment</button>
 
 </form>
 
@@ -426,152 +537,443 @@ h2 {
 
 
 <script>
-let selectedDate = null;
-let selectedTime = null;
+window.SERIK_APPOINTMENT = @json(\App\Support\AppointmentScheduler::frontendConfig());
 
-/* ---------- CALENDAR ---------- */
-const calendarDays = document.getElementById("calendar-days");
-const monthSelect = document.getElementById("month");
-const yearSelect = document.getElementById("year");
+(function () {
+    const cfg = window.SERIK_APPOINTMENT || {};
+    const calendarDays = document.getElementById("calendar-days");
+    const monthSelect = document.getElementById("month");
+    const yearSelect = document.getElementById("year");
+    const timesContainer = document.getElementById("times");
+    const timesStatus = document.getElementById("times-status");
+    const form = document.getElementById("appointmentForm");
+    const errorsEl = document.getElementById("appointment-form-errors");
+    const submitBtn = document.getElementById("appointment-submit");
+    if (!calendarDays || !monthSelect || !yearSelect || !timesContainer || !form) {
+        return;
+    }
 
-const months = [
-"January","February","March","April","May","June",
-"July","August","September","October","November","December"
-];
+    const months = [
+        "January","February","March","April","May","June",
+        "July","August","September","October","November","December"
+    ];
+    const todayStr = cfg.today;
+    const minDate = cfg.minDate || todayStr;
+    const maxDate = cfg.maxDate;
+    const catalog = Array.isArray(cfg.catalog) ? cfg.catalog : [];
 
-months.forEach((m,i)=>{
-monthSelect.innerHTML += `<option value="${i}">${m}</option>`;
-});
+    let selectedDate = null;
+    let selectedTime = null;
+    let slotsAbort = null;
+    let slotsSeq = 0;
+    let submitting = false;
+    let pollTimer = null;
+    let pollAbort = null;
 
-for(let y=2021;y<=2030;y++){
-yearSelect.innerHTML += `<option value="${y}">${y}</option>`;
-}
+    const pendingMsg = cfg.pendingMessage || "We're confirming your appointment. Please wait.";
+    const successMsg = cfg.successMessage || "Appointment booked successfully";
+    const failureMsg = cfg.failureMessage || "We couldn't confirm your appointment. Please try again or contact Serik Realty.";
+    const pollInterval = Number(cfg.pollIntervalMs) > 400 ? Number(cfg.pollIntervalMs) : 2000;
+    const pollTimeout = Number(cfg.pollTimeoutMs) > 5000 ? Number(cfg.pollTimeoutMs) : 90000;
+    const TOKEN_KEY = "serik_appointment_status_token";
 
-monthSelect.value = new Date().getMonth();
-yearSelect.value = new Date().getFullYear();
+    function pad(n) {
+        return String(n).padStart(2, "0");
+    }
 
-function renderCalendar(){
+    function ymd(year, monthIndex, day) {
+        return year + "-" + pad(monthIndex + 1) + "-" + pad(day);
+    }
 
-calendarDays.innerHTML = "";
+    function parseYmd(value) {
+        const parts = String(value || "").split("-");
+        if (parts.length !== 3) return null;
+        const year = Number(parts[0]);
+        const month = Number(parts[1]);
+        const day = Number(parts[2]);
+        if (!year || !month || !day) return null;
+        return { year: year, month: month, day: day };
+    }
 
-const month = +monthSelect.value;
-const year = +yearSelect.value;
+    function setStatus(text) {
+        if (timesStatus) {
+            timesStatus.textContent = text || "";
+        }
+    }
 
-const firstDay = new Date(year, month, 1).getDay();
-const daysInMonth = new Date(year, month+1, 0).getDate();
+    function setError(text) {
+        if (errorsEl) {
+            errorsEl.textContent = text || "";
+        }
+    }
 
-const start = firstDay === 0 ? 6 : firstDay - 1;
+    function firstError(message) {
+        if (typeof message === "string") return message;
+        if (message && typeof message === "object") {
+            const first = Object.values(message)[0];
+            return Array.isArray(first) ? String(first[0] || "") : String(first || "");
+        }
+        return "Unable to book that appointment. Please try again.";
+    }
 
-for(let i=0;i<start;i++){
-calendarDays.appendChild(document.createElement("span"));
-}
+    function setBusy(busy) {
+        submitting = !!busy;
+        if (submitBtn) {
+            submitBtn.disabled = !!busy;
+            if (busy) {
+                submitBtn.setAttribute("aria-busy", "true");
+            } else {
+                submitBtn.removeAttribute("aria-busy");
+            }
+        }
+    }
 
-for(let d=1; d<=daysInMonth; d++){
+    function fireConfirmedAnalytics(reference) {
+        try {
+            if (window.dataLayer && Array.isArray(window.dataLayer)) {
+                window.dataLayer.push({
+                    event: "appointment_booked",
+                    booking_reference: reference || ""
+                });
+            }
+        } catch (err) {}
+    }
 
-const day = document.createElement("span");
-day.textContent = d;
+    function resetFormAfterSuccess() {
+        form.reset();
+        selectedDate = null;
+        selectedTime = null;
+        renderCalendar();
+        timesContainer.innerHTML = "";
+        setStatus("Select a date to see available times.");
+        setError("");
+    }
 
-day.onclick = () => {
+    function onConfirmed(data) {
+        stopPolling();
+        try { sessionStorage.removeItem(TOKEN_KEY); } catch (err) {}
+        fireConfirmedAnalytics(data && data.booking_reference);
+        alert(successMsg);
+        resetFormAfterSuccess();
+        setBusy(false);
+    }
 
-document.querySelectorAll(".days span").forEach(x=>x.classList.remove("selected"));
+    function onFailed(data) {
+        stopPolling();
+        try { sessionStorage.removeItem(TOKEN_KEY); } catch (err) {}
+        const message = (data && data.message) ? firstError(data.message) : failureMsg;
+        setError(message);
+        alert(message);
+        setBusy(false);
+    }
 
-day.classList.add("selected");
+    function stopPolling() {
+        if (pollTimer) {
+            clearTimeout(pollTimer);
+            pollTimer = null;
+        }
+        if (pollAbort) {
+            pollAbort.abort();
+            pollAbort = null;
+        }
+    }
 
-selectedDate = `${year}-${month+1}-${d}`;
+    function pollAppointment(token, started) {
+        if (!token || !cfg.statusUrl) {
+            onFailed({ message: failureMsg });
+            return;
+        }
+        started = started || Date.now();
+        if (Date.now() - started > pollTimeout) {
+            onFailed({ message: failureMsg });
+            return;
+        }
+        pollTimer = setTimeout(function () {
+            if (pollAbort) {
+                pollAbort.abort();
+            }
+            pollAbort = new AbortController();
+            fetch(cfg.statusUrl + "?token=" + encodeURIComponent(token), {
+                headers: { Accept: "application/json" },
+                signal: pollAbort.signal
+            })
+                .then(function (res) { return res.json().then(function (data) { return { status: res.status, data: data || {} }; }); })
+                .then(function (result) {
+                    const data = result.data || {};
+                    if (data.status === true || data.state === "confirmed") {
+                        onConfirmed(data);
+                        return;
+                    }
+                    if (data.state === "failed" || result.status === 410 || result.status === 404) {
+                        onFailed(data);
+                        return;
+                    }
+                    setError(data.message || pendingMsg);
+                    pollAppointment(token, started);
+                })
+                .catch(function (err) {
+                    if (err && err.name === "AbortError") return;
+                    pollAppointment(token, started);
+                });
+        }, pollInterval);
+    }
 
-};
+    const todayParts = parseYmd(todayStr) || { year: new Date().getFullYear(), month: 1, day: 1 };
+    const maxParts = parseYmd(maxDate) || { year: 2030, month: 12, day: 31 };
 
-calendarDays.appendChild(day);
+    months.forEach(function (name, index) {
+        monthSelect.insertAdjacentHTML("beforeend", '<option value="' + index + '">' + name + "</option>");
+    });
+    for (let y = todayParts.year; y <= maxParts.year; y++) {
+        yearSelect.insertAdjacentHTML("beforeend", '<option value="' + y + '">' + y + "</option>");
+    }
+    monthSelect.value = String(todayParts.month - 1);
+    yearSelect.value = String(todayParts.year);
 
-}
+    function isUnavailableDate(dateStr) {
+        if (!dateStr) return true;
+        if (minDate && dateStr < minDate) return true;
+        if (maxDate && dateStr > maxDate) return true;
+        if (dateStr === todayStr && cfg.todayHasSlots === false) return true;
+        return false;
+    }
 
-}
+    function selectDate(dateStr, dayEl) {
+        if (isUnavailableDate(dateStr)) return;
+        selectedDate = dateStr;
+        selectedTime = null;
+        calendarDays.querySelectorAll(".cal-day").forEach(function (el) {
+            el.classList.remove("selected");
+            el.setAttribute("aria-pressed", "false");
+        });
+        if (dayEl) {
+            dayEl.classList.add("selected");
+            dayEl.setAttribute("aria-pressed", "true");
+        }
+        loadTimes(dateStr);
+    }
 
-monthSelect.onchange = renderCalendar;
-yearSelect.onchange = renderCalendar;
+    function renderCalendar() {
+        calendarDays.innerHTML = "";
+        const month = Number(monthSelect.value);
+        const year = Number(yearSelect.value);
+        const firstDay = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const start = firstDay === 0 ? 6 : firstDay - 1;
 
-renderCalendar();
+        for (let i = 0; i < start; i++) {
+            calendarDays.appendChild(document.createElement("span"));
+        }
 
+        for (let d = 1; d <= daysInMonth; d++) {
+            const dateStr = ymd(year, month, d);
+            const unavailable = isUnavailableDate(dateStr);
+            const isToday = dateStr === todayStr;
+            const day = document.createElement("button");
+            day.type = "button";
+            day.className = "cal-day";
+            day.textContent = String(d);
+            day.dataset.date = dateStr;
+            const labelParts = [months[month] + " " + d + ", " + year];
+            if (isToday) {
+                day.classList.add("is-today");
+                day.setAttribute("aria-current", "date");
+                const marker = document.createElement("span");
+                marker.className = "cal-day-today-label";
+                marker.textContent = "Today";
+                day.appendChild(marker);
+                labelParts.push("today");
+            }
+            if (unavailable) {
+                day.classList.add("is-unavailable");
+                day.disabled = true;
+                day.setAttribute("aria-disabled", "true");
+                day.tabIndex = -1;
+                labelParts.push("unavailable");
+            } else {
+                day.setAttribute("aria-pressed", dateStr === selectedDate ? "true" : "false");
+                day.addEventListener("click", function () {
+                    selectDate(dateStr, day);
+                });
+            }
+            if (dateStr === selectedDate && !unavailable) {
+                day.classList.add("selected");
+            }
+            day.setAttribute("aria-label", labelParts.join(", "));
+            calendarDays.appendChild(day);
+        }
+    }
 
-/* ---------- TIME SLOTS ---------- */
+    function renderTimes(slots) {
+        timesContainer.innerHTML = "";
+        selectedTime = null;
+        const available = (slots || []).filter(function (slot) { return slot && slot.available; });
+        if (!available.length) {
+            setStatus("No remaining times for this date.");
+            return;
+        }
+        setStatus("");
+        available.forEach(function (slot) {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "time";
+            btn.textContent = slot.label;
+            btn.dataset.value = slot.value;
+            btn.setAttribute("role", "option");
+            btn.setAttribute("aria-label", slot.label);
+            btn.setAttribute("aria-pressed", "false");
+            btn.addEventListener("click", function () {
+                timesContainer.querySelectorAll(".time").forEach(function (el) {
+                    el.classList.remove("selected");
+                    el.setAttribute("aria-pressed", "false");
+                });
+                btn.classList.add("selected");
+                btn.setAttribute("aria-pressed", "true");
+                selectedTime = slot.value;
+                setError("");
+            });
+            timesContainer.appendChild(btn);
+        });
+    }
 
-const timesContainer = document.getElementById("times");
+    function localSlotsForDate(dateStr) {
+        return catalog.map(function (slot) {
+            let available = true;
+            if (isUnavailableDate(dateStr)) {
+                available = false;
+            } else if (dateStr === todayStr) {
+                const nowMinutes = (Number(cfg.nowHour) * 60) + Number(cfg.nowMinute);
+                available = ((slot.hour * 60) + slot.minute) > nowMinutes;
+            }
+            return { value: slot.value, label: slot.label, available: available };
+        });
+    }
 
-const times = ["9:30","10:30","11:30","1:30","2:30","3:30","4:30","5:30","6:30"];
+    function loadTimes(dateStr) {
+        const seq = ++slotsSeq;
+        if (slotsAbort) {
+            slotsAbort.abort();
+        }
+        timesContainer.innerHTML = "";
+        setStatus("Loading available times…");
+        const fallback = localSlotsForDate(dateStr);
+        if (!cfg.slotsUrl) {
+            renderTimes(fallback);
+            return;
+        }
+        slotsAbort = new AbortController();
+        fetch(cfg.slotsUrl + "?date=" + encodeURIComponent(dateStr), {
+            headers: { Accept: "application/json" },
+            signal: slotsAbort.signal
+        })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                if (seq !== slotsSeq) return;
+                if (data && data.status && Array.isArray(data.slots)) {
+                    renderTimes(data.slots);
+                    return;
+                }
+                renderTimes(fallback);
+            })
+            .catch(function (err) {
+                if (err && err.name === "AbortError") return;
+                if (seq !== slotsSeq) return;
+                renderTimes(fallback);
+            });
+    }
 
-times.forEach(t=>{
+    monthSelect.addEventListener("change", renderCalendar);
+    yearSelect.addEventListener("change", renderCalendar);
+    renderCalendar();
 
-const div = document.createElement("div");
+    const todayButton = calendarDays.querySelector('.cal-day.is-today:not([aria-disabled="true"])');
+    if (todayButton && todayStr) {
+        selectDate(todayStr, todayButton);
+    } else {
+        setStatus("Select a date to see available times.");
+    }
 
-div.className = "time";
+    form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        if (submitting) return;
+        setError("");
 
-div.textContent = t;
+        if (!selectedDate) {
+            setError("Please select a date.");
+            return;
+        }
+        if (!selectedTime) {
+            setError("Please select a time.");
+            return;
+        }
+        const typeInput = form.querySelector('input[name="consultation_type"]:checked');
+        if (!typeInput) {
+            setError("Please select a Consultation Type.");
+            return;
+        }
 
-div.onclick = () => {
+        submitting = true;
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.setAttribute("aria-busy", "true");
+        }
 
-document.querySelectorAll(".time").forEach(x=>x.classList.remove("selected"));
+        const formData = new FormData(form);
+        formData.append("date", selectedDate);
+        formData.append("time", selectedTime);
 
-div.classList.add("selected");
+        fetch(cfg.bookUrl || "/api/v1/book-appointment", {
+            method: "POST",
+            headers: { Accept: "application/json" },
+            body: formData
+        })
+            .then(function (res) {
+                return res.json().then(function (data) {
+                    return { ok: res.ok, status: res.status, data: data };
+                });
+            })
+            .then(function (result) {
+                const data = result.data || {};
+                if (data.status === true || data.state === "confirmed") {
+                    onConfirmed(data);
+                    return;
+                }
+                if (result.status === 202 || data.pending === true || data.state === "pending" || data.state === "processing") {
+                    const token = data.token || "";
+                    setError(data.message || pendingMsg);
+                    if (token) {
+                        try { sessionStorage.setItem(TOKEN_KEY, token); } catch (err) {}
+                        pollAppointment(token);
+                        return;
+                    }
+                    onFailed({ message: failureMsg });
+                    return;
+                }
+                if (data.state === "failed") {
+                    onFailed(data);
+                    return;
+                }
+                if (Array.isArray(data.slots)) {
+                    renderTimes(data.slots);
+                }
+                const message = firstError(data.message);
+                setError(message);
+                alert(typeof data.message === "string" ? data.message : message);
+                setBusy(false);
+            })
+            .catch(function () {
+                setError("Unable to book that appointment. Please try again.");
+                setBusy(false);
+            });
+    });
 
-selectedTime = t;
-
-};
-
-timesContainer.appendChild(div);
-
-});
-
-
-
-document.getElementById("appointmentForm").addEventListener("submit", function(e){
-
-e.preventDefault();
-
-if(!selectedDate){
-alert("Please select date");
-return;
-}
-
-if(!selectedTime){
-alert("Please select time");
-return;
-}
-
-let form = document.getElementById("appointmentForm");
-let formData = new FormData(form);
-
-formData.append("date", selectedDate);
-formData.append("time", selectedTime);
-
-fetch("/api/v1/book-appointment", {
-
-method: "POST",
-
-headers:{
-'Accept':'application/json'
-},
-
-body: formData
-
-})
-.then(res => res.json())
-.then(data => {
-
-if(data.status === true){
-
-alert("Appointment booked successfully");
-
-form.reset();
-
-}else{
-
-alert(JSON.stringify(data.message));
-
-}
-
-})
-.catch(error => console.log(error));
-
-});
-
+    try {
+        const resumeToken = sessionStorage.getItem(TOKEN_KEY);
+        if (resumeToken && cfg.statusUrl) {
+            setError(pendingMsg);
+            setBusy(true);
+            pollAppointment(resumeToken);
+        }
+    } catch (err) {}
+})();
 </script>

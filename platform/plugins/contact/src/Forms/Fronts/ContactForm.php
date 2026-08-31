@@ -107,6 +107,9 @@ class ContactForm extends FormFront
             ->addRowWrapper('form_wrapper', function (self $form) use ($displayFields, $mandatoryFields): void {
                 $customFields = CustomField::query()
                     ->wherePublished()
+                    ->with(['options' => function ($query): void {
+                        $query->select('id', 'custom_field_id', 'label', 'value');
+                    }])
                     ->oldest('order')
                     ->get();
 
@@ -202,9 +205,10 @@ class ContactForm extends FormFront
                             /**
                              * @var CustomField $customField
                              */
-                            $options = $customField->options()->select('id', 'label', 'value')->get()->mapWithKeys(function ($option) {
-                                return [$option->value => $option->label];
-                            })->all();
+                            $options = $customField->options
+                                ->mapWithKeys(function ($option) {
+                                    return [$option->value => $option->label];
+                                })->all();
 
                             $fieldOptions = match ($customField->type->getValue()) {
                                 CustomFieldType::NUMBER => NumberFieldOption::make()

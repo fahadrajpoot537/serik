@@ -15,6 +15,12 @@ class AccountCreateRequest extends Request
             'email' => ['required', 'max:60', 'min:6', 'email', 'unique:re_accounts'],
             'password' => ['required', 'string', 'min:6', 'confirmed'],
             'description' => ['nullable', 'string', 'max:400'],
+            'professional_title' => ['nullable', 'string', 'max:160'],
+            'short_bio' => ['nullable', 'string', 'max:400'],
+            'specialties' => ['nullable'],
+            'service_areas' => ['nullable'],
+            'languages' => ['nullable'],
+            'contact_enabled' => ['nullable', 'boolean'],
             'is_blocked' => ['nullable', 'boolean'],
             'blocked_reason' => ['nullable', 'string', 'max:500', 'required_if:is_blocked,1'],
         ];

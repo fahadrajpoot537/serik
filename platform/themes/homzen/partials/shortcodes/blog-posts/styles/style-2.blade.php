@@ -389,6 +389,12 @@
   top: 80px;
   height: fit-content;
 }
+.serik-mortgage-cta-hint{
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #4b5563;
+}
 
 /* IMPORTANT FIX FOR CUT CONTENT */
 .monthly-expenses,
@@ -1212,17 +1218,19 @@ expenses using the Serik Realty Mortgage Payment Calculator.
         <p class="rate" id="rate-fixed">Loading... <small>5-yr fixed</small></p>
         <p class="rate" id="rate-variable">Loading... <small>5-yr variable</small></p>
 
-        <button class="btn">see which rates I qualify for</button>
+        <button type="button" class="btn" id="serik-mortgage-prequal-cta" aria-label="Open mortgage pre-qualification form">see which rates I qualify for</button>
+        <p class="serik-mortgage-cta-hint">Opens a mortgage pre-qualification form</p>
     </div>
 </div> 
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    const btn = document.querySelector('.mortgage-sidebar .sidebar button.btn');
+    const btn = document.querySelector('#serik-mortgage-prequal-cta')
+        || document.querySelector('.mortgage-sidebar .sidebar button.btn');
     if (!btn) return;
     btn.addEventListener('click', function (e) {
         e.preventDefault();
-        window.location.href = "{{ url('/contact-us') }}";
+        window.location.href = {!! json_encode(\App\Support\MortgageCalculatorFormContext::contactUrl()) !!};
     });
 });
 </script>
@@ -1395,6 +1403,11 @@ const observer = new IntersectionObserver((entries) => {
 });
 
 observer.observe(trigger);
+
+window.addEventListener('pagehide', function () {
+  try { stopCelebration(); } catch (e) {}
+  try { observer.disconnect(); } catch (e) {}
+});
 </script>
 
 

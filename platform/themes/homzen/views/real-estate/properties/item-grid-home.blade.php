@@ -6,28 +6,8 @@
     $canViewSold = ! $property->isSoldHistory() || auth('account')->check() || auth()->check();
     $linkUrl = $canViewSold ? $card['url'] : '#';
     $isSold = $property->isSoldHistory();
-    $mlsStatus = trim((string) ($property->MlsStatus ?? ''));
-    $transactionType = trim((string) ($property->TransactionType ?? ''));
-
-    // Display-only status badge from existing MlsStatus / TransactionType (no hardcoded values).
-    $badgeVariant = match (true) {
-        $mlsStatus === 'Terminated' => 'terminated',
-        $mlsStatus === 'Expired' => 'expired',
-        $mlsStatus === 'Suspended' => 'suspended',
-        in_array($mlsStatus, ['Leased', 'Leased Conditional'], true) => 'leased',
-        in_array($mlsStatus, ['Sold', 'Sold Conditional', 'Sold Conditional Escape'], true) => 'sold',
-        in_array($transactionType, ['For Lease', 'For Sub-Lease'], true) => 'for-lease',
-        default => 'for-sale',
-    };
-    $statusLabel = match ($badgeVariant) {
-        'terminated' => __('Terminated'),
-        'expired' => __('Expired'),
-        'suspended' => __('Suspended'),
-        'leased' => __('Leased'),
-        'sold' => __('Sold'),
-        'for-lease' => __('For Lease'),
-        default => __('For Sale'),
-    };
+    $badgeVariant = $card['status_badge_variant'] ?? 'for-sale';
+    $statusLabel = $card['status_compact'] ?? $card['status_label'] ?? __('For Sale');
 
     $baths = (int) ($property->number_bathroom ?? 0);
     $sqft = trim((string) ($property->square_text ?? ''));
@@ -52,7 +32,8 @@
                 'serik-portal-card__badge',
                 'serik-portal-card__badge--' . $badgeVariant,
                 'sold' => $badgeVariant === 'sold' || $badgeVariant === 'leased',
-            ])>{{ $statusLabel }}</span>
+                'delisted' => ! empty($card['is_delisted']),
+            ]) aria-label="{{ __('MLS status') }}: {{ $card['status_label'] ?? $statusLabel }}">{{ $statusLabel }}</span>
             @if ($card['listed_active'])
                 <span class="serik-prop-card__days serik-portal-card__days">{{ __('Listed') }} {{ $card['listed_active'] }}</span>
             @elseif ($card['listed_ago'] && $card['listed_ago'] !== '-')

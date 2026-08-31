@@ -13,6 +13,13 @@ class AccountEditRequest extends Request
             'last_name' => 'required|string|max:120|min:2',
             'username' => 'required|string|max:60|min:2|unique:re_accounts,username,' . $this->route('account.id'),
             'email' => 'required|max:60|min:6|email|unique:re_accounts,email,' . $this->route('account.id'),
+            'professional_title' => 'nullable|string|max:160',
+            'short_bio' => 'nullable|string|max:400',
+            'specialties' => 'nullable',
+            'service_areas' => 'nullable',
+            'languages' => 'nullable',
+            'contact_enabled' => 'nullable|boolean',
+            'display_order' => 'nullable|integer|min:0|max:65535',
         ];
 
         if ($this->boolean('is_change_password')) {

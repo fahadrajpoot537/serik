@@ -32,13 +32,14 @@ final class PageH1
         'agents' => 'Our Real Estate Agents',
     ];
 
+    public const FAQ_INTRO = 'Find clear answers about buying, selling, leasing, financing, and working with Serik Realty.';
+
     /**
      * Pages whose primary H1 is rendered inside page content shortcodes.
      *
      * @var array<int, string>
      */
     private const CONTENT_H1_SLUGS = [
-        'faqs',
     ];
 
     /**
@@ -69,6 +70,15 @@ final class PageH1
         }
 
         $slug = trim((string) $page->slug, '/');
+
+        if ($slug === 'faqs') {
+            Theme::set('pageHeroIntro', self::FAQ_INTRO);
+            Theme::addBodyAttributes(['id' => 'page-faqs']);
+        }
+
+        if ($slug === 'our-services') {
+            Theme::addBodyAttributes(['id' => 'page-our-services']);
+        }
 
         if (in_array($slug, self::CONTENT_H1_SLUGS, true)) {
             Theme::set('pageH1ProvidedByContent', true);
@@ -183,6 +193,25 @@ final class PageH1
     public static function utilityH1ForSlug(string $slug): ?string
     {
         $slug = trim(strtolower($slug), '/');
+
+        if ($slug === 'contact-us' && MortgageCalculatorFormContext::isActive()) {
+            return MortgageCalculatorFormContext::SUBJECT;
+        }
+
+        if ($slug === 'contact-us' && ServiceInquiryFormContext::isActive()) {
+            $key = ServiceInquiryFormContext::activeKey();
+            $subject = $key ? ServiceInquiryFormContext::subjectFor($key) : null;
+            if (is_string($subject) && $subject !== '') {
+                return $subject;
+            }
+        }
+
+        if ($slug === 'contact-us' && AgentInquiryFormContext::isActive()) {
+            $agent = AgentInquiryFormContext::resolveAgent();
+            if ($agent !== null) {
+                return AgentInquiryFormContext::subjectFor($agent);
+            }
+        }
 
         return self::UTILITY_H1[$slug] ?? null;
     }

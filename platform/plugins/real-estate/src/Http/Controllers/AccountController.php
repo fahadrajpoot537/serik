@@ -62,6 +62,12 @@ class AccountController extends BaseController
                 $account->password = Hash::make($request->input('password'));
                 $account->dob = Carbon::parse($request->input('dob'))->toDateString();
 
+                foreach (['specialties', 'service_areas', 'languages'] as $listField) {
+                    if (\App\Support\AgentProfile::hasColumn($listField) && $request->exists($listField)) {
+                        $account->setAttribute($listField, \App\Support\AgentProfile::sanitizeList($request->input($listField)));
+                    }
+                }
+
                 if ($avatarImage = $request->input('avatar_image')) {
                     $account->avatar_id = MediaFile::query()
                         ->where('url', $avatarImage)
@@ -117,6 +123,12 @@ class AccountController extends BaseController
                 $account->is_featured = $request->input('is_featured');
                 $account->is_public_profile = $request->input('is_public_profile', 0);
 
+                foreach (['specialties', 'service_areas', 'languages'] as $listField) {
+                    if (\App\Support\AgentProfile::hasColumn($listField) && $request->exists($listField)) {
+                        $account->setAttribute($listField, \App\Support\AgentProfile::sanitizeList($request->input($listField)));
+                    }
+                }
+
                 // Handle blocking/unblocking
                 $isBlocked = $request->input('is_blocked', 0);
                 if ($isBlocked) {
@@ -128,6 +140,7 @@ class AccountController extends BaseController
                 }
 
                 $account->save();
+                \App\Support\AgentProfile::invalidatePublicCaches();
             });
 
         return $this

@@ -44,6 +44,7 @@ class ProfileForm extends AccountForm
                 'is_public_profile',
                 'is_blocked',
                 'blocked_reason',
+                'display_order',
             ])
             ->addAfter('dob', 'gender', 'select', [
                 'label' => trans('plugins/real-estate::dashboard.gender'),

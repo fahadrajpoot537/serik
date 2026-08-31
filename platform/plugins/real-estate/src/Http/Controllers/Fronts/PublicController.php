@@ -468,6 +468,9 @@ class PublicController extends BaseController
 
         $accounts = Account::query()
             ->where('is_public_profile', true)
+            ->when(\Illuminate\Support\Facades\Schema::hasColumn('re_accounts', 'display_order'), function ($query) {
+                $query->orderBy('display_order');
+            })
             ->latest('is_featured')
             ->oldest('first_name')
             ->withCount([

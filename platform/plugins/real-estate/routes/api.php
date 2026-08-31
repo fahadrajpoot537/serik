@@ -82,6 +82,8 @@ Route::group([
     // Properties
     Route::get('properties', 'PropertyController@index');
     Route::post('book-appointment', 'PropertyController@bookAppointment');
+    Route::get('appointment-slots', 'PropertyController@appointmentSlots');
+    Route::get('appointment-status', 'PropertyController@appointmentStatus');
     Route::get('addproperties', 'PropertyController@addproperties');
     Route::get('addpropertiescron', 'PropertyController@addpropertiescron');
     Route::get('sync-amp-listing-dates', 'PropertyController@syncAmpListingDates');
@@ -113,34 +115,16 @@ Route::group([
         Route::get('community-index', 'PropertyController@communityIndex');
         Route::get('geocode-community', 'PropertyController@geocodeCommunity');
         Route::get('visitor-location', function (\Illuminate\Http\Request $request) {
-            $ip = (string) $request->ip();
+            $location = \App\Support\VisitorLocationResolver::resolve($request, true);
 
-            // Prefer real client IP behind CDN/proxy when available.
-            foreach (['CF-Connecting-IP', 'True-Client-IP', 'X-Real-IP'] as $header) {
-                $candidate = trim((string) $request->header($header, ''));
-                if (filter_var($candidate, FILTER_VALIDATE_IP)) {
-                    $ip = $candidate;
-                    break;
-                }
-            }
-
-            if ($ip === '' || in_array($ip, ['127.0.0.1', '::1'], true)) {
-                return response()->json([
-                    'available' => false,
-                    'source' => 'unavailable',
-                ]);
-            }
-
-            $payload = \App\Support\VisitorIpLocation::resolveFromIp($ip);
-
-            if (! $payload) {
-                return response()->json([
-                    'available' => false,
-                    'source' => 'unavailable',
-                ]);
-            }
-
-            return response()->json($payload);
+            return response()->json([
+                'available' => ! $location->isFallback(),
+                'source' => $location->source,
+                'lat' => $location->latitude,
+                'lng' => $location->longitude,
+                'city' => $location->city,
+                'country' => $location->country,
+            ]);
         });
     });
 

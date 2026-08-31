@@ -107,10 +107,21 @@ class PublicAccountController extends BaseController
             ->saving(function (AccountForm $form) use ($request): void {
                 $account = $form->getModel();
 
-                $account->fill($request->except(['password', 'email']));
+                $account->fill($request->except(array_merge(
+                    ['password', 'email'],
+                    \App\Support\AgentProfile::PRIVILEGED_FIELDS
+                )));
+
+                foreach (['specialties', 'service_areas', 'languages'] as $listField) {
+                    if (\App\Support\AgentProfile::hasColumn($listField) && $request->exists($listField)) {
+                        $account->setAttribute($listField, \App\Support\AgentProfile::sanitizeList($request->input($listField)));
+                    }
+                }
 
                 $account->dob = Carbon::parse($request->input('dob'))->toDateString();
                 $account->save();
+
+                \App\Support\AgentProfile::invalidatePublicCaches();
 
                 do_action('update_account_settings', $account);
 

@@ -395,25 +395,41 @@ $faqs = collect([
 ]);
 @endphp
 
+@php
+    $faqSideImage = is_file(public_path('storage/faqs.jpg'))
+        ? asset('storage/faqs.jpg')
+        : (is_file(public_path('pictures/real-estate-investing-tips-ontario.webp'))
+            ? asset('pictures/real-estate-investing-tips-ontario.webp')
+            : '');
+    $faqSideAlt = $faqSideImage !== '' ? __('Serik Realty team answering frequently asked questions') : '';
+@endphp
+
 <section id="contactMain"
-    class="flat-section-v3 flat-slider-contact"
-   style="background-image: url('https://serik.ca/storage/f27763e877bd758b84a315e1.jpg') !important"
+    class="flat-section-v3 flat-slider-contact serik-faq-panel"
 >
     <div class="container">
-        <h1 class="srk-privacy-title text-center mb-4">{{ __('Frequently Asked Questions') }}</h1>
         <div class="row content-wrap">
             <div class="col-lg-7">
-                <div class="content-left" style="padding-right: 100px;">
-                    <img src="https://serik.ca/storage/faqs.jpg" alt="{{ __('Serik Realty FAQs') }}" style="height:100%">
-                    <div class="tf-faq" style="zoom:0.8;">
+                <div class="content-left serik-faq-panel__media">
+                    @if($faqSideImage !== '')
+                        <img src="{{ $faqSideImage }}"
+                             alt="{{ $faqSideAlt }}"
+                             width="640"
+                             height="283"
+                             decoding="async"
+                             loading="eager"
+                             fetchpriority="high"
+                             class="serik-faq-panel__image">
+                    @endif
+                    <div class="tf-faq serik-faq-list">
                         <ul class="box-faq" id="wrapper-faq">
                             @foreach($faqs as $index => $faq)
                                 @php $faqId = "faq-{$index}" @endphp
-                                <li class="faq-item" style="background-color: #fff;">
-                                    <a href="#{{ $faqId }}" class="faq-header collapsed" data-bs-toggle="collapse" aria-expanded="false" aria-controls="{{ $faqId }}">
+                                <li class="faq-item">
+                                    <a href="#{{ $faqId }}" class="faq-header collapsed" data-bs-toggle="collapse" aria-expanded="false" aria-controls="{{ $faqId }}" id="{{ $faqId }}-q">
                                         {!! BaseHelper::clean($faq->question) !!}
                                     </a>
-                                    <div id="{{ $faqId }}" class="collapse" data-bs-parent="#wrapper-faq">
+                                    <div id="{{ $faqId }}" class="collapse" data-bs-parent="#wrapper-faq" role="region" aria-labelledby="{{ $faqId }}-q">
                                         <p class="faq-body">
                                             {!! BaseHelper::clean($faq->answer) !!}
                                         </p>

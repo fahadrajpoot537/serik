@@ -81,7 +81,16 @@
     height: auto !important;
 }
 .heading-breadcrumb{
-    font-size:100px;font-weight: 0;
+    font-size: clamp(2rem, 4vw, 3.5rem);
+    font-weight: 700;
+    line-height: 1.15;
+}
+
+#page-faqs #sectionhead,
+body#page-faqs #sectionhead {
+    height: auto;
+    min-height: 0;
+    padding-bottom: 1.5rem;
 }
 
 @media (max-width: 991px) {
@@ -122,9 +131,20 @@
                     'page-title mt-3 mb-0',
                     'text-center text-white heading-breadcrumb' => $useHeroStyle,
                     'text-start' => ! $useHeroStyle,
+                    'serik-page-h1' => true,
                 ])>
                     {!! BaseHelper::clean($pageH1) !!}
                 </h1>
+            @endif
+
+            @php
+                $heroIntro = Theme::get('pageHeroIntro');
+                $isFaqs = request()->is('faqs');
+            @endphp
+            @if ($isFaqs && $heroIntro)
+                <p class="serik-page-intro text-center {{ $useHeroStyle ? 'text-white' : '' }}">
+                    {!! BaseHelper::clean($heroIntro) !!}
+                </p>
             @endif
 
             @if ($isAboutUs)

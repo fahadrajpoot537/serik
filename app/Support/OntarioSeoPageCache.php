@@ -9,7 +9,7 @@ final class OntarioSeoPageCache
 {
     public const TTL = 1800;
 
-    public const VERSION = 'v14';
+    public const VERSION = 'v18';
 
     /**
      * @return array<int, string>
@@ -60,7 +60,7 @@ final class OntarioSeoPageCache
 
     public static function put(string $key, string $html): void
     {
-        if ($html === '') {
+        if ($html === '' || str_contains($html, 'No properties found.')) {
             return;
         }
 

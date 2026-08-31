@@ -80,6 +80,63 @@ class AccountForm extends FormAbstract
                     ->toArray()
             )
             ->add('description', TextareaField::class, DescriptionFieldOption::make()->toArray())
+            ->when(\App\Support\AgentProfile::hasColumn('professional_title'), function (FormAbstract $form): void {
+                $form->add(
+                    'professional_title',
+                    TextField::class,
+                    TextFieldOption::make()
+                        ->label(trans('plugins/real-estate::account.professional_title'))
+                        ->placeholder(trans('plugins/real-estate::account.professional_title_placeholder'))
+                        ->maxLength(160)
+                        ->toArray()
+                );
+            })
+            ->when(\App\Support\AgentProfile::hasColumn('short_bio'), function (FormAbstract $form): void {
+                $form->add(
+                    'short_bio',
+                    TextareaField::class,
+                    DescriptionFieldOption::make()
+                        ->label(trans('plugins/real-estate::account.short_bio'))
+                        ->placeholder(trans('plugins/real-estate::account.short_bio_placeholder'))
+                        ->toArray()
+                );
+            })
+            ->when(\App\Support\AgentProfile::hasColumn('specialties'), function (FormAbstract $form): void {
+                $form->add(
+                    'specialties',
+                    TextareaField::class,
+                    DescriptionFieldOption::make()
+                        ->label(trans('plugins/real-estate::account.specialties'))
+                        ->placeholder(trans('plugins/real-estate::account.list_placeholder'))
+                        ->helperText(trans('plugins/real-estate::account.list_helper'))
+                        ->value(\App\Support\AgentProfile::listToInput($form->getModel(), 'specialties'))
+                        ->toArray()
+                );
+            })
+            ->when(\App\Support\AgentProfile::hasColumn('service_areas'), function (FormAbstract $form): void {
+                $form->add(
+                    'service_areas',
+                    TextareaField::class,
+                    DescriptionFieldOption::make()
+                        ->label(trans('plugins/real-estate::account.service_areas'))
+                        ->placeholder(trans('plugins/real-estate::account.list_placeholder'))
+                        ->helperText(trans('plugins/real-estate::account.list_helper'))
+                        ->value(\App\Support\AgentProfile::listToInput($form->getModel(), 'service_areas'))
+                        ->toArray()
+                );
+            })
+            ->when(\App\Support\AgentProfile::hasColumn('languages'), function (FormAbstract $form): void {
+                $form->add(
+                    'languages',
+                    TextareaField::class,
+                    DescriptionFieldOption::make()
+                        ->label(trans('plugins/real-estate::account.languages'))
+                        ->placeholder(trans('plugins/real-estate::account.list_placeholder'))
+                        ->helperText(trans('plugins/real-estate::account.list_helper'))
+                        ->value(\App\Support\AgentProfile::listToInput($form->getModel(), 'languages'))
+                        ->toArray()
+                );
+            })
             ->add(
                 'phone',
                 TextField::class,
@@ -232,6 +289,27 @@ class AccountForm extends FormAbstract
                     OnOffFieldOption::make()
                         ->label(trans('plugins/real-estate::account.form.is_public_profile'))
                         ->defaultValue(false)
+                        ->toArray()
+                );
+            })
+            ->when(\App\Support\AgentProfile::hasColumn('contact_enabled'), function (FormAbstract $form): void {
+                $form->add(
+                    'contact_enabled',
+                    OnOffField::class,
+                    OnOffFieldOption::make()
+                        ->label(trans('plugins/real-estate::account.contact_enabled'))
+                        ->defaultValue(true)
+                        ->toArray()
+                );
+            })
+            ->when(\App\Support\AgentProfile::hasColumn('display_order'), function (FormAbstract $form): void {
+                $form->add(
+                    'display_order',
+                    \Botble\Base\Forms\Fields\NumberField::class,
+                    \Botble\Base\Forms\FieldOptions\NumberFieldOption::make()
+                        ->label(trans('plugins/real-estate::account.display_order'))
+                        ->defaultValue(0)
+                        ->min(0)
                         ->toArray()
                 );
             })

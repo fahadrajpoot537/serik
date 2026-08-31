@@ -1,6 +1,5 @@
 <?php
 
-use App\Services\Seo\CityNavigationService;
 use Botble\Shortcode\Compilers\Shortcode as ShortcodeCompiler;
 use Botble\Shortcode\Facades\Shortcode;
 use Botble\Theme\Facades\Theme;
@@ -13,8 +12,9 @@ Event::listen(RouteMatched::class, function (): void {
             ? $shortcode->context
             : 'home';
 
-        $data = app(CityNavigationService::class)->build($context);
+        // Never build this on the request TTFB — neighborhood JSON scans are 10–30s cold.
+        $ajaxUrl = route('public.ajax.seo-city-navigation', ['context' => $context]);
 
-        return Theme::partial('seo.city-navigation', $data);
+        return Theme::partial('seo.shortcode-nav-mount', compact('ajaxUrl', 'context'));
     });
 });

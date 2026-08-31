@@ -8,35 +8,10 @@
         is_array($property->images) ? $property->images : []
     );
 
+    $status = \App\Support\MlsStatus::forProperty($property);
     $statusLabel = $property->isSoldHistory()
         ? TrebPropertyHelper::soldStatusLabel($property->MlsStatus)
-        : (function () use ($property) {
-            $mlsStatus = trim((string) ($property->MlsStatus ?? ''));
-            $transactionType = trim((string) ($property->TransactionType ?? ''));
-
-            // Delisted badges must come from the real MLS status (not TransactionType).
-            if ($mlsStatus === 'Terminated') {
-                return __('Terminated');
-            }
-
-            if ($mlsStatus === 'Expired') {
-                return __('Expired');
-            }
-
-            if ($mlsStatus === 'Suspended') {
-                return __('Suspended');
-            }
-
-            if (in_array($mlsStatus, ['Leased', 'Leased Conditional'], true)) {
-                return __('Leased');
-            }
-
-            if (in_array($transactionType, ['For Lease', 'For Sub-Lease'], true)) {
-                return __('For Lease');
-            }
-
-            return __('For Sale');
-        })();
+        : ($status['is_delisted'] ? $status['compact_label'] : $status['display_label']);
 
     $galleryAlt = collect([
         $property->name,
@@ -237,7 +212,7 @@
         <div class="gallery-main">
             <a href="{{ $images[0] }}" data-gallery-index="0" class="js-property-gallery-open" style="height:100%">
                 <img src="{{ $images[0] }}" alt="{{ $galleryAlt }}" onerror="this.src='{{ RvMedia::getDefaultImage() }}'">
-                <span class="badge-sale @if($property->isSoldHistory()) status-sold-wrap @endif">
+                <span class="badge-sale @if($property->isSoldHistory()) status-sold-wrap @endif" aria-label="{{ __('MLS status') }}: {{ $status['display_label'] ?? $statusLabel }}">
                     @if($property->isSoldHistory())
                         {!! TrebPropertyHelper::soldStatusBadgeHtml($property->MlsStatus) !!}
                     @else

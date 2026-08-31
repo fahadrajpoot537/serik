@@ -53,6 +53,13 @@
         padding: 4px 10px; border-radius: 4px; line-height: 1.2;
     }
     .serik-prop-card__badge.sold { background: #c0392b; }
+    .serik-prop-card__badge.delisted {
+        background: #475569;
+        max-width: calc(100% - 110px);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
     .serik-prop-card__days {
         position: absolute; right: 10px; bottom: 10px;
         background: rgba(0, 0, 0, 0.72); color: #fff; font-size: 11px; font-weight: 500;
@@ -112,35 +119,8 @@
     $canViewSold = ! $property->isSoldHistory() || auth('account')->check() || auth()->check();
     $linkUrl = $canViewSold ? $card['url'] : '#';
     $isSold = $property->isSoldHistory();
-    $statusLabel = $isSold
-        ? ($property->MlsStatus === 'Leased' ? __('Leased') : __('Sold'))
-        : (function () use ($property) {
-            $mlsStatus = trim((string) ($property->MlsStatus ?? ''));
-            $transactionType = trim((string) ($property->TransactionType ?? ''));
-
-            // Delisted badges must come from the real MLS status (not TransactionType).
-            if ($mlsStatus === 'Terminated') {
-                return __('Terminated');
-            }
-
-            if ($mlsStatus === 'Expired') {
-                return __('Expired');
-            }
-
-            if ($mlsStatus === 'Suspended') {
-                return __('Suspended');
-            }
-
-            if (in_array($mlsStatus, ['Leased', 'Leased Conditional'], true)) {
-                return __('Leased');
-            }
-
-            if (in_array($transactionType, ['For Lease', 'For Sub-Lease'], true)) {
-                return __('For Lease');
-            }
-
-            return __('For Sale');
-        })();
+    $statusLabel = $card['status_compact'] ?? $card['status_label'] ?? __('For Sale');
+    $badgeVariant = $card['status_badge_variant'] ?? ($isSold ? 'sold' : 'for-sale');
     $baths = (int) ($property->number_bathroom ?? 0);
     $sqft = trim((string) ($property->square_text ?? ''));
     $broker = trim((string) ($property->broker ?? ''));
@@ -159,7 +139,11 @@
                 'size' => 'medium-rectangle',
                 'lazy' => $lazyImage ?? true,
             ])
-            <span @class(['serik-prop-card__badge', 'sold' => $isSold])>{{ $statusLabel }}</span>
+            <span @class([
+                'serik-prop-card__badge',
+                'sold' => $isSold,
+                'delisted' => ! empty($card['is_delisted']),
+            ]) aria-label="{{ __('MLS status') }}: {{ $card['status_label'] ?? $statusLabel }}">{{ $statusLabel }}</span>
             @if ($card['listed_active'])
                 <span class="serik-prop-card__days">{{ __('Listed') }} {{ $card['listed_active'] }}</span>
             @elseif ($card['listed_ago'] && $card['listed_ago'] !== '-')

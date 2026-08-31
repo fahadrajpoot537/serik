@@ -70,6 +70,13 @@ class Account extends BaseModel implements
         'verified_at',
         'verified_by',
         'verification_note',
+        'professional_title',
+        'short_bio',
+        'specialties',
+        'service_areas',
+        'languages',
+        'contact_enabled',
+        'display_order',
     ];
 
     protected $hidden = [
@@ -98,6 +105,13 @@ class Account extends BaseModel implements
         'blocked_reason' => SafeContent::class,
         'verified_at' => 'datetime',
         'verification_note' => SafeContent::class,
+        'professional_title' => SafeContent::class,
+        'short_bio' => SafeContent::class,
+        'specialties' => 'array',
+        'service_areas' => 'array',
+        'languages' => 'array',
+        'contact_enabled' => 'boolean',
+        'display_order' => 'integer',
     ];
 
     public function activityLogs(): HasMany

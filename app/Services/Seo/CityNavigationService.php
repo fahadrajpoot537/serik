@@ -37,7 +37,7 @@ final class CityNavigationService
             $slug = $city?->slug ?? 'ontario';
             $ttl = (int) config('seo_navigation.cache_ttl', 3600);
 
-            return Cache::remember("seo_nav:v9:home:{$slug}", $ttl, fn () => $this->buildHomeLayout($city));
+            return Cache::remember("seo_nav:v10:home:{$slug}", $ttl, fn () => $this->buildHomeLayout($city));
         }
 
         $city ??= $this->cityResolution->resolve()
@@ -116,11 +116,11 @@ final class CityNavigationService
             'sections' => [
                 [
                     'title' => __('Active Properties'),
-                    'links' => $this->activeOntarioCityLinks(),
+                    'links' => $this->activeOntarioCityLinks($ipCity),
                 ],
                 [
                     'title' => __('Sold Properties'),
-                    'links' => $this->soldOntarioCityLinks(),
+                    'links' => $this->soldOntarioCityLinks($ipCity),
                 ],
                 [
                     'title' => __('Popular Searches'),
@@ -278,7 +278,27 @@ final class CityNavigationService
             );
         }
 
-        return $links;
+        if (count($links) <= 1) {
+            $fallbackSlug = (string) config('seo_navigation.default_home_city_slug', 'toronto');
+            if (! $city || strcasecmp((string) $city->slug, $fallbackSlug) !== 0) {
+                $fallbackCity = $this->citiesBySlugs([$fallbackSlug])->first();
+                if ($fallbackCity) {
+                    foreach ($this->neighborhoodsForCity($fallbackCity) as $neighborhood) {
+                        $links[] = $this->link(
+                            "{$neighborhood->name} houses for sale",
+                            SeoLandingUrl::community($fallbackCity, $neighborhood->name)
+                        );
+                    }
+                }
+            }
+        }
+
+        $unique = [];
+        foreach ($links as $link) {
+            $unique[$link['url']] = $link;
+        }
+
+        return array_values($unique);
     }
 
     /**
@@ -302,14 +322,15 @@ final class CityNavigationService
     /**
      * @return array<int, array{label: string, url: string}>
      */
-    private function activeOntarioCityLinks(): array
+    private function activeOntarioCityLinks(?City $near = null): array
     {
         $ttl = (int) config('seo_navigation.cache_ttl', 3600);
+        $origin = $near?->slug ?? 'ontario';
 
-        return Cache::remember('seo_nav:v5:ontario_active_cities', $ttl, function () {
+        return Cache::remember("seo_nav:v6:ontario_active_cities:{$origin}", $ttl, function () use ($near) {
             $links = [];
 
-            foreach ($this->citiesBySlugs(config('seo_navigation.ontario_active_cities', [])) as $city) {
+            foreach ($this->citiesNearFirst(config('seo_navigation.ontario_active_cities', []), $near) as $city) {
                 $links[] = $this->link(
                     "{$city->name} houses for sale",
                     SeoLandingUrl::housesForSale($city)
@@ -323,14 +344,15 @@ final class CityNavigationService
     /**
      * @return array<int, array{label: string, url: string}>
      */
-    private function soldOntarioCityLinks(): array
+    private function soldOntarioCityLinks(?City $near = null): array
     {
         $ttl = (int) config('seo_navigation.cache_ttl', 3600);
+        $origin = $near?->slug ?? 'ontario';
 
-        return Cache::remember('seo_nav:v5:ontario_sold_cities', $ttl, function () {
+        return Cache::remember("seo_nav:v6:ontario_sold_cities:{$origin}", $ttl, function () use ($near) {
             $links = [];
 
-            foreach ($this->citiesBySlugs(config('seo_navigation.ontario_sold_cities', [])) as $city) {
+            foreach ($this->citiesNearFirst(config('seo_navigation.ontario_sold_cities', []), $near) as $city) {
                 $links[] = $this->link(
                     "{$city->name} sold houses",
                     SeoLandingUrl::soldHomes($city)
@@ -440,6 +462,51 @@ final class CityNavigationService
             ->map(fn (string $slug) => $cities->firstWhere('slug', $slug))
             ->filter()
             ->values();
+    }
+
+    /**
+     * @param  array<int, string>  $slugs
+     * @return Collection<int, City>
+     */
+    private function citiesNearFirst(array $slugs, ?City $near): Collection
+    {
+        $cities = $this->citiesBySlugs($slugs);
+        if ($cities->isEmpty() || ! $near) {
+            return $cities;
+        }
+
+        $originLat = (float) ($near->latitude ?? 0);
+        $originLng = (float) ($near->longitude ?? 0);
+        if ($originLat === 0.0 && $originLng === 0.0) {
+            return $cities;
+        }
+
+        return $cities
+            ->sortBy(function (City $city) use ($near, $originLat, $originLng) {
+                if ((int) $city->id === (int) $near->id || strcasecmp((string) $city->slug, (string) $near->slug) === 0) {
+                    return -1;
+                }
+
+                $lat = (float) ($city->latitude ?? 0);
+                $lng = (float) ($city->longitude ?? 0);
+                if ($lat === 0.0 && $lng === 0.0) {
+                    return 99999;
+                }
+
+                return $this->haversineKm($originLat, $originLng, $lat, $lng);
+            })
+            ->values();
+    }
+
+    private function haversineKm(float $lat1, float $lng1, float $lat2, float $lng2): float
+    {
+        $earth = 6371;
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLng = deg2rad($lng2 - $lng1);
+        $a = sin($dLat / 2) ** 2
+            + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLng / 2) ** 2;
+
+        return $earth * 2 * atan2(sqrt($a), sqrt(1 - $a));
     }
 
     /** @return Collection<int, Neighborhood> */

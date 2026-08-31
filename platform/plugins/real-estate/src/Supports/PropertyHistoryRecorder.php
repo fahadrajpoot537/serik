@@ -110,6 +110,8 @@ class PropertyHistoryRecorder
                 $mls === 'Terminated' => 'terminated',
                 $mls === 'Expired' => 'expired',
                 $mls === 'Suspended' => 'suspended',
+                $mls === 'Cancelled' || $mls === 'Canceled' => 'cancelled',
+                $mls === 'Withdrawn' => 'withdrawn',
                 $mls === 'New' => 'relisted',
                 default => 'status_change',
             };

@@ -2,7 +2,8 @@
    .smart-search {
     position: relative;
     max-width: 500px;
-    min-width: 350px;
+    min-width: 0;
+    width: 100%;
 }
 
 .search-box {
@@ -245,8 +246,8 @@
 
     /* Show search icon */
     .mobile-search-icon{
-        display:inline;
-        margin-left: 180px;
+        display:inline-flex;
+        margin-left: 0;
         align-items:center;
         justify-content:center;
         font-size:22px;
@@ -742,11 +743,51 @@
                         
                     </div>
                     <div class="serik-nav-right">
+                        <button type="button" id="openMobileSearch" class="serik-header-search-toggle" aria-label="{{ __('Search listings') }}">
+                            <x-core::icon name="ti ti-search" />
+                        </button>
                         <div class="header-account">
                             @if (is_plugin_active('real-estate') && RealEstateHelper::isLoginEnabled())
+                                @php
+                                    $officePhoneDisplay = \App\Support\OfficePhone::display();
+                                    $officePhoneE164 = \App\Support\OfficePhone::e164();
+                                    $wishlistEnabled = RealEstateHelper::isEnabledWishlist();
+                                    $wishlistAuthed = auth('account')->check();
+                                    $wishlistCount = $wishlistAuthed ? \App\Support\AccountWishlist::countFor((int) auth('account')->id()) : 0;
+                                    $wishlistAria = $wishlistCount === 1
+                                        ? __('Wishlist, 1 saved property')
+                                        : __('Wishlist, :count saved properties', ['count' => $wishlistCount]);
+                                @endphp
                                 <div class="flat-bt-top serik-portal-nav__actions">
+                                    @if ($wishlistEnabled)
+                                        <a
+                                            class="serik-nav-wishlist"
+                                            href="{{ route('public.wishlist') }}"
+                                            data-serik-wishlist-trigger
+                                            aria-label="{{ $wishlistAria }}"
+                                        >
+                                            <svg class="serik-nav-wishlist__icon" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                                <path d="M19.5 12.572l-7.5 7.428l-7.5 -7.428a5 5 0 1 1 7.5 -6.566a5 5 0 1 1 7.5 6.572"></path>
+                                            </svg>
+                                            <span class="serik-nav-wishlist__count" data-bb-toggle="wishlist-count" data-serik-wishlist-count @if($wishlistCount < 1) hidden @endif>{{ $wishlistCount }}</span>
+                                        </a>
+                                    @endif
                                     <a class="tf-btn primary serik-hp-nav__cta serik-portal-nav__cta" href="{{ url('/contact-us') }}">{{ __('Contact Us') }}</a>
-                                    <a class="serik-portal-nav__map" href="tel:+16475789400">+1 (647) 578-9400</a>
+                                    <button
+                                        type="button"
+                                        class="serik-portal-nav__map serik-portal-nav__map--copy"
+                                        data-serik-copy-phone="{{ $officePhoneE164 }}"
+                                        data-serik-copy-label="{{ $officePhoneDisplay }}"
+                                        aria-label="{{ __('Copy phone number :number', ['number' => $officePhoneDisplay]) }}"
+                                    >{{ $officePhoneDisplay }}</button>
+                                    <a
+                                        class="serik-portal-nav__map serik-portal-nav__map--tel"
+                                        href="tel:{{ $officePhoneE164 }}"
+                                        aria-label="{{ __('Call :number', ['number' => $officePhoneDisplay]) }}"
+                                        tabindex="-1"
+                                        aria-hidden="true"
+                                    >{{ $officePhoneDisplay }}</a>
+                                    <span class="visually-hidden" data-serik-phone-live aria-live="polite"></span>
                                 </div>
                             @endif
                         </div>
@@ -876,7 +917,7 @@
                     @if (is_plugin_active('real-estate'))
                         @if (RealEstateHelper::isEnabledWishlist())
                             <div class="box">
-                                <a href="{{ route('public.wishlist') }}">
+                                <a href="{{ route('public.wishlist') }}" data-serik-wishlist-trigger>
                                     {{ __('My Wishlist') }}
                                     (<span data-bb-toggle="wishlist-count" class="fw-medium">0</span>)
                                 </a>
@@ -894,10 +935,14 @@
                         </div>
                     @endif
 
-                    @if($hotline = theme_option('hotline'))
+                    @php
+                        $mobileOfficeDisplay = \App\Support\OfficePhone::display();
+                        $mobileOfficeE164 = \App\Support\OfficePhone::e164();
+                    @endphp
+                    @if($mobileOfficeDisplay)
                         <div class="box d-flex align-items-center">
                             <x-core::icon name="ti ti-phone" style="width: 1.25rem; height: 1.25rem" />
-                            <div><a href="tel:{{ $hotline }}" title="{{ __('Phone') }}">{{ $hotline }}</a></div>
+                            <div><a href="tel:{{ $mobileOfficeE164 }}" title="{{ __('Phone') }}">{{ $mobileOfficeDisplay }}</a></div>
                         </div>
                     @endif
                     @if($email = theme_option('email'))
@@ -911,6 +956,106 @@
         </nav>
     </div>
 </header>
+
+<div id="serik-home-nav-status" hidden>
+    <div class="serik-home-nav-status__bar" aria-hidden="true"></div>
+    <p id="serik-home-nav-status-msg" class="serik-home-nav-status__msg" role="status" aria-live="polite"></p>
+</div>
+<script>
+(function () {
+    if (window.__serikHomeNavFeedback) {
+        return;
+    }
+    window.__serikHomeNavFeedback = true;
+
+    var SHOW_DELAY_MS = 80;
+    var showTimer = null;
+
+    function statusEl() {
+        return document.getElementById('serik-home-nav-status');
+    }
+
+    function statusMsg() {
+        return document.getElementById('serik-home-nav-status-msg');
+    }
+
+    function isHomeHref(href) {
+        if (!href) {
+            return false;
+        }
+        try {
+            var url = new URL(href, location.href);
+            if (url.origin !== location.origin) {
+                return false;
+            }
+            var path = url.pathname.replace(/\/+$/, '') || '/';
+            return path === '/';
+        } catch (err) {
+            return false;
+        }
+    }
+
+    function alreadyOnHome() {
+        var path = location.pathname.replace(/\/+$/, '') || '/';
+        return path === '/';
+    }
+
+    function hideHomeNavStatus() {
+        if (showTimer) {
+            clearTimeout(showTimer);
+            showTimer = null;
+        }
+        var node = statusEl();
+        if (!node) {
+            return;
+        }
+        node.classList.remove('is-visible');
+        node.setAttribute('hidden', '');
+        var msg = statusMsg();
+        if (msg) {
+            msg.textContent = '';
+        }
+    }
+
+    function showHomeNavStatus() {
+        var node = statusEl();
+        if (!node) {
+            return;
+        }
+        node.removeAttribute('hidden');
+        node.classList.add('is-visible');
+        var msg = statusMsg();
+        if (msg) {
+            msg.textContent = 'Loading homepage';
+        }
+    }
+
+    window.serikHideHomeNavStatus = hideHomeNavStatus;
+
+    document.addEventListener('click', function (e) {
+        if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+            return;
+        }
+        var link = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+        if (!link) {
+            return;
+        }
+        if (link.target && link.target !== '' && link.target !== '_self') {
+            return;
+        }
+        if (!isHomeHref(link.getAttribute('href') || link.href) || alreadyOnHome()) {
+            return;
+        }
+        if (showTimer) {
+            clearTimeout(showTimer);
+        }
+        showTimer = setTimeout(showHomeNavStatus, SHOW_DELAY_MS);
+    }, true);
+
+    window.addEventListener('pageshow', hideHomeNavStatus);
+    window.addEventListener('pagehide', hideHomeNavStatus);
+})();
+</script>
 
 
 <div class="mobile-bottom-nav">
@@ -1009,11 +1154,7 @@ document.querySelectorAll('.mobile-bottom-nav .nav-item').forEach(link => {
 });
 
 document.addEventListener("DOMContentLoaded", function () {
-  const links = document.querySelectorAll(".navigation > li > a");
-  
-  links.forEach(link => {
-    link.style.fontSize = "14px"; // change to your desired size
-  });
+  // Nav link size is owned by site-chrome.css (compact laptops vs desktop).
 });
 
 const openSearch = document.getElementById('openMobileSearch');
@@ -1376,6 +1517,15 @@ const loader = document.getElementById("dropdownLoader");
 const clearBtn = document.getElementById("clearBtn");
 const SITE_BASE = @json(rtrim(url('/'), '/'));
 const isLoggedIn = @json((is_plugin_active('real-estate') && auth('account')->check()) || auth()->check());
+window.SERIK_WISHLIST = {
+    authenticated: @json(is_plugin_active('real-estate') && auth('account')->check()),
+    count: @json(is_plugin_active('real-estate') && auth('account')->check() ? \App\Support\AccountWishlist::countFor((int) auth('account')->id()) : 0),
+    toggleUrl: @json(route('public.ajax.wishlist.toggle')),
+    stateUrl: @json(route('public.ajax.wishlist.state')),
+    csrfUrl: @json(route('auth.csrf-token')),
+    pageUrl: @json(route('public.wishlist')),
+    openLogin: @json((bool) session('serik_open_login')),
+};
 const SOLD_STATUSES = ['Sold', 'Leased', 'Sold Conditional', 'Sold Conditional Escape', 'Leased Conditional'];
 let skip = 0;
 let currentKeyword = "";
@@ -1765,7 +1915,7 @@ function loadResults(keyword, reset = false){
     loadResults._activeKeyword = keyword;
 
     const isMlsKey = isHeaderMlsKeyword(keyword);
-    const searchTimeoutMs = isMlsKey ? 45000 : 15000;
+    const searchTimeoutMs = isMlsKey ? 20000 : 12000;
     const searchTimeoutId = setTimeout(() => requestController.abort(), searchTimeoutMs);
     const searchUrl = buildHeaderSearchUrl(keyword);
 

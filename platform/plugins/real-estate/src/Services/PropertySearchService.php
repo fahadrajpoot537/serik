@@ -2,9 +2,9 @@
 
 namespace Botble\RealEstate\Services;
 
+use App\Support\SerikCache;
 use Botble\RealEstate\Models\Property;
 use Illuminate\Database\Query\Builder;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Meilisearch\Client;
 use Theme\homzen\Supports\TrebPropertyHelper;
@@ -32,7 +32,7 @@ class PropertySearchService
 
         // Cache health: positive 30s, negative 5s so recovery after Meili restart
         // is picked up quickly without hammering a downed host on every request.
-        $cached = Cache::get('serik_meili_health_v2');
+        $cached = SerikCache::get('serik_meili_health_v2');
         if ($cached !== null) {
             return (bool) $cached;
         }
@@ -48,7 +48,7 @@ class PropertySearchService
             $healthy = false;
         }
 
-        Cache::put('serik_meili_health_v2', $healthy, $healthy ? 30 : 5);
+        SerikCache::put('serik_meili_health_v2', $healthy, $healthy ? 30 : 5);
 
         return $healthy;
     }
@@ -66,7 +66,7 @@ class PropertySearchService
 
         $cacheKey = 'serik_meili_total_v1:' . md5(mb_strtolower($keyword) . '|' . json_encode($opts));
 
-        return Cache::remember($cacheKey, 300, function () use ($keyword, $opts) {
+        return SerikCache::remember($cacheKey, 300, function () use ($keyword, $opts) {
             try {
                 $params = [
                     'limit' => 0,
@@ -120,6 +120,11 @@ class PropertySearchService
 
         if (! empty($opts['sort']) && is_array($opts['sort'])) {
             $params['sort'] = array_values($opts['sort']);
+        }
+
+        $strategy = strtolower(trim((string) ($opts['matching_strategy'] ?? '')));
+        if (in_array($strategy, ['all', 'last', 'frequency'], true)) {
+            $params['matchingStrategy'] = $strategy;
         }
 
         try {
@@ -180,7 +185,7 @@ class PropertySearchService
                     'id', 'name', 'external_id', 'price', 'close_price',
                     'number_bedroom', 'number_bathroom', 'bedrooms_below', 'covered_spaces',
                     'square', 'broker', 'mls_status', 'transaction_type',
-                    'created_ts', '_geo',
+                    'created_ts', 'expire_date', '_geo',
                 ],
             ]);
 
@@ -317,18 +322,18 @@ class PropertySearchService
             return null;
         }
 
-        $cacheKey = 'serik_city_ids_v4:' . md5(mb_strtolower($city) . '|' . $limit . '|' . md5(json_encode($opts)));
+        $cacheKey = 'serik_city_ids_v5:' . md5(mb_strtolower($city) . '|' . $limit . '|' . md5(json_encode($opts)));
 
         // Never cache null — a temporary Meili outage would pin "no city filter"
         // for 15 minutes and force multi-second MySQL full scans on every filter click.
-        $cached = Cache::get($cacheKey);
+        $cached = SerikCache::get($cacheKey);
         if (is_array($cached)) {
             return $cached;
         }
 
         $ids = $this->resolveCityIdsUncached($city, $limit, $opts);
         if (is_array($ids)) {
-            Cache::put($cacheKey, $ids, 900);
+            SerikCache::put($cacheKey, $ids, 900);
         }
 
         return $ids;
@@ -339,6 +344,17 @@ class PropertySearchService
      */
     protected function resolveCityIdsUncached(string $city, int $limit, array $opts): ?array
     {
+        // Former Toronto municipalities live as TREB district codes (Toronto W01),
+        // not as address-city "Etobicoke". District JSON is MySQL and works when
+        // Meili is down. Do this first so a handful of "…, Etobicoke, ON" rows
+        // cannot hide the real inventory.
+        if ($this->hasTrebDistrictMapping($city)) {
+            $districtIds = $this->searchDistrictCityIds($city, $limit);
+            if ($districtIds !== null && $districtIds !== []) {
+                return $districtIds;
+            }
+        }
+
         if (! $this->isAvailable()) {
             // Do not JSON-scan meta_boxes here — that query is 10–30s+ on a cold
             // MLS table. Callers fall back to FULLTEXT location (fast enough).
@@ -356,13 +372,6 @@ class PropertySearchService
             }
         }
 
-        // Former Toronto municipalities (North York, etc.) live as district codes.
-        // Prefer districts only — geo radius overlaps neighboring GTA cities.
-        $districtIds = $this->searchDistrictCityIds($city, $limit);
-        if ($districtIds !== null && $districtIds !== []) {
-            return $districtIds;
-        }
-
         $geoIds = $this->searchCityIdsByGeo($city, $limit);
         if ($geoIds !== null && $geoIds !== []) {
             return $geoIds;
@@ -374,20 +383,20 @@ class PropertySearchService
     }
 
     /**
-     * Resolve IDs via TREB City district codes stored in amp_snapshot meta.
+     * TREB district codes for former Toronto municipalities (Etobicoke → Toronto W01…).
      *
-     * @return int[]|null  null = no district mapping for this city
+     * @return list<string>
      */
-    public function searchDistrictCityIds(string $city, int $limit = 5000): ?array
+    public function trebDistrictCodes(string $city): array
     {
         $city = trim($city);
         if ($city === '') {
-            return null;
+            return [];
         }
 
         $map = (array) config('seo_navigation.treb_city_districts', []);
         if ($map === []) {
-            return null;
+            return [];
         }
 
         $slug = \Illuminate\Support\Str::slug($city);
@@ -403,12 +412,33 @@ class PropertySearchService
         }
 
         if (! is_array($districts) || $districts === []) {
+            return [];
+        }
+
+        return array_values(array_unique(array_map('strval', $districts)));
+    }
+
+    public function hasTrebDistrictMapping(string $city): bool
+    {
+        return $this->trebDistrictCodes($city) !== [];
+    }
+
+    /**
+     * Resolve IDs via TREB City district codes stored in amp_snapshot meta.
+     *
+     * @return int[]|null  null = no district mapping for this city
+     */
+    public function searchDistrictCityIds(string $city, int $limit = 5000): ?array
+    {
+        $districts = $this->trebDistrictCodes($city);
+        if ($districts === []) {
             return null;
         }
 
+        $slug = \Illuminate\Support\Str::slug($city);
         $cacheKey = 'serik_district_ids_v1:' . $slug . ':' . $limit;
 
-        return Cache::remember($cacheKey, 1800, function () use ($districts, $limit) {
+        return SerikCache::remember($cacheKey, 1800, function () use ($districts, $limit) {
             $districts = array_values(array_unique(array_map('strval', $districts)));
             $placeholders = implode(',', array_fill(0, count($districts), '?'));
 
@@ -493,7 +523,9 @@ class PropertySearchService
         if ($ids === null) {
             // Meili down / empty index: still pin the city via address fragment so
             // filters never scan every Ontario listing (15–30s cold MySQL).
-            return $this->constrainQueryToCityViaLocation($query, $city, $strict);
+            $skipWindow = ! empty($opts['subtypes']) || ! empty($opts['home_types']);
+
+            return $this->constrainQueryToCityViaLocation($query, $city, $strict, $skipWindow);
         }
 
         if ($ids === []) {
@@ -514,23 +546,37 @@ class PropertySearchService
     /**
      * MySQL fallback when Meilisearch cannot resolve city IDs.
      * MLS addresses are stored as "…, {City}, ON {postal}".
+     *
+     * @param  bool  $skipIdWindow  When true, do not restrict to newest-N ids.
+     *                              House/condo SEO landings must skip the window:
+     *                              recent MLS batches are often condos, so a 60k
+     *                              id cap hides every Detached/Semi-Detached row.
      */
-    public function constrainQueryToCityViaLocation($query, string $city, bool $strict = false): bool
+    public function constrainQueryToCityViaLocation($query, string $city, bool $strict = false, bool $skipIdWindow = false): bool
     {
         $city = trim($city);
         if ($city === '' || strcasecmp($city, 'ontario') === 0 || strcasecmp($city, 'on') === 0) {
             return false;
         }
 
+        $districtIds = $this->searchDistrictCityIds($city, 8000);
+        if (is_array($districtIds) && $districtIds !== []) {
+            $query->whereIn('id', $districtIds);
+
+            return true;
+        }
+
         // FULLTEXT + ORDER BY id DESC was 37s on Toronto (huge hit set, filesort).
         // Restrict to recent MLS ids (PRIMARY range) then pin city with a suffix LIKE
         // so page-1 SEO landings stay in-city without scanning the whole table.
-        $maxId = (int) Cache::remember('serik_re_properties_max_id_v1', 120, static function () {
-            return (int) DB::table('re_properties')->max('id');
-        });
-        $window = 60000;
-        if ($maxId > $window) {
-            $query->where('re_properties.id', '>=', $maxId - $window);
+        if (! $skipIdWindow) {
+            $maxId = (int) SerikCache::remember('serik_re_properties_max_id_v1', 120, static function () {
+                return (int) DB::table('re_properties')->max('id');
+            });
+            $window = 60000;
+            if ($maxId > $window) {
+                $query->where('re_properties.id', '>=', $maxId - $window);
+            }
         }
 
         $safe = addcslashes($city, '%_\\');
@@ -602,7 +648,7 @@ class PropertySearchService
      */
     public function getPublicCommunityIndex(): array
     {
-        return Cache::remember('serik_community_index_public_v1', 21600, function () {
+        return SerikCache::remember('serik_community_index_public_v1', 21600, function () {
             $out = [];
 
             foreach ($this->getCommunityIndex() as $row) {
@@ -646,7 +692,7 @@ class PropertySearchService
 
         $cacheKey = 'serik_community_ids_v5:' . md5(mb_strtolower($community) . '|' . mb_strtolower(trim((string) $city)) . '|' . $limit);
 
-        return Cache::remember($cacheKey, 1800, function () use ($community, $city, $limit, $opts) {
+        return SerikCache::remember($cacheKey, 1800, function () use ($community, $city, $limit, $opts) {
             // Prefer Meili filter (community/city) — MySQL JSON_EXTRACT on
             // meta_boxes.amp_snapshot was measuring 0.7–2.2s per community.
             $meiliIds = $this->searchIds('', $opts);
@@ -665,7 +711,7 @@ class PropertySearchService
      */
     private function getCommunityIndex(): array
     {
-        return Cache::remember('serik_community_index_v6', 21600, function () {
+        return SerikCache::remember('serik_community_index_v6', 21600, function () {
             $rows = $this->communityRegionQuery()
                 ->select([
                     DB::raw('JSON_UNQUOTE(JSON_EXTRACT(mb.meta_value, "$.CityRegion")) as raw_region'),
@@ -941,6 +987,20 @@ class PropertySearchService
             $filters[] = 'mls_status NOT IN [' . implode(', ', $vals) . ']';
         }
 
+        if (
+            isset($opts['geo_lat'], $opts['geo_lng'], $opts['geo_radius_km'])
+            && is_numeric($opts['geo_lat'])
+            && is_numeric($opts['geo_lng'])
+            && is_numeric($opts['geo_radius_km'])
+        ) {
+            $lat = (float) $opts['geo_lat'];
+            $lng = (float) $opts['geo_lng'];
+            $radiusM = (int) round(((float) $opts['geo_radius_km']) * 1000);
+            if ($radiusM > 0 && abs($lat) <= 90 && abs($lng) <= 180) {
+                $filters[] = '_geoRadius(' . $lat . ', ' . $lng . ', ' . $radiusM . ')';
+            }
+        }
+
         if (isset($opts['min_price']) && $opts['min_price'] > 0) {
             $filters[] = 'price >= ' . (float) $opts['min_price'];
         }
@@ -1008,8 +1068,8 @@ class PropertySearchService
     {
         if ($this->client === null) {
             $http = new \GuzzleHttp\Client([
-                'timeout' => 0.8,
-                'connect_timeout' => 0.2,
+                'timeout' => (float) config('scout.meilisearch.timeout', 0.8),
+                'connect_timeout' => (float) config('scout.meilisearch.connect_timeout', 0.2),
                 'http_errors' => false,
             ]);
             $this->client = new Client(

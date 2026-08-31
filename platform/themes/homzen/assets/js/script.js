@@ -1876,53 +1876,421 @@ $(() => {
         .replace(/\s+/g, ' ')
         .trim()
 
-    const initWishlistCount = () => {
-        const wishlist = decodeURIComponent(getCookie('wishlist') || '')
+    const wishlistHeartFilled = `
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" class="icon">
+                    <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+                    <path d="M6.979 3.074a6 6 0 0 1 4.988 1.425l.037 .033l.034 -.03a6 6 0 0 1 4.733 -1.44l.246 .036a6 6 0 0 1 3.364 10.008l-.18 .185l-.048 .041l-7.45 7.379a1 1 0 0 1 -1.313 .082l-.094 -.082l-7.493 -7.422a6 6 0 0 1 3.176 -10.215z" />
+                </svg>
+            `
+    const wishlistHeartOutline = `
+                    <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
+                        <path d="M19.5 12.572l-7.5 7.428l-7.5 -7.428a5 5 0 1 1 7.5 -6.566a5 5 0 1 1 7.5 6.572"></path>
+                    </svg>
+                `
+
+    const serikWishlistConfig = () => window.SERIK_WISHLIST || {}
+
+    const serikCsrfToken = () => document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+
+    const serikXsrfCookie = () => {
+        const match = document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/)
+        return match ? decodeURIComponent(match[1]) : ''
+    }
+
+    const parseWishlistId = (value) => {
+        const n = parseInt(String(value ?? ''), 10)
+        return Number.isFinite(n) && n > 0 ? n : 0
+    }
+
+    const markWishlistAuthenticated = (value) => {
+        if (!window.SERIK_WISHLIST) {
+            window.SERIK_WISHLIST = {}
+        }
+        window.SERIK_WISHLIST.authenticated = !!value
+    }
+
+    const rememberPendingWishlist = (payload) => {
+        try {
+            sessionStorage.setItem('serik_pending_wishlist', JSON.stringify(payload))
+        } catch (err) {}
+    }
+
+    const readPendingWishlist = () => {
+        try {
+            return JSON.parse(sessionStorage.getItem('serik_pending_wishlist') || 'null')
+        } catch (err) {
+            return null
+        }
+    }
+
+    const clearPendingWishlist = () => {
+        try {
+            sessionStorage.removeItem('serik_pending_wishlist')
+        } catch (err) {}
+    }
+
+    const serikWishlistHeaders = () => {
+        const headers = {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRF-TOKEN': serikCsrfToken(),
+        }
+        const xsrf = serikXsrfCookie()
+        if (xsrf) {
+            headers['X-XSRF-TOKEN'] = xsrf
+        }
+        return headers
+    }
+
+    const refreshWishlistCsrf = () => {
+        const url = serikWishlistConfig().csrfUrl || '/auth/csrf-token'
+        return fetch(url, {
+            credentials: 'same-origin',
+            headers: {
+                Accept: 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => {
+                if (data && data.token) {
+                    const meta = document.querySelector('meta[name="csrf-token"]')
+                    if (meta) {
+                        meta.setAttribute('content', data.token)
+                    }
+                    return true
+                }
+                return false
+            })
+            .catch(() => false)
+    }
+
+    const promptWishlistLogin = () => {
+        if (typeof window.openAuthModal === 'function') {
+            window.openAuthModal('login')
+        }
+    }
+
+    const postWishlist = (payload, retried) => {
+        const cfg = serikWishlistConfig()
+        if (!cfg.toggleUrl) {
+            return Promise.resolve({ res: null, data: null })
+        }
+
+        return refreshWishlistCsrf()
+            .then(() => fetch(cfg.toggleUrl, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: serikWishlistHeaders(),
+                body: JSON.stringify(payload),
+            }))
+            .then(async (res) => {
+                let data = null
+                try {
+                    data = await res.json()
+                } catch (err) {
+                    data = null
+                }
+
+                const message = String((data && data.message) || '')
+                const csrfFail = (res && res.status === 419)
+                    || !!(data && data.error && /session expired|csrf|token mismatch/i.test(message))
+
+                if (csrfFail && !retried) {
+                    return refreshWishlistCsrf().then(() => postWishlist(payload, true))
+                }
+
+                return { res, data }
+            })
+    }
+
+    const projectWishlistIds = () => {
         const projectWishlist = decodeURIComponent(getCookie('project_wishlist') || '')
+        return projectWishlist ? projectWishlist.split(',').filter(Boolean) : []
+    }
 
-        const wishlistArray = wishlist ? wishlist.split(',') : []
-        const projectWishlistArray = projectWishlist ? projectWishlist.split(',') : []
+    const paintWishlistCount = (propertyCount) => {
+        const n = Math.max(0, parseInt(propertyCount, 10) || 0)
+        const total = n + projectWishlistIds().length
+        $('[data-bb-toggle="wishlist-count"]').each(function () {
+            this.textContent = String(total)
+            if (this.hasAttribute('data-serik-wishlist-count')) {
+                if (total < 1) {
+                    this.setAttribute('hidden', 'hidden')
+                } else {
+                    this.removeAttribute('hidden')
+                }
+            }
+        })
+        document.querySelectorAll('[data-serik-wishlist-trigger]').forEach((el) => {
+            el.setAttribute('aria-label', n === 1 ? 'Wishlist, 1 saved property' : `Wishlist, ${n} saved properties`)
+        })
+        if (window.SERIK_WISHLIST) {
+            window.SERIK_WISHLIST.count = n
+        }
+    }
 
-        $('[data-bb-toggle="wishlist-count"]').text(wishlistArray.length + projectWishlistArray.length)
+    const paintPropertyHearts = (ids) => {
+        const set = new Set((ids || []).map(String))
+        window.__serikWishlistIds = Array.from(set)
+        $('[data-bb-toggle="add-to-wishlist"][data-type="property"]').each(function () {
+            const $btn = $(this)
+            const id = String($btn.attr('data-id') || $btn.data('id') || '')
+            const active = set.has(id)
+            $btn.toggleClass('active', active)
+            $btn.attr('aria-pressed', active ? 'true' : 'false')
+            $btn.html(active ? wishlistHeartFilled : wishlistHeartOutline)
+        })
+    }
+
+    const initWishlistCount = () => {
+        if (serikWishlistConfig().authenticated) {
+            paintWishlistCount(serikWishlistConfig().count || 0)
+            return
+        }
+
+        $('[data-bb-toggle="wishlist-count"]').text(String(projectWishlistIds().length))
+    }
+
+    const syncAuthenticatedWishlist = () => {
+        const cfg = serikWishlistConfig()
+        if (!cfg.stateUrl) {
+            return Promise.resolve(false)
+        }
+
+        return fetch(cfg.stateUrl, {
+            credentials: 'same-origin',
+            headers: {
+                Accept: 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => {
+                if (!data || data.authenticated === false) {
+                    markWishlistAuthenticated(false)
+                    return false
+                }
+                markWishlistAuthenticated(true)
+                paintPropertyHearts(data.ids || [])
+                paintWishlistCount(data.count || 0)
+                return true
+            })
+            .catch(() => false)
+    }
+
+    const completePendingWishlist = () => {
+        const cfg = serikWishlistConfig()
+        if (!cfg.authenticated) {
+            return
+        }
+
+        const pending = readPendingWishlist()
+        if (!pending) {
+            return
+        }
+
+        if (pending.action === 'open' && cfg.pageUrl) {
+            clearPendingWishlist()
+            window.location.href = cfg.pageUrl
+            return
+        }
+
+        const pendingId = parseWishlistId(pending.id)
+        if ((pending.action === 'add' || pending.type === 'property') && pendingId && cfg.toggleUrl) {
+            postWishlist({
+                id: pendingId,
+                type: 'property',
+                action: 'add',
+            }).then(({ res, data }) => {
+                if (res && res.status === 401) {
+                    markWishlistAuthenticated(false)
+                    promptWishlistLogin()
+                    return
+                }
+                if (!data || data.error || !res || !res.ok) {
+                    return
+                }
+                clearPendingWishlist()
+                const ids = Array.from(new Set([...(window.__serikWishlistIds || []), String(pendingId)]))
+                paintPropertyHearts(ids)
+                paintWishlistCount(data.count)
+            }).catch(() => {})
+        }
     }
 
     const initWishlist = () => {
-        const wishlist = decodeURIComponent(getCookie('wishlist') || '')
-        const projectWishlist = decodeURIComponent(getCookie('project_wishlist') || '')
-
-        const wishlistArray = wishlist ? wishlist.split(',') : []
-        const projectWishlistArray = projectWishlist ? projectWishlist.split(',') : []
-
-        wishlistArray.forEach((id) => {
-            $(`[data-bb-toggle="add-to-wishlist"][data-type="property"][data-id="${id}"]`).addClass('active').html(`
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" class="icon">
-                    <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
-                    <path d="M6.979 3.074a6 6 0 0 1 4.988 1.425l.037 .033l.034 -.03a6 6 0 0 1 4.733 -1.44l.246 .036a6 6 0 0 1 3.364 10.008l-.18 .185l-.048 .041l-7.45 7.379a1 1 0 0 1 -1.313 .082l-.094 -.082l-7.493 -7.422a6 6 0 0 1 3.176 -10.215z" />
-                </svg>
-            `)
+        projectWishlistIds().forEach((id) => {
+            $(`[data-bb-toggle="add-to-wishlist"][data-type="project"][data-id="${id}"]`).addClass('active').html(wishlistHeartFilled)
         })
 
-        projectWishlistArray.forEach((id) => {
-            $(`[data-bb-toggle="add-to-wishlist"][data-type="project"][data-id="${id}"]`).addClass('active').html(`
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" class="icon">
-                    <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
-                    <path d="M6.979 3.074a6 6 0 0 1 4.988 1.425l.037 .033l.034 -.03a6 6 0 0 1 4.733 -1.44l.246 .036a6 6 0 0 1 3.364 10.008l-.18 .185l-.048 .041l-7.45 7.379a1 1 0 0 1 -1.313 .082l-.094 -.082l-7.493 -7.422a6 6 0 0 1 3.176 -10.215z" />
-                </svg>
-            `)
-        })
-
+        paintPropertyHearts(window.__serikWishlistIds || [])
         initWishlistCount()
+
+        syncAuthenticatedWishlist().then(() => completePendingWishlist())
+
+        if (serikWishlistConfig().openLogin && typeof window.openAuthModal === 'function') {
+            window.openAuthModal('login')
+        }
+    }
+    window.serikInitWishlist = initWishlist
+
+    const initOfficePhoneCopy = () => {
+        const live = document.querySelector('[data-serik-phone-live]')
+        const announce = (message) => {
+            if (live) {
+                live.textContent = message
+            }
+        }
+
+        document.querySelectorAll('[data-serik-copy-phone]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+                const number = btn.getAttribute('data-serik-copy-phone') || ''
+                try {
+                    if (!navigator.clipboard || !navigator.clipboard.writeText) {
+                        throw new Error('clipboard unavailable')
+                    }
+                    await navigator.clipboard.writeText(number)
+                    announce('Phone number copied.')
+                } catch (err) {
+                    try {
+                        const range = document.createRange()
+                        range.selectNodeContents(btn)
+                        const selection = window.getSelection()
+                        selection.removeAllRanges()
+                        selection.addRange(range)
+                    } catch (selectErr) {}
+                    announce('Select and copy the number manually.')
+                }
+            })
+        })
     }
 
     initWishlist()
+    initOfficePhoneCopy()
+
+    const serikConsultPhoneRequiredMessage = 'Phone number is required.'
+    const serikConsultPhoneInvalidMessage = 'Please enter a valid phone number.'
+
+    function serikConsultPhoneDigits(value) {
+        return String(value || '').replace(/\D+/g, '')
+    }
+
+    function serikConsultPhoneIsBlank(value) {
+        return serikConsultPhoneDigits(value) === ''
+    }
+
+    function serikConsultPhoneLooksValid(value) {
+        const original = String(value || '').trim()
+        if (serikConsultPhoneIsBlank(original)) {
+            return false
+        }
+        if (/[A-Za-z]/.test(original) || (original.match(/\+/g) || []).length > 1) {
+            return false
+        }
+        const digits = serikConsultPhoneDigits(original)
+        if (digits.length === 0 || digits.length > 15) {
+            return false
+        }
+        if (original.charAt(0) === '+') {
+            return digits.charAt(0) !== '0' && digits.length >= 8
+        }
+        if (digits.length === 10) {
+            return digits.charAt(0) !== '0' && digits.charAt(0) !== '1'
+                && digits.charAt(3) !== '0' && digits.charAt(3) !== '1'
+        }
+        if (digits.length === 11 && digits.charAt(0) === '1') {
+            return digits.charAt(1) !== '0' && digits.charAt(1) !== '1'
+                && digits.charAt(4) !== '0' && digits.charAt(4) !== '1'
+        }
+        return false
+    }
+
+    function serikConsultPhoneInput($form) {
+        return $form.find('[name="phone"]').first()
+    }
+
+    function serikClearConsultPhoneError($form) {
+        const $input = serikConsultPhoneInput($form)
+        $input.removeClass('is-invalid').removeAttr('aria-invalid')
+        const describedBy = $input.attr('aria-describedby')
+        $form.find('.serik-consult-phone-error').remove()
+        if (describedBy) {
+            $input.removeAttr('aria-describedby')
+        }
+    }
+
+    function serikShowConsultPhoneError($form, message) {
+        const $input = serikConsultPhoneInput($form)
+        if (!$input.length) {
+            return
+        }
+        serikClearConsultPhoneError($form)
+        $input.addClass('is-invalid').attr('aria-invalid', 'true')
+        const errId = ($input.attr('id') || 'tour-phone') + '-error'
+        const $err = $(`<div class="invalid-feedback serik-consult-phone-error" role="alert"></div>`)
+            .attr('id', errId)
+            .text(message)
+        $input.after($err)
+        $input.attr('aria-describedby', errId)
+        $input.trigger('focus')
+    }
+
+    function serikEnhanceConsultPhoneFields(root) {
+        const $scope = root ? $(root) : $(document)
+        $scope.find('.serik-schedule-viewing [name="phone"], [data-serik-consult-phone]').each(function () {
+            this.setAttribute('type', 'tel')
+            this.setAttribute('inputmode', 'tel')
+            this.setAttribute('autocomplete', 'tel')
+            this.setAttribute('aria-required', 'true')
+            this.required = true
+        })
+    }
+
+    serikEnhanceConsultPhoneFields()
 
     $(document)
+        .on('invalid', '.serik-schedule-viewing [name="phone"]', function (event) {
+            event.preventDefault()
+            const $form = $(this).closest('form')
+            const message = serikConsultPhoneIsBlank(this.value)
+                ? serikConsultPhoneRequiredMessage
+                : serikConsultPhoneInvalidMessage
+            serikShowConsultPhoneError($form, message)
+        })
+        .on('input change', '.serik-schedule-viewing [name="phone"]', function () {
+            const $form = $(this).closest('form')
+            if (serikConsultPhoneLooksValid(this.value)) {
+                serikClearConsultPhoneError($form)
+            }
+        })
         .on('submit', '.contact-form', function (event) {
             event.preventDefault()
             event.stopPropagation()
 
             const $form = $(this)
             const $button = $form.find('button[type=submit]')
+            const isScheduleViewing = $form.hasClass('serik-schedule-viewing')
+
+            if (isScheduleViewing) {
+                serikEnhanceConsultPhoneFields($form)
+                const phoneValue = serikConsultPhoneInput($form).val()
+                if (serikConsultPhoneIsBlank(phoneValue)) {
+                    serikShowConsultPhoneError($form, serikConsultPhoneRequiredMessage)
+                    return
+                }
+                if (!serikConsultPhoneLooksValid(phoneValue)) {
+                    serikShowConsultPhoneError($form, serikConsultPhoneInvalidMessage)
+                    return
+                }
+                serikClearConsultPhoneError($form)
+                if ($form.data('serikSubmitting')) {
+                    return
+                }
+                $form.data('serikSubmitting', true)
+            }
 
             $.ajax({
                 type: 'POST',
@@ -1935,6 +2303,9 @@ $(() => {
                 success: ({error, message}) => {
                     if (!error) {
                         $form[0].reset()
+                        if (isScheduleViewing) {
+                            serikClearConsultPhoneError($form)
+                        }
                         Theme.showSuccess(message)
                         if (typeof window.serikTrackAdsContactConversion === 'function') {
                             window.serikTrackAdsContactConversion()
@@ -1944,6 +2315,16 @@ $(() => {
                     }
                 },
                 error: (error) => {
+                    if (isScheduleViewing) {
+                        const errors = error && error.responseJSON && error.responseJSON.errors
+                        if (errors && errors.phone) {
+                            const phoneError = Array.isArray(errors.phone) ? errors.phone[0] : errors.phone
+                            serikShowConsultPhoneError($form, phoneError)
+                            if (Object.keys(errors).length === 1) {
+                                return
+                            }
+                        }
+                    }
                     Theme.handleError(error)
                 },
                 complete: () => {
@@ -1952,6 +2333,9 @@ $(() => {
                     }
 
                     $button.removeClass('btn-loading')
+                    if (isScheduleViewing) {
+                        $form.data('serikSubmitting', false)
+                    }
                 },
             })
         })
@@ -2183,40 +2567,99 @@ $(() => {
                 $('.property-search-form select').prop('disabled', false)
             }
         })
-        .on('click', '[data-bb-toggle="add-to-wishlist"]', (e) => {
-            e.preventDefault()
-
-            const $currentTarget = $(e.currentTarget)
-            const id = $currentTarget.data('id')
-            const cookieName = $currentTarget.data('type') === 'property' ? 'wishlist' : 'project_wishlist'
-
-            const wishlist = decodeURIComponent(getCookie(cookieName) || '')
-            const wishlistArray = wishlist ? wishlist.split(',') : []
-
-            if (wishlistArray.includes(String(id))) {
-                wishlistArray.splice(wishlistArray.indexOf(id), 1)
-                $currentTarget.removeClass('active').html(`
-                    <svg class="icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
-                        <path d="M19.5 12.572l-7.5 7.428l-7.5 -7.428a5 5 0 1 1 7.5 -6.566a5 5 0 1 1 7.5 6.572"></path>
-                    </svg>
-                `)
-
-                Theme.showSuccess($currentTarget.data('remove-message'))
-            } else {
-                wishlistArray.push(id)
-                $currentTarget.addClass('active').html(`
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" class="icon">
-                        <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
-                        <path d="M6.979 3.074a6 6 0 0 1 4.988 1.425l.037 .033l.034 -.03a6 6 0 0 1 4.733 -1.44l.246 .036a6 6 0 0 1 3.364 10.008l-.18 .185l-.048 .041l-7.45 7.379a1 1 0 0 1 -1.313 .082l-.094 -.082l-7.493 -7.422a6 6 0 0 1 3.176 -10.215z" />
-                    </svg>
-                `)
-
-                Theme.showSuccess($currentTarget.data('add-message'))
+        .on('click', '[data-serik-wishlist-trigger]', (e) => {
+            if (serikWishlistConfig().authenticated) {
+                return
             }
 
-            setCookie(cookieName, wishlistArray.join(','), 365)
-            initWishlistCount()
+            e.preventDefault()
+            rememberPendingWishlist({ action: 'open' })
+            promptWishlistLogin()
+        })
+        .on('click', '[data-bb-toggle="add-to-wishlist"]', (e) => {
+            e.preventDefault()
+            e.stopPropagation()
+
+            const $currentTarget = $(e.currentTarget)
+            const id = parseWishlistId($currentTarget.attr('data-id') || $currentTarget.data('id'))
+            const type = $currentTarget.data('type') === 'project' ? 'project' : 'property'
+
+            if (type === 'project') {
+                const cookieName = 'project_wishlist'
+                const wishlist = decodeURIComponent(getCookie(cookieName) || '')
+                const wishlistArray = wishlist ? wishlist.split(',') : []
+
+                if (wishlistArray.includes(String(id))) {
+                    wishlistArray.splice(wishlistArray.indexOf(String(id)), 1)
+                    $currentTarget.removeClass('active').html(wishlistHeartOutline)
+                    Theme.showSuccess($currentTarget.data('remove-message'))
+                } else {
+                    wishlistArray.push(id)
+                    $currentTarget.addClass('active').html(wishlistHeartFilled)
+                    Theme.showSuccess($currentTarget.data('add-message'))
+                }
+
+                setCookie(cookieName, wishlistArray.join(','), 365)
+                initWishlistCount()
+                return
+            }
+
+            if (!id) {
+                return
+            }
+
+            const cfg = serikWishlistConfig()
+            if (!cfg.authenticated) {
+                rememberPendingWishlist({
+                    action: 'add',
+                    type: 'property',
+                    id: String(id),
+                })
+                promptWishlistLogin()
+                return
+            }
+
+            if (!cfg.toggleUrl) {
+                return
+            }
+
+            postWishlist({
+                id,
+                type: 'property',
+                action: 'toggle',
+            })
+                .then(({ res, data }) => {
+                    if (res && res.status === 401) {
+                        markWishlistAuthenticated(false)
+                        rememberPendingWishlist({
+                            action: 'add',
+                            type: 'property',
+                            id: String(id),
+                        })
+                        promptWishlistLogin()
+                        return
+                    }
+
+                    if (!data || data.error || !res || !res.ok) {
+                        if (typeof Theme.showError === 'function') {
+                            Theme.showError((data && data.message) || 'Unable to update wishlist. Please try again.')
+                        }
+                        return
+                    }
+
+                    const current = window.__serikWishlistIds || []
+                    const ids = data.saved
+                        ? Array.from(new Set([...current.map(String), String(id)]))
+                        : current.filter((value) => String(value) !== String(id))
+                    paintPropertyHearts(ids)
+                    paintWishlistCount(data.count)
+                    Theme.showSuccess(data.saved ? $currentTarget.data('add-message') : $currentTarget.data('remove-message'))
+                })
+                .catch(() => {
+                    if (typeof Theme.showError === 'function') {
+                        Theme.showError('Unable to update wishlist. Please try again.')
+                    }
+                })
         })
         .on('click', '[data-bb-toggle="toggle-filter-offcanvas"]', (e) => {
             e.preventDefault()
@@ -2455,6 +2898,10 @@ $(() => {
         }
 
         // Wait for nice-select to be initialized by the theme
+        if (!$('#location').length) {
+            return;
+        }
+
         const checkInterval = setInterval(function() {
             if ($('#location').next('.nice-select').length) {
                 clearInterval(checkInterval);
@@ -2464,6 +2911,7 @@ $(() => {
 
         // Backup initialization if the theme hasn't done it after 2 seconds
         setTimeout(function() {
+            clearInterval(checkInterval);
             if (!$('#location').next('.nice-select').length && $.fn.niceSelect) {
                 $('#location').niceSelect();
                 enhanceLocationDropdown();
@@ -2529,7 +2977,7 @@ $(() => {
 
         startRotation();
 
-        $(window).on('beforeunload', function() {
+        $(window).on('pagehide', function() {
             stopRotation();
         });
     };

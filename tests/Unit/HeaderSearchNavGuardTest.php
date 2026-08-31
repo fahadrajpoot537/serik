@@ -26,12 +26,12 @@ class HeaderSearchNavGuardTest extends TestCase
         $this->assertStringContainsString('isHeaderSearchPanelOpen', $menu);
         $this->assertStringContainsString('closeMegaMenu();', $menu);
         $this->assertStringContainsString("classList.add('serik-mega-portal', 'is-mega-open')", $menu);
-        $this->assertStringContainsString('mega-v7', $cache);
+        $this->assertStringContainsString('mega-v8', $cache);
         $this->assertStringContainsString('html.serik-header-search-active .mega-dropdown.serik-mega-portal', $chrome);
         $this->assertStringContainsString('html.serik-header-search-active #page-home .main-header .main-menu .navigation > li:hover > ul', $chrome);
         $this->assertStringContainsString('html.serik-header-search-active .has-dropdown.is-active > .mega-dropdown', $chrome);
         $this->assertStringContainsString('serikHeaderSearchSync', $a11y);
         $this->assertStringContainsString('html.serik-header-search-active .mega-dropdown', $menu);
-        $this->assertStringContainsString('isDesktop() && isHeaderSearchActive()', $menu);
+        $this->assertStringContainsString('__serikMegaMenuInit', $menu);
     }
 }

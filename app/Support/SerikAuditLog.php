@@ -7,7 +7,7 @@ use Throwable;
 
 /**
  * Structured reliability audit events (imports / sync / retries / failures / recoveries).
- * Additive — never throws into callers.
+ * Additive — never throws into callers. Missing channels fall back to the default logger.
  */
 final class SerikAuditLog
 {
@@ -30,35 +30,40 @@ final class SerikAuditLog
         array $context = [],
         string $level = 'info',
     ): void {
+        $payload = [
+            'ts' => now()->toIso8601String(),
+            'domain' => $domain,
+            'action' => $action,
+            'context' => SerikSafeLog::redact($context),
+        ];
+
+        $channel = match ($domain) {
+            self::DOMAIN_IMPORTS => 'treb_archive',
+            self::DOMAIN_GHL => 'ghl_sync',
+            self::DOMAIN_SEARCH => 'search_sync',
+            default => 'reliability',
+        };
+
+        $message = sprintf('[%s] %s', strtoupper($domain), $action);
+
+        SerikSafeLog::write($level, $message, $payload, $channel);
+
+        if ($level === 'error' && $channel !== 'reliability') {
+            SerikSafeLog::write('error', $message, $payload, 'reliability');
+        }
+    }
+
+    /**
+     * True when a named logging channel is defined and resolvable.
+     */
+    public static function channelExists(string $channel): bool
+    {
         try {
-            $payload = [
-                'ts' => now()->toIso8601String(),
-                'domain' => $domain,
-                'action' => $action,
-                'context' => $context,
-            ];
+            Log::channel($channel);
 
-            $channel = match ($domain) {
-                self::DOMAIN_IMPORTS => 'treb_archive',
-                self::DOMAIN_GHL => 'ghl_sync',
-                self::DOMAIN_SEARCH => 'search_sync',
-                default => 'reliability',
-            };
-
-            $logger = Log::channel($channel);
-            $message = sprintf('[%s] %s', strtoupper($domain), $action);
-
-            match ($level) {
-                'warning' => $logger->warning($message, $payload),
-                'error' => $logger->error($message, $payload),
-                default => $logger->info($message, $payload),
-            };
-
-            // Mirror critical failures onto reliability channel.
-            if ($level === 'error' && $channel !== 'reliability') {
-                Log::channel('reliability')->error($message, $payload);
-            }
+            return true;
         } catch (Throwable) {
+            return false;
         }
     }
 }

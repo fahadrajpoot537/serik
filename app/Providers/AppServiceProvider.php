@@ -13,7 +13,6 @@ use Illuminate\Queue\Events\JobExceptionOccurred;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobProcessing;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\HtmlString;
@@ -64,16 +63,31 @@ class AppServiceProvider extends ServiceProvider
         $this->registerAccountAuthCookieMarker();
         $this->registerQueueMetricsListeners();
 
+        if (class_exists(\Botble\Contact\Events\SentContactEvent::class)) {
+            Event::listen(
+                \Botble\Contact\Events\SentContactEvent::class,
+                \App\Listeners\ApplyMortgageCalculatorContactContext::class,
+                250
+            );
+            Event::listen(
+                \Botble\Contact\Events\SentContactEvent::class,
+                \App\Listeners\ApplyServiceInquiryContactContext::class,
+                240
+            );
+        }
+
         // New CMS uploads → WebP (TREB images use a separate proxy; untouched).
         // Skip Redis on console so Artisan maintenance does not hang when Memurai is down.
         if (! $this->app->runningInConsole()) {
             try {
-                if (! Cache::get('serik_media_webp_enabled_v1') && ! (bool) setting('media_convert_image_to_webp', false)) {
+                if (! \App\Support\SerikCache::get('serik_media_webp_enabled_v1') && ! (bool) setting('media_convert_image_to_webp', false)) {
                     setting()->set(['media_convert_image_to_webp' => '1'])->save();
-                    Cache::forever('serik_media_webp_enabled_v1', 1);
+                    \App\Support\SerikCache::forever('serik_media_webp_enabled_v1', 1);
                 }
-            } catch (\Throwable) {
-                // Settings/Redis may be unavailable during early install/migrate.
+            } catch (\Throwable $e) {
+                \App\Support\SerikSafeLog::write('debug', '[boot] media webp setting skipped', [
+                    'error' => $e->getMessage(),
+                ]);
             }
         }
 
@@ -229,7 +243,7 @@ class AppServiceProvider extends ServiceProvider
         if (class_exists(\Botble\Blog\Models\Post::class)) {
             $forgetBlogCache = static function (): void {
                 foreach (['recent', 'featured', 'popular'] as $type) {
-                    \Illuminate\Support\Facades\Cache::forget('serik_homepage_blog_posts_v1:' . $type . ':3');
+                    \App\Support\SerikCache::forget('serik_homepage_blog_posts_v1:' . $type . ':3');
                 }
 
                 \App\Support\HomepageFragmentCache::bump('shortcode:blog-posts');

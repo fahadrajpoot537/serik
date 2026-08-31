@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Support\PropertySearchSync;
 use App\Support\SerikQueue;
 use App\Support\SerikQueueMetrics;
+use App\Support\SerikSafeLog;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -12,7 +13,6 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
@@ -50,7 +50,7 @@ class SearchBatchJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
     {
         if ($sync->isMeilisearchCircuitOpen()) {
             $delay = max(5, $sync->meilisearchRetryAfterSeconds());
-            Log::warning('[SearchBatchJob] Meilisearch cooldown active; retaining pending checkpoint', [
+            SerikSafeLog::write('warning', '[SearchBatchJob] Meilisearch cooldown active; retaining pending checkpoint', [
                 'pending_count' => $sync->pendingCount(),
                 'retry_after_seconds' => $delay,
             ]);
@@ -60,19 +60,19 @@ class SearchBatchJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
             return;
         }
 
-        Log::info('[SearchBatchJob] handle start', [
+        SerikSafeLog::write('info', '[SearchBatchJob] handle start', [
             'pending_count' => $sync->pendingCount(),
         ]);
 
         $lock = Cache::lock(PropertySearchSync::WORKER_LOCK_KEY, 600);
         $workerLockAcquired = $lock->get();
 
-        Log::info('[SearchBatchJob] worker lock', [
+        SerikSafeLog::write('info', '[SearchBatchJob] worker lock', [
             'acquired' => $workerLockAcquired,
         ]);
 
         if (! $workerLockAcquired) {
-            Log::debug('[SearchBatchJob] worker lock held — releasing job for retry');
+            SerikSafeLog::write('debug', '[SearchBatchJob] worker lock held — releasing job for retry');
             SerikQueueMetrics::recordRetry(SerikQueue::search());
             $this->release(5);
 
@@ -94,7 +94,7 @@ class SearchBatchJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
                 }
             }
         } catch (Throwable $e) {
-            Log::warning('[SearchBatchJob] batch drain failed', [
+            SerikSafeLog::write('warning', '[SearchBatchJob] batch drain failed', [
                 'attempt' => $this->attempts(),
                 'remaining_pending' => $sync->pendingCount(),
                 'error' => $e->getMessage(),
@@ -106,7 +106,7 @@ class SearchBatchJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
         }
 
         if ($sync->pendingCount() > 0) {
-            Log::info('[SearchBatchJob] bounded drain yielding continuation', [
+            SerikSafeLog::write('info', '[SearchBatchJob] bounded drain yielding continuation', [
                 'batches' => $batches,
                 'remaining_pending' => $sync->pendingCount(),
             ]);
@@ -120,7 +120,7 @@ class SearchBatchJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
 
     public function failed(?Throwable $e): void
     {
-        Log::error('[SearchBatchJob] batch drain permanently failed', [
+        SerikSafeLog::write('error', '[SearchBatchJob] batch drain permanently failed', [
             'error' => $e?->getMessage(),
         ]);
 
@@ -132,7 +132,7 @@ class SearchBatchJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
         }
 
         if ($sync->isMeilisearchCircuitOpen()) {
-            Log::warning('[SearchBatchJob] permanent failure held by Meilisearch cooldown', [
+            SerikSafeLog::write('warning', '[SearchBatchJob] permanent failure held by Meilisearch cooldown', [
                 'pending_count' => $sync->pendingCount(),
                 'retry_after_seconds' => $sync->meilisearchRetryAfterSeconds(),
             ]);

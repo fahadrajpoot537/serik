@@ -11,6 +11,7 @@ use Botble\Base\Forms\FieldOptions\RadioFieldOption;
 use Botble\Base\Forms\FieldOptions\SelectFieldOption;
 use Botble\Base\Forms\FieldOptions\TextareaFieldOption;
 use Botble\Base\Forms\FieldOptions\TextFieldOption;
+use App\Forms\Fields\TelField;
 use Botble\Base\Forms\Fields\HtmlField;
 use Botble\Base\Forms\Fields\NumberField;
 use Botble\Base\Forms\Fields\OnOffCheckboxField;
@@ -49,18 +50,19 @@ class ConsultForm extends FormFront
                     ->label(trans('plugins/real-estate::consult.form_name'))
                     ->placeholder(trans('plugins/real-estate::consult.name_placeholder')),
             )
-            ->when(! RealEstateHelper::isHiddenFieldAtConsultForm('phone'), function (ConsultForm $form) use (
-                $mandatoryFields
-            ): void {
-                $form->add(
-                    'phone',
-                    TextField::class,
-                    TextFieldOption::make()
-                        ->required(in_array('phone', $mandatoryFields))
-                        ->label(trans('plugins/real-estate::consult.form_phone'))
-                        ->placeholder(trans('plugins/real-estate::consult.phone_placeholder')),
-                );
-            })
+            ->add(
+                'phone',
+                TelField::class,
+                TextFieldOption::make()
+                    ->required()
+                    ->label(trans('plugins/real-estate::consult.form_phone'))
+                    ->placeholder(trans('plugins/real-estate::consult.phone_placeholder'))
+                    ->wrapperAttributes(['class' => 'ip-group'])
+                    ->addAttribute('autocomplete', 'tel')
+                    ->addAttribute('inputmode', 'tel')
+                    ->addAttribute('aria-required', 'true')
+                    ->addAttribute('data-serik-consult-phone', '1'),
+            )
             ->when(! RealEstateHelper::isHiddenFieldAtConsultForm('email'), function (ConsultForm $form) use (
                 $mandatoryFields
             ): void {

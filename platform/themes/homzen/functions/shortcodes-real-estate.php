@@ -51,13 +51,13 @@ app()->booted(function (): void {
                     }
                 } catch (\Throwable $e) {
                     try {
-                        \Illuminate\Support\Facades\Log::error('[shortcode:properties] style=5 uncaught', [
+                        \App\Support\SerikSafeLog::write('error', '[shortcode:properties] style=5 uncaught', [
                             'message' => $e->getMessage(),
                             'file' => $e->getFile(),
                             'line' => $e->getLine(),
                         ]);
-                    } catch (\Throwable) {
-                        // ignore log failures
+                    } catch (\Throwable $ignored) {
+                        unset($ignored);
                     }
                     $result = [
                         'propertiesForSale' => collect(),
@@ -69,29 +69,31 @@ app()->booted(function (): void {
                 $propertiesForSale = $result['propertiesForSale'] ?? collect();
                 $propertiesSold = $result['propertiesSold'] ?? collect();
                 $visitorCity = $result['visitorCity'] ?? null;
+                $locationLabel = $result['locationLabel'] ?? ($visitorCity ?: 'Ontario');
+                $locationSource = $result['locationSource'] ?? 'fallback';
                 $properties = $propertiesForSale;
 
+                $viewData = [
+                    'shortcode' => $shortcode,
+                    'properties' => $properties,
+                    'propertiesForSale' => $propertiesForSale,
+                    'propertiesSold' => $propertiesSold,
+                    'tabs' => $tabs,
+                    'categoryIds' => $categoryIds,
+                    'visitorCity' => $visitorCity,
+                    'locationLabel' => $locationLabel,
+                    'locationSource' => $locationSource,
+                ];
+
                 try {
-                    return Theme::partial('shortcodes.properties.index', compact(
-                        'shortcode',
-                        'properties',
-                        'propertiesForSale',
-                        'propertiesSold',
-                        'tabs',
-                        'categoryIds',
-                        'visitorCity'
-                    ));
-                } catch (\Throwable $e) {
-                    try {
-                        \Illuminate\Support\Facades\Log::error('[shortcode:properties] style=5 view failed', [
-                            'message' => $e->getMessage(),
-                            'file' => $e->getFile(),
-                            'line' => $e->getLine(),
-                            'class' => $e::class,
-                        ]);
-                    } catch (\Throwable) {
-                        // ignore
-                    }
+                    return Theme::partial('shortcodes.properties.index', $viewData);
+                } catch (\Throwable $exception) {
+                    \App\Support\SerikSafeLog::write('error', '[shortcode:properties] style=5 view failed', [
+                        'message' => $exception->getMessage(),
+                        'file' => $exception->getFile(),
+                        'line' => $exception->getLine(),
+                        'class' => get_class($exception),
+                    ]);
 
                     return '<section class="flat-section"><div class="container text-center py-4">'
                         . '<p class="mb-3">Featured properties are temporarily unavailable.</p>'

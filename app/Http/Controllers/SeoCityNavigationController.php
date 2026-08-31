@@ -30,12 +30,24 @@ class SeoCityNavigationController extends Controller
         }
 
         if (! $city && $context === 'home') {
-            $city = $cityResolution->resolveForHome($request);
+            $resolved = \App\Support\VisitorLocationResolver::resolve($request, true);
+            if (! $resolved->isFallback()) {
+                $city = City::query()
+                    ->where('is_active', true)
+                    ->where(function ($q) use ($resolved) {
+                        $q->where('name', $resolved->city)
+                            ->orWhere('slug', \Illuminate\Support\Str::slug($resolved->city));
+                    })
+                    ->first(['id', 'name', 'slug', 'latitude', 'longitude', 'property_count', 'is_major']);
+            }
+            if (! $city) {
+                $city = $cityResolution->resolveForHome($request);
+            }
         }
 
         $cacheSlug = $city?->slug ?? ($slug !== '' ? Str::slug($slug) : 'ontario');
         $communityKey = $community !== '' ? md5(mb_strtolower($community)) : 'none';
-        $cacheKey = "seo_nav_html:v12:{$context}:{$cacheSlug}:{$communityKey}";
+        $cacheKey = "seo_nav_html:v13:{$context}:{$cacheSlug}:{$communityKey}";
 
         $html = Cache::remember($cacheKey, (int) config('seo_navigation.cache_ttl', 3600), function () use ($navigation, $context, $city, $community) {
             $data = $navigation->build($context, $city, $community !== '' ? $community : null);

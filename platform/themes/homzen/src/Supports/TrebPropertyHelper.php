@@ -1263,6 +1263,8 @@ class TrebPropertyHelper
         // Relative fragment without prefix — cards already render "Listed …".
         $listedActive = self::relativeListedLabel($listedAt, '');
 
+        $status = \App\Support\MlsStatus::forProperty($property);
+
         return [
             'address' => $address,
             'location' => $location,
@@ -1271,6 +1273,12 @@ class TrebPropertyHelper
             'beds' => $beds,
             'url' => self::listingSeoUrl($property),
             'price_format' => self::listingDisplayPriceFormat($property),
+            'status_label' => $status['display_label'],
+            'status_compact' => $status['compact_label'],
+            'status_date_label' => $status['status_date_label'],
+            'status_badge_variant' => $status['badge_variant'],
+            'is_delisted' => $status['is_delisted'],
+            'strike_price' => $status['strike_price'],
         ];
     }
 

@@ -3,6 +3,9 @@
 namespace App\Listeners;
 
 use App\Services\GoHighLevel\GoHighLevelLeadService;
+use App\Support\AgentInquiryFormContext;
+use App\Support\MortgageCalculatorFormContext;
+use App\Support\ServiceInquiryFormContext;
 use Botble\Contact\Events\SentContactEvent;
 use Botble\Contact\Models\Contact;
 
@@ -18,6 +21,52 @@ class PushContactLeadToGoHighLevel
 
         if (! $contact instanceof Contact) {
             return;
+        }
+
+        $inquiryType = MortgageCalculatorFormContext::inquiryTypeFromCustomFields(
+            is_array($contact->custom_fields) ? $contact->custom_fields : null
+        ) ?? MortgageCalculatorFormContext::validatedInquiryType(
+            request()->input(MortgageCalculatorFormContext::REQUEST_INQUIRY_KEY)
+        );
+
+        if (MortgageCalculatorFormContext::isActive() && $inquiryType !== null) {
+            $this->ghl->pushAfterResponse(MortgageCalculatorFormContext::buildGhlLead(
+                (string) ($contact->name ?? ''),
+                (string) ($contact->email ?? ''),
+                (string) ($contact->phone ?? ''),
+                (string) ($contact->content ?? ''),
+                $inquiryType
+            ));
+
+            return;
+        }
+
+        $serviceKey = ServiceInquiryFormContext::activeKey();
+        if ($serviceKey !== null) {
+            $this->ghl->pushAfterResponse(ServiceInquiryFormContext::buildGhlLead(
+                (string) ($contact->name ?? ''),
+                (string) ($contact->email ?? ''),
+                (string) ($contact->phone ?? ''),
+                (string) ($contact->content ?? ''),
+                $serviceKey
+            ));
+
+            return;
+        }
+
+        if (AgentInquiryFormContext::isActive()) {
+            $agent = AgentInquiryFormContext::resolveAgent();
+            if ($agent !== null) {
+                $this->ghl->pushAfterResponse(AgentInquiryFormContext::buildGhlLead(
+                    (string) ($contact->name ?? ''),
+                    (string) ($contact->email ?? ''),
+                    (string) ($contact->phone ?? ''),
+                    (string) ($contact->content ?? ''),
+                    $agent
+                ));
+
+                return;
+            }
         }
 
         $this->ghl->pushAfterResponse([

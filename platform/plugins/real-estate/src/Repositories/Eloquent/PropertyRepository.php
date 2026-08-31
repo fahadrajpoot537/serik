@@ -19,6 +19,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use App\Support\SerikCache;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class PropertyRepository extends RepositoriesAbstract implements PropertyInterface
 {
@@ -231,6 +232,7 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
                 if (
                     $isBrowseListing
                     && empty($filters['location'])
+                    && empty($filters['community'])
                     && empty($filters['city_id'])
                     && empty($filters['city'])
                     && empty($filters['keyword'])
@@ -441,13 +443,19 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
             $perPage = max(12, (int) request()->input('per_page', 12));
             $meiliCityLimit = min(8000, max(800, ($page * $perPage) + 1500));
             $pagedBrowse = $isBrowseListing && (($params['paginate']['type'] ?? '') === 'simplePaginate');
+            $isDistrictCity = $search->hasTrebDistrictMapping($locationSearch);
 
-            if ($pagedBrowse && $locationSearch !== '') {
+            if ($pagedBrowse && $locationSearch !== '' && ! $isDistrictCity) {
                 // Listing pages hydrate 12 Meili IDs in browsePageIdsViaMeili.
                 // Skip 800–8000 city whereIn (and JSON district scans) on TTFB.
-                // Meili down: FULLTEXT city pin so SQL LIMIT 12 stays in-city.
+                // Meili down: address LIKE so SQL LIMIT 12 stays in-city.
+                // House/condo filters skip the newest-N id window (condo batches
+                // otherwise blank every …-houses-for-sale landing).
                 if (! $search->isAvailable()) {
-                    $search->constrainQueryToCityViaLocation($this->model, $locationSearch, true);
+                    $skipWindow = $meiliSubtypes !== [] || ! empty($filters['subtypes']);
+                    if (! $skipWindow) {
+                        $search->constrainQueryToCityViaLocation($this->model, $locationSearch, true, false);
+                    }
                 }
             } elseif (
                 ! $skipMeiliCity
@@ -607,20 +615,52 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
     protected function browseListingFetchPage($query, array $filters, int $page, int $perPage)
     {
         $meiliIds = $this->browsePageIdsViaMeili($filters, $page, $perPage);
-        if (is_array($meiliIds)) {
-            if ($meiliIds === []) {
-                return collect();
-            }
-
+        if (is_array($meiliIds) && $meiliIds !== []) {
             $rows = (clone $query)
                 ->whereIn('re_properties.id', $meiliIds)
                 ->get()
                 ->keyBy('id');
 
-            return collect($meiliIds)
+            $hydrated = collect($meiliIds)
                 ->map(fn ($id) => $rows->get((int) $id))
                 ->filter()
                 ->values();
+
+            if ($hydrated->isNotEmpty()) {
+                return $hydrated;
+            }
+        }
+
+        $sqlIds = $this->browsePageIdsViaSqlLocation($filters, 120);
+        if ($sqlIds !== []) {
+            request()->attributes->set('serik_browse_sql_ids_total', count($sqlIds));
+            $offset = max(0, ($page - 1) * $perPage);
+            $pageIds = array_slice($sqlIds, $offset, $perPage);
+            if ($pageIds === []) {
+                return collect();
+            }
+
+            $rows = (clone $query)
+                ->whereIn('re_properties.id', $pageIds)
+                ->get()
+                ->keyBy('id');
+
+            return collect($pageIds)
+                ->map(fn ($id) => $rows->get((int) $id))
+                ->filter()
+                ->values();
+        }
+
+        $location = trim((string) ($filters['location'] ?? ''));
+        $city = $location !== '' ? trim(explode(',', $location)[0]) : '';
+        if (
+            $city !== ''
+            && strcasecmp($city, 'ontario') !== 0
+            && ! $this->locationUsesTrebDistricts($filters)
+        ) {
+            $skipWindow = ! empty($filters['home_types']) || ! empty($filters['subtypes']);
+            app(\Botble\RealEstate\Services\PropertySearchService::class)
+                ->constrainQueryToCityViaLocation($query, $city, true, $skipWindow);
         }
 
         return (clone $query)->forPage($page, $perPage)->get();
@@ -659,12 +699,14 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
         ];
 
         $location = trim((string) ($filters['location'] ?? ''));
-        if ($location !== '') {
-            $parts = explode(',', $location);
-            $city = trim($parts[0]);
-            if ($city !== '' && strcasecmp($city, 'ontario') !== 0) {
-                $opts['city'] = $city;
-            }
+        $locationCity = $location !== '' ? trim(explode(',', $location)[0]) : '';
+        if ($locationCity !== '' && $this->locationUsesTrebDistricts($filters)) {
+            // Meili `city=Etobicoke` only matches rare address-city rows. SQL
+            // paginates the TREB district ID set from constrainQueryToCity.
+            return null;
+        }
+        if ($locationCity !== '' && strcasecmp($locationCity, 'ontario') !== 0) {
+            $opts['city'] = $locationCity;
         }
 
         $type = (string) ($filters['type'] ?? '');
@@ -743,7 +785,7 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
             }
         }
 
-        $cacheKey = 'serik_browse_count:' . md5(json_encode($this->browseListingCountSignature($filters)));
+        $cacheKey = 'serik_browse_count_v3:' . md5(json_encode($this->browseListingCountSignature($filters)));
         $ttl = $unfiltered ? 600 : 300;
 
         $cachedTotal = Cache::get($cacheKey);
@@ -751,15 +793,32 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
             return (int) $cachedTotal;
         }
 
-        $meiliTotal = $this->estimateBrowseTotalViaMeili($filters);
-        if ($meiliTotal !== null) {
-            Cache::put($cacheKey, $meiliTotal, $ttl);
-            if ($unfiltered) {
-                Cache::put('serik_active_listing_count_v1', $meiliTotal, 600);
-                Cache::put('serik_active_listing_count_v1:last', $meiliTotal, 86400);
-            }
+        $sqlIdsTotal = request()->attributes->get('serik_browse_sql_ids_total');
+        if (is_numeric($sqlIdsTotal) && (int) $sqlIdsTotal > 0) {
+            $total = (int) $sqlIdsTotal;
+            Cache::put($cacheKey, $total, $ttl);
 
-            return $meiliTotal;
+            return $total;
+        }
+
+        if (! $this->locationUsesTrebDistricts($filters)) {
+            $meiliTotal = $this->estimateBrowseTotalViaMeili($filters);
+            if ($meiliTotal !== null) {
+                Cache::put($cacheKey, $meiliTotal, $ttl);
+                if ($unfiltered) {
+                    Cache::put('serik_active_listing_count_v1', $meiliTotal, 600);
+                    Cache::put('serik_active_listing_count_v1:last', $meiliTotal, 86400);
+                }
+
+                return $meiliTotal;
+            }
+        } else {
+            // District ID sets are hundreds of PKs — COUNT is cheap and accurate.
+            $total = (int) (clone $query)->toBase()->count('re_properties.id');
+            Cache::put($cacheKey, $total, $ttl);
+            Cache::put($cacheKey . ':last', $total, 86400);
+
+            return $total;
         }
 
         $lastKnown = Cache::get($cacheKey . ':last');
@@ -854,6 +913,10 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
                 'Active Under Contract',
             ],
         ];
+
+        if ($this->locationUsesTrebDistricts($filters)) {
+            return null;
+        }
 
         $location = trim((string) ($filters['location'] ?? ''));
         if ($location !== '') {
@@ -955,6 +1018,92 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
         }
 
         return false;
+    }
+
+    /**
+     * Meili-down city + house/condo/townhouse page: newest matching ids via
+     * address LIKE (no newest-N window, no COUNT). Caps at $limit so TTFB
+     * stays ~2s instead of a 30s Eloquent filesort.
+     *
+     * @return list<int>
+     */
+    protected function browsePageIdsViaSqlLocation(array $filters, int $limit = 800): array
+    {
+        if (! empty($filters['open_house']) || ($filters['status'] ?? '') === 'sold') {
+            return [];
+        }
+        if (trim((string) ($filters['keyword'] ?? '')) !== '') {
+            return [];
+        }
+        if ($this->locationUsesTrebDistricts($filters)) {
+            return [];
+        }
+
+        $location = trim((string) ($filters['location'] ?? ''));
+        $city = $location !== '' ? trim(explode(',', $location)[0]) : '';
+        if ($city === '' || strcasecmp($city, 'ontario') === 0 || strcasecmp($city, 'on') === 0) {
+            return [];
+        }
+
+        $subtypeMap = [
+            'house' => ['Detached', 'Semi-Detached', 'Link', 'Rural Residential', 'Farm'],
+            'condo' => ['Condo Apartment', 'Condo Townhouse', 'Detached Condo', 'Leasehold Condo', 'Common Element Condo', 'Co-Ownership Apartment'],
+            'townhouse' => ['Att/Row/Townhouse', 'Condo Townhouse'],
+        ];
+        $subtypes = [];
+        foreach ((array) ($filters['home_types'] ?? []) as $homeType) {
+            if (isset($subtypeMap[$homeType])) {
+                $subtypes = array_merge($subtypes, $subtypeMap[$homeType]);
+            }
+        }
+        if (! empty($filters['subtypes']) && is_array($filters['subtypes'])) {
+            $subtypes = array_merge($subtypes, array_map('strval', $filters['subtypes']));
+        }
+        $subtypes = array_values(array_unique(array_filter($subtypes)));
+        if ($subtypes === []) {
+            return [];
+        }
+
+        $query = DB::table('re_properties')
+            ->select('id')
+            ->where('location', 'like', '%, ' . addcslashes($city, '%_\\') . ', ON%')
+            ->whereIn('PropertySubType', $subtypes)
+            ->whereIn('MlsStatus', [
+                'New',
+                'Active',
+                'Ext',
+                'Extension',
+                'Price Change',
+                'Active Under Contract',
+            ])
+            ->where('moderation_status', ModerationStatusEnum::APPROVED)
+            ->orderByDesc('id')
+            ->limit(max(12, min($limit, 120)));
+
+        $type = (string) ($filters['type'] ?? '');
+        if (in_array($type, [PropertyTypeEnum::RENT, 'rent', 'lease'], true)) {
+            $query->whereIn('TransactionType', ['For Lease', 'For Sub-Lease']);
+        } elseif ($type === PropertyTypeEnum::SALE || $type === 'sale') {
+            $query->where('TransactionType', 'For Sale');
+        }
+
+        return $query->pluck('id')->map(static fn ($id) => (int) $id)->values()->all();
+    }
+
+    protected function locationUsesTrebDistricts(array $filters): bool
+    {
+        $location = trim((string) ($filters['location'] ?? ''));
+        if ($location === '') {
+            return false;
+        }
+
+        $city = trim(explode(',', $location)[0]);
+        if ($city === '' || strcasecmp($city, 'ontario') === 0 || strcasecmp($city, 'on') === 0) {
+            return false;
+        }
+
+        return app(\Botble\RealEstate\Services\PropertySearchService::class)
+            ->hasTrebDistrictMapping($city);
     }
 
     /**

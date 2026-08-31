@@ -41,12 +41,9 @@ class ForceCanonicalDomainMiddleware
 
         $response = $next($request);
 
-        // Always disable HTML bfcache/shared reuse after login — previously only
-        // applied on canonical hosts, so local/other hosts could restore guest nav.
+        // Guest HTML: private + no-cache (bfcache-eligible). Auth cookies keep no-store.
         if (str_contains((string) $response->headers->get('Content-Type', ''), 'text/html')) {
-            $response->headers->set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
-            $response->headers->set('Pragma', 'no-cache');
-            $response->headers->set('Vary', 'Cookie');
+            \App\Support\SerikHtmlCacheHeaders::apply($response, $request);
         }
 
         return $response;

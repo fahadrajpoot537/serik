@@ -35,8 +35,10 @@ class LiveTrebPropertyFallbackService
         }
 
         return Property::query()
-            ->where('external_id', $listingKey)
-            ->orWhere('external_id', strtolower($listingKey))
+            ->where(function ($q) use ($listingKey): void {
+                $q->where('external_id', $listingKey)
+                    ->orWhere('external_id', strtolower($listingKey));
+            })
             ->first();
     }
 
@@ -274,6 +276,10 @@ class LiveTrebPropertyFallbackService
                 continue;
             }
 
+            if (! $this->addressMatchesParsedSearch((string) ($item['UnparsedAddress'] ?? ''), $parsed)) {
+                continue;
+            }
+
             $existingId = DB::table('re_properties')->where('external_id', $key)->value('id');
 
             if ($existingId) {
@@ -414,79 +420,7 @@ class LiveTrebPropertyFallbackService
      */
     public function parseAddressSearchKeyword(string $keyword): ?array
     {
-        $keyword = trim(preg_replace('/\s+/', ' ', $keyword) ?? '');
-
-        if ($keyword === '') {
-            return null;
-        }
-
-        if (str_contains($keyword, ',')) {
-            $keyword = trim(explode(',', $keyword, 2)[0]);
-        }
-
-        if (str_contains($keyword, ' - ')) {
-            $keyword = trim(explode(' - ', $keyword, 2)[0]);
-        }
-
-        $keyword = trim(preg_replace('/\b(ON|Ontario|QC|Quebec|BC|AB|MB|SK|NS|NB|NL|PE|YT|NT|NU)\b.*$/i', '', $keyword) ?? $keyword);
-
-        $unitNumber = null;
-
-        if (preg_match('/^(\d{1,5}[A-Za-z]?|PH\d+|TH\d+|[A-Za-z]{1,3}-?\d+)\s+(\d+[A-Za-z]?)\s+(.+)$/i', $keyword, $unitMatch)) {
-            $unitNumber = TrebPropertyHelper::normalizeUnitToken($unitMatch[1]);
-            $keyword = trim($unitMatch[2] . ' ' . $unitMatch[3]);
-        }
-
-        if (! preg_match('/^(\d+[A-Za-z]?)\s+(.+)$/', $keyword, $matches)) {
-            return null;
-        }
-
-        $streetNumber = $matches[1];
-        $rest = trim($matches[2]);
-        $tokens = preg_split('/\s+/', $rest) ?: [];
-        $streetTokens = [];
-
-        foreach ($tokens as $token) {
-            $streetTokens[] = $token;
-
-            if (TrebPropertyHelper::isStreetSuffixWord($token)) {
-                break;
-            }
-
-            if (count($streetTokens) >= 2) {
-                break;
-            }
-        }
-
-        if ($streetTokens === []) {
-            return null;
-        }
-
-        $streetPart = implode(' ', $streetTokens);
-        $streetName = '';
-
-        foreach ($streetTokens as $token) {
-            if (! TrebPropertyHelper::isStreetSuffixWord($token)) {
-                $streetName = $token;
-                break;
-            }
-        }
-
-        if ($streetName === '') {
-            $streetName = $streetTokens[0];
-        }
-
-        $parsed = [
-            'street_number' => $streetNumber,
-            'street_part' => $streetPart,
-            'street_name' => $streetName,
-        ];
-
-        if ($unitNumber !== null && $unitNumber !== '') {
-            $parsed['unit_number'] = $unitNumber;
-        }
-
-        return $parsed;
+        return \App\Support\AddressNormalizer::parseQuery($keyword);
     }
 
     /**
@@ -508,24 +442,7 @@ class LiveTrebPropertyFallbackService
 
     public function addressMatchesParsedSearch(string $address, array $parsed): bool
     {
-        $address = strtolower(trim($address));
-
-        if ($address === '') {
-            return false;
-        }
-
-        $number = strtolower(trim((string) ($parsed['street_number'] ?? '')));
-        $name = strtolower(trim((string) ($parsed['street_name'] ?? '')));
-
-        if ($number === '' || $name === '') {
-            return false;
-        }
-
-        if (! preg_match('/\b' . preg_quote($number, '/') . '\b/', $address)) {
-            return false;
-        }
-
-        return (bool) preg_match('/\b' . preg_quote($name, '/') . '\b/', $address);
+        return \App\Support\AddressNormalizer::addressMatches($address, $parsed);
     }
 
     protected function unitMatches(array $item, string $unit): bool

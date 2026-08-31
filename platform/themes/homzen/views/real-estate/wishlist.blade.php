@@ -25,6 +25,9 @@
             </section>
         @endif
     @else
-        <p class="text-center body-2">{{ __('You have not added any properties or projects to your wishlist.') }}</p>
+        <div class="text-center py-5 px-3" role="status">
+            <p class="body-2 mb-3">{{ __('You have not added any properties or projects to your wishlist.') }}</p>
+            <a class="tf-btn primary" href="{{ url('/map') }}">{{ __('Browse properties') }}</a>
+        </div>
     @endif
 </div>

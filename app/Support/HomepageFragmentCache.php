@@ -4,7 +4,6 @@ namespace App\Support;
 
 use Botble\Shortcode\Compilers\Shortcode;
 use Illuminate\Contracts\View\View;
-use Illuminate\Support\Facades\Cache;
 
 /**
  * Versioned HTML fragment cache for anonymous homepage SSR sections.
@@ -13,7 +12,7 @@ final class HomepageFragmentCache
 {
   private const VERSION_PREFIX = 'homepage_fragment_version_v1:';
 
-  private const CACHE_PREFIX = 'homepage_fragment_html_v1:';
+  private const CACHE_PREFIX = 'homepage_fragment_html_v4:';
 
   private const TTL_SECONDS = 3600;
 
@@ -75,12 +74,12 @@ final class HomepageFragmentCache
 
   public static function version(string $fragment): int
   {
-    return (int) Cache::get(self::VERSION_PREFIX . $fragment, 1);
+    return (int) SerikCache::get(self::VERSION_PREFIX . $fragment, 1);
   }
 
   public static function bump(string $fragment): void
   {
-    Cache::forever(self::VERSION_PREFIX . $fragment, self::version($fragment) + 1);
+    SerikCache::forever(self::VERSION_PREFIX . $fragment, self::version($fragment) + 1);
   }
 
   public static function bumpAll(): void
@@ -103,7 +102,7 @@ final class HomepageFragmentCache
 
   public static function rememberMenu(string $location, callable $render): string
   {
-    $suffix = app()->getLocale() . ':' . $location . ':mega-v7';
+    $suffix = app()->getLocale() . ':' . $location . ':mega-v8';
 
     return self::remember('header_menu', $render, $suffix);
   }

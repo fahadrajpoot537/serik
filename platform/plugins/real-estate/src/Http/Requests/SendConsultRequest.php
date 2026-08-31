@@ -2,7 +2,8 @@
 
 namespace Botble\RealEstate\Http\Requests;
 
-use Botble\Base\Facades\BaseHelper;
+use App\Rules\ConsultPhoneNumber;
+use App\Support\PhoneNumberNormalizer;
 use Botble\Base\Rules\OnOffRule;
 use Botble\Captcha\Facades\Captcha;
 use Botble\RealEstate\Enums\ConsultCustomFieldTypeEnum;
@@ -11,6 +12,7 @@ use Botble\RealEstate\Models\ConsultCustomField;
 use Botble\Support\Http\Requests\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\ValidationException;
 
 class SendConsultRequest extends Request
 {
@@ -21,7 +23,7 @@ class SendConsultRequest extends Request
         $rules = [
             'name' => ['required', 'string', 'max:220'],
             'email' => ['nullable', 'email'],
-            'phone' => 'nullable|string|' . BaseHelper::getPhoneValidationRule(),
+            'phone' => ['bail', 'required', 'string', new ConsultPhoneNumber()],
             'content' => ['required', 'string'],
         ];
 
@@ -33,7 +35,7 @@ class SendConsultRequest extends Request
         $hiddenFields = RealEstateHelper::getHiddenFieldsAtConsultForm();
 
         if ($hiddenFields) {
-            Arr::forget($rules, $hiddenFields);
+            Arr::forget($rules, array_values(array_diff($hiddenFields, ['phone'])));
         }
 
         if ($availableMandatoryFields) {
@@ -72,7 +74,38 @@ class SendConsultRequest extends Request
             };
         }
 
+        $rules['phone'] = ['bail', 'required', 'string', new ConsultPhoneNumber()];
+
         return $rules;
+    }
+
+    public function messages(): array
+    {
+        return [
+            'phone.required' => PhoneNumberNormalizer::REQUIRED_MESSAGE,
+        ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $phone = $this->input('phone');
+
+        if (is_string($phone)) {
+            $this->merge(['phone' => trim($phone)]);
+        }
+    }
+
+    protected function passedValidation(): void
+    {
+        $normalized = PhoneNumberNormalizer::normalize($this->input('phone'));
+
+        if ($normalized === null) {
+            throw ValidationException::withMessages([
+                'phone' => [PhoneNumberNormalizer::INVALID_MESSAGE],
+            ]);
+        }
+
+        $this->merge(['phone' => $normalized]);
     }
 
     public function attributes(): array
