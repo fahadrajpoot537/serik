@@ -23,7 +23,7 @@ class MediaFileController extends BaseController
     {
         try {
             if (! RvMedia::isChunkUploadEnabled()) {
-                $result = RvMedia::handleUpload(Arr::first($request->file('file')), $request->input('folder_id', 0));
+                $result = RvMedia::handleUpload(Arr::first(Arr::wrap($request->file('file'))), $request->input('folder_id', 0));
 
                 return $this->handleUploadResponse($result);
             }
