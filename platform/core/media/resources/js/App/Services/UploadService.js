@@ -51,7 +51,9 @@ export class UploadService {
                 formData.append('_token', $('meta[name="csrf-token"]').attr('content'))
                 formData.append('folder_id', Helpers.getRequestParams().folder_id)
                 formData.append('view_in', Helpers.getRequestParams().view_in)
-                formData.append('path', file.fullPath)
+                if (file.fullPath) {
+                    formData.append('path', file.fullPath)
+                }
             },
             chunksUploaded: (file, done) => {
                 _self.uploadProgressContainer.find('.progress-percent').html(`- <span class="text-info">100%</span>`)
@@ -195,7 +197,7 @@ export class UploadService {
     getDropZoneConfig() {
         return {
             url: this.uploadUrl,
-            uploadMultiple: !RV_MEDIA_CONFIG.chunk.enabled,
+            uploadMultiple: false,
             chunking: RV_MEDIA_CONFIG.chunk.enabled,
             forceChunking: true, // forces chunking when file.size < chunkSize
             parallelChunkUploads: false, // allows chunks to be uploaded in parallel (this is independent of the parallelUploads option)

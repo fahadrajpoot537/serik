@@ -459,6 +459,13 @@ class RvMedia
             ];
         }
 
+        if (! $fileUpload->isValid()) {
+            return [
+                'error' => true,
+                'message' => $this->uploadedFileErrorMessage($fileUpload),
+            ];
+        }
+
         $allowedMimeTypes = $this->getConfig('allowed_mime_types');
 
         $allowedToUploadAnyFileTypes = AdminHelper::isInAdmin(true) && $this->getConfig(
@@ -714,6 +721,30 @@ class RvMedia
         return round($size);
     }
 
+    public function uploadedFileErrorMessage(?UploadedFile $fileUpload): string
+    {
+        if (! $fileUpload instanceof UploadedFile) {
+            return trans('core/media::media.can_not_detect_file_type');
+        }
+
+        if ($fileUpload->isValid()) {
+            return trans('core/media::media.can_not_detect_file_type');
+        }
+
+        return match ($fileUpload->getError()) {
+            UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE => trans('core/media::media.file_too_big_readable_size', [
+                'size' => BaseHelper::humanFilesize((int) $this->getServerConfigMaxUploadFileSize()),
+            ]),
+            UPLOAD_ERR_PARTIAL => trans('core/media::media.validation.upload_network_error'),
+            UPLOAD_ERR_NO_FILE => trans('core/media::media.validation.uploaded_file_required'),
+            UPLOAD_ERR_NO_TMP_DIR, UPLOAD_ERR_CANT_WRITE => trans('core/media::media.unable_to_write', [
+                'folder' => $this->getUploadPath(),
+            ]),
+            UPLOAD_ERR_EXTENSION => trans('core/media::media.validation.uploaded_file_invalid_type'),
+            default => $fileUpload->getErrorMessage() ?: trans('core/media::media.validation.upload_network_error'),
+        };
+    }
+
     public function generateThumbnails(MediaFile $file, ?UploadedFile $fileUpload = null): bool
     {
         if (! $file->canGenerateThumbnails()) {
@@ -741,16 +772,16 @@ class RvMedia
         foreach ($this->getSizes() as $size) {
             $readableSize = explode('x', $size);
 
-            if (! $fileUpload || $this->isChunkUploadEnabled()) {
-                $fileUpload = $this->getRealPath($file->url);
+            $imageSource = $this->getRealPath($file->url);
 
-                if ($this->isUsingCloud()) {
-                    $fileUpload = @file_get_contents($fileUpload);
+            if ($this->isUsingCloud()) {
+                $imageSource = @file_get_contents($imageSource);
 
-                    if (! $fileUpload) {
-                        continue;
-                    }
+                if (! $imageSource) {
+                    continue;
                 }
+            } elseif (! $imageSource || ! File::exists($imageSource)) {
+                continue;
             }
 
             $thumbnailFileName = File::name($file->url) . '-' . $size . '.' . File::extension($file->url);
@@ -762,7 +793,7 @@ class RvMedia
             }
 
             $this->thumbnailService
-                ->setImage($fileUpload)
+                ->setImage($imageSource)
                 ->setSize($readableSize[0], $readableSize[1])
                 ->setDestinationPath(File::dirname($file->url))
                 ->setFileName($thumbnailFileName)

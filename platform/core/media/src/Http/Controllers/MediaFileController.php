@@ -9,6 +9,7 @@ use Botble\Media\Chunks\Receiver\FileReceiver;
 use Botble\Media\Facades\RvMedia;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
@@ -22,8 +23,14 @@ class MediaFileController extends BaseController
     public function postUpload(Request $request)
     {
         try {
+            $fileUpload = $this->resolveUploadedFile($request);
+
+            if (! $fileUpload instanceof UploadedFile || ! $fileUpload->isValid()) {
+                return RvMedia::responseError(RvMedia::uploadedFileErrorMessage($fileUpload));
+            }
+
             if (! RvMedia::isChunkUploadEnabled()) {
-                $result = RvMedia::handleUpload(Arr::first(Arr::wrap($request->file('file'))), $request->input('folder_id', 0));
+                $result = RvMedia::handleUpload($fileUpload, $request->input('folder_id', 0));
 
                 return $this->handleUploadResponse($result);
             }
@@ -64,6 +71,13 @@ class MediaFileController extends BaseController
         }
 
         return RvMedia::responseError($result['message']);
+    }
+
+    protected function resolveUploadedFile(Request $request): ?UploadedFile
+    {
+        $file = Arr::first(Arr::wrap($request->file('file')));
+
+        return $file instanceof UploadedFile ? $file : null;
     }
 
     public function postUploadFromEditor(Request $request)
