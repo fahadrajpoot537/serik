@@ -90,7 +90,7 @@
                             </li>
                             @if (RealEstateHelper::isRegisterEnabled())
                                 <li>
-                                    <a href="#modalRegister" class="tf-btn primary serik-hp-topbar__auth-btn serik-hp-topbar__auth-btn--join js-auth-open-register">{{ __('Join Us') }}</a>
+                                    <a href="#modalRegister" class="tf-btn primary serik-hp-topbar__auth-btn serik-hp-topbar__auth-btn--join js-auth-open-register">Join Us</a>
                                 </li>
                             @endif
                         </ul>
