@@ -3364,6 +3364,50 @@ class PropertyController extends BaseController
         $meiliUnavailable = false;
 
         if ($isListingKey) {
+            $mlsMysqlFirst = (bool) config('serik.search.mls_mysql_first', true);
+
+            // Exact ListingKey: MySQL unique external_id is authoritative for local
+            // inventory. Meili is often incomplete (index lag), so Meili-first made
+            // MLS search wait on a miss before the const unique lookup. Flag keeps
+            // the old Meili → MySQL order available for instant rollback.
+            if ($mlsMysqlFirst) {
+                $mlsHit = DB::table('re_properties')
+                    ->select(PropertyFulltextSearch::SEARCH_COLUMNS)
+                    ->where('moderation_status', 'approved')
+                    ->where('external_id', strtoupper($keyword))
+                    ->limit(1)
+                    ->first();
+                if (
+                    $mlsHit
+                    && class_exists(TrebPropertyHelper::class)
+                    && TrebPropertyHelper::isCommercialSubType($mlsHit->PropertySubType ?? null)
+                ) {
+                    $mlsHit = null;
+                }
+                if ($mlsHit) {
+                    $mappedMls = $this->mapLocalSearchCollection(collect([$mlsHit]));
+                    if ($mappedMls !== []) {
+                        return response()->json(
+                            $rememberSearch(TrebPropertyHelper::groupListingsByBuilding($mappedMls))
+                        );
+                    }
+                }
+
+                // Local miss → live AMP ingest (same as previous terminal MLS path).
+                $ingested = app(\Botble\RealEstate\Services\LiveTrebPropertyFallbackService::class)
+                    ->ingestByListingKey($keyword, true, false);
+                if ($ingested !== null) {
+                    $ordered = $this->hydrateSmartSearchRows([(int) $ingested->id], $top, false);
+                    if ($ordered !== []) {
+                        return response()->json(
+                            $rememberSearch(TrebPropertyHelper::groupListingsByBuilding($ordered))
+                        );
+                    }
+                }
+
+                return response()->json($rememberSearch([]));
+            }
+
             try {
                 $meiliTried = true;
                 $search = app(\Botble\RealEstate\Services\PropertySearchService::class);

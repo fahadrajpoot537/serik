@@ -153,6 +153,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Public property search (smart-search / browse helpers)
+    |--------------------------------------------------------------------------
+    */
+    'search' => [
+        // MLS ListingKey path: query MySQL unique external_id BEFORE Meilisearch.
+        // Meili often misses (index lag vs re_properties); waiting on Meili first made
+        // exact MLS lookups slow. Set SERIK_SEARCH_MLS_MYSQL_FIRST=false to restore
+        // the previous Meili → MySQL → AMP order.
+        'mls_mysql_first' => filter_var(env('SERIK_SEARCH_MLS_MYSQL_FIRST', true), FILTER_VALIDATE_BOOLEAN),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Geo block (public site)
     |--------------------------------------------------------------------------
     | When enabled, only listed ISO country codes may view the public site.
