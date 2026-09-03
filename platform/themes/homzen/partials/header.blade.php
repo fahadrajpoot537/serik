@@ -22,6 +22,12 @@
     width:100%;
     font-size:16px;
 }
+.search-box input:focus,
+.search-box input:focus-visible {
+    border: none;
+    outline: none;
+    box-shadow: none;
+}
 
 .clear-btn {
     cursor:pointer;
@@ -556,7 +562,7 @@
     }
     .main-header .logo-box {
         min-width: 0;
-        flex: 0 1 auto;
+        flex: 1 1 auto;
     }
     .main-header .logo {
         max-width: min(200px, 46vw);

@@ -113,7 +113,8 @@
 @if ($isSerikHomepage)
 <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" rel="stylesheet"></noscript>
 @else
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
@@ -135,10 +136,92 @@
 @if ($isSerikHomepage)
 {{-- MUST load AFTER Theme::header() so redesign beats style.css --}}
 {{-- Path-only href so CSS stays same-origin (CSP 'self') on :8000, localhost, or XAMPP. --}}
-<link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp60">
+<link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp64">
 @endif
 {{-- Site chrome last: shared navbar/footer + compact laptop scaling --}}
-<link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc30">
+<link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc35">
+@if ($isSerikHomepage)
+        <script>
+        (function () {
+            if (window.__serikDeferredThirdParty) {
+                return;
+            }
+            window.__serikDeferredThirdParty = true;
+
+            function loadClarity() {
+                if (window.__serikClarityLoaded) {
+                    return;
+                }
+                window.__serikClarityLoaded = true;
+                (function (c, l, a, r, i, t, y) {
+                    c[a] = c[a] || function () { (c[a].q = c[a].q || []).push(arguments); };
+                    t = l.createElement(r);
+                    t.async = 1;
+                    t.src = 'https://www.clarity.ms/tag/' + i;
+                    y = l.getElementsByTagName(r)[0];
+                    y.parentNode.insertBefore(t, y);
+                })(window, document, 'clarity', 'script', 'xu00ale4yi');
+            }
+
+            function loadTawk() {
+                if (window.__serikTawkLoaded) {
+                    return;
+                }
+                window.__serikTawkLoaded = true;
+
+                window.Tawk_API = window.Tawk_API || {};
+                window.Tawk_LoadStart = new Date();
+                var Tawk_API = window.Tawk_API;
+                Tawk_API.customStyle = {
+                    visibility: {
+                        desktop: { position: 'br', xOffset: '20px', yOffset: '20px' },
+                        mobile: { position: 'br', xOffset: '12px', yOffset: '80px' }
+                    }
+                };
+
+                function serikTawkBottom80() {
+                    if (window.innerWidth > 991) {
+                        return;
+                    }
+                    try {
+                        document.querySelectorAll('iframe').forEach(function (frame) {
+                            var title = String(frame.getAttribute('title') || '').toLowerCase();
+                            if (title.indexOf('chat') === -1) {
+                                return;
+                            }
+                            frame.style.setProperty('bottom', '80px', 'important');
+                            frame.style.setProperty('right', '12px', 'important');
+                            frame.style.setProperty('left', 'auto', 'important');
+                        });
+                    } catch (e) {}
+                }
+
+                Tawk_API.onLoad = function () {
+                    serikTawkBottom80();
+                    setTimeout(serikTawkBottom80, 500);
+                };
+
+                var s1 = document.createElement('script');
+                var s0 = document.getElementsByTagName('script')[0];
+                s1.async = true;
+                s1.src = 'https://embed.tawk.to/6a6d0ff4f9ea531d4e9995a8/1jut0cl8v';
+                s1.charset = 'UTF-8';
+                s1.setAttribute('crossorigin', '*');
+                s0.parentNode.insertBefore(s1, s0);
+            }
+
+            function loadThirdParty() {
+                loadClarity();
+                loadTawk();
+            }
+
+            ['scroll', 'pointerdown', 'keydown', 'touchstart'].forEach(function (eventName) {
+                window.addEventListener(eventName, loadThirdParty, { once: true, passive: true });
+            });
+            window.setTimeout(loadThirdParty, 8000);
+        })();
+        </script>
+@else
         <script type="text/javascript">
             (function(c,l,a,r,i,t,y){
                 c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
@@ -188,6 +271,7 @@
         s0.parentNode.insertBefore(s1,s0);
         })();
         </script>
+@endif
         <style>
             /* Keep Tawk.to bubble on the right (desktop unchanged) */
             iframe[title="chat widget"],

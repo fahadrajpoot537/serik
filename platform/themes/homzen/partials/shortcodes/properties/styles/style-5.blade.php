@@ -20,7 +20,7 @@
 
     $propertiesForSale = $propertiesForSale ?? collect();
     $propertiesSold = $propertiesSold ?? collect();
-    $eagerImageLimit = \App\Support\SerikHomepage::isHomepageRequest() ? 3 : 0;
+    $eagerImageLimit = 0;
     $homepageCardLimit = 6;
 @endphp
 

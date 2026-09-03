@@ -116,16 +116,6 @@ class NewsletterManager extends Manager implements Factory
                     version: '1.3.7'
                 );
 
-            add_filter('theme_front_meta', function (?string $html): string {
-                $image = theme_option('newsletter_popup_image');
-
-                if (! $image) {
-                    return $html;
-                }
-
-                return $html . '<link rel="preload" as="image" href="' . e(\App\Support\SerikMediaUrl::newsletterPopupImage($image)) . '" />';
-            });
-
             add_filter(THEME_FRONT_BODY, function (?string $html): string {
                 return $html . view('plugins/newsletter::partials.newsletter-popup');
             });

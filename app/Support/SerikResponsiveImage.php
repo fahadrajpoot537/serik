@@ -42,6 +42,10 @@ final class SerikResponsiveImage
             return $markup;
         }
 
+        if ($size === null && isset($attributes['size']) && is_string($attributes['size'])) {
+            $size = $attributes['size'];
+        }
+
         if (str_contains($markup, 'srcset=')) {
             return $markup;
         }

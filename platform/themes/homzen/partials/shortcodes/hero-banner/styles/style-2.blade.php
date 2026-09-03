@@ -1,5 +1,6 @@
 @php
     use App\Support\ImageAlt;
+    use App\Support\CmsWebp;
     use App\Support\SerikMediaUrl;
 
     $titleColor = $shortcode->title_color ?: '#161e2d';
@@ -15,6 +16,9 @@
     $heroMediaUrl = $firstSlider
         ? SerikMediaUrl::cmsImageUrl($firstSlider, 'large')
         : ($shortcode->background_image ? SerikMediaUrl::cmsImageUrl($shortcode->background_image, 'large') : null);
+    if (is_string($heroMediaUrl) && $heroMediaUrl !== '') {
+        $heroMediaUrl = CmsWebp::preferWebpUrl($heroMediaUrl) ?: $heroMediaUrl;
+    }
 @endphp
 
 @if ($heroMediaUrl)

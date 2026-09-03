@@ -108,6 +108,20 @@ class AppServiceProvider extends ServiceProvider
             return str_replace($url, $webp, $html);
         }, 20, 2);
 
+        add_filter('core_media_image', static function ($html, $url, $alt = null, $attributes = [], $secure = false) {
+            if (! is_string($html) || $html === '' || ! is_string($url) || $url === '') {
+                return $html;
+            }
+
+            $markup = $html instanceof HtmlString ? $html->toHtml() : (string) $html;
+            $size = null;
+            if (is_array($attributes)) {
+                $size = $attributes['size'] ?? $attributes['data-size'] ?? null;
+            }
+
+            return new HtmlString(\App\Support\SerikResponsiveImage::enhance($markup, $url, is_string($size) ? $size : null, is_array($attributes) ? $attributes : []));
+        }, 30, 5);
+
         if (defined('BASE_ACTION_PUBLIC_RENDER_SINGLE')) {
             add_action(BASE_ACTION_PUBLIC_RENDER_SINGLE, function (string $screen, object $data): void {
                 SerikSeo::applyForModel($screen, $data);
@@ -310,6 +324,14 @@ class AppServiceProvider extends ServiceProvider
                 $html
             ) ?? $html;
         };
+
+        add_filter(THEME_FRONT_HEADER, static function (?string $html): ?string {
+            return \App\Support\SerikHomepageAssets::optimizeHeaderHtml($html);
+        }, 45);
+
+        add_filter(THEME_FRONT_FOOTER, static function (?string $html): ?string {
+            return \App\Support\SerikHomepageAssets::optimizeFooterHtml($html);
+        }, 45);
 
         add_filter(THEME_FRONT_HEADER, $rewriteLegacyMediaUrls, 999);
         add_filter(THEME_FRONT_FOOTER, $rewriteLegacyMediaUrls, 999);

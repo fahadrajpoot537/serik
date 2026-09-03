@@ -607,16 +607,48 @@
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/intl-tel-input@19.5.6/build/js/intlTelInput.min.js"></script>
 <script>
-    // Initialize Phone Input if you want international formatting (optional styling)
-    const phoneInput = document.querySelector("#regPhone");
-    if (phoneInput) {
-        window.intlTelInput(phoneInput, {
-            utilsScript: "https://cdn.jsdelivr.net/npm/intl-tel-input@19.5.6/build/js/utils.js",
-            initialCountry: "ca"
+    function ensureIntlTelInputScript(done) {
+        if (typeof window.intlTelInput === 'function') {
+            done();
+            return;
+        }
+
+        const src = 'https://cdn.jsdelivr.net/npm/intl-tel-input@19.5.6/build/js/intlTelInput.min.js';
+        const existing = document.querySelector('script[src="' + src + '"]');
+        if (existing) {
+            existing.addEventListener('load', done, { once: true });
+            return;
+        }
+
+        const script = document.createElement('script');
+        script.src = src;
+        script.async = true;
+        script.onload = done;
+        document.body.appendChild(script);
+    }
+
+    function initRegPhoneInput() {
+        const phoneInput = document.querySelector('#regPhone');
+        if (!phoneInput || phoneInput.dataset.intlReady === '1') {
+            return;
+        }
+
+        ensureIntlTelInputScript(function () {
+            if (typeof window.intlTelInput !== 'function') {
+                return;
+            }
+            if (phoneInput.dataset.intlReady === '1') {
+                return;
+            }
+            phoneInput.dataset.intlReady = '1';
+            window.intlTelInput(phoneInput, {
+                utilsScript: 'https://cdn.jsdelivr.net/npm/intl-tel-input@19.5.6/build/js/utils.js',
+                initialCountry: 'ca',
+            });
         });
     }
+    window.initRegPhoneInput = initRegPhoneInput;
 
     // Unified auth modal helpers
     let authModalInstance = null;
@@ -705,6 +737,10 @@
     }
 
     function openAuthModal(mode = 'login') {
+        if (typeof window.__serikLoadHomepageIdleScripts === 'function') {
+            window.__serikLoadHomepageIdleScripts();
+        }
+
         // Show immediately — never wait on CSRF (homepage HTML is cached; token refresh is ~0.5s).
         const modalEl = document.getElementById('modalLogin');
         toggleAuthMode(mode);
@@ -863,6 +899,7 @@
             // reset steps
             document.querySelectorAll('.reg-step').forEach(el => el.classList.remove('active'));
             document.getElementById('regStep1').classList.add('active');
+            initRegPhoneInput();
         } else {
             slider.classList.remove('show-register');
             toggleForgotPassword(false);

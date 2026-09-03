@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Support\HomepageResponseCache;
+use App\Support\SerikHomepageAssets;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -46,6 +47,7 @@ class CacheHomepageResponseMiddleware
             && str_contains((string) $response->headers->get('Content-Type'), 'text/html')
         ) {
             $html = HomepageResponseCache::alignLoopbackOrigins((string) $response->getContent(), $request);
+            $html = SerikHomepageAssets::optimizeDocumentHtml($html);
             $response->setContent($html);
             HomepageResponseCache::put($request, $html);
             $response->headers->set('X-Serik-Homepage-Cache', 'MISS');

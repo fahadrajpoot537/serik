@@ -32,6 +32,8 @@ final class SerikHomepageAssets
         'announcement',
         'newsletter',
         'intlTelInput',
+        'fancybox',
+        'tabler-icons',
     ];
 
     /**
@@ -46,6 +48,9 @@ final class SerikHomepageAssets
         'js-validation',
         'toast.js',
         'wow.min.js',
+        'visitor-location.js',
+        'lazyload.min.js',
+        'keyboard-a11y.js',
     ];
 
     /**
@@ -98,6 +103,42 @@ final class SerikHomepageAssets
         }
 
         return $html . self::idleLoaderSnippet();
+    }
+
+    /**
+     * Full HTML pass for homepage (Theme::header/footer fragments + inline assets).
+     */
+    public static function optimizeDocumentHtml(string $html): string
+    {
+        if (! SerikHomepage::isHomepageRequest() || $html === '') {
+            return $html;
+        }
+
+        foreach (self::REMOVE_PATTERNS as $pattern) {
+            $html = preg_replace(
+                '/<link[^>]*href="[^"]*' . preg_quote($pattern, '/') . '[^"]*"[^>]*>\s*/i',
+                '',
+                $html
+            ) ?? $html;
+        }
+
+        foreach (self::ASYNC_PATTERNS as $pattern) {
+            $html = self::makeStylesheetAsync($html, $pattern);
+        }
+
+        foreach (self::DEFER_SCRIPT_PATTERNS as $pattern) {
+            $html = self::deferScriptTag($html, $pattern);
+        }
+
+        foreach (self::IDLE_SCRIPT_PATTERNS as $pattern) {
+            $html = self::stripScriptForIdleLoad($html, $pattern);
+        }
+
+        if (! str_contains($html, '__serikHomepageIdleScripts')) {
+            $html = str_replace('</body>', self::idleLoaderSnippet() . '</body>', $html);
+        }
+
+        return $html;
     }
 
     private static function deferScriptTag(string $html, string $pattern): string
@@ -155,7 +196,15 @@ final class SerikHomepageAssets
         }
         window.__serikHomepageIdleLoaded = true;
         queue.forEach(inject);
+        if (typeof window.initRegPhoneInput === 'function') {
+            window.initRegPhoneInput();
+        }
+        if (typeof window.initSerikRecaptcha === 'function') {
+            window.initSerikRecaptcha();
+        }
     }
+
+    window.__serikLoadHomepageIdleScripts = loadAll;
 
     function onModalOpen() {
         loadAll();

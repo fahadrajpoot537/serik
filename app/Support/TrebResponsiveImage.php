@@ -40,10 +40,6 @@ final class TrebResponsiveImage
             'loading' => $lazy ? 'lazy' : 'eager',
         ];
 
-        if (! $lazy) {
-            $attrs['fetchpriority'] = 'high';
-        }
-
         return $attrs;
     }
 

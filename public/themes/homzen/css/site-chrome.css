@@ -173,7 +173,6 @@
 
 .main-header .smart-search {
   min-width: 0 !important;
-  max-width: min(380px, 100%) !important;
 }
 
 /* Contact Us + phone locked to far right */
@@ -186,6 +185,9 @@
   margin-left: auto !important;
   margin-right: 0 !important;
   padding-right: 0 !important;
+  flex-shrink: 0 !important;
+  z-index: 3;
+  position: relative;
 }
 .main-header .header-account {
   flex: 0 0 auto;
@@ -247,6 +249,9 @@
 
 .main-header .main-menu .navigation > li {
   position: relative;
+  margin: 0 !important;
+  padding: 0 !important;
+  padding-inline-end: 0 !important;
 }
 
 @media (min-width: 992px) {
@@ -510,59 +515,104 @@
     box-shadow: 0 12px 30px rgba(11, 76, 159, 0.24) !important;
   }
 
-  .main-header .logo img {
+  .main-header .logo img,
+  #page-home .main-header .logo img {
     max-height: 44px !important;
   }
 
-  .main-header .logo-box {
-    min-width: 0;
-    flex: 0 0 auto;
+  /* 3 zones: [logo+search] [menu] [heart+cta+phone] — none may overlap */
+  .main-header .serik-nav-bar,
+  #page-home .main-header .serik-nav-bar {
     gap: 0.75rem !important;
   }
 
-  .main-header .mobile-search-panel {
-    min-width: 0;
-    flex: 0 0 auto;
-  }
-
-  .main-header .smart-search {
+  .main-header .logo-box,
+  #page-home .main-header .logo-box {
+    flex: 1 1 auto !important;
     min-width: 0 !important;
-    flex: 0 0 auto;
-    width: clamp(240px, 20vw, 380px);
-    max-width: 380px;
+    max-width: none !important;
+    gap: 0.75rem !important;
   }
 
-  .main-header .smart-search .search-box {
+  .main-header .logo,
+  #page-home .main-header .logo {
+    flex: 0 0 auto;
+    max-width: 160px;
+  }
+
+  .main-header .mobile-search-panel,
+  #page-home .main-header .mobile-search-panel {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    width: auto !important;
+  }
+
+  .main-header .smart-search,
+  #page-home .main-header .smart-search {
+    flex: 1 1 auto !important;
+    min-width: 220px !important;
+    width: auto !important;
+    max-width: none !important;
+  }
+
+  .main-header .smart-search .search-box,
+  #page-home .main-header .smart-search .search-box {
     background: #fff !important;
     border-color: transparent !important;
+    border-radius: 8px !important;
   }
 
   .main-header .nav-outer,
   .main-header .main-menu,
   .main-header .navbar-collapse,
-  #navbarSupportedContent {
+  #navbarSupportedContent,
+  #page-home .main-header .nav-outer,
+  #page-home .main-header .main-menu {
+    flex: 0 1 auto !important;
+    min-width: 0;
     background: transparent !important;
   }
 
-  .main-header .nav-outer {
-    padding-left: 1.35rem;
+  .main-header .nav-outer,
+  #page-home .main-header .nav-outer {
+    padding-left: 0.25rem;
+    overflow: visible !important;
   }
 
-  .main-header .main-menu .navigation {
+  .main-header .main-menu .navigation,
+  #page-home .main-header .main-menu .navigation {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
-    gap: clamp(6px, 1vw, 16px);
-    padding-left: 0.5rem;
-    padding-right: 0.85rem;
+    justify-content: center;
+    flex-wrap: nowrap;
+    gap: 0.15rem;
+    padding: 0;
   }
 
-  .main-header .main-menu .navigation > li > a {
+  .main-header .main-menu .navigation > li,
+  #page-home .main-header .main-menu .navigation > li {
+    margin: 0 !important;
+    padding: 0 !important;
+    padding-inline-end: 0 !important;
+    flex: 0 0 auto;
+  }
+
+  .main-header .main-menu .navigation > li > a,
+  #page-home .main-header .main-menu .navigation > li > a {
     color: #fff !important;
-    padding: 0.45rem 0.1rem !important;
+    padding: 0.4rem 0.7rem !important;
     border-radius: 0;
-    font-size: 0.95rem !important;
+    font-size: 0.9rem !important;
     font-weight: 500 !important;
+  }
+
+  .main-header .serik-nav-right,
+  #page-home .main-header .serik-nav-right {
+    flex: 0 0 auto !important;
+    flex-shrink: 0 !important;
+    margin-left: 0.35rem !important;
+    gap: 0.5rem !important;
+    z-index: 4;
   }
 
   .main-header .main-menu .navigation > li:hover > a,
@@ -650,43 +700,33 @@
 
   .main-header .logo-box,
   #page-home .main-header .logo-box {
-    gap: 0.45rem !important;
+    max-width: none !important;
+    gap: 0.5rem !important;
   }
 
-  .main-header .smart-search,
-  #page-home .main-header .smart-search {
-    width: clamp(200px, 18vw, 300px) !important;
-    max-width: 300px !important;
-  }
   .main-header .smart-search .search-box,
   .main-header .smart-search .search-box input,
   #page-home .main-header .smart-search .search-box,
   #page-home .main-header .smart-search .search-box input {
-    font-size: 0.72rem !important;
+    font-size: 0.78rem !important;
   }
   .main-header .smart-search .search-box,
   #page-home .main-header .smart-search .search-box {
-    padding-left: 0.55rem !important;
-    padding-right: 0.55rem !important;
+    padding-left: 0.65rem !important;
+    padding-right: 0.65rem !important;
+    border-radius: 8px !important;
   }
 
-  .main-header .main-menu .navigation,
-  #page-home .main-header .main-menu .navigation {
-    gap: clamp(6px, 0.9vw, 14px) !important;
-    justify-content: flex-end;
-    padding-left: 0.75rem;
-    padding-right: 0.5rem;
-  }
   .main-header .main-menu .navigation > li > a,
   #page-home .main-header .main-menu .navigation > li > a {
-    font-size: 0.8125rem !important;
-    padding: 0.3rem 0.02rem !important;
+    font-size: 0.82rem !important;
+    padding: 0.32rem 0.5rem !important;
     font-weight: 500 !important;
   }
 
   .serik-portal-nav__actions,
   #page-home .serik-portal-nav__actions {
-    gap: 0.35rem !important;
+    gap: 0.4rem !important;
   }
   .serik-portal-nav__cta,
   .serik-hp-nav__cta,
@@ -702,17 +742,17 @@
   }
 }
 
-/* Tighter laptops: shrink menu/search further — keep phone visible */
+/* Tighter laptops: hide phone, keep search + menu + heart in one row */
 @media (min-width: 992px) and (max-width: 1279.98px) {
-  .main-header .main-menu .navigation > li > a,
-  #page-home .main-header .main-menu .navigation > li > a {
-    font-size: 0.75rem !important;
+  .main-header .logo-box,
+  #page-home .main-header .logo-box {
+    max-width: none !important;
   }
 
-  .main-header .smart-search,
-  #page-home .main-header .smart-search {
-    width: clamp(170px, 16vw, 240px) !important;
-    max-width: 240px !important;
+  .main-header .main-menu .navigation > li > a,
+  #page-home .main-header .main-menu .navigation > li > a {
+    font-size: 0.8rem !important;
+    padding: 0.3rem 0.42rem !important;
   }
 
   .serik-portal-nav__map,
@@ -735,26 +775,22 @@
 
   .main-header .logo,
   #page-home .main-header .logo {
-    max-width: min(120px, 14vw);
+    max-width: min(112px, 13vw);
   }
   .main-header .logo img,
   #page-home .main-header .logo img {
     max-height: 30px !important;
   }
 
-  .main-header .smart-search,
-  #page-home .main-header .smart-search {
-    width: 170px !important;
-    max-width: 170px !important;
+  .main-header .logo-box,
+  #page-home .main-header .logo-box {
+    max-width: none !important;
   }
 
-  .main-header .main-menu .navigation,
-  #page-home .main-header .main-menu .navigation {
-    gap: 2px !important;
-  }
   .main-header .main-menu .navigation > li > a,
   #page-home .main-header .main-menu .navigation > li > a {
-    font-size: 0.7rem !important;
+    font-size: 0.75rem !important;
+    padding: 0.26rem 0.32rem !important;
   }
 
   .serik-portal-nav__cta,
@@ -773,9 +809,51 @@
 
 /* Header smart-search dropdown labels */
 .smart-search .search-box {
-  border-radius: 999px !important;
+  border-radius: 8px !important;
   border: 1px solid var(--p-line) !important;
   background: var(--p-surface) !important;
+}
+
+/* No inner focus ring while typing — keep search behavior unchanged */
+.main-header .smart-search .search-box,
+.main-header .smart-search .search-box:focus-within,
+#page-home .main-header .smart-search .search-box,
+#page-home .main-header .smart-search .search-box:focus-within {
+  outline: none !important;
+  box-shadow: none !important;
+}
+@media (min-width: 992px) {
+  .main-header .smart-search .search-box,
+  .main-header .smart-search .search-box:focus-within,
+  #page-home .main-header .smart-search .search-box,
+  #page-home .main-header .smart-search .search-box:focus-within {
+    border-color: transparent !important;
+  }
+}
+.main-header .smart-search input,
+.main-header .smart-search input:focus,
+.main-header .smart-search input:focus-visible,
+#page-home .main-header .smart-search input,
+#page-home .main-header .smart-search input:focus,
+#page-home .main-header .smart-search input:focus-visible,
+#smartInput,
+#smartInput:focus,
+#smartInput:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+@media (min-width: 992px) {
+  .main-header .serik-nav-right,
+  #page-home .main-header .serik-nav-right {
+    gap: 0.35rem !important;
+  }
+
+  .main-header .serik-portal-nav__actions,
+  #page-home .main-header .serik-portal-nav__actions {
+    gap: 0.35rem !important;
+  }
 }
 #searchDropdown {
   border-radius: 18px !important;
@@ -1605,8 +1683,8 @@ select:focus-visible {
   }
 
   .main-header .logo-box {
-    max-width: min(360px, 40%);
-    flex: 0 1 auto;
+    max-width: none;
+    flex: 1 1 auto;
   }
 
   .main-header .nav-outer,
