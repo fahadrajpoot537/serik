@@ -84,14 +84,13 @@
                     </a>
                 @else
                     <div class="register serik-hp-topbar__auth">
-                        <ul class="d-flex">
+                        <ul class="d-flex align-items-center serik-hp-topbar__auth-list">
                             <li>
-                                <a href="#modalLogin" class="js-auth-open-login">{{ __('Login') }}</a>
+                                <a href="#modalLogin" class="tf-btn style-border serik-hp-topbar__auth-btn serik-hp-topbar__auth-btn--login js-auth-open-login">{{ __('Login') }}</a>
                             </li>
                             @if (RealEstateHelper::isRegisterEnabled())
-                                <li class="serik-hp-topbar__sep" aria-hidden="true">/</li>
                                 <li>
-                                    <a href="#modalRegister" class="js-auth-open-register">{{ __('Register') }}</a>
+                                    <a href="#modalRegister" class="tf-btn primary serik-hp-topbar__auth-btn serik-hp-topbar__auth-btn--join js-auth-open-register">{{ __('Join Us') }}</a>
                                 </li>
                             @endif
                         </ul>

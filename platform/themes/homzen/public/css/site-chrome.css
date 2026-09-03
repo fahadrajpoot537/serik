@@ -101,6 +101,84 @@
   white-space: nowrap;
 }
 
+/* Top-bar Login / Join Us — reuse theme tf-btn (outline + primary), sized for chrome */
+.serik-hp-topbar__auth-list {
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.serik-hp-topbar__auth-list li {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.serik-hp-topbar__auth .serik-hp-topbar__auth-btn,
+.serik-hp-topbar__auth a.tf-btn {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  padding: 0.32rem 0.95rem !important;
+  min-height: 2rem;
+  border-radius: 999px !important;
+  font-size: 0.8125rem !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+  text-decoration: none !important;
+  white-space: nowrap !important;
+  max-width: none !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  box-shadow: none !important;
+}
+.serik-hp-topbar__auth-btn--login,
+.serik-hp-topbar__auth a.tf-btn.style-border {
+  color: var(--serik-reference-blue) !important;
+  background: transparent !important;
+  border: 1.5px solid var(--serik-reference-blue) !important;
+}
+.serik-hp-topbar__auth-btn--login:hover,
+.serik-hp-topbar__auth a.tf-btn.style-border:hover {
+  color: #fff !important;
+  background: var(--serik-reference-blue) !important;
+  border-color: var(--serik-reference-blue) !important;
+}
+.serik-hp-topbar__auth-btn--join,
+.serik-hp-topbar__auth a.tf-btn.primary {
+  color: #fff !important;
+  background: var(--serik-reference-blue) !important;
+  border: 1.5px solid var(--serik-reference-blue) !important;
+}
+.serik-hp-topbar__auth-btn--join:hover,
+.serik-hp-topbar__auth a.tf-btn.primary:hover {
+  color: #fff !important;
+  background: var(--serik-reference-blue-dark) !important;
+  border-color: var(--serik-reference-blue-dark) !important;
+}
+.serik-hp-topbar__sep {
+  display: none !important;
+}
+
+/* Homepage premium uses #page-home auth link font rules — keep pill buttons consistent */
+#page-home .serik-hp-topbar__auth .serik-hp-topbar__auth-btn,
+#page-home .serik-hp-topbar__auth a.tf-btn {
+  font-size: 0.8125rem !important;
+  font-weight: 700 !important;
+  color: inherit;
+}
+#page-home .serik-hp-topbar__auth-btn--login,
+#page-home .serik-hp-topbar__auth a.tf-btn.style-border {
+  color: var(--serik-reference-blue) !important;
+}
+#page-home .serik-hp-topbar__auth-btn--login:hover,
+#page-home .serik-hp-topbar__auth a.tf-btn.style-border:hover {
+  color: #fff !important;
+}
+#page-home .serik-hp-topbar__auth-btn--join,
+#page-home .serik-hp-topbar__auth a.tf-btn.primary {
+  color: #fff !important;
+}
+
 @media (max-width: 1199.98px) {
   .serik-hp-topbar__tools a:nth-child(n+3) {
     display: none;
