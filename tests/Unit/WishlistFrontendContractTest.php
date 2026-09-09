@@ -39,7 +39,8 @@ class WishlistFrontendContractTest extends TestCase
     {
         $controller = file_get_contents(base_path('app/Http/Controllers/AccountWishlistController.php'));
 
-        $this->assertStringContainsString("Auth::guard('account')->id()", $controller);
+        $this->assertStringContainsString('SerikAccountAuth::id()', $controller);
+        $this->assertStringNotContainsString("Auth::guard('account')->id()", $controller);
         $this->assertStringNotContainsString("input('user_id'", $controller);
         $this->assertStringNotContainsString("input('account_id'", $controller);
         $this->assertStringContainsString("'action' => ['nullable', 'in:add,remove,toggle']", $controller);

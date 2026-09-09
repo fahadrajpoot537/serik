@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\SerikAccountAuth;
 use App\Support\AccountWishlist;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 
 class AccountWishlistController extends Controller
 {
@@ -88,9 +88,7 @@ class AccountWishlistController extends Controller
 
     private function accountId(): ?int
     {
-        $id = Auth::guard('account')->id();
-
-        return $id ? (int) $id : null;
+        return SerikAccountAuth::id();
     }
 
     private function importLegacyCookie(Request $request, int $accountId): void
