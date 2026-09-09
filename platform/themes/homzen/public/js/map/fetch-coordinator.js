@@ -263,7 +263,12 @@
 
     function onMapMoveEnd(buildRequest) {
         const state = global.HsMapInteractionState;
-        if (state && state.isListingOpen()) {
+        // isListingOpen is optional — older interaction-state builds omit it.
+        // Calling a missing method threw and blocked every drag refetch on live.
+        if (state && typeof state.isListingOpen === 'function' && state.isListingOpen()) {
+            return;
+        }
+        if (state && typeof state.isClusterPanelOpen === 'function' && state.isClusterPanelOpen()) {
             return;
         }
         if (global.autoCenteringMap) {

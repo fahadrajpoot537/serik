@@ -5601,7 +5601,7 @@ position: absolute;
 <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.3/mapbox-gl-draw.js"></script>
 <script src="{{ Theme::asset()->url('js/map/interaction-state.js') }}?v={{ get_cms_version() }}"></script>
 <script src="{{ Theme::asset()->url('js/map/marker-manager.js') }}?v={{ get_cms_version() }}"></script>
-<script src="{{ Theme::asset()->url('js/map/fetch-coordinator.js') }}?v={{ get_cms_version() }}-mf5"></script>
+<script src="{{ Theme::asset()->url('js/map/fetch-coordinator.js') }}?v={{ get_cms_version() }}-mf6"></script>
 @if (request()->boolean('hs_map_trace') || request()->cookie('hs_map_trace'))
 <script src="{{ Theme::asset()->url('js/map/map-trace.js') }}?v={{ get_cms_version() }}"></script>
 @endif
@@ -8812,6 +8812,7 @@ function flyMapToDetectedLocation(detectedLocation) {
         && Math.abs(map.getZoom() - targetZoom) < 0.25;
 
     autoCenteringMap = true;
+    window.autoCenteringMap = true;
     let centeringFinished = false;
     let fallbackTimer = null;
 
@@ -8821,6 +8822,7 @@ function flyMapToDetectedLocation(detectedLocation) {
         }
         centeringFinished = true;
         autoCenteringMap = false;
+        window.autoCenteringMap = false;
         if (fallbackTimer) {
             clearTimeout(fallbackTimer);
             fallbackTimer = null;
@@ -9094,9 +9096,13 @@ function getTransactionFromUrl() {
             if (isClusterPanelOpen()) return;
             if (!window.HsMapFetchCoordinator?.movedEnoughToRefetch?.(map)) return;
             skipSeoUrlOnNextLoad = true;
-            if (window.HsMapFetchCoordinator?.onMapMoveEnd) {
-                window.HsMapFetchCoordinator.onMapMoveEnd(buildMapPropertiesRequest);
-                return;
+            try {
+                if (window.HsMapFetchCoordinator?.onMapMoveEnd) {
+                    window.HsMapFetchCoordinator.onMapMoveEnd(buildMapPropertiesRequest);
+                    return;
+                }
+            } catch (err) {
+                console.warn('Map moveend coordinator failed; falling back', err);
             }
             loadProperties({ fromMapMove: true, delayMs: 180 });
         }, 120);
