@@ -238,7 +238,7 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
                     && empty($filters['keyword'])
                 ) {
                     $search = app(\Botble\RealEstate\Services\PropertySearchService::class);
-                    $ids = $search->searchIds('', [
+                    $meiliOpts = [
                         'limit' => max(200, ((int) ($params['paginate']['per_page'] ?? 12)) * 20),
                         'subtypes' => $subtypes,
                         'statuses' => [
@@ -250,7 +250,14 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
                             'Active Under Contract',
                         ],
                         'sort' => ['id:desc'],
-                    ]);
+                    ];
+                    $browseType = (string) ($filters['type'] ?? '');
+                    if (in_array($browseType, [PropertyTypeEnum::RENT, 'rent', 'lease'], true)) {
+                        $meiliOpts['transactions'] = ['For Lease', 'For Sub-Lease'];
+                    } elseif ($browseType === PropertyTypeEnum::SALE || $browseType === 'sale') {
+                        $meiliOpts['transaction'] = 'For Sale';
+                    }
+                    $ids = $search->searchIds('', $meiliOpts);
                     if (is_array($ids) && $ids !== []) {
                         $this->model = $this->model->whereIn('re_properties.id', $ids);
                         $appliedMeili = true;
@@ -448,14 +455,13 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
             if ($pagedBrowse && $locationSearch !== '' && ! $isDistrictCity) {
                 // Listing pages hydrate 12 Meili IDs in browsePageIdsViaMeili.
                 // Skip 800–8000 city whereIn (and JSON district scans) on TTFB.
-                // Meili down: address LIKE so SQL LIMIT 12 stays in-city.
+                // Sold / Meili-down: always pin city so SQL pagination stays in-city.
                 // House/condo filters skip the newest-N id window (condo batches
                 // otherwise blank every …-houses-for-sale landing).
-                if (! $search->isAvailable()) {
-                    $skipWindow = $meiliSubtypes !== [] || ! empty($filters['subtypes']);
-                    if (! $skipWindow) {
-                        $search->constrainQueryToCityViaLocation($this->model, $locationSearch, true, false);
-                    }
+                $mustPinCity = $wantSold || ! $search->isAvailable();
+                if ($mustPinCity) {
+                    $skipWindow = $meiliSubtypes !== [] || ! empty($filters['subtypes']) || $wantSold;
+                    $search->constrainQueryToCityViaLocation($this->model, $locationSearch, true, $skipWindow);
                 }
             } elseif (
                 ! $skipMeiliCity
@@ -590,6 +596,7 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
         $query = $this->applyBeforeExecuteQuery($query);
 
         $items = $this->browseListingFetchPage($query, $filters, $page, $perPage);
+        request()->attributes->set('serik_browse_page_item_count', $items->count());
         $total = $this->resolveBrowseListingTotal($query, $filters);
 
         return new LengthAwarePaginator(
@@ -615,7 +622,13 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
     protected function browseListingFetchPage($query, array $filters, int $page, int $perPage)
     {
         $meiliIds = $this->browsePageIdsViaMeili($filters, $page, $perPage);
-        if (is_array($meiliIds) && $meiliIds !== []) {
+        if (is_array($meiliIds)) {
+            // Meili answered: empty page means no more hits for these filters.
+            // Do not fall through to province-wide SQL (that leaked sale/wrong-city rows).
+            if ($meiliIds === []) {
+                return collect();
+            }
+
             $rows = (clone $query)
                 ->whereIn('re_properties.id', $meiliIds)
                 ->get()
@@ -629,9 +642,12 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
             if ($hydrated->isNotEmpty()) {
                 return $hydrated;
             }
+
+            // Stale Meili IDs (not in SQL filter set) — fall through to SQL path.
         }
 
-        $sqlIds = $this->browsePageIdsViaSqlLocation($filters, 120);
+        $sqlLimit = (($filters['status'] ?? '') === 'sold') ? 500 : 200;
+        $sqlIds = $this->browsePageIdsViaSqlLocation($filters, $sqlLimit);
         if ($sqlIds !== []) {
             request()->attributes->set('serik_browse_sql_ids_total', count($sqlIds));
             $offset = max(0, ($page - 1) * $perPage);
@@ -671,7 +687,7 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
      */
     protected function browsePageIdsViaMeili(array $filters, int $page, int $perPage): ?array
     {
-        if (! empty($filters['open_house']) || ($filters['status'] ?? '') === 'sold') {
+        if (! empty($filters['open_house'])) {
             return null;
         }
 
@@ -681,22 +697,29 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
             return null;
         }
 
-        // Keyword / heavy filters already constrain via whereIn elsewhere;
-        // only accelerate the common Ontario-wide / city / type browse path.
+        $wantSold = ($filters['status'] ?? '') === 'sold';
+
         $opts = [
             'residential_only' => true,
-            'statuses' => [
+            'limit' => max(1, $perPage),
+            'offset' => max(0, ($page - 1) * $perPage),
+            'sort' => ['id:desc'],
+        ];
+
+        if ($wantSold) {
+            // Meili is_sold covers Sold + Leased history (Property::isSoldHistory).
+            $opts['status'] = 'Sold';
+            $opts['sort'] = ['close_ts:desc', 'id:desc'];
+        } else {
+            $opts['statuses'] = [
                 'New',
                 'Active',
                 'Ext',
                 'Extension',
                 'Price Change',
                 'Active Under Contract',
-            ],
-            'limit' => max(1, $perPage),
-            'offset' => max(0, ($page - 1) * $perPage),
-            'sort' => ['id:desc'],
-        ];
+            ];
+        }
 
         $location = trim((string) ($filters['location'] ?? ''));
         $locationCity = $location !== '' ? trim(explode(',', $location)[0]) : '';
@@ -710,10 +733,12 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
         }
 
         $type = (string) ($filters['type'] ?? '');
-        if (in_array($type, [PropertyTypeEnum::RENT, 'rent', 'lease'], true)) {
-            $opts['transactions'] = ['For Lease', 'For Sub-Lease'];
-        } elseif ($type === PropertyTypeEnum::SALE || $type === 'sale') {
-            $opts['transaction'] = 'For Sale';
+        if (! $wantSold) {
+            if (in_array($type, [PropertyTypeEnum::RENT, 'rent', 'lease'], true)) {
+                $opts['transactions'] = ['For Lease', 'For Sub-Lease'];
+            } elseif ($type === PropertyTypeEnum::SALE || $type === 'sale') {
+                $opts['transaction'] = 'For Sale';
+            }
         }
 
         $subtypeMap = [
@@ -805,6 +830,7 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
             $meiliTotal = $this->estimateBrowseTotalViaMeili($filters);
             if ($meiliTotal !== null) {
                 Cache::put($cacheKey, $meiliTotal, $ttl);
+                Cache::put($cacheKey . ':last', $meiliTotal, 86400);
                 if ($unfiltered) {
                     Cache::put('serik_active_listing_count_v1', $meiliTotal, 600);
                     Cache::put('serik_active_listing_count_v1:last', $meiliTotal, 86400);
@@ -823,14 +849,65 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
 
         $lastKnown = Cache::get($cacheKey . ':last');
         if ($lastKnown !== null) {
+            $this->scheduleFilteredBrowseTotalRefresh($filters, $cacheKey);
+
             return (int) $lastKnown;
         }
 
-        // Never COUNT(*) on the request path. Filtered Toronto+house scans ~90k
-        // MLS rows and was timing the SEO landing out at 120s when Meili is down.
-        $perPage = max(12, (int) request()->input('per_page', 12));
+        // Never invent per_page+1 (=13). Prefer a live Meili estimate; if Meili is
+        // down, schedule a refresh and report the current page size only when the
+        // page is clearly the last (partial). Otherwise keep pagination open via
+        // a soft lower bound without advertising a fake inventory of 13.
+        $meiliRetry = $this->estimateBrowseTotalViaMeili($filters);
+        if ($meiliRetry !== null) {
+            Cache::put($cacheKey, $meiliRetry, $ttl);
+            Cache::put($cacheKey . ':last', $meiliRetry, 86400);
 
-        return $perPage + 1;
+            return $meiliRetry;
+        }
+
+        $this->scheduleFilteredBrowseTotalRefresh($filters, $cacheKey);
+
+        $page = max(1, (int) request()->input('page', 1));
+        $perPage = max(12, (int) request()->input('per_page', 12));
+        $pageItems = (int) request()->attributes->get('serik_browse_page_item_count', 0);
+
+        if ($pageItems > 0 && $pageItems < $perPage) {
+            return (($page - 1) * $perPage) + $pageItems;
+        }
+
+        if ($pageItems === $perPage) {
+            // At least one more page may exist — do not cap at 13.
+            return max($page * $perPage + $perPage, 100);
+        }
+
+        return max($perPage, 1);
+    }
+
+    /**
+     * Soft-refresh filtered Meili totals after the response (no COUNT(*)).
+     */
+    protected function scheduleFilteredBrowseTotalRefresh(array $filters, string $cacheKey): void
+    {
+        static $scheduledKeys = [];
+        if (isset($scheduledKeys[$cacheKey])) {
+            return;
+        }
+        $scheduledKeys[$cacheKey] = true;
+
+        $signatureFilters = $filters;
+        app()->terminating(function () use ($signatureFilters, $cacheKey): void {
+            try {
+                $total = $this->estimateBrowseTotalViaMeili($signatureFilters);
+                if ($total === null) {
+                    return;
+                }
+                Cache::put($cacheKey, $total, 300);
+                Cache::put($cacheKey . ':last', $total, 86400);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        });
     }
 
     /**
@@ -866,12 +943,9 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
 
                 $total = $meiliTotal;
                 if ($total === null) {
-                    $total = (int) Property::query()
-                        ->active()
-                        ->residential()
-                        ->mlsActive()
-                        ->toBase()
-                        ->count('re_properties.id');
+                    // Never COUNT(*) here — keeps PHP from holding the socket open
+                    // for 15–30s after HTML is already sent (Connection: close hang).
+                    return;
                 }
 
                 $total = (int) $total;
@@ -898,21 +972,28 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
      */
     protected function estimateBrowseTotalViaMeili(array $filters): ?int
     {
-        if (! empty($filters['open_house']) || ($filters['status'] ?? '') === 'sold') {
+        if (! empty($filters['open_house'])) {
             return null;
         }
 
+        $wantSold = ($filters['status'] ?? '') === 'sold';
+
         $opts = [
             'residential_only' => true,
-            'statuses' => [
+        ];
+
+        if ($wantSold) {
+            $opts['status'] = 'Sold';
+        } else {
+            $opts['statuses'] = [
                 'New',
                 'Active',
                 'Ext',
                 'Extension',
                 'Price Change',
                 'Active Under Contract',
-            ],
-        ];
+            ];
+        }
 
         if ($this->locationUsesTrebDistricts($filters)) {
             return null;
@@ -928,10 +1009,12 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
         }
 
         $type = (string) ($filters['type'] ?? '');
-        if (in_array($type, [PropertyTypeEnum::RENT, 'rent', 'lease'], true)) {
-            $opts['transactions'] = ['For Lease', 'For Sub-Lease'];
-        } elseif ($type === PropertyTypeEnum::SALE || $type === 'sale') {
-            $opts['transaction'] = 'For Sale';
+        if (! $wantSold) {
+            if (in_array($type, [PropertyTypeEnum::RENT, 'rent', 'lease'], true)) {
+                $opts['transactions'] = ['For Lease', 'For Sub-Lease'];
+            } elseif ($type === PropertyTypeEnum::SALE || $type === 'sale') {
+                $opts['transaction'] = 'For Sale';
+            }
         }
 
         $subtypeMap = [
@@ -1029,7 +1112,7 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
      */
     protected function browsePageIdsViaSqlLocation(array $filters, int $limit = 800): array
     {
-        if (! empty($filters['open_house']) || ($filters['status'] ?? '') === 'sold') {
+        if (! empty($filters['open_house'])) {
             return [];
         }
         if (trim((string) ($filters['keyword'] ?? '')) !== '') {
@@ -1044,6 +1127,8 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
         if ($city === '' || strcasecmp($city, 'ontario') === 0 || strcasecmp($city, 'on') === 0) {
             return [];
         }
+
+        $wantSold = ($filters['status'] ?? '') === 'sold';
 
         $subtypeMap = [
             'house' => ['Detached', 'Semi-Detached', 'Link', 'Rural Residential', 'Farm'],
@@ -1064,27 +1149,40 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
             return [];
         }
 
+        $cap = $wantSold ? max(12, min($limit, 500)) : max(12, min($limit, 200));
+
         $query = DB::table('re_properties')
             ->select('id')
             ->where('location', 'like', '%, ' . addcslashes($city, '%_\\') . ', ON%')
             ->whereIn('PropertySubType', $subtypes)
-            ->whereIn('MlsStatus', [
+            ->where('moderation_status', ModerationStatusEnum::APPROVED)
+            ->orderByDesc('id')
+            ->limit($cap);
+
+        if ($wantSold) {
+            $query->whereIn('MlsStatus', [
+                'Sold',
+                'Sold Conditional',
+                'Sold Conditional Escape',
+                'Leased',
+                'Leased Conditional',
+            ]);
+        } else {
+            $query->whereIn('MlsStatus', [
                 'New',
                 'Active',
                 'Ext',
                 'Extension',
                 'Price Change',
                 'Active Under Contract',
-            ])
-            ->where('moderation_status', ModerationStatusEnum::APPROVED)
-            ->orderByDesc('id')
-            ->limit(max(12, min($limit, 120)));
+            ]);
 
-        $type = (string) ($filters['type'] ?? '');
-        if (in_array($type, [PropertyTypeEnum::RENT, 'rent', 'lease'], true)) {
-            $query->whereIn('TransactionType', ['For Lease', 'For Sub-Lease']);
-        } elseif ($type === PropertyTypeEnum::SALE || $type === 'sale') {
-            $query->where('TransactionType', 'For Sale');
+            $type = (string) ($filters['type'] ?? '');
+            if (in_array($type, [PropertyTypeEnum::RENT, 'rent', 'lease'], true)) {
+                $query->whereIn('TransactionType', ['For Lease', 'For Sub-Lease']);
+            } elseif ($type === PropertyTypeEnum::SALE || $type === 'sale') {
+                $query->where('TransactionType', 'For Sale');
+            }
         }
 
         return $query->pluck('id')->map(static fn ($id) => (int) $id)->values()->all();

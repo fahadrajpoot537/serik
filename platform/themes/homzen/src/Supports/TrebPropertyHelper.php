@@ -667,6 +667,7 @@ class TrebPropertyHelper
         Cache::forget('treb_listing_history_v6_' . $listingKey);
         Cache::forget('treb_price_changes_v4_' . $listingKey);
         Cache::forget('treb_price_changes_v5_' . $listingKey);
+        Cache::forget('treb_price_changes_v6_' . $listingKey);
         Cache::forget('treb_map_popup_bundle_v1_' . $listingKey);
         Cache::forget('treb_map_popup_bundle_v2_' . $listingKey);
         Cache::forget('treb_property_rooms_v1_' . $listingKey);
@@ -1264,6 +1265,12 @@ class TrebPropertyHelper
         $listedActive = self::relativeListedLabel($listedAt, '');
 
         $status = \App\Support\MlsStatus::forProperty($property);
+        $isSoldHistory = $property->isSoldHistory();
+        $closePrice = (float) ($property->ClosePrice ?? 0);
+        $listPriceFormat = (string) $property->price_format;
+        $soldPriceFormat = ($isSoldHistory && $closePrice > 0)
+            ? format_price($property->ClosePrice)
+            : null;
 
         return [
             'address' => $address,
@@ -1272,13 +1279,15 @@ class TrebPropertyHelper
             'listed_active' => $listedActive !== '' ? $listedActive : null,
             'beds' => $beds,
             'url' => self::listingSeoUrl($property),
-            'price_format' => self::listingDisplayPriceFormat($property),
+            'price_format' => $soldPriceFormat ?? $listPriceFormat,
+            'list_price_format' => ($soldPriceFormat !== null) ? $listPriceFormat : null,
+            'show_sold_dual_price' => $soldPriceFormat !== null,
             'status_label' => $status['display_label'],
             'status_compact' => $status['compact_label'],
             'status_date_label' => $status['status_date_label'],
             'status_badge_variant' => $status['badge_variant'],
             'is_delisted' => $status['is_delisted'],
-            'strike_price' => $status['strike_price'],
+            'strike_price' => $status['strike_price'] || ($soldPriceFormat !== null),
         ];
     }
 
@@ -1366,15 +1375,29 @@ class TrebPropertyHelper
 
     public static function eventLabel(?string $mlsStatus, ?string $transactionType = null): string
     {
-        if ($mlsStatus === 'New' && $transactionType) {
-            return $transactionType;
+        $mls = trim((string) $mlsStatus);
+        $tx = trim((string) $transactionType);
+
+        // Active board statuses (including Price Change) should read as the
+        // transaction label — matches House Sigma / TREB consumer UIs.
+        $activeStatuses = [
+            'New',
+            'Active',
+            'Ext',
+            'Extension',
+            'Price Change',
+            'Active Under Contract',
+            'Previous Status',
+        ];
+        if (in_array($mls, $activeStatuses, true) && $tx !== '') {
+            return $tx;
         }
 
-        if ($mlsStatus) {
-            return $mlsStatus;
+        if ($mls !== '') {
+            return $mls;
         }
 
-        return $transactionType ?: 'Active';
+        return $tx !== '' ? $tx : 'Active';
     }
 
     /**
@@ -2252,45 +2275,128 @@ class TrebPropertyHelper
         $changes = [];
 
         foreach ($records as $item) {
+            $listingId = $item['ListingKey'] ?? null;
             $current = $item['ListPrice'] ?? null;
             $previous = $item['PreviousListPrice'] ?? null;
             $original = $item['OriginalListPrice'] ?? null;
+            $priceChangeAt = self::formatDateValue($item['PriceChangeTimestamp'] ?? $item['ModificationTimestamp'] ?? null);
+            $listedAt = self::formatDateValue($item['ListingContractDate'] ?? $item['OriginalEntryTimestamp'] ?? null);
 
             if ($previous !== null && $current !== null && (float) $previous !== (float) $current) {
                 $changes[] = [
-                    'date' => self::formatDateValue($item['PriceChangeTimestamp'] ?? $item['ModificationTimestamp'] ?? null),
+                    'date' => $priceChangeAt ?: $listedAt,
                     'old_price' => $previous,
                     'new_price' => $current,
                     'event' => 'Price Change',
-                    'listing_id' => $item['ListingKey'] ?? null,
+                    'listing_id' => $listingId,
                 ];
             }
 
+            // AMP often omits PreviousListPrice but still returns OriginalListPrice
+            // after a board price change (MlsStatus = Price Change).
             if (
                 $original !== null
                 && $current !== null
                 && (float) $original !== (float) $current
-                && (float) $original !== (float) ($previous ?? $original)
+                && (float) $original !== (float) ($previous ?? -1)
             ) {
                 $changes[] = [
-                    'date' => self::formatDateValue($item['ListingContractDate'] ?? null),
+                    'date' => $priceChangeAt ?: $listedAt,
                     'old_price' => $original,
                     'new_price' => $current,
-                    'event' => ($item['PriorMlsStatus'] ?? '') === 'Price Change' ? 'Price Change' : 'Listed',
-                    'listing_id' => $item['ListingKey'] ?? null,
+                    'event' => 'Price Change',
+                    'listing_id' => $listingId,
                 ];
+
+                if ($listedAt) {
+                    $changes[] = [
+                        'date' => $listedAt,
+                        'old_price' => null,
+                        'new_price' => $original,
+                        'event' => 'Listed',
+                        'listing_id' => $listingId,
+                    ];
+                }
             }
         }
 
+        return self::dedupePriceChangeRows($changes);
+    }
+
+    /**
+     * Build price-change rows from local observation log (re_property_history).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function extractPriceChangesFromPropertyHistory(string $listingKey): array
+    {
+        $listingKey = strtoupper(trim($listingKey));
+        if ($listingKey === '' || ! \Illuminate\Support\Facades\Schema::hasTable('re_property_history')) {
+            return [];
+        }
+
+        try {
+            $rows = DB::table('re_property_history')
+                ->where('external_id', $listingKey)
+                ->where('event', 'price_change')
+                ->orderByDesc('recorded_at')
+                ->orderByDesc('id')
+                ->limit(50)
+                ->get();
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $changes = [];
+        foreach ($rows as $row) {
+            $changed = [];
+            if (is_string($row->changed ?? null) && $row->changed !== '') {
+                $decoded = json_decode($row->changed, true);
+                $changed = is_array($decoded) ? $decoded : [];
+            } elseif (is_array($row->changed ?? null)) {
+                $changed = $row->changed;
+            }
+
+            $old = $changed['price']['old'] ?? null;
+            $new = $changed['price']['new'] ?? ($row->price ?? null);
+            if ($old === null || $new === null || (float) $old === (float) $new) {
+                continue;
+            }
+
+            $date = self::formatDateValue($row->listing_modified_at ?? $row->recorded_at ?? null);
+
+            $changes[] = [
+                'date' => $date,
+                'old_price' => $old,
+                'new_price' => $new,
+                'event' => 'Price Change',
+                'listing_id' => $listingKey,
+            ];
+        }
+
+        return self::dedupePriceChangeRows($changes);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $changes
+     * @return array<int, array<string, mixed>>
+     */
+    protected static function dedupePriceChangeRows(array $changes): array
+    {
         $unique = [];
         foreach ($changes as $change) {
-            $key = ($change['listing_id'] ?? '') . '|' . ($change['date'] ?? '') . '|' . ($change['new_price'] ?? '');
+            $key = ($change['listing_id'] ?? '')
+                . '|' . ($change['date'] ?? '')
+                . '|' . ($change['old_price'] ?? '')
+                . '|' . ($change['new_price'] ?? '')
+                . '|' . ($change['event'] ?? '');
             $unique[$key] = $change;
         }
 
-        usort($unique, fn ($a, $b) => strcmp($b['date'] ?? '', $a['date'] ?? ''));
+        $rows = array_values($unique);
+        usort($rows, fn ($a, $b) => strcmp($b['date'] ?? '', $a['date'] ?? ''));
 
-        return array_values($unique);
+        return $rows;
     }
 
     /**
@@ -2340,15 +2446,7 @@ class TrebPropertyHelper
             ];
         }
 
-        $unique = [];
-        foreach ($changes as $change) {
-            $key = ($change['listing_id'] ?? '') . '|' . ($change['date'] ?? '') . '|' . ($change['new_price'] ?? '');
-            $unique[$key] = $change;
-        }
-
-        usort($unique, fn ($a, $b) => strcmp($b['date'] ?? '', $a['date'] ?? ''));
-
-        return array_values($unique);
+        return self::dedupePriceChangeRows($changes);
     }
 
     /**
@@ -2734,81 +2832,117 @@ class TrebPropertyHelper
     public static function fetchPriceChanges(string $listingKey): array
     {
         $listingKey = strtoupper($listingKey);
-        $cacheKey = 'treb_price_changes_v5_' . $listingKey;
+        $cacheKey = 'treb_price_changes_v6_' . $listingKey;
         $local = self::localPropertyArray($listingKey);
 
         $cached = Cache::get($cacheKey);
-        if (is_array($cached)) {
+        if (is_array($cached) && $cached !== []) {
             return $cached;
         }
 
-        if (self::shouldSkipRemoteAmpFetch()) {
-            self::schedulePriceChangesWarm($listingKey, $local, $cacheKey);
+        // Always start with local observation log — never blank the tab just because
+        // SSR skips remote AMP (that previously pinned Price Changes (0)).
+        $localChanges = self::extractPriceChangesFromPropertyHistory($listingKey);
 
-            return [];
+        if (self::shouldSkipRemoteAmpFetch()) {
+            if ($localChanges !== []) {
+                Cache::put($cacheKey, $localChanges, 1800);
+
+                return $localChanges;
+            }
+
+            // Sibling address history is local-DB capable; try without AMP.
+            try {
+                $history = self::fetchListingHistory($listingKey, $local);
+                $fromHistory = self::extractPriceChangesFromHistory($history);
+                $merged = self::dedupePriceChangeRows(array_merge($localChanges, $fromHistory));
+                if ($merged !== []) {
+                    Cache::put($cacheKey, $merged, 1800);
+                }
+                self::schedulePriceChangesWarm($listingKey, $local, $cacheKey);
+
+                return $merged;
+            } catch (\Throwable) {
+                self::schedulePriceChangesWarm($listingKey, $local, $cacheKey);
+
+                return $localChanges;
+            }
         }
 
         try {
-            return Cache::remember($cacheKey, 1800, function () use ($listingKey, $local): array {
-                $record = self::fetchPropertyRecord($listingKey) ?: self::fetchPropertyRecordRaw($listingKey);
+            $resolved = Cache::remember($cacheKey, 1800, function () use ($listingKey, $local, $localChanges): array {
+                $changes = $localChanges;
 
+                $record = self::fetchPropertyRecord($listingKey) ?: self::fetchPropertyRecordRaw($listingKey);
                 if ($record) {
                     $record = self::enrichRecordAddress($record);
                     $candidates = self::fetchUnitPropertyRecords($record);
-
                     if ($candidates === []) {
                         $candidates = [$record];
                     }
+                    $changes = array_merge($changes, self::extractPriceChangesFromRecords($candidates));
+                }
 
-                    $changes = self::extractPriceChangesFromRecords($candidates);
-                    if ($changes !== []) {
-                        return $changes;
+                if ($changes === []) {
+                    $history = self::fetchListingHistory($listingKey, $local);
+                    $changes = array_merge($changes, self::extractPriceChangesFromHistory($history));
+                } else {
+                    // Still merge sibling diffs so multi-listing address timelines appear.
+                    try {
+                        $history = self::fetchListingHistory($listingKey, $local);
+                        $changes = array_merge($changes, self::extractPriceChangesFromHistory($history));
+                    } catch (\Throwable) {
                     }
                 }
 
-                $history = self::fetchListingHistory($listingKey, $local);
-
-                return self::extractPriceChangesFromHistory($history);
+                return self::dedupePriceChangeRows($changes);
             });
+
+            // Do not permanently cache an empty miss — allow a later warm to fill.
+            if ($resolved === []) {
+                Cache::forget($cacheKey);
+            }
+
+            return $resolved;
         } catch (\Throwable $e) {
             try {
                 report($e);
             } catch (\Throwable) {
             }
 
-            return [];
+            return $localChanges;
         }
     }
 
     protected static function schedulePriceChangesWarm(string $listingKey, ?array $local, string $cacheKey): void
     {
         dispatch(function () use ($listingKey, $local, $cacheKey): void {
-            if (Cache::has($cacheKey)) {
+            $existing = Cache::get($cacheKey);
+            if (is_array($existing) && $existing !== []) {
                 return;
             }
 
             try {
-                Cache::remember($cacheKey, 1800, function () use ($listingKey, $local): array {
-                    $record = self::fetchPropertyRecord($listingKey) ?: self::fetchPropertyRecordRaw($listingKey);
+                $localChanges = self::extractPriceChangesFromPropertyHistory($listingKey);
+                $changes = $localChanges;
 
-                    if ($record) {
-                        $record = self::enrichRecordAddress($record);
-                        $candidates = self::fetchUnitPropertyRecords($record);
-
-                        if ($candidates === []) {
-                            $candidates = [$record];
-                        }
-
-                        $changes = self::extractPriceChangesFromRecords($candidates);
-                        if ($changes !== []) {
-                            return $changes;
-                        }
+                $record = self::fetchPropertyRecord($listingKey) ?: self::fetchPropertyRecordRaw($listingKey);
+                if ($record) {
+                    $record = self::enrichRecordAddress($record);
+                    $candidates = self::fetchUnitPropertyRecords($record);
+                    if ($candidates === []) {
+                        $candidates = [$record];
                     }
+                    $changes = array_merge($changes, self::extractPriceChangesFromRecords($candidates));
+                }
 
-                    $history = self::fetchListingHistory($listingKey, $local);
+                $history = self::fetchListingHistory($listingKey, $local);
+                $changes = array_merge($changes, self::extractPriceChangesFromHistory($history));
+                $changes = self::dedupePriceChangeRows($changes);
 
-                    return self::extractPriceChangesFromHistory($history);
-                });
+                if ($changes !== []) {
+                    Cache::put($cacheKey, $changes, 1800);
+                }
             } catch (\Throwable $e) {
                 try {
                     report($e);
@@ -2844,9 +2978,13 @@ class TrebPropertyHelper
 
         $record = self::resolveFactRecordForDetail($listingKey, $local);
 
-        $priceChanges = self::extractPriceChangesFromHistory($history);
+        $priceChanges = self::dedupePriceChangeRows(array_merge(
+            self::extractPriceChangesFromPropertyHistory($listingKey),
+            self::extractPriceChangesFromHistory($history)
+        ));
         if ($priceChanges === []) {
-            $priceCached = Cache::get('treb_price_changes_v5_' . $listingKey);
+            $priceCached = Cache::get('treb_price_changes_v6_' . $listingKey)
+                ?? Cache::get('treb_price_changes_v5_' . $listingKey);
             if (is_array($priceCached)) {
                 $priceChanges = $priceCached;
             }
@@ -4028,6 +4166,7 @@ class TrebPropertyHelper
             'treb_listing_history_v6_',
             'treb_price_changes_v4_',
             'treb_price_changes_v5_',
+            'treb_price_changes_v6_',
             'treb_map_popup_bundle_v1_',
             'treb_map_popup_bundle_v2_',
             'treb_property_rooms_detail_v2_',

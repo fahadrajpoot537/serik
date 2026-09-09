@@ -402,13 +402,21 @@ app()->booted(function (): void {
             // Same Google reCAPTCHA stack as login modal (RecaptchaHelper).
             // Do NOT use Botble Captcha::display() — it loads a second api.js
             // onload callback and breaks login verification site-wide.
+            // Unique ids + shared class: style-2 renders multiple contact forms;
+            // duplicate #contactRecaptcha left the visible estimate form empty.
             if ($siteKey !== '' && ! $form->has('serik_contact_recaptcha')) {
+                static $serikContactRecaptchaSeq = 0;
+                $serikContactRecaptchaSeq++;
+                $widgetId = 'contactRecaptcha_' . $serikContactRecaptchaSeq;
+
                 $form->addBefore(
                     'submit',
                     'serik_contact_recaptcha',
                     HtmlField::class,
                     [
-                        'html' => '<div class="contact-form-group mb-3"><div id="contactRecaptcha"></div></div>',
+                        'html' => '<div class="contact-form-group mb-3 serik-contact-recaptcha-wrap">'
+                            . '<div id="' . e($widgetId) . '" class="js-serik-contact-recaptcha" data-serik-recaptcha></div>'
+                            . '</div>',
                     ]
                 );
             }

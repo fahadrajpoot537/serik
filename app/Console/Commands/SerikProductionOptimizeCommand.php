@@ -25,6 +25,11 @@ class SerikProductionOptimizeCommand extends Command
         }
 
         // route:cache intentionally skipped — closures in routes/web.php.
+        // Clear stale compiled routes (e.g. "Class Language not found" from routes-v7.php).
+        Artisan::call('route:clear');
+        $this->line(trim(Artisan::output()) ?: 'Routes cleared.');
+        Artisan::call('config:clear');
+        $this->line(trim(Artisan::output()) ?: 'Config cleared.');
         Artisan::call('config:cache');
         $this->line(trim(Artisan::output()));
         Artisan::call('event:cache');

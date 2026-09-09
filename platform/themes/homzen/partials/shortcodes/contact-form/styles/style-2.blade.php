@@ -495,6 +495,151 @@ $faqs = collect([
 
 
 <section id="thirdMain">
+@php
+    $isFreeHomeEvaluationPage = request()->is('free-home-evaluation') || request()->is('evaluation');
+@endphp
+@if ($isFreeHomeEvaluationPage)
+<style>
+.serik-sell-offer-wrap {
+    padding: 1.75rem 0 0.25rem;
+}
+.serik-sell-offer {
+    position: relative;
+    display: flex;
+    align-items: stretch;
+    justify-content: space-between;
+    gap: 1.5rem;
+    background: linear-gradient(105deg, #06152b 0%, #0a1f3d 55%, #0d2a52 100%);
+    color: #fff;
+    border-radius: 18px;
+    padding: 1.75rem 1.75rem 1.35rem;
+    box-shadow: 0 18px 40px rgba(6, 21, 43, 0.28);
+    overflow: visible;
+}
+.serik-sell-offer__badge {
+    position: absolute;
+    top: -12px;
+    left: 22px;
+    z-index: 2;
+    background: #f5c518;
+    color: #111;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0.42rem 0.85rem;
+    border-radius: 8px 8px 6px 6px;
+    line-height: 1.1;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
+}
+.serik-sell-offer__copy {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding-top: 0.35rem;
+}
+.serik-sell-offer__title {
+    margin: 0 0 0.55rem;
+    font-size: clamp(1.15rem, 2.2vw, 1.55rem);
+    font-weight: 700;
+    line-height: 1.35;
+    color: #fff;
+}
+.serik-sell-offer__title .serik-sell-offer__price {
+    color: #f5c518;
+    white-space: nowrap;
+}
+.serik-sell-offer__text {
+    margin: 0 0 1rem;
+    font-size: 0.98rem;
+    line-height: 1.55;
+    color: rgba(255, 255, 255, 0.88);
+    max-width: 40rem;
+}
+.serik-sell-offer__note {
+    margin: 0;
+    font-size: 0.8rem;
+    font-style: italic;
+    color: rgba(255, 255, 255, 0.55);
+}
+.serik-sell-offer__card {
+    flex: 0 0 auto;
+    align-self: center;
+    min-width: 148px;
+    text-align: center;
+    border: 1.5px solid rgba(245, 197, 24, 0.85);
+    border-radius: 12px;
+    padding: 1rem 1.15rem;
+    background: rgba(255, 255, 255, 0.03);
+    box-shadow: 0 0 0 1px rgba(245, 197, 24, 0.15), inset 0 0 24px rgba(245, 197, 24, 0.06);
+}
+.serik-sell-offer__card-label {
+    display: block;
+    font-size: 0.82rem;
+    color: rgba(255, 255, 255, 0.9);
+    margin-bottom: 0.2rem;
+}
+.serik-sell-offer__card-price {
+    display: block;
+    font-size: clamp(1.55rem, 2.5vw, 1.9rem);
+    font-weight: 800;
+    color: #f5c518;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+}
+.serik-sell-offer__card-price small {
+    font-size: 0.72em;
+    font-weight: 700;
+    margin-left: 0.15rem;
+}
+.serik-sell-offer__card-sub {
+    display: block;
+    margin-top: 0.35rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.92);
+}
+@media (max-width: 767px) {
+    .serik-sell-offer {
+        flex-direction: column;
+        padding: 1.5rem 1.15rem 1.2rem;
+        gap: 1.1rem;
+    }
+    .serik-sell-offer__badge {
+        left: 16px;
+    }
+    .serik-sell-offer__card {
+        width: 100%;
+        max-width: 220px;
+        align-self: flex-start;
+    }
+}
+</style>
+<div class="serik-sell-offer-wrap">
+    <div class="container">
+        <aside class="serik-sell-offer" aria-label="{{ __('Limited-time fixed commission offer') }}">
+            <div class="serik-sell-offer__badge">{{ __('LIMITED-TIME OFFER') }}</div>
+            <div class="serik-sell-offer__copy">
+                <h2 class="serik-sell-offer__title">
+                    {!! __('Sell your home with us for just :price — fixed commission', [
+                        'price' => '<span class="serik-sell-offer__price">$5,999 CAD</span>',
+                    ]) !!}
+                </h2>
+                <p class="serik-sell-offer__text">
+                    {{ __('Get expert support to sell your home with a simple, transparent fixed commission of $5,999 CAD.') }}
+                </p>
+                <p class="serik-sell-offer__note">*{{ __('Terms and conditions apply.') }}</p>
+            </div>
+            <div class="serik-sell-offer__card" aria-hidden="true">
+                <span class="serik-sell-offer__card-label">{{ __('Pay only') }}</span>
+                <span class="serik-sell-offer__card-price">$5,999<small>CAD</small></span>
+                <span class="serik-sell-offer__card-sub">{{ __('FLAT COMMISSION') }}</span>
+            </div>
+        </aside>
+    </div>
+</div>
+@endif
         <div class="container py-5">
   {!! Theme::partial('shortcode-heading', ['shortcode' => $shortcode]) !!}
             <div class="row">
@@ -889,6 +1034,16 @@ if (isAboutUsPage() || isFeedbackePage() ) {
     
 }
 
+// After showing/hiding contact sections, (re)init CAPTCHA on the visible form(s).
+if (typeof window.initSerikRecaptcha === 'function') {
+    window.initSerikRecaptcha();
+    setTimeout(function () {
+        if (typeof window.initSerikRecaptcha === 'function') {
+            window.initSerikRecaptcha();
+        }
+    }, 400);
+}
+
 
 document.querySelectorAll('.counter').forEach(function(counter) {
     const input = counter.querySelector('input');
@@ -917,14 +1072,49 @@ document.querySelectorAll('.counter').forEach(function(counter) {
 
 document.addEventListener("DOMContentLoaded", function () {
 
+    /**
+     * Format MLS living-area ranges for display only.
+     * "1100-1500" → "1,100 - 1,500 sq ft"
+     */
+    function formatSquareFootageDisplay(value) {
+        const raw = String(value ?? '').trim();
+        if (raw === '' || raw === '0') {
+            return raw;
+        }
+        const withoutUnit = raw.replace(/\s*sq\.?\s*ft\.?/gi, '').trim();
+        const parts = withoutUnit.split(/\s*[-–—]\s*/).map((part) => part.replace(/,/g, '').trim()).filter(Boolean);
+        if (parts.length === 0) {
+            return raw;
+        }
+        const formatted = parts.map((part) => {
+            const n = Number(part);
+            return Number.isFinite(n) ? n.toLocaleString('en-US') : part;
+        });
+        if (formatted.length >= 2) {
+            return formatted[0] + ' - ' + formatted[1] + ' sq ft';
+        }
+        return Number.isFinite(Number(parts[0])) ? (formatted[0] + ' sq ft') : raw;
+    }
+    window.serikFormatSquareFootage = formatSquareFootageDisplay;
+
     const input = document.getElementById("prop-address");
     const suggestionBox = document.getElementById("address-suggestions");
     const form = document.getElementById("prop-name");
     const resultBox = document.getElementById("estimate-result");
     const estimateBtn = document.getElementById("get-estimate-btn");
+    const sqftInput = document.getElementById("sqft");
 
     if (!input || !suggestionBox) {
         return;
+    }
+
+    if (sqftInput && sqftInput.value) {
+        sqftInput.value = formatSquareFootageDisplay(sqftInput.value);
+    }
+    if (sqftInput) {
+        sqftInput.addEventListener('blur', function () {
+            this.value = formatSquareFootageDisplay(this.value);
+        });
     }
 
     let debounceTimer;
@@ -1036,7 +1226,7 @@ document.addEventListener("DOMContentLoaded", function () {
         document.getElementById("bedrooms-below").value = data.BedroomsBelowGrade ?? 0;
         document.getElementById("bathrooms").value = data.BathroomsTotalInteger ?? 0;
         document.getElementById("garage").value = data.ParkingTotal ?? 0;
-        document.getElementById("sqft").value = data.LivingAreaRange ?? '0';
+        document.getElementById("sqft").value = formatSquareFootageDisplay(data.LivingAreaRange ?? '0');
         document.getElementById("tax").value = data.TaxAnnualAmount ?? '0';
         matchPropertyType(data.PropertySubType);
         document.getElementById("lot-width").value = data.LotWidth ?? '0';

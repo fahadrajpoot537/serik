@@ -73,6 +73,18 @@
     }
     .serik-prop-card__price-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
     .serik-prop-card__price { font-size: 1.25rem; font-weight: 700; color: #111; margin: 0; line-height: 1.2; }
+    .serik-prop-card__list-price {
+        display: inline-block;
+        margin-right: 0.45rem;
+        font-size: 0.92em;
+        font-weight: 500;
+        color: #9ca3af;
+        text-decoration: line-through;
+    }
+    .serik-prop-card__sold-price {
+        color: var(--primary-color, #db1d23);
+        font-weight: 700;
+    }
     .serik-prop-card__heart { border: none; background: transparent; padding: 4px; color: #6b7280; line-height: 1; }
     .serik-prop-card__stats { font-size: 13px; color: #374151; margin-bottom: 6px; line-height: 1.4; }
     .serik-prop-card__stats span + span::before { content: '  '; }
@@ -155,7 +167,14 @@
             <div class="serik-prop-card__price-row">
                 @if (! setting('real_estate_hide_price', false))
                     @if ($canViewSold)
-                        <h3 class="serik-prop-card__price">{{ $card['price_format'] }}</h3>
+                        <h3 class="serik-prop-card__price">
+                            @if (! empty($card['show_sold_dual_price']) && ! empty($card['list_price_format']))
+                                <span class="serik-prop-card__list-price">{{ $card['list_price_format'] }}</span>
+                                <span class="serik-prop-card__sold-price">{{ $card['price_format'] }}</span>
+                            @else
+                                {{ $card['price_format'] }}
+                            @endif
+                        </h3>
                     @else
                         <h3 class="serik-prop-card__price">******</h3>
                     @endif

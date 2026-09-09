@@ -65,7 +65,16 @@ final class ProductionCacheWarmer
         '/',
         '/map',
         '/ontario',
+        '/ontario/north-york-houses-for-sale',
+        '/ontario/mississauga-houses-for-sale',
+        '/ontario/brampton-houses-for-sale',
+        '/ontario/toronto-houses-for-sale',
         '/properties',
+        '/blogs',
+        '/mortgage-calculator',
+        '/cash-back-calculator',
+        '/free-home-evaluation',
+        '/tips-for-home-selling',
     ];
 
     /**

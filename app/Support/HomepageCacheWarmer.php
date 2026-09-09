@@ -27,7 +27,7 @@ final class HomepageCacheWarmer
     /**
      * @return list<array{step: string, ms: float, detail: string}>
      */
-    public static function warm(?string $locale = null): array
+    public static function warm(?string $locale = null, bool $keysOnly = false): array
     {
         $timings = [];
         $homepage = self::homepagePage();
@@ -83,24 +83,47 @@ final class HomepageCacheWarmer
             return 'bytes=' . strlen($html) . ', sections=' . count($data['sections'] ?? []);
         });
 
-        $timings[] = self::runStep('homepage_response_html', static function (): string {
-            $kernel = app(HttpKernel::class);
-            $request = self::homepageRequest();
-            $response = $kernel->handle($request);
-            $kernel->terminate($request, $response);
+        // Full page render is expensive (~10s). In keys-only mode, only render when
+        // the anonymous homepage HTML cache is missing/expired.
+        $shouldRenderHtml = ! $keysOnly || ! self::homepageHtmlCacheIsWarm();
+        if ($shouldRenderHtml) {
+            $timings[] = self::runStep('homepage_response_html', static function (): string {
+                $kernel = app(HttpKernel::class);
+                $request = self::homepageRequest();
+                $response = $kernel->handle($request);
+                $kernel->terminate($request, $response);
 
-            $cacheStatus = $response->headers->get('X-Serik-Homepage-Cache', 'unknown');
-            $bytes = strlen((string) $response->getContent());
+                $cacheStatus = $response->headers->get('X-Serik-Homepage-Cache', 'unknown');
+                $bytes = strlen((string) $response->getContent());
 
-            return "status={$response->getStatusCode()}, cache={$cacheStatus}, bytes={$bytes}";
-        });
+                return "status={$response->getStatusCode()}, cache={$cacheStatus}, bytes={$bytes}";
+            });
+        } else {
+            $timings[] = [
+                'step' => 'homepage_response_html',
+                'ms' => 0.0,
+                'detail' => 'skipped (keys-only; HTML cache already warm)',
+            ];
+        }
 
         // Additive light warm (map / popular places) when enabled — same payloads as live traffic.
-        if (config('serik.cache.warm_extended_on_homepage', true)) {
+        if (config('serik.cache.warm_extended_on_homepage', false) && ! $keysOnly) {
             $timings = array_merge($timings, ProductionCacheWarmer::warmLight());
         }
 
         return $timings;
+    }
+
+    private static function homepageHtmlCacheIsWarm(): bool
+    {
+        try {
+            $request = self::homepageRequest();
+            $cached = HomepageResponseCache::get($request);
+
+            return is_string($cached) && $cached !== '';
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**

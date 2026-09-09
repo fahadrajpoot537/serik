@@ -1,9 +1,5 @@
 @php
-$order = ['Gary Sodhi', 'Sadaqat Sheikh'];
-$accounts = $accounts->sortBy(function ($account) use ($order) {
-    $index = array_search($account->name, $order);
-    return $index === false ? 999 : $index;
-});
+    // Keep CMS / shortcode account_ids order — do not re-sort here.
 @endphp
 
 <section id="about-agent" class="flat-section flat-agents serik-hp-agents" @style(["background-color: $shortcode->background_color" => $shortcode->background_color])>

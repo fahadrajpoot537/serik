@@ -29,6 +29,8 @@ class SyncLiveJob implements ShouldQueue, ShouldBeUnique
 
     public int $tries = 2;
 
+    public int $maxExceptions = 1;
+
     public int $timeout = 180;
 
     /** Must exceed $timeout so a second SyncLiveJob cannot overlap the first. */
@@ -145,12 +147,19 @@ class SyncLiveJob implements ShouldQueue, ShouldBeUnique
             if ($needGeo !== []) {
                 GeocodeState::markQueuedMany($needGeo);
 
-                try {
-                    $geoRes = $controller->geocode($needGeo, count($needGeo));
-                    $geoBody = json_decode($geoRes->getContent(), true) ?: [];
-                    Log::info('[SyncLiveJob] geocode batch', $geoBody);
-                } catch (Throwable $e) {
-                    Log::warning('[SyncLiveJob] geocode batch failed: ' . $e->getMessage());
+                // Default: defer Nominatim to async GeocodePropertyJob chains so
+                // SyncLiveJob stays AMP-import-only on the HIGH lane.
+                if (config('serik.sync_live.inline_geocode', false)) {
+                    try {
+                        $geoRes = $controller->geocode($needGeo, min(count($needGeo), 15));
+                        $geoBody = json_decode($geoRes->getContent(), true) ?: [];
+                        Log::info('[SyncLiveJob] geocode batch', [
+                            'geocoded' => $geoBody['geocoded'] ?? null,
+                            'requested' => count($needGeo),
+                        ]);
+                    } catch (Throwable $e) {
+                        Log::warning('[SyncLiveJob] geocode batch failed: ' . $e->getMessage());
+                    }
                 }
             }
 
@@ -214,6 +223,11 @@ class SyncLiveJob implements ShouldQueue, ShouldBeUnique
         } finally {
             optional($lock)->release();
             Cache::forget('amp_recent_lock');
+            try {
+                DB::disconnect();
+            } catch (Throwable) {
+                //
+            }
         }
     }
 

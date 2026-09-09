@@ -22,6 +22,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
         \App\Console\Commands\TrebArchiveHealthCommand::class,
         \App\Console\Commands\ProcessGhlPendingMlsCommand::class,
         \App\Console\Commands\SerikQueueHealCommand::class,
+        \App\Console\Commands\SerikQueuePruneDuplicatesCommand::class,
         \App\Console\Commands\SerikQueueRecoverFailedCommand::class,
         \App\Console\Commands\SerikReliabilityValidateCommand::class,
         \App\Console\Commands\SerikProductionOptimizeCommand::class,
@@ -57,6 +58,8 @@ $app = Application::configure(basePath: dirname(__DIR__))
                     }
                 } catch (\Throwable $e) {
                     Log::error('[schedule-safe] ' . $command . ' failed: ' . $e->getMessage());
+                } finally {
+                    SerikScheduler::releaseDatabaseConnections();
                 }
 
                 return 0;
@@ -86,9 +89,16 @@ $app = Application::configure(basePath: dirname(__DIR__))
         };
 
         // A) HIGH — live AMP import / geocode / history (worker does the work)
-        $schedule->call($safe('serik:sync-live:dispatch'))
+        $schedule->call($safe('serik:sync-live:dispatch', [
+            '--days' => (int) config('serik.sync_live.days', 2),
+            '--pages' => (int) config('serik.sync_live.pages', 2),
+            '--max-seconds' => (int) config('serik.sync_live.max_seconds', 30),
+            '--max-new' => (int) config('serik.sync_live.max_new', 15),
+            '--page-size' => (int) config('serik.sync_live.page_size', 100),
+        ]))
             ->name('serik-sync-live-dispatch')
             ->everyMinute()
+            ->when(fn () => SerikScheduler::shouldRunStaggerSlot('serik-sync-live-dispatch'))
             ->withoutOverlapping(2)
             ->appendOutputTo(storage_path('logs/treb-sync-live.log'));
 
@@ -96,6 +106,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
         $schedule->call($safe('serik:backlog:dispatch'))
             ->name('serik-backlog-dispatch')
             ->everyMinute()
+            ->when(fn () => SerikScheduler::shouldRunStaggerSlot('serik-backlog-dispatch'))
             ->withoutOverlapping(2)
             ->appendOutputTo(storage_path('logs/treb-geocode-backlog.log'));
 
@@ -115,7 +126,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
         // D) Meili catch-up for recent actives — LOW queue only (never block schedule:run).
         $schedule->call($dispatchLow('serik:search-index-recent', [
             '--days' => 3,
-            '--limit' => (int) config('serik.scheduler.search_index_recent_limit', 300),
+            '--limit' => (int) config('serik.scheduler.search_index_recent_limit', 100),
         ]))
             ->name('serik-search-index-recent-dispatch')
             ->everyThirtyMinutes()
@@ -126,7 +137,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
         if (config('serik.scheduler.import_historical_enabled', true)) {
             $schedule->call($dispatchLow('serik:import-historical', [
                 '--resume' => true,
-                '--max-runtime' => (int) config('serik.scheduler.import_historical_max_runtime', 180),
+                '--max-runtime' => (int) config('serik.scheduler.import_historical_max_runtime', 120),
             ]))
                 ->name('serik-import-historical-dispatch')
                 ->hourly()
@@ -136,8 +147,8 @@ $app = Application::configure(basePath: dirname(__DIR__))
 
         // E) Heavy maintenance → LOW queue (scheduler only dispatches)
         $schedule->call($dispatchLow('serik:catch-up', [
-            '--from-year' => 2000,
-            '--hours' => 2,
+            '--from-year' => (int) config('serik.scheduler.catch_up_from_year', 2015),
+            '--hours' => (float) config('serik.scheduler.catch_up_hours', 0.5),
             '--resume' => true,
             '--skip-existing' => true,
             '--no-geocode' => true,
@@ -149,8 +160,8 @@ $app = Application::configure(basePath: dirname(__DIR__))
 
         $schedule->call($dispatchLow('serik:import-amp-gaps', [
             '--resume' => true,
-            '--page' => 80,
-            '--max-runtime' => 90,
+            '--page' => (int) config('serik.scheduler.amp_gaps_page', 50),
+            '--max-runtime' => (int) config('serik.scheduler.amp_gaps_max_runtime', 60),
         ]))
             ->name('serik-amp-gaps-dispatch')
             ->hourly()
@@ -158,7 +169,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
             ->appendOutputTo(storage_path('logs/treb-amp-gaps.log'));
 
         $schedule->call($dispatchLow('serik:fix-slugs', [
-            '--limit' => 5000,
+            '--limit' => (int) config('serik.scheduler.fix_slugs_limit', 1000),
         ]))
             ->name('serik-fix-slugs-dispatch')
             ->hourly()
@@ -166,17 +177,26 @@ $app = Application::configure(basePath: dirname(__DIR__))
             ->appendOutputTo(storage_path('logs/treb-fix-slugs.log'));
 
         $schedule->call($dispatchLow('serik:geocode-borrow', [
-            '--limit' => 300,
+            '--limit' => (int) config('serik.scheduler.geocode_borrow_limit', 100),
             '--active-days' => 14,
+            '--max-runtime' => 45,
         ]))
             ->name('serik-geocode-borrow-dispatch')
             ->dailyAt('01:45')
             ->withoutOverlapping(10)
             ->appendOutputTo(storage_path('logs/treb-geocode.log'));
 
-        $schedule->call($dispatchLow('serik:backfill-property-images', [
-            '--limit' => 200,
-        ], requireLightLoad: true))
+        $schedule->call(function () use ($dispatchLow) {
+            if (! SerikScheduler::shouldDispatchImageBackfill()) {
+                Log::debug('[schedule] skipped image backfill (images queue depth)');
+
+                return 0;
+            }
+
+            return $dispatchLow('serik:backfill-property-images', [
+                '--limit' => (int) config('serik.scheduler.image_backfill_limit', 50),
+            ], requireLightLoad: true)();
+        })
             ->name('serik-backfill-property-images')
             ->everyFiveMinutes()
             ->withoutOverlapping(15)
@@ -201,7 +221,10 @@ $app = Application::configure(basePath: dirname(__DIR__))
             ->appendOutputTo(storage_path('logs/seo-navigation.log'));
 
         // Keep anonymous homepage HTML cache warm (MISS is ~10s+).
-        $schedule->call($dispatchLow('serik:cache:warm-homepage', [], requireLightLoad: false))
+        // keys-only refreshes data/fragment keys; full HTML render only when cache cold.
+        $schedule->call($dispatchLow('serik:cache:warm-homepage', array_filter([
+            '--keys-only' => config('serik.scheduler.warm_homepage_keys_only', true) ? true : null,
+        ]), requireLightLoad: false))
             ->name('serik-warm-homepage-dispatch')
             ->everyTenMinutes()
             ->withoutOverlapping(20)
@@ -254,6 +277,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
         })
             ->name('serik-treb-archive-import-dispatch')
             ->everyMinute()
+            ->when(fn () => SerikScheduler::shouldRunStaggerSlot('serik-treb-archive-import-dispatch'))
             ->withoutOverlapping(2)
             ->appendOutputTo(storage_path('logs/treb-archive-import.log'));
 
@@ -270,7 +294,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
         $schedule->call($safe('serik:queue:heal'))
             ->name('serik-queue-heal-dispatch')
             ->cron('*/' . max(1, (int) config('serik.orchestration.heal_every_minutes', 5)) . ' * * * *')
-            ->withoutOverlapping(4)
+            ->withoutOverlapping(8)
             ->appendOutputTo(storage_path('logs/queue-heal.log'));
     })
     ->withMiddleware(function (Middleware $middleware): void {
@@ -283,6 +307,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
         // Outermost wrappers: security headers, then request ID (last prepend = first on the way in).
         $middleware->prepend(\App\Http\Middleware\SerikSecurityHeadersMiddleware::class);
         $middleware->prepend(\App\Http\Middleware\RequestCorrelationMiddleware::class);
+        $middleware->prependToGroup('api', \App\Http\Middleware\SerikApiTimeBudgetMiddleware::class);
         \Illuminate\Foundation\Http\Middleware\PreventRequestsDuringMaintenance::except('/health/live');
         \Illuminate\Foundation\Http\Middleware\PreventRequestsDuringMaintenance::except('/health/ready');
         $middleware->appendToGroup('web', \App\Http\Middleware\CacheHomepageResponseMiddleware::class);

@@ -136,11 +136,10 @@
 @if ($isSerikHomepage)
 {{-- MUST load AFTER Theme::header() so redesign beats style.css --}}
 {{-- Path-only href so CSS stays same-origin (CSP 'self') on :8000, localhost, or XAMPP. --}}
-<link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp64">
+<link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp67">
 @endif
 {{-- Site chrome last: shared navbar/footer + compact laptop scaling --}}
-<link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc37">
-@if ($isSerikHomepage)
+<link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc48">
         <script>
         (function () {
             if (window.__serikDeferredThirdParty) {
@@ -221,57 +220,6 @@
             window.setTimeout(loadThirdParty, 8000);
         })();
         </script>
-@else
-        <script type="text/javascript">
-            (function(c,l,a,r,i,t,y){
-                c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-                t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-                y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-            })(window, document, "clarity", "script", "xu00ale4yi");
-        </script>
-        <!--Start of Tawk.to Script (bottom-right)-->
-        <script type="text/javascript">
-        var Tawk_API=Tawk_API||{}, Tawk_LoadStart=new Date();
-        Tawk_API.customStyle = {
-            visibility: {
-                desktop: {
-                    position: 'br',
-                    xOffset: '20px',
-                    yOffset: '20px'
-                },
-                mobile: {
-                    position: 'br',
-                    xOffset: '12px',
-                    yOffset: '80px'
-                }
-            }
-        };
-        (function(){
-        function serikTawkBottom80() {
-            if (window.innerWidth > 991) return;
-            try {
-                document.querySelectorAll('iframe').forEach(function (frame) {
-                    var title = String(frame.getAttribute('title') || '').toLowerCase();
-                    if (title.indexOf('chat') === -1) return;
-                    frame.style.setProperty('bottom', '80px', 'important');
-                    frame.style.setProperty('right', '12px', 'important');
-                    frame.style.setProperty('left', 'auto', 'important');
-                });
-            } catch (e) {}
-        }
-        Tawk_API.onLoad = function () {
-            serikTawkBottom80();
-            setTimeout(serikTawkBottom80, 500);
-        };
-        var s1=document.createElement("script"),s0=document.getElementsByTagName("script")[0];
-        s1.async=true;
-        s1.src='https://embed.tawk.to/6a6d0ff4f9ea531d4e9995a8/1jut0cl8v';
-        s1.charset='UTF-8';
-        s1.setAttribute('crossorigin','*');
-        s0.parentNode.insertBefore(s1,s0);
-        })();
-        </script>
-@endif
         <style>
             /* Keep Tawk.to bubble on the right (desktop unchanged) */
             iframe[title="chat widget"],
@@ -312,6 +260,35 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
      
 
         {!! Theme::footer() !!}
+
+        {{-- Keep CSRF fresh on guest HTML-cache hits (homepage / CMS / blog). --}}
+        <script>
+        (function () {
+            if (window.__serikCsrfRefreshBound) {
+                return;
+            }
+            window.__serikCsrfRefreshBound = true;
+            var url = @json(route('auth.csrf-token'));
+            fetch(url, {
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+            }).then(function (r) {
+                return r.ok ? r.json() : null;
+            }).then(function (data) {
+                var token = data && (data.token || data.csrf_token);
+                if (!token) {
+                    return;
+                }
+                var meta = document.querySelector('meta[name="csrf-token"]');
+                if (meta) {
+                    meta.setAttribute('content', token);
+                }
+                document.querySelectorAll('input[name="_token"]').forEach(function (el) {
+                    el.value = token;
+                });
+            }).catch(function () {});
+        })();
+        </script>
 
         {{-- Always load analytics: homepage uses deferred path inside the partial --}}
         @include(Theme::getThemeNamespace('partials.deferred-analytics'))

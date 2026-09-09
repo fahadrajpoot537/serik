@@ -483,6 +483,42 @@ document.addEventListener('DOMContentLoaded', function () {
         })
         .catch(() => 0);
 
+        const renderPriceChangeRows = (rows) => {
+            const tbody = document.querySelector('#hs-price-change tbody');
+            const tabLabel = document.querySelector('[data-tab="hs-price-change"] .hs-tab-text');
+            if (!tbody || !Array.isArray(rows)) {
+                return;
+            }
+            if (rows.length === 0) {
+                return;
+            }
+            tbody.innerHTML = rows.map((row) => {
+                const oldPrice = (row.old_price != null) ? ('$' + Number(row.old_price).toLocaleString()) : '-';
+                const newPrice = (row.new_price != null) ? ('$' + Number(row.new_price).toLocaleString()) : '-';
+                return '<tr>'
+                    + '<td>' + (row.date || '-') + '</td>'
+                    + '<td>' + oldPrice + '</td>'
+                    + '<td>' + newPrice + '</td>'
+                    + '<td>' + (row.event || 'Price Change') + '</td>'
+                    + '</tr>';
+            }).join('');
+            if (tabLabel) {
+                tabLabel.textContent = 'Price Changes (' + rows.length + ')';
+            }
+        };
+
+        const loadPriceChanges = () => fetch('/api/v1/price-changes/' + encodeURIComponent(listingKey), {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then((res) => res.ok ? res.json() : null)
+        .then((payload) => {
+            const rows = Array.isArray(payload?.data) ? payload.data : [];
+            renderPriceChangeRows(rows);
+            return rows.length;
+        })
+        .catch(() => 0);
+
         // First paint from local Fast history; one delayed refresh picks up AMP siblings
         // imported by afterResponse sync (does not block SSR / first request).
         loadListingHistory().then((count) => {
@@ -493,6 +529,15 @@ document.addEventListener('DOMContentLoaded', function () {
                     }
                 });
             }, 4500);
+        });
+        loadPriceChanges().then((count) => {
+            window.setTimeout(() => {
+                loadPriceChanges().then((nextCount) => {
+                    if (nextCount > count) {
+                        loadPriceChanges();
+                    }
+                });
+            }, 5000);
         });
     }
 

@@ -77,8 +77,67 @@ final class SerikScheduler
         return self::importsQueueDepth() < $maxDepth;
     }
 
+    /**
+     * Skip dispatching SyncLiveJob when the HIGH lane already has pending copies.
+     */
+    public static function shouldDispatchSyncLive(): bool
+    {
+        $maxPending = max(0, (int) config('serik.scheduler.max_sync_live_pending', 1));
+        if ($maxPending === 0) {
+            return true;
+        }
+
+        try {
+            if (! \Illuminate\Support\Facades\Schema::hasTable('jobs')) {
+                return true;
+            }
+
+            $pending = SerikQueueJobHygiene::countPending(\App\Jobs\SyncLiveJob::class, SerikQueue::high());
+        } catch (\Throwable) {
+            return true;
+        }
+
+        return $pending < $maxPending;
+    }
+
+    /**
+     * Spread every-minute scheduler tasks across N minute slots (configurable).
+     * stagger_slots=1 (default) runs every task every minute (no behavior change).
+     */
+    public static function shouldRunStaggerSlot(string $taskKey): bool
+    {
+        $slots = max(1, (int) config('serik.scheduler.stagger_slots', 1));
+        if ($slots <= 1) {
+            return true;
+        }
+
+        $phase = abs(crc32($taskKey)) % $slots;
+
+        return ((int) now()->format('i') % $slots) === $phase;
+    }
+
+    /**
+     * Release DB connections after lightweight schedule closures (cron overlap).
+     */
+    public static function releaseDatabaseConnections(): void
+    {
+        try {
+            \Illuminate\Support\Facades\DB::disconnect();
+        } catch (\Throwable) {
+            //
+        }
+    }
+
     private static function queueDepth(string $queue): int
     {
-        return (int) DB::table('jobs')->where('queue', $queue)->count();
+        try {
+            if (! \Illuminate\Support\Facades\Schema::hasTable('jobs')) {
+                return 0;
+            }
+
+            return (int) DB::table('jobs')->where('queue', $queue)->count();
+        } catch (\Throwable) {
+            return 0;
+        }
     }
 }

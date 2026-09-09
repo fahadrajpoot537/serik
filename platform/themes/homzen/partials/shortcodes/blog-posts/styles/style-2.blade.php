@@ -1573,26 +1573,46 @@ document.addEventListener("DOMContentLoaded", () => {
     if (window.calculateMonthlyExpenses) {
       window.calculateMonthlyExpenses();
     }
-    
-        const downSelect = document.getElementById("downPercent");
-        
-          downSelect?.addEventListener("change", () => {
-              userChangedDownSelect = true;
-            });
 
-        if (downSelect && downPercentInputs.length > 0) {
-        
-          const firstPercent = parseNumber(downPercentInputs[0].value);
-        
-          const optionExists = Array.from(downSelect.options).some(
-            opt => parseFloat(opt.value) === firstPercent
-          );
-        
-          // 👉 ONLY auto-set if user has NOT touched dropdown
-          if (!userChangedDownSelect && optionExists) {
-            downSelect.value = firstPercent.toString();
-          }
-        }
+    const downSelect = document.getElementById("downPercent");
+    if (downSelect && downPercentInputs.length > 0) {
+      const firstPercent = parseNumber(downPercentInputs[0].value);
+      const optionExists = Array.from(downSelect.options).some(
+        (opt) => Math.abs(parseFloat(opt.value) - firstPercent) < 0.051
+      );
+      if (!userChangedDownSelect && optionExists) {
+        downSelect.value = firstPercent.toString();
+      }
+    }
+
+    // Sync cash-to-close down payment with upper calculator column 1 (authoritative).
+    syncCashToCloseDownPayment();
+  }
+
+  function syncCashToCloseDownPayment() {
+    const cashSelect = document.getElementById("downPercent1");
+    const cashDpDisplay = document.querySelector(".calculator.cash-close .cash-right .line-item:nth-child(1) span:last-child");
+    if (!downPercentInputs.length || !downInputs.length) {
+      return;
+    }
+
+    const firstAmt = parseNumber(downInputs[0].value);
+    const firstPct = parseNumber(downPercentInputs[0].dataset.original || downPercentInputs[0].value);
+
+    if (cashSelect && cashSelect.dataset.userLocked !== "1") {
+      const optionExists = Array.from(cashSelect.options).some(
+        (opt) => Math.abs(parseFloat(opt.value) - firstPct) < 0.051
+      );
+      if (optionExists) {
+        cashSelect.value = String(firstPct);
+      }
+    }
+
+    if (typeof window.serikRecalcCashClose === "function") {
+      window.serikRecalcCashClose({ downPaymentOverride: firstAmt > 0 ? firstAmt : null });
+    } else if (cashDpDisplay && firstAmt > 0) {
+      cashDpDisplay.textContent = formatMoney(firstAmt);
+    }
   }
 
   // ===== EVENTS =====
@@ -1608,7 +1628,12 @@ document.addEventListener("DOMContentLoaded", () => {
     input.addEventListener("focus", () => { input.value = parseNumber(input.value) || ""; });
     input.addEventListener("blur", () => { 
       let val = parseNumber(input.value);
+      input.dataset.original = String(val || input.dataset.original || "");
       input.value = val ? formatPercent(val) : "";
+      const cashSelect = document.getElementById("downPercent1");
+      if (cashSelect) {
+        cashSelect.dataset.userLocked = "";
+      }
       calculateAll();
     });
     input.addEventListener("input", calculateAll);
@@ -1620,6 +1645,14 @@ document.addEventListener("DOMContentLoaded", () => {
       isEditingDown = false;
       let val = parseNumber(input.value);
       input.value = val ? formatMoney(val) : "";
+      const P = parseNumber(amountInput.value);
+      if (P > 0 && val > 0) {
+        downPercentInputs[i].dataset.original = ((val / P) * 100).toFixed(2);
+      }
+      const cashSelect = document.getElementById("downPercent1");
+      if (cashSelect) {
+        cashSelect.dataset.userLocked = "";
+      }
       calculateAll();
     });
     input.addEventListener("input", () => {
@@ -1643,7 +1676,10 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   const monthlyDownSelect = document.getElementById("downPercent");
-  monthlyDownSelect?.addEventListener("change", () => { calculateAll(); });
+  monthlyDownSelect?.addEventListener("change", () => {
+    userChangedDownSelect = true;
+    calculateAll();
+  });
 
   amortizationSelects.forEach(el => el.addEventListener("change", calculateAll));
   frequencySelects.forEach(el => el.addEventListener("change", calculateAll));
@@ -1785,9 +1821,25 @@ cashbackNo?.addEventListener("click", () => {
 }
 
   // ========= CASH CLOSE =========
-  function updateCashClose(price, ltt) {
+  function getMinDownPayment(P) {
+    if (P <= 500000) return 0.05 * P;
+    if (P <= 1500000) return (0.05 * 500000) + (0.10 * (P - 500000));
+    return 0.20 * P;
+  }
+
+  function updateCashClose(price, ltt, downPaymentOverride) {
       const downPercent = parseFloat(downPercentSelect?.value) || 0;
-      const downPayment = (downPercent / 100) * price;
+      let downPayment = (downPaymentOverride != null && downPaymentOverride > 0)
+        ? downPaymentOverride
+        : (downPercent / 100) * price;
+
+      // Same Ontario minimum-DP rule as the upper mortgage columns.
+      if (!(downPaymentOverride != null && downPaymentOverride > 0) && price > 0) {
+        const minDP = getMinDownPayment(price);
+        if (downPayment < minDP) {
+          downPayment = minDP;
+        }
+      }
     
       const pstInsurance = 0;
     
@@ -1811,14 +1863,20 @@ cashbackNo?.addEventListener("click", () => {
         fees.appraisal -
         cashback;
     
-      // UI updates
-      document.querySelector(".cash-right .line-item:nth-child(1) span:last-child").textContent = formatMoney(downPayment);
-      document.querySelector(".cash-right .line-item:nth-child(2) span:last-child").textContent = formatMoney(ltt);
-    
-      document.querySelector(".cash-right .line-item:nth-child(3) input").value = formatMoney(fees.lawyer);
-      document.querySelector(".cash-right .line-item:nth-child(4) input").value = formatMoney(fees.title);
-      document.querySelector(".cash-right .line-item:nth-child(5) input").value = formatMoney(fees.inspection);
-      document.querySelector(".cash-right .line-item:nth-child(6) input").value = formatMoney(fees.appraisal);
+      // Scope to cash-close calculator only (avoid writing monthly-expenses block).
+      const cashRoot = document.querySelector(".calculator.cash-close");
+      if (cashRoot) {
+        const dpSpan = cashRoot.querySelector(".cash-right .line-item:nth-child(1) span:last-child");
+        const lttSpan = cashRoot.querySelector(".cash-right .line-item:nth-child(2) span:last-child");
+        if (dpSpan) dpSpan.textContent = formatMoney(downPayment);
+        if (lttSpan) lttSpan.textContent = formatMoney(ltt);
+
+        const feeInputs = cashRoot.querySelectorAll(".cash-right .line-item input");
+        if (feeInputs[0]) feeInputs[0].value = formatMoney(fees.lawyer);
+        if (feeInputs[1]) feeInputs[1].value = formatMoney(fees.title);
+        if (feeInputs[2]) feeInputs[2].value = formatMoney(fees.inspection);
+        if (feeInputs[3]) feeInputs[3].value = formatMoney(fees.appraisal);
+      }
     
       // ✅ Optional: show cashback line (if you want UI)
       const cashbackRow = document.getElementById("cashback-amount");
@@ -1830,18 +1888,34 @@ cashbackNo?.addEventListener("click", () => {
     }
 
   // ========= MASTER FUNCTION =========
-  function calculateAll() {
+  function calculateAll(downPaymentOverride) {
     const price = parseNumber(amountInput.value);
     const city = citySelect.value.toLowerCase();
 
     const ltt = calculateLTT(price, city);
-    updateCashClose(price, ltt);
+    updateCashClose(price, ltt, downPaymentOverride);
   }
 
+  window.serikRecalcCashClose = function (opts) {
+    calculateAll(opts && opts.downPaymentOverride != null ? opts.downPaymentOverride : null);
+  };
+
   // ========= EVENTS =========
-  amountInput?.addEventListener("input", calculateAll);
-  citySelect?.addEventListener("change", calculateAll);
-  downPercentSelect?.addEventListener("change", calculateAll);
+  amountInput?.addEventListener("input", () => calculateAll());
+  citySelect?.addEventListener("change", () => calculateAll());
+  downPercentSelect?.addEventListener("change", () => {
+    if (downPercentSelect) {
+      downPercentSelect.dataset.userLocked = "1";
+    }
+    const pct = parseFloat(downPercentSelect?.value) || 0;
+    const firstPctInput = document.querySelector("[data-percentage]");
+    if (firstPctInput && pct > 0) {
+      firstPctInput.dataset.original = String(pct);
+      firstPctInput.value = String(pct);
+      firstPctInput.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    calculateAll();
+  });
 
   // ========= INIT =========
   calculateAll();

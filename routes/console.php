@@ -689,14 +689,17 @@ Artisan::command('serik:test-mail {email? : Destination address} {--resend : For
 | in seconds so "Last 1/3/7 days" map filters fill without waiting on OSM.
 */
 Artisan::command('serik:geocode-borrow
-    {--limit=2000 : Max rows to attempt}
-    {--active-days=30 : Prefer active listings listed within N days (0 = all active)}', function () {
-    @set_time_limit(0);
-    $limit = max(50, min(10000, (int) $this->option('limit')));
+    {--limit=100 : Max rows to attempt}
+    {--active-days=30 : Prefer active listings listed within N days (0 = all active)}
+    {--max-runtime=45 : Soft time budget seconds}', function () {
+    @set_time_limit(90);
+    $limit = max(1, min(500, (int) $this->option('limit')));
     $activeDays = max(0, (int) $this->option('active-days'));
+    $maxRuntime = max(10, min(300, (int) $this->option('max-runtime')));
+    $deadline = microtime(true) + $maxRuntime;
     $activeStatuses = ['New', 'Price Change', 'Extension', 'Ext', 'Previous Status'];
 
-    $query = \Botble\RealEstate\Models\Property::query()
+    $query = DB::table('re_properties')
         ->where('latitude', 0)
         ->whereIn('MlsStatus', $activeStatuses)
         ->where(function ($w) {
@@ -715,8 +718,8 @@ Artisan::command('serik:geocode-borrow
         $query->where('listing_contract_date', '>=', now()->subDays($activeDays)->toDateString());
     }
 
-    $properties = $query->get();
-    if ($properties->isEmpty()) {
+    $rows = $query->get();
+    if ($rows->isEmpty()) {
         $this->info('Nothing to borrow-geocode.');
 
         return 0;
@@ -726,17 +729,26 @@ Artisan::command('serik:geocode-borrow
     $ref = new ReflectionClass($controller);
     $borrow = $ref->getMethod('borrowCoordsFromSibling');
     $borrow->setAccessible(true);
-    $sync = $ref->getMethod('syncPropertyToSearchIndex');
-    $sync->setAccessible(true);
     $clearFail = $ref->getMethod('clearGeocodeFailure');
     $clearFail->setAccessible(true);
 
-    $previousQueue = config('scout.queue');
-    config(['scout.queue' => false]);
-
     $geocoded = 0;
     $failed = 0;
-    foreach ($properties as $property) {
+    $syncedIds = [];
+
+    foreach ($rows as $row) {
+        if (microtime(true) >= $deadline) {
+            break;
+        }
+
+        $property = \Botble\RealEstate\Models\Property::query()
+            ->select(['id', 'external_id', 'name', 'location', 'zip_code', 'latitude', 'longitude', 'MlsStatus', 'TransactionType'])
+            ->find((int) $row->id);
+        if (! $property) {
+            $failed++;
+            continue;
+        }
+
         $coords = $borrow->invoke($controller, $property);
         if ($coords === null) {
             $failed++;
@@ -748,12 +760,15 @@ Artisan::command('serik:geocode-borrow
             'longitude' => $coords['lng'],
         ]);
         $clearFail->invoke($controller, (int) $property->id);
-        $sync->invoke($controller, $property);
+        $syncedIds[] = (int) $property->id;
         $geocoded++;
     }
 
-    config(['scout.queue' => $previousQueue]);
-    $this->info("Borrow geocode: tried={$properties->count()} geocoded={$geocoded} no_sibling={$failed}");
+    if ($syncedIds !== []) {
+        app(\App\Support\PropertySearchSync::class)->scheduleMany($syncedIds);
+    }
+
+    $this->info("Borrow geocode: tried={$rows->count()} geocoded={$geocoded} no_sibling={$failed} queued_search=" . count($syncedIds));
 
     return 0;
 })->purpose('Fast Nominatim-free geocode via sibling building coordinates');
@@ -766,7 +781,7 @@ Artisan::command('serik:geocode-borrow
 Artisan::command('serik:backfill-property-images
     {--limit=200 : Rows per batch}', function () {
     @set_time_limit(0);
-    $limit = max(20, min(500, (int) $this->option('limit')));
+    $limit = max(1, min(500, (int) $this->option('limit')));
 
     $lock = \App\Support\PropertyImageBackfill::acquireLock(600);
     if ($lock === null) {
@@ -799,12 +814,10 @@ Artisan::command('serik:backfill-property-images
 */
 Artisan::command('serik:search-index-recent
     {--days=3 : Listing contract lookback}
-    {--limit=3000 : Max rows to reindex}', function () {
-    @set_time_limit(0);
+    {--limit=100 : Max rows to queue for incremental Meili index}', function () {
+    @set_time_limit(60);
     $days = max(1, min(30, (int) $this->option('days')));
-    $limit = max(100, min(20000, (int) $this->option('limit')));
-    $previousQueue = config('scout.queue');
-    config(['scout.queue' => false]);
+    $limit = max(10, min(500, (int) $this->option('limit')));
 
     $cutoff = now()->subDays($days)->toDateString();
     $ids = DB::table('re_properties')
@@ -815,29 +828,21 @@ Artisan::command('serik:search-index-recent
         ->orderByDesc('listing_contract_date')
         ->limit($limit)
         ->pluck('id')
+        ->map(fn ($id) => (int) $id)
         ->all();
 
     if ($ids === []) {
-        config(['scout.queue' => $previousQueue]);
         $this->info('No recent geocoded listings to index.');
 
         return 0;
     }
 
-    $done = 0;
-    \Botble\RealEstate\Models\Property::query()
-        ->whereIn('id', $ids)
-        ->orderBy('id')
-        ->chunkById(200, function ($rows) use (&$done) {
-            $rows->searchable();
-            $done += $rows->count();
-        });
-
-    config(['scout.queue' => $previousQueue]);
-    $this->info("Indexed {$done} recent geocoded listings into Meilisearch.");
+    // Incremental only — never sync searchable() inline (blocks worker + Meili).
+    app(\App\Support\PropertySearchSync::class)->scheduleMany($ids);
+    $this->info('Queued ' . count($ids) . ' recent listings for incremental Meilisearch sync.');
 
     return 0;
-})->purpose('Re-index recent geocoded listings into Meilisearch (sync)');
+})->purpose('Queue recent geocoded listings for incremental Meilisearch sync');
 
 Artisan::command('serik:sync-properties', function () {
     $this->info('Running full AMP property sync...');
@@ -2437,6 +2442,13 @@ Artisan::command('serik:sync-live:dispatch
 
     $high = \App\Support\SerikQueue::high();
 
+    if (! \App\Support\SerikScheduler::shouldDispatchSyncLive()) {
+        $pending = \App\Support\SerikQueueJobHygiene::countPending(\App\Jobs\SyncLiveJob::class, $high);
+        $this->warn("Skipped SyncLiveJob dispatch — {$pending} already pending on queue={$high}");
+
+        return 0;
+    }
+
     \App\Jobs\SyncLiveJob::dispatch(
         $force,
         $days,
@@ -2513,7 +2525,14 @@ Artisan::command('serik:backlog:dispatch
     $days = (int) config('serik.backlog.days', 90);
     $activeStatuses = ['New', 'Price Change', 'Extension', 'Ext', 'Previous Status', 'Active'];
 
-    $highDepth = (int) DB::table('jobs')->where('queue', $high)->count();
+    $highDepth = 0;
+    try {
+        if (\Illuminate\Support\Facades\Schema::hasTable('jobs')) {
+            $highDepth = (int) DB::table('jobs')->where('queue', $high)->count();
+        }
+    } catch (\Throwable) {
+        $highDepth = 0;
+    }
     if (! $force && $highDepth >= $pauseAt) {
         $this->warn("HIGH queue depth={$highDepth} ≥ {$pauseAt} — backlog dispatch paused.");
 
@@ -2575,8 +2594,14 @@ Artisan::command('serik:backlog:dispatch
 
     $dispatched = 0;
     foreach ($ids as $propertyId) {
-        \App\Jobs\GeocodeBacklogPropertyJob::dispatch($propertyId)->onQueue($low);
-        $dispatched++;
+        try {
+            \App\Jobs\GeocodeBacklogPropertyJob::dispatch($propertyId)->onQueue($low);
+            $dispatched++;
+        } catch (\Throwable $e) {
+            $this->error('Backlog dispatch failed: ' . $e->getMessage());
+
+            return 1;
+        }
     }
 
     $this->info("Backlog dispatch: {$dispatched} → queue={$low} (high_depth={$highDepth})");
@@ -3463,8 +3488,20 @@ Artisan::command('serik:reconcile
                 $report['meilisearch_docs'] = $meiliCount;
                 $report['index_drift'] = $dbCount - $meiliCount;
                 if (abs($dbCount - $meiliCount) > 100 && ! $dry) {
-                    $this->warn("Index drift of {$report['index_drift']} — queueing search-index catch-up.");
-                    $this->call('serik:search-index', ['--resume' => true]);
+                    $this->warn("Index drift of {$report['index_drift']} — queueing incremental search catch-up (no full reindex).");
+                    $driftIds = DB::table('re_properties')
+                        ->where('moderation_status', 'approved')
+                        ->where('latitude', '!=', 0)
+                        ->where('longitude', '!=', 0)
+                        ->orderByDesc('updated_at')
+                        ->limit(500)
+                        ->pluck('id')
+                        ->map(fn ($id) => (int) $id)
+                        ->all();
+                    if ($driftIds !== []) {
+                        app(\App\Support\PropertySearchSync::class)->scheduleMany($driftIds);
+                        $report['search_queued'] = count($driftIds);
+                    }
                 }
             }
         } catch (\Throwable $e) {
@@ -3491,10 +3528,10 @@ Artisan::command('serik:reconcile
 |--------------------------------------------------------------------------
 */
 Artisan::command('serik:fix-slugs
-    {--limit=5000 : Max properties to fix per run}
+    {--limit=1000 : Max properties to fix per run}
     {--dry-run : Report only}', function () {
     @set_time_limit(0);
-    $limit = max(100, min(50000, (int) $this->option('limit')));
+    $limit = max(1, min(50000, (int) $this->option('limit')));
     $dry = (bool) $this->option('dry-run');
     $prefix = \Botble\Slug\Facades\SlugHelper::getPrefix(\Botble\RealEstate\Models\Property::class, 'properties') ?: 'properties';
 

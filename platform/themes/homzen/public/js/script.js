@@ -2382,7 +2382,10 @@ $(() => {
                 type: isSerikProperties ? 'GET' : 'POST',
                 data: cleanedFormData.formData,
                 dataType: 'json',
-                headers: { Accept: 'application/json' },
+                headers: {
+                    Accept: 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
                 beforeSend: () => {
                     $dataListing.addClass('is-loading')
                     $dataListing.find('.loading-spinner').remove()

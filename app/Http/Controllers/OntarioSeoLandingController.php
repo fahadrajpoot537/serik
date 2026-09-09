@@ -23,6 +23,14 @@ class OntarioSeoLandingController extends Controller
         // Capture client intent BEFORE SEO defaults touch the request.
         $explicitType = strtolower(trim((string) $request->input('type', '')));
         $explicitStatus = strtolower(trim((string) $request->input('status', '')));
+        $explicitTx = strtolower(trim((string) $request->input('transaction', '')));
+        if ($explicitType === '' && $explicitTx !== '') {
+            if (str_contains($explicitTx, 'lease') || $explicitTx === 'rent') {
+                $explicitType = 'rent';
+            } elseif (str_contains($explicitTx, 'sale')) {
+                $explicitType = 'sale';
+            }
+        }
 
         $parsed = SeoLandingParser::toFilterParams($seo);
 
@@ -90,9 +98,11 @@ class OntarioSeoLandingController extends Controller
     {
         return response($html, 200, [
             'Content-Type' => 'text/html; charset=UTF-8',
+            'Content-Length' => (string) strlen($html),
             'X-Serik-Ontario-Cache' => $cacheStatus,
             'Cache-Control' => 'private, no-cache, no-store, must-revalidate',
             'Vary' => 'Cookie',
+            'Connection' => 'close',
         ]);
     }
 

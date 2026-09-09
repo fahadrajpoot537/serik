@@ -33,4 +33,17 @@ class MeilisearchResilienceTest extends TestCase
         $this->assertStringContainsString('SerikCache::get', $src);
         $this->assertStringContainsString('config(\'scout.meilisearch.timeout\'', $src);
     }
+
+    public function test_meili_heal_config_defaults_preserve_behavior(): void
+    {
+        $this->assertTrue((bool) config('serik.health.meili_heal.enabled'));
+        $this->assertFalse((bool) config('serik.health.meili_heal.auto_start_process'));
+        $this->assertSame('SerikMeilisearch', (string) config('serik.health.meili_heal.service_name'));
+    }
+
+    public function test_queue_heal_includes_meilisearch_step(): void
+    {
+        $src = (string) file_get_contents(base_path('app/Support/SerikQueueSelfHealService.php'));
+        $this->assertStringContainsString('SerikMeilisearchHealth', $src);
+    }
 }

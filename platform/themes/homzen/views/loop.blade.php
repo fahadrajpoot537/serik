@@ -3,6 +3,16 @@
 
     $activeCategory = $category ?? null;
     $blogPageUrl = get_blog_page_url();
+
+    // Content owns the H1 so breadcrumb/title chrome does not duplicate it.
+    Theme::set('pageH1ProvidedByContent', true);
+    Theme::set('breadcrumbStyle', 'without-title');
+    if (! Theme::get('pageH1')) {
+        Theme::set(
+            'pageH1',
+            $activeCategory->name ?? __('Real Estate Insights & Market Updates')
+        );
+    }
 @endphp
 
 <style>
@@ -112,7 +122,8 @@
     .blog-list-page .flat-blog-item .blog-card-img-placeholder {
         width: 100%;
         height: 100%;
-        object-fit: cover;
+        object-fit: contain;
+        object-position: center center;
         display: block;
     }
 
@@ -324,6 +335,34 @@
             gap: 1rem;
         }
     }
+
+    .blog-list-page .serik-blog-list-intro {
+        margin: 0 0 1.25rem;
+    }
+
+    .blog-list-page .serik-blog-list-h1 {
+        font-family: inherit;
+        font-size: clamp(1.55rem, 3.2vw, 2.1rem);
+        font-weight: 700;
+        line-height: 1.25;
+        color: var(--serik-reference-navy, #0b4c9f);
+        margin: 0 0 0.45rem;
+        letter-spacing: -0.01em;
+    }
+
+    .blog-list-page .serik-blog-list-lede {
+        margin: 0;
+        max-width: 40rem;
+        font-size: 0.98rem;
+        line-height: 1.55;
+        color: #64748b;
+    }
+
+    .blog-list-page .flat-blog-item .title,
+    .blog-list-page .flat-blog-item .description,
+    .blog-list-page .blog-category-tab {
+        font-family: inherit;
+    }
 </style>
 
 <section class="flat-section blog-list-page">
@@ -332,6 +371,20 @@
     <div class="row g-4 align-items-start blog-list-layout">
         <div class="col-12 col-md-8 col-lg-8 col-xl-9">
             <div class="flat-blog-list">
+                @php
+                    $blogListHeading = $activeCategory->name
+                        ?? __('Real Estate Insights & Market Updates');
+                    $blogListLede = $activeCategory
+                        ? null
+                        : __('Expert guidance, local market trends, and practical tips for Ontario homebuyers and sellers.');
+                @endphp
+                <header class="serik-blog-list-intro">
+                    <h1 class="serik-blog-list-h1">{{ $blogListHeading }}</h1>
+                    @if ($blogListLede)
+                        <p class="serik-blog-list-lede">{{ $blogListLede }}</p>
+                    @endif
+                </header>
+
                 @if ($blogCategories->isNotEmpty())
                     <nav class="blog-category-tabs" aria-label="{{ __('Blog categories') }}">
                         <a href="{{ $blogPageUrl }}"

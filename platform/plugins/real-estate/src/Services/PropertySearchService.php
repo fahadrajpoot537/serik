@@ -38,17 +38,33 @@ class PropertySearchService
         }
 
         $healthy = false;
+        $reason = null;
         try {
             if ($this->client()->isHealthy()) {
                 $stats = $this->index()->stats();
                 $docs = (int) ($stats['numberOfDocuments'] ?? 0);
                 $healthy = $docs > 0;
+                if (! $healthy) {
+                    $reason = 'index_empty';
+                }
+            } else {
+                $reason = 'health_false';
             }
-        } catch (Throwable) {
+        } catch (Throwable $e) {
             $healthy = false;
+            $reason = 'unreachable: ' . mb_substr($e->getMessage(), 0, 180);
         }
 
         SerikCache::put('serik_meili_health_v2', $healthy, $healthy ? 30 : 5);
+
+        if (! $healthy && class_exists(\App\Support\SerikMeilisearchHealth::class)) {
+            app(\App\Support\SerikMeilisearchHealth::class)->logDown([
+                'host' => (string) config('scout.meilisearch.host'),
+                'reachable' => $reason === null || ! str_starts_with((string) $reason, 'unreachable'),
+                'documents' => null,
+                'reason' => $reason ?? 'unavailable',
+            ], 'isAvailable');
+        }
 
         return $healthy;
     }

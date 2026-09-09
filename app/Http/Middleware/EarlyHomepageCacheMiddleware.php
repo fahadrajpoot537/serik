@@ -24,7 +24,7 @@ class EarlyHomepageCacheMiddleware
         }
 
         if ($request->getPathInfo() !== '/') {
-            return $this->maybeOntarioSeoHit($request, $next);
+            return $this->maybeCachedPublicHit($request, $next);
         }
 
         if ($request->ajax() || $request->wantsJson()) {
@@ -87,29 +87,69 @@ class EarlyHomepageCacheMiddleware
         return false;
     }
 
-    private function maybeOntarioSeoHit(Request $request, Closure $next): Response
+    private function maybeCachedPublicHit(Request $request, Closure $next): Response
+    {
+        $ontario = $this->maybeOntarioSeoHit($request);
+        if ($ontario !== null) {
+            return $ontario;
+        }
+
+        $guest = $this->maybeGuestPageHit($request);
+        if ($guest !== null) {
+            return $guest;
+        }
+
+        return $next($request);
+    }
+
+    private function maybeGuestPageHit(Request $request): ?Response
+    {
+        if ($this->shouldBypassEarlyCache($request)) {
+            return null;
+        }
+
+        $key = \App\Support\SerikGuestPageCache::key($request);
+        $cached = \App\Support\SerikGuestPageCache::get($key);
+        if ($cached === null) {
+            return null;
+        }
+
+        $response = response($cached, 200, [
+            'Content-Type' => 'text/html; charset=UTF-8',
+            'Content-Length' => (string) strlen($cached),
+            'X-Serik-Guest-Cache' => 'HIT-EARLY',
+            'Connection' => 'close',
+        ]);
+        \App\Support\SerikHtmlCacheHeaders::apply($response, $request);
+
+        return \App\Support\SerikSecurityHeaders::apply($response, $request);
+    }
+
+    private function maybeOntarioSeoHit(Request $request): ?Response
     {
         if (! preg_match('#^/ontario/([a-z0-9\-]+)$#i', $request->getPathInfo(), $matches)) {
-            return $next($request);
+            return null;
         }
 
         if ($request->ajax() || $request->wantsJson()) {
-            return $next($request);
+            return null;
         }
 
         if ($this->shouldBypassEarlyCache($request)) {
-            return $next($request);
+            return null;
         }
 
         $key = \App\Support\OntarioSeoPageCache::key($request, $matches[1], ':anon');
         $cached = \App\Support\OntarioSeoPageCache::get($key);
         if ($cached === null) {
-            return $next($request);
+            return null;
         }
 
         $response = response($cached, 200, [
             'Content-Type' => 'text/html; charset=UTF-8',
+            'Content-Length' => (string) strlen($cached),
             'X-Serik-Ontario-Cache' => 'HIT-EARLY',
+            'Connection' => 'close',
         ]);
         \App\Support\SerikHtmlCacheHeaders::apply($response, $request);
 

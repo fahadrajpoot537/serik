@@ -20,19 +20,19 @@ return [
         'enabled' => filter_var(env('TREB_ARCHIVE_IMPORT_ENABLED', true), FILTER_VALIDATE_BOOL),
 
         // OData $top per API page (10–500).
-        'chunk_size' => (int) env('TREB_ARCHIVE_CHUNK_SIZE', 200),
+        'chunk_size' => (int) env('TREB_ARCHIVE_CHUNK_SIZE', 100),
         'adaptive_chunk' => filter_var(env('TREB_ARCHIVE_ADAPTIVE_CHUNK', true), FILTER_VALIDATE_BOOL),
-        'upsert_chunk' => (int) env('TREB_ARCHIVE_UPSERT_CHUNK', 250),
+        'upsert_chunk' => (int) env('TREB_ARCHIVE_UPSERT_CHUNK', 100),
 
         // Max AMP pages processed inside one queue job.
-        'pages_per_job' => (int) env('TREB_ARCHIVE_PAGES_PER_JOB', 15),
+        'pages_per_job' => (int) env('TREB_ARCHIVE_PAGES_PER_JOB', 8),
 
         // Soft time budget (seconds) per job before yielding.
-        'max_seconds_per_job' => (int) env('TREB_ARCHIVE_MAX_SECONDS', 90),
+        'max_seconds_per_job' => (int) env('TREB_ARCHIVE_MAX_SECONDS', 60),
 
         // Parallel workers (page leases). Safe: no two workers claim same skip.
         'parallel_enabled' => filter_var(env('TREB_ARCHIVE_PARALLEL', true), FILTER_VALIDATE_BOOL),
-        'max_parallel_jobs' => (int) env('TREB_ARCHIVE_MAX_PARALLEL', 4),
+        'max_parallel_jobs' => (int) env('TREB_ARCHIVE_MAX_PARALLEL', 2),
         'lease_ttl_seconds' => (int) env('TREB_ARCHIVE_LEASE_TTL', 180),
 
         // HTTP client

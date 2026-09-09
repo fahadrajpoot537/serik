@@ -27,7 +27,7 @@ return [
         'process_at' => env('GOHIGHLEVEL_MLS_PROCESS_AT', '05:15'),
 
         // Max pending tasks claimed per morning dispatch
-        'batch_size' => (int) env('GOHIGHLEVEL_MLS_BATCH_SIZE', 100),
+        'batch_size' => (int) env('GOHIGHLEVEL_MLS_BATCH_SIZE', 50),
 
         // Job retries (transient 429/5xx/timeouts/network)
         'job_tries' => (int) env('GOHIGHLEVEL_MLS_JOB_TRIES', 8),

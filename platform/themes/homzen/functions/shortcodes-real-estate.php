@@ -420,11 +420,16 @@ app()->booted(function (): void {
                 return null;
             }
 
-            $accounts = Account::query()
+            // Preserve the exact CMS account_ids order (homepage featured lineup).
+            $accountsById = Account::query()
                 ->whereIn('id', $accountIds)
-                ->orderByDesc('is_featured')
-                ->oldest('first_name')
-                ->get();
+                ->get()
+                ->keyBy('id');
+
+            $accounts = collect($accountIds)
+                ->map(fn ($id) => $accountsById->get((int) $id))
+                ->filter()
+                ->values();
 
             $counts = \App\Support\RealEstateCountCache::agentPropertyCountsFor($accountIds);
             $accounts->each(function (Account $account) use ($counts): void {

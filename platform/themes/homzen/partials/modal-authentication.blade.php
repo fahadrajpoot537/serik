@@ -1148,6 +1148,7 @@
     let registerRecaptchaWidgetId = null;
     let contactRecaptchaWidgetId = null;
     window.contactRecaptchaWidgetId = null;
+    window.serikContactRecaptchaWidgets = window.serikContactRecaptchaWidgets || [];
     let newsletterRecaptchaWidgetId = null;
     window.newsletterRecaptchaWidgetId = null;
 
@@ -1162,11 +1163,41 @@
             setTimeout(syncAuthBodyHeight, 100);
         }
 
-        const contactEl = document.getElementById('contactRecaptcha');
-        if (contactEl && contactRecaptchaWidgetId === null) {
-            contactRecaptchaWidgetId = grecaptcha.render(contactEl, { sitekey: recaptchaSiteKey });
-            window.contactRecaptchaWidgetId = contactRecaptchaWidgetId;
-        }
+        // Prefer class-based widgets (unique ids). Fall back to legacy #contactRecaptcha.
+        // Only render into visible hosts so hidden duplicate forms (style-2) do not steal the widget.
+        const contactNodes = document.querySelectorAll('.js-serik-contact-recaptcha, #contactRecaptcha');
+        contactNodes.forEach((contactEl) => {
+            if (!contactEl || contactEl.getAttribute('data-widget-ready') === '1') {
+                return;
+            }
+            if (contactEl.childElementCount > 0) {
+                contactEl.setAttribute('data-widget-ready', '1');
+                return;
+            }
+            let hidden = false;
+            let node = contactEl;
+            while (node && node !== document.documentElement) {
+                const style = window.getComputedStyle(node);
+                if (style.display === 'none' || style.visibility === 'hidden') {
+                    hidden = true;
+                    break;
+                }
+                node = node.parentElement;
+            }
+            if (hidden) {
+                return;
+            }
+            try {
+                const wid = grecaptcha.render(contactEl, { sitekey: recaptchaSiteKey });
+                contactEl.setAttribute('data-widget-ready', '1');
+                contactEl.setAttribute('data-widget-id', String(wid));
+                window.serikContactRecaptchaWidgets.push(wid);
+                contactRecaptchaWidgetId = wid;
+                window.contactRecaptchaWidgetId = wid;
+            } catch (err) {
+                // Already rendered or grecaptcha not ready
+            }
+        });
 
         const newsletterEl = document.getElementById('newsletterRecaptcha');
         if (newsletterEl && newsletterRecaptchaWidgetId === null && !newsletterEl.childElementCount) {
@@ -1180,14 +1211,43 @@
         if (typeof grecaptcha === 'undefined') {
             return;
         }
+        (window.serikContactRecaptchaWidgets || []).forEach((wid) => {
+            try { grecaptcha.reset(wid); } catch (e) {}
+        });
         if (contactRecaptchaWidgetId !== null) {
-            grecaptcha.reset(contactRecaptchaWidgetId);
+            try { grecaptcha.reset(contactRecaptchaWidgetId); } catch (e) {}
         }
         if (newsletterRecaptchaWidgetId !== null) {
-            grecaptcha.reset(newsletterRecaptchaWidgetId);
+            try { grecaptcha.reset(newsletterRecaptchaWidgetId); } catch (e) {}
         }
         resetAuthCaptcha();
     };
+
+    // Inject token into whichever contact form is submitting (multi-form pages).
+    document.addEventListener('submit', function (e) {
+        const form = e.target;
+        if (!(form instanceof HTMLFormElement) || !form.classList.contains('contact-form')) {
+            return;
+        }
+        if (typeof grecaptcha === 'undefined') {
+            return;
+        }
+        const widgetEl = form.querySelector('.js-serik-contact-recaptcha, #contactRecaptcha');
+        let wid = widgetEl ? widgetEl.getAttribute('data-widget-id') : null;
+        wid = wid != null && wid !== '' ? Number(wid) : window.contactRecaptchaWidgetId;
+        if (wid == null || Number.isNaN(wid)) {
+            return;
+        }
+        const token = grecaptcha.getResponse(wid) || '';
+        let input = form.querySelector('textarea[name="g-recaptcha-response"], input[name="g-recaptcha-response"]');
+        if (!input) {
+            input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'g-recaptcha-response';
+            form.appendChild(input);
+        }
+        input.value = token;
+    }, true);
 
     function ensureRegisterRecaptcha() {
         if (typeof grecaptcha === 'undefined') {

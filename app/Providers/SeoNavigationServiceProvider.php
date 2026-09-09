@@ -66,14 +66,11 @@ class SeoNavigationServiceProvider extends ServiceProvider
                 return $query;
             }
 
+            // Align with Property::isSoldHistory() — never treat ClosePrice alone as sold
+            // (AMP stale close data was leaking active For Sale rows into Sold browse).
             $soldStatuses = ['Sold', 'Sold Conditional', 'Sold Conditional Escape', 'Leased', 'Leased Conditional'];
 
-            return $query->where(function ($q) use ($soldStatuses): void {
-                $q->whereIn('MlsStatus', $soldStatuses)
-                    ->orWhere(function ($inner): void {
-                        $inner->whereNotNull('ClosePrice')->where('ClosePrice', '>', 0);
-                    });
-            });
+            return $query->whereIn('MlsStatus', $soldStatuses);
         }, 25, 2);
 
         add_filter('properties_filter_query', function ($query, array $filters) {

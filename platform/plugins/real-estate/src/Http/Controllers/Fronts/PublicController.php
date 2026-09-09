@@ -210,7 +210,7 @@ class PublicController extends BaseController
 
         $ajaxCacheKey = null;
         if ($request->ajax() && ! $request->query('minimal')) {
-            $ajaxCacheKey = 'serik_props_ajax_html_v7:' . md5(json_encode($request->except(['_token', '_method'])));
+            $ajaxCacheKey = 'serik_props_ajax_html_v8:' . md5(json_encode($request->except(['_token', '_method'])));
             $cachedAjax = \Illuminate\Support\Facades\Cache::get($ajaxCacheKey);
             if (is_array($cachedAjax) && isset($cachedAjax['html'])) {
                 $response = $this->httpResponse()->setData($cachedAjax['html']);
@@ -224,18 +224,32 @@ class PublicController extends BaseController
 
         $properties = RealEstateHelper::getPropertiesFilter((int) theme_option('number_of_properties_per_page') ?: 12);
 
+        // Never run a full-table COUNT on the request process — after Cache::flush
+        // that COUNT blocked Connection: close for 15–30s on local (637k rows).
         if (! \Illuminate\Support\Facades\Cache::has('serik_active_listing_count_v1')) {
             app()->terminating(function (): void {
-                \Illuminate\Support\Facades\Cache::remember('serik_active_listing_count_v1', 600, function () {
-                    $total = (int) \Botble\RealEstate\Models\Property::query()
-                        ->active()
-                        ->residential()
-                        ->mlsActive()
-                        ->count();
+                try {
+                    $meiliTotal = app(\Botble\RealEstate\Services\PropertySearchService::class)
+                        ->searchEstimatedTotal('', [
+                            'residential_only' => true,
+                            'statuses' => [
+                                'New',
+                                'Active',
+                                'Ext',
+                                'Extension',
+                                'Price Change',
+                                'Active Under Contract',
+                            ],
+                        ]);
+                    if ($meiliTotal === null) {
+                        return;
+                    }
+                    $total = (int) $meiliTotal;
+                    \Illuminate\Support\Facades\Cache::put('serik_active_listing_count_v1', $total, 600);
                     \Illuminate\Support\Facades\Cache::put('serik_active_listing_count_v1:last', $total, 86400);
-
-                    return $total;
-                });
+                } catch (\Throwable $e) {
+                    report($e);
+                }
             });
         }
 

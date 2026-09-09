@@ -46,6 +46,15 @@ final class SerikQueueSelfHealService
         }
 
         try {
+            if (config('serik.orchestration.prune_duplicate_jobs', true)) {
+                $report['pruned_duplicate_jobs'] = SerikQueueJobHygiene::healConfiguredDuplicates(false);
+                $report['purged_exceeded_attempts'] = SerikQueueJobHygiene::purgeExceededAttempts(50);
+            }
+        } catch (Throwable $e) {
+            $report['errors'][] = 'duplicate_prune: ' . $e->getMessage();
+        }
+
+        try {
             if ($this->shouldSignalQueueRestart()) {
                 Artisan::call('queue:restart');
                 Cache::put('serik_queue_restart_at', now()->timestamp, 86400);
@@ -59,6 +68,13 @@ final class SerikQueueSelfHealService
             $report['domain_recover'] = app(SerikReliabilityService::class)->recoverSafe();
         } catch (Throwable $e) {
             $report['errors'][] = 'domain: ' . $e->getMessage();
+        }
+
+        try {
+            $report['meilisearch'] = app(SerikMeilisearchHealth::class)->heal();
+        } catch (Throwable $e) {
+            $report['errors'][] = 'meilisearch: ' . $e->getMessage();
+            $report['meilisearch'] = ['error' => $e->getMessage()];
         }
 
         Log::info('SerikQueueSelfHeal', $report);

@@ -95,6 +95,21 @@ final class PropertySearchSync
     public function processNextBatch(): array
     {
         $batchSize = max(1, (int) config('serik.search_sync.batch_size', 25));
+
+        if (! class_exists(Property::class)) {
+            SerikSafeLog::write('error', '[PropertySearchSync] Property model unavailable — skipping batch drain', [
+                'pending_count' => $this->pendingCount(),
+            ]);
+
+            return [
+                'batch_size' => $batchSize,
+                'property_count' => 0,
+                'property_ids' => [],
+                'meilisearch_duration_ms' => 0.0,
+                'remaining_pending' => $this->pendingCount(),
+            ];
+        }
+
         $propertyIds = $this->claimNextBatch($batchSize);
 
         if ($propertyIds === []) {
@@ -560,6 +575,15 @@ final class PropertySearchSync
     private function clearMeilisearchFailureState(): void
     {
         Cache::forget(self::MEILISEARCH_CIRCUIT_KEY);
+    }
+
+    /**
+     * Public entry for heal/recovery paths — clears the write circuit so
+     * SearchBatchJob can drain pending docs after Meili comes back.
+     */
+    public function clearMeilisearchCircuit(): void
+    {
+        $this->clearMeilisearchFailureState();
     }
 
     private function checkpointsEnabled(): bool

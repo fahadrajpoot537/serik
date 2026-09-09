@@ -3,7 +3,7 @@
     $innerFooterSidebar = dynamic_sidebar('inner_footer_sidebar');
     $bottomFooterSidebar = dynamic_sidebar('bottom_footer_sidebar');
     // Light Serik footer is site-wide — never apply the dark texture image.
-    $footerBackgroundColor = '#f4f6fa';
+    $footerBackgroundColor = '#bdbdbd';
     $footerBackgroundImage = null;
     $useFooterBackgroundImage = false;
 @endphp

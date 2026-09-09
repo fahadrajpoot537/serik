@@ -125,6 +125,18 @@ class SearchBatchJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
         ]);
 
         $sync = app(PropertySearchSync::class);
+        $message = (string) ($e?->getMessage() ?? '');
+
+        // Autoload/bootstrap issue — retrying will never succeed until deploy fixes workers.
+        if (str_contains($message, 'Property') && str_contains($message, 'not found')) {
+            SerikSafeLog::write('warning', '[SearchBatchJob] Property model missing — holding pending IDs, no auto-recovery dispatch', [
+                'pending_count' => $sync->pendingCount(),
+            ]);
+            $sync->releaseDispatchGuard();
+
+            return;
+        }
+
         if ($sync->pendingCount() === 0) {
             $sync->releaseDispatchGuard();
 

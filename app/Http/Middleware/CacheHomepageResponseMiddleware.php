@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Support\HomepageResponseCache;
+use App\Support\SerikGuestPageCache;
 use App\Support\SerikHomepageAssets;
 use Closure;
 use Illuminate\Http\Request;
@@ -10,6 +11,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Serve cached homepage HTML when available (measured ~10s render → ~5ms cache hit).
+ * Also stores guest HTML for static CMS/blog paths (SerikGuestPageCache).
  */
 class CacheHomepageResponseMiddleware
 {
@@ -39,6 +41,25 @@ class CacheHomepageResponseMiddleware
             return $hit;
         }
 
+        // Guest static pages: serve after StartSession when early layer was bypassed
+        // only if the visitor is still anonymous (no account auth).
+        if (
+            ! auth()->check()
+            && ! (is_plugin_active('real-estate') && auth('account')->check())
+        ) {
+            $guestKey = SerikGuestPageCache::key($request);
+            $guestHtml = SerikGuestPageCache::get($guestKey);
+            if ($guestHtml !== null) {
+                $hit = response($guestHtml, 200, [
+                    'Content-Type' => 'text/html; charset=UTF-8',
+                    'X-Serik-Guest-Cache' => 'HIT',
+                ]);
+                \App\Support\SerikHtmlCacheHeaders::apply($hit, $request);
+
+                return $hit;
+            }
+        }
+
         $response = $next($request);
 
         if (
@@ -55,6 +76,19 @@ class CacheHomepageResponseMiddleware
             $etag = HomepageResponseCache::getEtag($request);
             if ($etag) {
                 $response->headers->set('ETag', $etag);
+            }
+        } elseif (
+            $response->getStatusCode() === 200
+            && str_contains((string) $response->headers->get('Content-Type'), 'text/html')
+            && ! auth()->check()
+            && ! (is_plugin_active('real-estate') && auth('account')->check())
+        ) {
+            $guestKey = SerikGuestPageCache::key($request);
+            if ($guestKey !== null) {
+                $html = HomepageResponseCache::alignLoopbackOrigins((string) $response->getContent(), $request);
+                SerikGuestPageCache::put($guestKey, $html);
+                $response->headers->set('X-Serik-Guest-Cache', 'MISS');
+                \App\Support\SerikHtmlCacheHeaders::apply($response, $request);
             }
         }
 
