@@ -5601,7 +5601,7 @@ position: absolute;
 <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.3/mapbox-gl-draw.js"></script>
 <script src="{{ Theme::asset()->url('js/map/interaction-state.js') }}?v={{ get_cms_version() }}"></script>
 <script src="{{ Theme::asset()->url('js/map/marker-manager.js') }}?v={{ get_cms_version() }}"></script>
-<script src="{{ Theme::asset()->url('js/map/fetch-coordinator.js') }}?v={{ get_cms_version() }}-mf4"></script>
+<script src="{{ Theme::asset()->url('js/map/fetch-coordinator.js') }}?v={{ get_cms_version() }}-mf5"></script>
 @if (request()->boolean('hs_map_trace') || request()->cookie('hs_map_trace'))
 <script src="{{ Theme::asset()->url('js/map/map-trace.js') }}?v={{ get_cms_version() }}"></script>
 @endif
@@ -6763,10 +6763,22 @@ async function showCityBoundary(cityName, fallbackCoords = null) {
         }
         autoCenteringMap = true;
         window.autoCenteringMap = true;
-        map.once('moveend', () => {
+        let cleared = false;
+        const clearAutoCenter = () => {
+            if (cleared) {
+                return;
+            }
+            cleared = true;
             autoCenteringMap = false;
             window.autoCenteringMap = false;
-        });
+            try {
+                map.off('moveend', onMoveEnd);
+            } catch (e) {}
+        };
+        const onMoveEnd = () => clearAutoCenter();
+        map.once('moveend', onMoveEnd);
+        // Safety: a missed moveend must never permanently block marker fetches.
+        setTimeout(clearAutoCenter, 2800);
         moveFn();
     }
 
@@ -9073,14 +9085,21 @@ function getTransactionFromUrl() {
         if (isClusterPanelOpen()) {
             return;
         }
-        if (autoCenteringMap) return;
+        if (autoCenteringMap || window.autoCenteringMap) return;
 
         clearTimeout(moveTimer);
+        // Coalesce rapid inertia moveend events; coordinator also debounces.
         moveTimer = setTimeout(() => {
+            if (autoCenteringMap || window.autoCenteringMap) return;
+            if (isClusterPanelOpen()) return;
             if (!window.HsMapFetchCoordinator?.movedEnoughToRefetch?.(map)) return;
             skipSeoUrlOnNextLoad = true;
-            loadProperties({ fromMapMove: true });
-        }, 0);
+            if (window.HsMapFetchCoordinator?.onMapMoveEnd) {
+                window.HsMapFetchCoordinator.onMapMoveEnd(buildMapPropertiesRequest);
+                return;
+            }
+            loadProperties({ fromMapMove: true, delayMs: 180 });
+        }, 120);
     });
     
  
@@ -9566,16 +9585,26 @@ function mapMovedEnoughToRefetch() {
             return;
         }
 
-        if ((fromFilters || fromMapMove || options.fromInit) && window.HsMapFetchCoordinator?.executeLoad) {
+        // Pan/drag: debounce + coalesce (never abort-storm via executeLoad).
+        if (fromMapMove && window.HsMapFetchCoordinator?.scheduleLoad) {
+            window.HsMapFetchCoordinator.scheduleLoad(
+                buildMapPropertiesRequest,
+                options,
+                options.delayMs != null ? options.delayMs : 180
+            );
+            return;
+        }
+
+        // Filters / init: run immediately (force replaces in-flight).
+        if ((fromFilters || options.fromInit) && window.HsMapFetchCoordinator?.executeLoad) {
             window.HsMapFetchCoordinator.clearDebounce?.();
             window.HsMapFetchCoordinator.executeLoad(buildMapPropertiesRequest, options);
             return;
         }
 
-        const forDebounce = fromFilters || (!fromMapMove && !options.fromInit);
         window.HsMapFetchCoordinator?.scheduleLoad?.(
             buildMapPropertiesRequest,
-            Object.assign({}, options, { fromFilters: forDebounce }),
+            options,
             options.delayMs
         );
     }

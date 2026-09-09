@@ -12,6 +12,9 @@
     let lastFetchZoom = null;
     let pendingInitFetch = false;
     let initFetchScheduled = false;
+    let pendingBuildRequest = null;
+    let pendingOptions = null;
+    let inFlightKey = '';
 
     function abortInFlight() {
         if (controller) {
@@ -23,6 +26,7 @@
             controller = null;
         }
         isLoading = false;
+        inFlightKey = '';
     }
 
     function clearDebounce() {
@@ -41,26 +45,27 @@
         const center = map.getCenter();
         const latSpan = Math.abs(bounds.getNorth() - bounds.getSouth());
         const lngSpan = Math.abs(bounds.getEast() - bounds.getWest());
-        const movedLat = Math.abs(center.lat - lastFetchCenter.lat);
-        const movedLng = Math.abs(center.lng - lastFetchCenter.lng);
-        const panned = movedLat > latSpan * 0.08 || movedLng > lngSpan * 0.08;
+        // 4% viewport — update sooner while still avoiding tiny jitter refetches.
+        const panned = movedLatEnough(center.lat, lastFetchCenter.lat, latSpan)
+            || movedLngEnough(center.lng, lastFetchCenter.lng, lngSpan);
 
         if (panned) {
             return true;
         }
 
-        // Zoom-in on the same area: refetch so denser local pins land on exact
-        // DB coordinates for the tighter viewport (avoids sparse city-level sample).
-        if (lastFetchZoom !== null && zoom > lastFetchZoom) {
-            return true;
-        }
-
-        // Zoom-out needs a wider sample from the API.
-        if (lastFetchZoom !== null && zoom < lastFetchZoom) {
+        if (lastFetchZoom !== null && zoom !== lastFetchZoom) {
             return true;
         }
 
         return false;
+    }
+
+    function movedLatEnough(a, b, span) {
+        return Math.abs(a - b) > span * 0.04;
+    }
+
+    function movedLngEnough(a, b, span) {
+        return Math.abs(a - b) > span * 0.04;
     }
 
     function rememberFetchMeta(map) {
@@ -73,6 +78,7 @@
 
     function bustCache() {
         lastFetchKey = '';
+        inFlightKey = '';
     }
 
     function scheduleLoad(buildRequest, options, delayMs) {
@@ -84,18 +90,24 @@
 
         if (delayMs == null) {
             if (options.fromMapMove) {
-                delayMs = 80;
+                delayMs = 180;
             } else if (options.fromFilters) {
                 delayMs = 100;
             } else {
-                delayMs = 80;
+                delayMs = 100;
             }
         }
 
+        pendingBuildRequest = buildRequest;
+        pendingOptions = options;
         clearDebounce();
         debounceTimer = setTimeout(() => {
             debounceTimer = null;
-            executeLoad(buildRequest, options);
+            const nextBuild = pendingBuildRequest;
+            const nextOpts = pendingOptions || {};
+            pendingBuildRequest = null;
+            pendingOptions = null;
+            executeLoad(nextBuild, nextOpts);
         }, delayMs);
     }
 
@@ -116,8 +128,33 @@
             return;
         }
 
-        const fetchKey = built.key;
+        const fetchKey = built.key || '';
         if (fetchKey && fetchKey === lastFetchKey && !options.force) {
+            return;
+        }
+
+        // Same bounds already loading — coalesce instead of aborting (abort storms
+        // under rapid pan + slow API leave markers stuck on stale data).
+        if (isLoading && fetchKey && fetchKey === inFlightKey && !options.force) {
+            return;
+        }
+
+        // Prefer coalescing: if a different request is in flight, queue latest
+        // and let the current one finish unless force=true.
+        if (isLoading && !options.force && options.fromMapMove) {
+            pendingBuildRequest = buildRequest;
+            pendingOptions = Object.assign({}, options, { force: false });
+            clearDebounce();
+            debounceTimer = setTimeout(() => {
+                debounceTimer = null;
+                if (!isLoading && pendingBuildRequest) {
+                    const nextBuild = pendingBuildRequest;
+                    const nextOpts = pendingOptions || {};
+                    pendingBuildRequest = null;
+                    pendingOptions = null;
+                    executeLoad(nextBuild, nextOpts);
+                }
+            }, 120);
             return;
         }
 
@@ -126,6 +163,7 @@
         const generation = state ? state.beginFetch() : 0;
         controller = new AbortController();
         isLoading = true;
+        inFlightKey = fetchKey;
         document.body.classList.add('hs-map-fetching');
 
         fetch(built.url, {
@@ -172,7 +210,21 @@
             .finally(() => {
                 isLoading = false;
                 controller = null;
+                inFlightKey = '';
                 document.body.classList.remove('hs-map-fetching');
+
+                // Drain coalesced pan request after the current fetch settles.
+                if (pendingBuildRequest) {
+                    const nextBuild = pendingBuildRequest;
+                    const nextOpts = pendingOptions || { fromMapMove: true };
+                    pendingBuildRequest = null;
+                    pendingOptions = null;
+                    clearDebounce();
+                    debounceTimer = setTimeout(() => {
+                        debounceTimer = null;
+                        executeLoad(nextBuild, nextOpts);
+                    }, 40);
+                }
             });
     }
 
@@ -211,7 +263,7 @@
 
     function onMapMoveEnd(buildRequest) {
         const state = global.HsMapInteractionState;
-        if (state && state.isPanelOpen()) {
+        if (state && state.isListingOpen()) {
             return;
         }
         if (global.autoCenteringMap) {
@@ -221,7 +273,7 @@
         if (!map || !movedEnoughToRefetch(map)) {
             return;
         }
-        scheduleLoad(buildRequest, { fromMapMove: true }, 80);
+        scheduleLoad(buildRequest, { fromMapMove: true }, 180);
     }
 
     global.HsMapFetchCoordinator = {
