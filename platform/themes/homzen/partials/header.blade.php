@@ -506,7 +506,12 @@
         left: auto;
         right: auto;
         z-index: 1;
-        width: 100%;
+    }
+
+    @media (max-width: 991.98px) {
+        .main-header.fixed-header {
+            width: 100%;
+        }
     }
 
     @media (min-width: 992px) {
@@ -885,8 +890,8 @@
                             
                          
                             <a href="{{ url('/free-home-evaluation') }}" class="main-city"> Free Home Evaluation</a>
-                                <a href="https://serik.ca/tips-for-home-selling" class="main-city"> Tips For Home Selling</a>
-                                <a href="https://serik.ca/about-us#testimonials" class="main-city"> Customers' testimonials</a>
+                                <a href="{{ url('/tips-for-home-selling') }}" class="main-city"> Tips For Home Selling</a>
+                                <a href="https://www.google.com/search?q=Serik+Realty+Inc.+Reviews" class="main-city" target="_blank" rel="noopener noreferrer"> Customers' testimonials</a>
                             </div>
                         </div>
                         
@@ -1540,6 +1545,7 @@ if (loadMoreBtn) {
 }
 let typingTimer;
 const typingDelay = 300;
+const mlsTypingDelay = 120;
 let searchController = null;
 let headerSearchRequestId = 0;
 const headerSearchCache = new Map();
@@ -1639,11 +1645,14 @@ function handleHeaderSearchInput(keyword) {
     }
     resetHeaderAcCatExpanded();
     renderHeaderSearchShell(trimmed);
+    const delay = (isHeaderMlsKeyword(trimmed) || looksLikeHeaderMlsPrefix(trimmed))
+        ? mlsTypingDelay
+        : typingDelay;
     typingTimer = setTimeout(() => {
         if (currentKeyword === trimmed) {
             loadResults(trimmed, true);
         }
-    }, typingDelay);
+    }, delay);
 }
 
 if (input) {

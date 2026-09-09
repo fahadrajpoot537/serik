@@ -541,9 +541,9 @@ class PropertyController extends BaseController
                     . '&$select='
                     . 'ListingKey,UnparsedAddress,PropertySubType,PublicRemarks,PrivateRemarks,'
                     . 'BedroomsTotal,BedroomsAboveGrade,BathroomsTotalInteger,KitchensTotal,LivingAreaRange,'
-                    . 'StandardStatus,ExpirationDate,ListPrice,PostalCode,'
+                    . 'StandardStatus,ExpirationDate,ListPrice,OriginalListPrice,PreviousListPrice,PostalCode,'
                     . 'OriginalEntryTimestamp,ModificationTimestamp,PriceChangeTimestamp,'
-                    . 'TransactionType,MlsStatus,ListOfficeName,BedroomsBelowGrade,'
+                    . 'TransactionType,MlsStatus,PriorMlsStatus,ListOfficeName,BedroomsBelowGrade,'
                     . 'ListingContractDate,CloseDate,PurchaseContractDate,Basement,ParkingSpaces,CoveredSpaces,ClosePrice,ArchitecturalStyle';
 
                 $response = $this->ampCurl($url, 45);
@@ -854,9 +854,9 @@ class PropertyController extends BaseController
         $select =
             'ListingKey,UnparsedAddress,PropertySubType,PublicRemarks,PrivateRemarks,'
             . 'BedroomsTotal,BedroomsAboveGrade,BathroomsTotalInteger,KitchensTotal,LivingAreaRange,'
-            . 'StandardStatus,ExpirationDate,ListPrice,PostalCode,'
+            . 'StandardStatus,ExpirationDate,ListPrice,OriginalListPrice,PreviousListPrice,PostalCode,'
             . 'OriginalEntryTimestamp,ModificationTimestamp,PriceChangeTimestamp,'
-            . 'TransactionType,MlsStatus,ListOfficeName,BedroomsBelowGrade,'
+            . 'TransactionType,MlsStatus,PriorMlsStatus,ListOfficeName,BedroomsBelowGrade,'
             . 'ListingContractDate,CloseDate,PurchaseContractDate,Basement,ParkingSpaces,CoveredSpaces,ClosePrice,ArchitecturalStyle';
 
         $top = $pageSize;
@@ -906,6 +906,9 @@ class PropertyController extends BaseController
                 // runs stay fast and reach deeper into the window each time.
                 $existing = $this->fetchExistingModifiedMap($rows);
 
+                $batchEnabled = \App\Services\Treb\AmpLivePropertyBatchWriter::enabled();
+                $pendingBatch = [];
+
                 foreach ($rows as $item) {
                     if (microtime(true) > $deadline) {
                         $stoppedEarly = true;
@@ -922,12 +925,32 @@ class PropertyController extends BaseController
                         continue;
                     }
 
+                    if ($batchEnabled) {
+                        $pendingNew = $this->countNewAmpKeysInBatch($pendingBatch, $existing);
+                        $thisIsNew = ! $this->ampListingKeyExists((string) ($item['ListingKey'] ?? ''), $existing);
+                        if ($maxNew > 0 && $thisIsNew && (count($newPropertyIds) + $pendingNew + 1) > $maxNew) {
+                            $stoppedEarly = true;
+                            break 2;
+                        }
+                        $pendingBatch[] = $item;
+                        continue;
+                    }
+
                     $result = $this->saveAmpPropertyItem($item, $newPropertyIds);
 
                     if ($result === 'created') {
                         $created++;
                     } elseif ($result === 'updated') {
                         $updated++;
+                    }
+                }
+
+                if ($batchEnabled && $pendingBatch !== []) {
+                    $batchResult = app(\App\Services\Treb\AmpLivePropertyBatchWriter::class)->write($pendingBatch);
+                    $created += (int) ($batchResult['created'] ?? 0);
+                    $updated += (int) ($batchResult['updated'] ?? 0);
+                    foreach ($batchResult['new_ids'] ?? [] as $nid) {
+                        $newPropertyIds[] = (int) $nid;
                     }
                 }
 
@@ -965,6 +988,42 @@ class PropertyController extends BaseController
         } finally {
             cache()->forget('amp_recent_lock');
         }
+    }
+
+    private function ampListingKeyExists(string $listingKey, array $existing): bool
+    {
+        $listingKey = trim($listingKey);
+        if ($listingKey === '') {
+            return false;
+        }
+
+        if (array_key_exists($listingKey, $existing)) {
+            return true;
+        }
+
+        foreach (array_keys($existing) as $ek) {
+            if (strcasecmp((string) $ek, $listingKey) === 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $pending
+     * @param  array<string, mixed>  $existing
+     */
+    private function countNewAmpKeysInBatch(array $pending, array $existing): int
+    {
+        $n = 0;
+        foreach ($pending as $item) {
+            if (! $this->ampListingKeyExists((string) ($item['ListingKey'] ?? ''), $existing)) {
+                $n++;
+            }
+        }
+
+        return $n;
     }
 
     /**
@@ -3313,6 +3372,12 @@ class PropertyController extends BaseController
             if ($isListingKey) {
                 if ($payload !== []) {
                     Cache::put('smart_search_mls:' . strtoupper($keyword), $payload, 600);
+                } else {
+                    Cache::put(
+                        'smart_search_mls:' . strtoupper($keyword),
+                        [],
+                        (int) config('serik.search.mls_empty_cache_seconds', 45)
+                    );
                 }
             } elseif (mb_strlen($keyword) >= 3 && preg_match('/\d/', $keyword)) {
                 Cache::put($searchCacheKey, $payload, $payload === [] ? 45 : 180);
@@ -3322,6 +3387,39 @@ class PropertyController extends BaseController
 
             return $payload;
         };
+
+        // Typing MLS prefixes (C12 / W4929): MySQL external_id prefix only.
+        // Never Meili / FULLTEXT / AMP — those paths measured 5–22s locally.
+        $isMlsPrefix = ! $isListingKey && (bool) preg_match('/^[a-z]{1,2}\d{2,}$/i', $keyword);
+        if ($isMlsPrefix) {
+            $prefix = strtoupper($keyword);
+            $prefixCacheKey = 'smart_search_mls_prefix:' . $prefix . '|t' . $top . '|s' . $skip;
+            $cachedPrefix = Cache::get($prefixCacheKey);
+            if (is_array($cachedPrefix)) {
+                return response()->json($this->ensureSearchResultSlugs($cachedPrefix));
+            }
+
+            $prefixRows = DB::table('re_properties')
+                ->select(PropertyFulltextSearch::SEARCH_COLUMNS)
+                ->where('moderation_status', 'approved')
+                ->where('external_id', 'like', $prefix . '%')
+                ->orderBy('external_id')
+                ->limit($top)
+                ->offset(max(0, $skip))
+                ->get();
+
+            if (class_exists(TrebPropertyHelper::class)) {
+                $prefixRows = $prefixRows->reject(
+                    static fn ($row) => TrebPropertyHelper::isCommercialSubType($row->PropertySubType ?? null)
+                )->values();
+            }
+
+            $mappedPrefix = $this->mapLocalSearchCollection($prefixRows);
+            $payload = TrebPropertyHelper::groupListingsByBuilding($mappedPrefix);
+            Cache::put($prefixCacheKey, $payload, $payload === [] ? 30 : 120);
+
+            return response()->json($payload);
+        }
 
         // Short alphabetic keywords: try community inventory before giving up.
         if (mb_strlen($keyword) < 5 && ! $isListingKey && ! preg_match('/\d/', $keyword)) {
@@ -3391,6 +3489,12 @@ class PropertyController extends BaseController
                             $rememberSearch(TrebPropertyHelper::groupListingsByBuilding($mappedMls))
                         );
                     }
+                }
+
+                $mlsDigitLen = strlen((string) preg_replace('/\D+/', '', $keyword));
+                $mlsAmpMinDigits = (int) config('serik.search.mls_amp_min_digits', 7);
+                if ($mlsDigitLen < $mlsAmpMinDigits) {
+                    return response()->json($rememberSearch([]));
                 }
 
                 // Local miss → live AMP ingest (same as previous terminal MLS path).
@@ -3695,15 +3799,21 @@ class PropertyController extends BaseController
         // center / drop a marker on it and every future request is served
         // entirely from local storage.
         if ($isListingKey && $mappedLocal === []) {
-            $ingested = app(\Botble\RealEstate\Services\LiveTrebPropertyFallbackService::class)
-                ->ingestByListingKey($keyword, true, false);
+            $mlsDigitLen = strlen((string) preg_replace('/\D+/', '', $keyword));
+            $mlsAmpMinDigits = (int) config('serik.search.mls_amp_min_digits', 7);
+            if ($mlsDigitLen >= $mlsAmpMinDigits) {
+                $ingested = app(\Botble\RealEstate\Services\LiveTrebPropertyFallbackService::class)
+                    ->ingestByListingKey($keyword, true, false);
 
-            if ($ingested !== null) {
-                $ordered = $this->hydrateSmartSearchRows([(int) $ingested->id], $top, false);
-                if ($ordered !== []) {
-                    return response()->json($rememberSearch(TrebPropertyHelper::groupListingsByBuilding($ordered)));
+                if ($ingested !== null) {
+                    $ordered = $this->hydrateSmartSearchRows([(int) $ingested->id], $top, false);
+                    if ($ordered !== []) {
+                        return response()->json($rememberSearch(TrebPropertyHelper::groupListingsByBuilding($ordered)));
+                    }
                 }
             }
+
+            return response()->json($rememberSearch([]));
         }
 
         $postal = app(\Botble\RealEstate\Services\LiveTrebPropertyFallbackService::class)->parsePostalCode($keyword);
@@ -3773,40 +3883,54 @@ class PropertyController extends BaseController
 
     public function geocodeCommunity(Request $request)
     {
-        $community = TrebPropertyHelper::formatRegionLabel(trim((string) $request->input('community', '')));
-        if ($community === '') {
-            return response()->json(['geocoded' => 0, 'processed' => 0]);
+        @set_time_limit((int) config('serik.http.geocode_community_max_seconds', 35));
+
+        try {
+            $community = TrebPropertyHelper::formatRegionLabel(trim((string) $request->input('community', '')));
+            if ($community === '') {
+                return response()->json(['geocoded' => 0, 'processed' => 0]);
+            }
+
+            $ids = app(\Botble\RealEstate\Services\PropertySearchService::class)
+                ->searchCommunityIds($community, null, 500);
+
+            if ($ids === []) {
+                return response()->json(['geocoded' => 0, 'processed' => 0]);
+            }
+
+            $missing = Property::query()
+                ->whereIn('id', $ids)
+                ->where(function ($q) {
+                    $q->whereNull('latitude')->orWhere('latitude', 0)
+                        ->orWhereNull('longitude')->orWhere('longitude', 0);
+                })
+                ->whereIn('MlsStatus', ['New', 'Price Change', 'Extension', 'Previous Status'])
+                ->limit(8)
+                ->pluck('id')
+                ->all();
+
+            if ($missing === []) {
+                return response()->json(['geocoded' => 0, 'processed' => 0]);
+            }
+
+            $result = $this->geocodePropertyBatch(count($missing), $missing, ['active_only' => true]);
+
+            return response()->json([
+                'geocoded' => (int) ($result['geocoded'] ?? 0),
+                'processed' => (int) ($result['processed'] ?? 0),
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('[geocodeCommunity] failed gracefully', [
+                'community' => $request->input('community'),
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'geocoded' => 0,
+                'processed' => 0,
+                'degraded' => true,
+            ], 503);
         }
-
-        $ids = app(\Botble\RealEstate\Services\PropertySearchService::class)
-            ->searchCommunityIds($community, null, 500);
-
-        if ($ids === []) {
-            return response()->json(['geocoded' => 0, 'processed' => 0]);
-        }
-
-        $missing = Property::query()
-            ->whereIn('id', $ids)
-            ->where(function ($q) {
-                $q->whereNull('latitude')->orWhere('latitude', 0)
-                    ->orWhereNull('longitude')->orWhere('longitude', 0);
-            })
-            ->whereIn('MlsStatus', ['New', 'Price Change', 'Extension', 'Previous Status'])
-            ->limit(8)
-            ->pluck('id')
-            ->all();
-
-        if ($missing === []) {
-            return response()->json(['geocoded' => 0, 'processed' => 0]);
-        }
-
-        @set_time_limit(45);
-        $result = $this->geocodePropertyBatch(count($missing), $missing, ['active_only' => true]);
-
-        return response()->json([
-            'geocoded' => (int) ($result['geocoded'] ?? 0),
-            'processed' => (int) ($result['processed'] ?? 0),
-        ]);
     }
 
     /**
@@ -6707,14 +6831,23 @@ class PropertyController extends BaseController
             $opts['exclude_statuses'] = $soldOrDelisted;
         }
 
-        $hits = app(\Botble\RealEstate\Services\PropertySearchService::class)->geoSearch(
-            $south,
-            $north,
-            $west,
-            $east,
-            $opts,
-            $limit
-        );
+        $hits = null;
+        try {
+            $hits = app(\Botble\RealEstate\Services\PropertySearchService::class)->geoSearch(
+                $south,
+                $north,
+                $west,
+                $east,
+                $opts,
+                $limit
+            );
+        } catch (\Throwable $e) {
+            Log::warning('[fetchMapPropertiesViaMeili] geoSearch failed — MySQL fallback', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
 
         if ($hits === null) {
             return null;
@@ -7221,59 +7354,77 @@ class PropertyController extends BaseController
 
     public function getMapPropertyBundle($listingKey)
     {
-        $property = Property::query()
-            ->where(function ($query) use ($listingKey) {
-                $query->where('external_id', $listingKey)
-                    ->orWhere('external_id', strtoupper($listingKey));
-            })
-            ->first();
+        @set_time_limit((int) config('serik.http.map_bundle_max_seconds', 45));
 
-        if ($property && $property->isSoldHistory() && ! (auth('account')->check() || auth()->check())) {
+        try {
+            $property = Property::query()
+                ->where(function ($query) use ($listingKey) {
+                    $query->where('external_id', $listingKey)
+                        ->orWhere('external_id', strtoupper($listingKey));
+                })
+                ->first();
+
+            $authed = \App\Support\SerikAccountAuth::isAuthenticatedVisitor();
+
+            if ($property && $property->isSoldHistory() && ! $authed) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthenticated access to sold property details',
+                    'data' => null,
+                ], 401);
+            }
+
+            if ($property && TrebPropertyHelper::isCommercialSubType($property->PropertySubType ?? null)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Property not found',
+                    'data' => null,
+                ], 404);
+            }
+
+            $local = $property
+                ? TrebPropertyHelper::dbRowToLocalArray($property)
+                : TrebPropertyHelper::localPropertyArray($listingKey);
+
+            if (TrebPropertyHelper::isCommercialSubType($local['PropertySubType'] ?? $local['property_subtype'] ?? null)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Property not found',
+                    'data' => null,
+                ], 404);
+            }
+
+            $bundle = TrebPropertyHelper::fetchMapPopupBundle($listingKey, $local);
+
+            if ($property) {
+                $bundle['property_id'] = $property->getKey();
+                $bundle['is_locked'] = $property->isSoldHistory() && ! $authed;
+            }
+
+            if ($accountId = \App\Support\SerikAccountAuth::id()) {
+                PropertyVisit::recordForAccount(
+                    $accountId,
+                    $property,
+                    (string) $listingKey,
+                    'map',
+                    is_array($local) ? $local : null
+                );
+            }
+
+            return response()->json($bundle);
+        } catch (\Throwable $e) {
+            Log::warning('[getMapPropertyBundle] failed gracefully', [
+                'listing_key' => $listingKey,
+                'error' => $e->getMessage(),
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Unauthenticated access to sold property details',
+                'message' => 'Property details temporarily unavailable',
                 'data' => null,
-            ], 401);
+                'degraded' => true,
+            ], 503);
         }
-
-        if ($property && TrebPropertyHelper::isCommercialSubType($property->PropertySubType ?? null)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Property not found',
-                'data' => null,
-            ], 404);
-        }
-
-        $local = $property
-            ? TrebPropertyHelper::dbRowToLocalArray($property)
-            : TrebPropertyHelper::localPropertyArray($listingKey);
-
-        if (TrebPropertyHelper::isCommercialSubType($local['PropertySubType'] ?? $local['property_subtype'] ?? null)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Property not found',
-                'data' => null,
-            ], 404);
-        }
-
-        $bundle = TrebPropertyHelper::fetchMapPopupBundle($listingKey, $local);
-
-        if ($property) {
-            $bundle['property_id'] = $property->getKey();
-            $bundle['is_locked'] = $property->isSoldHistory() && ! (auth('account')->check() || auth()->check());
-        }
-
-        if (auth('account')->check()) {
-            PropertyVisit::recordForAccount(
-                (int) auth('account')->id(),
-                $property,
-                (string) $listingKey,
-                'map',
-                is_array($local) ? $local : null
-            );
-        }
-
-        return response()->json($bundle);
     }
 
     public function getRelatedProperties($propertyId)

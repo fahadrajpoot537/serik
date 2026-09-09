@@ -45,6 +45,15 @@ return [
         // Opt-in: touch storage/framework/queue-restart.flag after deploy
         'auto_queue_restart' => filter_var(env('SERIK_QUEUE_AUTO_RESTART', true), FILTER_VALIDATE_BOOLEAN),
         'heal_every_minutes' => (int) env('SERIK_QUEUE_HEAL_EVERY', 5),
+        // Prune duplicate queued jobs during self-heal (SyncLiveJob pile-up).
+        'prune_duplicate_jobs' => filter_var(env('SERIK_QUEUE_PRUNE_DUPLICATES', true), FILTER_VALIDATE_BOOLEAN),
+        'duplicate_job_rules' => [
+            [
+                'class' => \App\Jobs\SyncLiveJob::class,
+                'queue' => env('SERIK_QUEUE_HIGH', 'high'),
+                'keep' => 1,
+            ],
+        ],
     ],
 
     /*
@@ -103,9 +112,11 @@ return [
     'sync_live' => [
         'days' => (int) env('SERIK_SYNC_LIVE_DAYS', 2),
         'pages' => (int) env('SERIK_SYNC_LIVE_PAGES', 2),
-        'max_seconds' => (int) env('SERIK_SYNC_LIVE_MAX_SECONDS', 40),
-        'max_new' => (int) env('SERIK_SYNC_LIVE_MAX_NEW', 25),
+        'max_seconds' => (int) env('SERIK_SYNC_LIVE_MAX_SECONDS', 30),
+        'max_new' => (int) env('SERIK_SYNC_LIVE_MAX_NEW', 15),
         'page_size' => (int) env('SERIK_SYNC_LIVE_PAGE_SIZE', 100),
+        // Inline Nominatim during SyncLiveJob blocks HIGH; prefer async chain only.
+        'inline_geocode' => filter_var(env('SERIK_SYNC_LIVE_INLINE_GEOCODE', false), FILTER_VALIDATE_BOOLEAN),
     ],
 
     /*
@@ -115,7 +126,7 @@ return [
     */
     'backlog' => [
         // Max GeocodeBacklogPropertyJob dispatches per scheduler tick.
-        'dispatch_limit' => (int) env('SERIK_BACKLOG_DISPATCH', 40),
+        'dispatch_limit' => (int) env('SERIK_BACKLOG_DISPATCH', 20),
         // If HIGH queue has this many waiting jobs, pause / shrink backlog.
         'high_depth_pause' => (int) env('SERIK_BACKLOG_PAUSE_HIGH_DEPTH', 5),
         'active_only' => filter_var(env('SERIK_BACKLOG_ACTIVE_ONLY', true), FILTER_VALIDATE_BOOL),
@@ -128,8 +139,8 @@ return [
         // Reset processing → pending if started older than this.
         'stuck_minutes' => (int) env('SERIK_GEOCODE_STUCK_MINUTES', 20),
         // Max rows reset / requeued per dispatcher tick.
-        'reset_limit' => (int) env('SERIK_GEOCODE_RESET_LIMIT', 200),
-        'retry_failed_limit' => (int) env('SERIK_GEOCODE_RETRY_FAILED_LIMIT', 100),
+        'reset_limit' => (int) env('SERIK_GEOCODE_RESET_LIMIT', 100),
+        'retry_failed_limit' => (int) env('SERIK_GEOCODE_RETRY_FAILED_LIMIT', 80),
     ],
 
     /*
@@ -143,12 +154,26 @@ return [
         // Skip new LOW maintenance dispatches when queue depth is at/above this.
         'max_low_queue_depth' => (int) env('SERIK_SCHEDULER_MAX_LOW_DEPTH', 3),
         // Cap imports fan-out when the imports lane is already deep (never touches high/low).
-        'max_imports_queue_depth' => (int) env('SERIK_SCHEDULER_MAX_IMPORTS_DEPTH', 20),
-        'search_index_recent_limit' => (int) env('SERIK_SEARCH_INDEX_RECENT_LIMIT', 300),
+        'max_imports_queue_depth' => (int) env('SERIK_SCHEDULER_MAX_IMPORTS_DEPTH', 12),
+        // Do not dispatch another SyncLiveJob while this many are already pending on HIGH.
+        'max_sync_live_pending' => (int) env('SERIK_SCHEDULER_MAX_SYNC_LIVE_PENDING', 1),
+        // 1 = all every-minute tasks run each minute (default). 2 = stagger even/odd minutes.
+        'stagger_slots' => (int) env('SERIK_SCHEDULER_STAGGER_SLOTS', 2),
+        'search_index_recent_limit' => (int) env('SERIK_SEARCH_INDEX_RECENT_LIMIT', 100),
         'import_historical_enabled' => filter_var(env('SERIK_IMPORT_HISTORICAL_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
-        'import_historical_max_runtime' => (int) env('SERIK_IMPORT_HISTORICAL_MAX_RUNTIME', 180),
+        'import_historical_max_runtime' => (int) env('SERIK_IMPORT_HISTORICAL_MAX_RUNTIME', 120),
         'treb_images_max_runtime' => (int) env('SERIK_TREB_IMAGES_MAX_RUNTIME', 600),
         'treb_images_chunk' => (int) env('SERIK_TREB_IMAGES_CHUNK', 50),
+        // Catch-up / AMP gaps — keep LOW worker slices short.
+        'catch_up_hours' => (float) env('SERIK_CATCH_UP_HOURS', 0.5),
+        'catch_up_from_year' => (int) env('SERIK_CATCH_UP_FROM_YEAR', 2015),
+        'amp_gaps_page' => (int) env('SERIK_AMP_GAPS_PAGE', 50),
+        'amp_gaps_max_runtime' => (int) env('SERIK_AMP_GAPS_MAX_RUNTIME', 60),
+        'fix_slugs_limit' => (int) env('SERIK_FIX_SLUGS_LIMIT', 1000),
+        'geocode_borrow_limit' => (int) env('SERIK_GEOCODE_BORROW_LIMIT', 100),
+        'image_backfill_limit' => (int) env('SERIK_IMAGE_BACKFILL_LIMIT', 50),
+        // Homepage warm: keys-only skips full HTTP render when HTML cache is fresh.
+        'warm_homepage_keys_only' => filter_var(env('SERIK_WARM_HOMEPAGE_KEYS_ONLY', true), FILTER_VALIDATE_BOOLEAN),
     ],
 
     /*
@@ -162,6 +187,23 @@ return [
         // exact MLS lookups slow. Set SERIK_SEARCH_MLS_MYSQL_FIRST=false to restore
         // the previous Meili → MySQL → AMP order.
         'mls_mysql_first' => filter_var(env('SERIK_SEARCH_MLS_MYSQL_FIRST', true), FILTER_VALIDATE_BOOLEAN),
+        // Exact MLS miss → live AMP only when digit count is high enough (full keys).
+        // Typing C12896… must not pay a multi-second AMP round-trip per keystroke.
+        'mls_amp_min_digits' => max(5, (int) env('SERIK_SEARCH_MLS_AMP_MIN_DIGITS', 7)),
+        // Cache empty exact MLS misses so retries do not re-hit AMP.
+        'mls_empty_cache_seconds' => max(5, (int) env('SERIK_SEARCH_MLS_EMPTY_CACHE_SECONDS', 45)),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Live AMP sync (SyncLiveJob → importRecentModifiedAmpListings)
+    |--------------------------------------------------------------------------
+    | batched_upsert defaults FALSE so production keeps Eloquent firstOrNew/save
+    | until explicitly enabled after staging verification.
+    */
+    'sync' => [
+        'batched_upsert' => filter_var(env('SERIK_SYNC_BATCHED_UPSERT', false), FILTER_VALIDATE_BOOLEAN),
+        'upsert_chunk' => (int) env('SERIK_SYNC_UPSERT_CHUNK', 100),
     ],
 
     /*
@@ -192,6 +234,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | HTTP time budgets (explicit limits — avoids silent max_execution fatals)
+    |--------------------------------------------------------------------------
+    */
+    'http' => [
+        'api_default_max_seconds' => (int) env('SERIK_HTTP_API_MAX_SECONDS', 55),
+        'map_bundle_max_seconds' => (int) env('SERIK_HTTP_MAP_BUNDLE_MAX_SECONDS', 45),
+        'geocode_community_max_seconds' => (int) env('SERIK_HTTP_GEOCODE_COMMUNITY_MAX_SECONDS', 35),
+        'api_route_max_seconds' => [
+            'api/v1/map-property-bundle/*' => (int) env('SERIK_HTTP_MAP_BUNDLE_MAX_SECONDS', 45),
+            'api/v1/geocode-community' => (int) env('SERIK_HTTP_GEOCODE_COMMUNITY_MAX_SECONDS', 35),
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Response / payload cache TTLs (seconds)
     |--------------------------------------------------------------------------
     */
@@ -204,7 +261,7 @@ return [
         'place_search_ttl' => (int) env('SERIK_PLACE_SEARCH_TTL', 86400),
         'related_ttl' => (int) env('SERIK_RELATED_TTL', 900),
         // After homepage warm, also warm map APIs + popular place searches (guest only).
-        'warm_extended_on_homepage' => filter_var(env('SERIK_CACHE_WARM_EXTENDED', true), FILTER_VALIDATE_BOOLEAN),
+        'warm_extended_on_homepage' => filter_var(env('SERIK_CACHE_WARM_EXTENDED', false), FILTER_VALIDATE_BOOLEAN),
         // Full warm (serik:cache:warm) — used by deploy / cache-refresh worker.
         'warm_dispatch_on_optimize' => filter_var(env('SERIK_CACHE_WARM_ON_OPTIMIZE', true), FILTER_VALIDATE_BOOLEAN),
     ],
@@ -313,6 +370,18 @@ return [
         'meilisearch_timeout' => (float) env('SERIK_HEALTH_MEILI_TIMEOUT', 1.0),
         'redis_timeout' => (float) env('SERIK_HEALTH_REDIS_TIMEOUT', 1.5),
         'db_timeout' => (float) env('SERIK_HEALTH_DB_TIMEOUT', 2.0),
+        /*
+         | Meilisearch heal (serik:queue:heal). Defaults preserve prior behavior
+         | except for clearer logging + NSSM service restart when installed.
+         | Auto-spawning meilisearch.exe is opt-in (local XAMPP without NSSM).
+         */
+        'meili_heal' => [
+            'enabled' => filter_var(env('SERIK_MEILI_HEAL', true), FILTER_VALIDATE_BOOLEAN),
+            'service_name' => env('SERIK_MEILI_SERVICE', 'SerikMeilisearch'),
+            'auto_start_process' => filter_var(env('SERIK_MEILI_AUTO_START', false), FILTER_VALIDATE_BOOLEAN),
+            'start_command' => env('SERIK_MEILI_START_CMD', ''),
+            'down_log_seconds' => (int) env('SERIK_MEILI_DOWN_LOG_SECONDS', 120),
+        ],
     ],
 
     /*

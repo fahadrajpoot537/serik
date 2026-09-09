@@ -413,7 +413,11 @@
             $childCount = ($row->has_child && isset($row->child) && is_countable($row->child))
                 ? count($row->child)
                 : 0;
-            $showMega = (bool) $row->has_child && ! ($isBlogsItem && $childCount === 0);
+            $forceMegaTitles = ['buy', 'sell'];
+            $showMega = (
+                ((bool) $row->has_child || in_array($titleNorm, $forceMegaTitles, true))
+                && ! ($isBlogsItem && $childCount === 0)
+            );
             $panelId = $showMega ? 'serik-mega-' . $menuKey . '-' . (string) ($row->id ?? $menuKey) : null;
             $parentHref = \App\Support\MenuUrl::resolve($row->url);
         @endphp
@@ -695,8 +699,8 @@
                             <h4>Features</h4>
 
                                 <a href="{{ url('/free-home-evaluation') }}">&gt; Free Home Evaluation</a>
-                                <a href="https://serik.ca/tips-for-home-selling">&gt; Tips For Home Selling</a>
-                                <a href="https://www.google.com/search?sca_esv=5007095e94022ac2&biw=1536&bih=738&sxsrf=ANbL-n6A5KhK6IOO-0FVdTuAlRbAQEQ3MA:1776271594886&si=AL3DRZEsmMGCryMMFSHJ3StBhOdZ2-6yYkXd_doETEE1OR-qOfvoulo1K3CdIC5M45JUCC4r873m2qwN7EicjGCMgYWtNzBTKNl8PkUaJZYYaU6q_EC5LNKLYfGq1WitFm3vQOmt5TFOzgO3dLn3bfm3a6YNV2Pe8g%3D%3D&q=Serik+Realty+Inc.+Reviews&sa=X&ved=2ahUKEwjz-7-rp_CTAxVmVqQEHbnzCsUQ0bkNegQIJRAH" target="_blank">&gt; Customers' testimonials</a>
+                                <a href="{{ url('/tips-for-home-selling') }}">&gt; Tips For Home Selling</a>
+                                <a href="https://www.google.com/search?q=Serik+Realty+Inc.+Reviews" target="_blank" rel="noopener noreferrer">&gt; Customers' testimonials</a>
                         </div>
 
                     </div>
@@ -748,6 +752,7 @@
     const NAV_ITEM_SEL = '#header.main-header .main-menu .navigation > li.has-dropdown';
     let closeTimer = null;
     let activeItem = null;
+    let megaLinkArmed = false;
     let ignoreFocusOpen = false;
 
     function isDesktop() {
@@ -919,7 +924,7 @@
             }
         });
         activeItem = item;
-        item.classList.add('is-active');
+        item.classList.add('is-active', 'is-open');
         const link = item.querySelector(':scope > .menu-link');
         if (link) {
             link.setAttribute('aria-expanded', 'true');
@@ -944,7 +949,18 @@
         if (!panel) {
             return false;
         }
-        const r = panel.getBoundingClientRect();
+        // Portaled mega is 100vw — only the content wrapper counts as "over menu".
+        const content = panel.querySelector('.mega-wrapper') || panel;
+        const r = content.getBoundingClientRect();
+        const pad = 10;
+        return x >= (r.left - pad) && x <= (r.right + pad) && y >= (r.top - pad) && y <= (r.bottom + pad);
+    }
+
+    function isOnActiveTrigger(x, y) {
+        if (!activeItem) {
+            return false;
+        }
+        const r = activeItem.getBoundingClientRect();
         return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
     }
 
@@ -960,22 +976,18 @@
         return null;
     }
 
-    function isOnHeaderNavRow(x, y) {
-        const nav = document.querySelector('#header.main-header .main-menu .navigation');
-        if (!nav) {
-            return false;
-        }
-        const r = nav.getBoundingClientRect();
-        return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
-    }
-
     function scheduleClose() {
         clearTimeout(closeTimer);
         closeTimer = setTimeout(() => {
             const panel = activeItem && activeItem._megaPanel;
-            if (panel && panel._megaLock) {
+            // Stale lock from a prior press must not pin the panel open after leave.
+            if (panel && panel._megaLock && megaLinkArmed) {
                 return;
             }
+            if (panel) {
+                panel._megaLock = false;
+            }
+            megaLinkArmed = false;
             closeMegaMenu();
         }, 80);
     }
@@ -1065,6 +1077,16 @@
         });
     });
 
+    let lastPointerX = 0;
+    let lastPointerY = 0;
+
+    function isPointerStillOverMega() {
+        if (isOnActivePanel(lastPointerX, lastPointerY) || isOnActiveTrigger(lastPointerX, lastPointerY)) {
+            return true;
+        }
+        return !!headerNavItemFromPoint(lastPointerX, lastPointerY);
+    }
+
     document.querySelectorAll('#header .mega-dropdown').forEach((dropdown) => {
         dropdown.addEventListener('pointerenter', () => {
             if (!isDesktop()) {
@@ -1080,32 +1102,18 @@
             }
         });
 
-        dropdown.addEventListener('pointerdown', (e) => {
-            const link = e.target && e.target.closest ? e.target.closest('a[href]') : null;
-            if (!link || !dropdown.contains(link)) {
-                return;
-            }
-            const raw = (link.getAttribute('href') || '').trim();
-            if (!raw || raw === '#' || raw.toLowerCase().startsWith('javascript:')) {
-                return;
-            }
+        dropdown.addEventListener('contextmenu', (e) => {
+            // Keep mega open while the browser context menu is used (Open link in new tab).
+            // Never preventDefault — browser must receive the native "open link in new tab".
             dropdown._megaLock = true;
-            if ((link.getAttribute('target') || '') === '_blank') {
-                return;
-            }
-            e.preventDefault();
-            e.stopPropagation();
-            if (typeof e.stopImmediatePropagation === 'function') {
-                e.stopImmediatePropagation();
-            }
-            window.location.href = link.href;
+            clearTimeout(closeTimer);
+            closeTimer = null;
+            lastPointerX = e.clientX;
+            lastPointerY = e.clientY;
         }, true);
 
         dropdown.addEventListener('pointerleave', (e) => {
             if (!isDesktop()) {
-                return;
-            }
-            if (dropdown._megaLock) {
                 return;
             }
             const parent = dropdown._megaHome;
@@ -1115,13 +1123,147 @@
             }
             const nextItem = next && next.closest ? next.closest(NAV_ITEM_SEL) : null;
             if (nextItem) {
+                dropdown._megaLock = false;
                 setActiveMegaItem(nextItem);
                 return;
             }
+            // Context menu often sets relatedTarget to null while the cursor is still over the panel.
+            if (!next && isPointerStillOverMega()) {
+                return;
+            }
+            dropdown._megaLock = false;
             scheduleClose();
         });
     });
 
+    // Same-tab + new-tab mega link navigation (document capture).
+    // Primary unmodified press navigates immediately (pointerdown/mousedown) so
+    // mega portal teardown cannot swallow the later click. Modifier clicks,
+    // middle/right click, and target=_blank stay native (new tab / context menu).
+    function serikMegaHrefIsNavigable(raw) {
+        const href = (raw || '').trim();
+        return href !== '' && href !== '#' && !href.toLowerCase().startsWith('javascript:');
+    }
+
+    function serikMegaShouldNativeNewTab(link, e) {
+        if (!link) {
+            return true;
+        }
+        if (e && (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)) {
+            return true;
+        }
+        const targetAttr = (link.getAttribute('target') || '').toLowerCase();
+        return targetAttr === '_blank';
+    }
+
+    function serikNavigateMegaSameTab(url) {
+        const href = String(url || '').trim();
+        if (!href) {
+            return;
+        }
+        try {
+            window.location.assign(href);
+        } catch (err) {
+            window.location.href = href;
+        }
+    }
+
+    function serikMegaPrimaryNavigate(e) {
+        if (!e || e.button !== 0) {
+            return false;
+        }
+        const link = e.target && e.target.closest ? e.target.closest('.mega-dropdown a[href]') : null;
+        if (!link || serikMegaShouldNativeNewTab(link, e)) {
+            return false;
+        }
+        const raw = link.getAttribute('href') || '';
+        if (!serikMegaHrefIsNavigable(raw)) {
+            return false;
+        }
+        const panel = link.closest('.mega-dropdown');
+        if (panel) {
+            panel._megaLock = true;
+        }
+        clearTimeout(closeTimer);
+        closeTimer = null;
+        lastPointerX = e.clientX;
+        lastPointerY = e.clientY;
+        megaLinkArmed = true;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        serikNavigateMegaSameTab(link.href || raw);
+        return true;
+    }
+
+    document.addEventListener('pointerdown', (e) => {
+        const link = e.target && e.target.closest ? e.target.closest('.mega-dropdown a[href]') : null;
+        if (link) {
+            const panel = link.closest('.mega-dropdown');
+            if (panel) {
+                panel._megaLock = true;
+            }
+            clearTimeout(closeTimer);
+            closeTimer = null;
+            lastPointerX = e.clientX;
+            lastPointerY = e.clientY;
+        }
+        serikMegaPrimaryNavigate(e);
+    }, true);
+
+    document.addEventListener('mousedown', (e) => {
+        serikMegaPrimaryNavigate(e);
+    }, true);
+
+    document.addEventListener('click', (e) => {
+        const link = e.target && e.target.closest ? e.target.closest('.mega-dropdown a[href]') : null;
+        if (!link) {
+            return;
+        }
+        if (serikMegaShouldNativeNewTab(link, e)) {
+            e.stopPropagation();
+            return;
+        }
+        if (!serikMegaHrefIsNavigable(link.getAttribute('href') || '')) {
+            return;
+        }
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        serikNavigateMegaSameTab(link.href || link.getAttribute('href'));
+    }, true);
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') {
+            return;
+        }
+        const link = e.target && e.target.closest ? e.target.closest('.mega-dropdown a[href]') : null;
+        if (!link || serikMegaShouldNativeNewTab(link, e)) {
+            return;
+        }
+        if (!serikMegaHrefIsNavigable(link.getAttribute('href') || '')) {
+            return;
+        }
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        serikNavigateMegaSameTab(link.href || link.getAttribute('href'));
+    }, true);
+
+    document.querySelectorAll('.mega-dropdown a[href]').forEach((a) => {
+        const raw = (a.getAttribute('href') || '').trim();
+        if (!serikMegaHrefIsNavigable(raw)) {
+            return;
+        }
+        const host = (() => {
+            try {
+                return new URL(raw, window.location.origin).hostname;
+            } catch (err) {
+                return '';
+            }
+        })();
+        const isExternal = host !== '' && host !== window.location.hostname;
+        if (!isExternal && (a.getAttribute('target') || '') === '_blank') {
+            a.removeAttribute('target');
+        }
+    });
     window.addEventListener('scroll', updateMegaTop, { passive: true });
     window.addEventListener('resize', () => {
         updateMegaTop();
@@ -1150,6 +1292,8 @@
     });
 
     document.addEventListener('pointermove', (e) => {
+        lastPointerX = e.clientX;
+        lastPointerY = e.clientY;
         if (!isDesktop() || isHeaderSearchActive()) {
             if (isHeaderSearchActive() && document.documentElement.classList.contains('serik-mega-open')) {
                 closeMegaMenu();
@@ -1165,14 +1309,26 @@
             return;
         }
         if (headerPlainLinkFromPoint(e.clientX, e.clientY)) {
+            const panel = activeItem && activeItem._megaPanel;
+            if (panel) {
+                panel._megaLock = false;
+            }
+            megaLinkArmed = false;
             closeMegaMenu();
             return;
         }
-        if (isOnActivePanel(e.clientX, e.clientY) || isOnHeaderNavRow(e.clientX, e.clientY)) {
+        // Keep open only over the active trigger or the content panel — not the
+        // full nav row / 100vw portal chrome (that blocked sideways leave-to-close).
+        if (isOnActivePanel(e.clientX, e.clientY) || isOnActiveTrigger(e.clientX, e.clientY)) {
             clearTimeout(closeTimer);
             closeTimer = null;
             return;
         }
+        const panel = activeItem && activeItem._megaPanel;
+        if (panel) {
+            panel._megaLock = false;
+        }
+        megaLinkArmed = false;
         scheduleClose();
     }, { passive: true });
 
@@ -1193,6 +1349,18 @@
         }
         window.setTimeout(() => {
             if (isHeaderSearchActive()) {
+                return;
+            }
+            // Right-click / context menu blurs focus — keep mega open only while
+            // the pointer is still over the trigger/panel (do not pin forever).
+            const panel = activeItem && activeItem._megaPanel;
+            if (panel && panel._megaLock && (megaLinkArmed || isPointerStillOverMega())) {
+                return;
+            }
+            if (panel) {
+                panel._megaLock = false;
+            }
+            if (isPointerStillOverMega()) {
                 return;
             }
             const ae = document.activeElement;
