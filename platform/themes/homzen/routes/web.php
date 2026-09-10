@@ -36,7 +36,6 @@ Route::middleware(['web', 'core'])->group(function (): void {
     Route::redirect('/evaluation', '/free-home-evaluation', 301);
     Route::redirect('/frequently-asked-questions', '/faqs', 301);
     Route::redirect('/blog', '/blogs', 301);
-    Route::redirect('/agents/sadaqat', '/agents', 301);
     Route::redirect('/fthb', '/first-time-house-buyer', 301);
 
     Route::get('/blogs', function () {
