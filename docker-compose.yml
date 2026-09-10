@@ -17,12 +17,17 @@ services:
             XDEBUG_MODE: '${SAIL_XDEBUG_MODE:-off}'
             XDEBUG_CONFIG: '${SAIL_XDEBUG_CONFIG:-client_host=host.docker.internal}'
             IGNITION_LOCAL_SITES_PATH: '${PWD}'
+            # Inside Sail, point Scout at the compose service (override host .env).
+            MEILISEARCH_HOST: '${SAIL_MEILISEARCH_HOST:-http://meilisearch:7700}'
+            MEILISEARCH_KEY: '${MEILISEARCH_KEY:-masterKey}'
+            SCOUT_DRIVER: meilisearch
         volumes:
             - '.:/var/www/html'
         networks:
             - sail
         depends_on:
             - mysql
+            - meilisearch
     mysql:
         image: 'mysql/mysql-server:8.0'
         ports:
@@ -47,9 +52,37 @@ services:
                 - '-p${DB_PASSWORD}'
             retries: 3
             timeout: 5s
+    # Local Meilisearch mirrors production (NSSM SerikMeilisearch on Windows).
+    # ~2 vCPU / 2GB — enough for address/MLS/geo search without starving MySQL.
+    # Host PHP/XAMPP: MEILISEARCH_HOST=http://127.0.0.1:7700 (port publish below).
+    # Sail PHP: MEILISEARCH_HOST=http://meilisearch:7700 (set on laravel.test).
+    meilisearch:
+        image: 'getmeili/meilisearch:v1.11'
+        ports:
+            - '${FORWARD_MEILISEARCH_PORT:-7700}:7700'
+        environment:
+            MEILI_ENV: '${MEILI_ENV:-development}'
+            MEILI_NO_ANALYTICS: 'true'
+            MEILI_MASTER_KEY: '${MEILISEARCH_KEY:-masterKey}'
+            MEILI_MAX_INDEXING_MEMORY: '${MEILI_MAX_INDEXING_MEMORY:-1Gb}'
+        volumes:
+            - 'sail-meilisearch:/meili_data'
+        networks:
+            - sail
+        healthcheck:
+            test: ['CMD', 'wget', '--no-verbose', '--spider', 'http://127.0.0.1:7700/health']
+            retries: 5
+            timeout: 5s
+            interval: 10s
+            start_period: 15s
+        mem_limit: 2g
+        cpus: 2.0
+        restart: unless-stopped
 networks:
     sail:
         driver: bridge
 volumes:
     sail-mysql:
+        driver: local
+    sail-meilisearch:
         driver: local
