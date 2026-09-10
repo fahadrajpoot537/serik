@@ -296,7 +296,7 @@ class HomepageMeetOurExpertsSeeder extends Seeder
 
             $next = preg_replace(
                 '/(\[agents\b[^\]]*?\saccount_ids=")[^"]*(")/s',
-                '$1' . $idsCsv . '$2',
+                '${1}' . $idsCsv . '${2}',
                 $content,
                 1,
                 $count
@@ -306,7 +306,7 @@ class HomepageMeetOurExpertsSeeder extends Seeder
                 // Inject account_ids if missing on the Meet Our Experts shortcode.
                 $next = preg_replace(
                     '/(\[agents\b[^\]]*?\btitle="Meet Our Experts"[^\]]*)(\])/s',
-                    '$1 account_ids="' . $idsCsv . '"$2',
+                    '${1} account_ids="' . $idsCsv . '"${2}',
                     $content,
                     1,
                     $count2

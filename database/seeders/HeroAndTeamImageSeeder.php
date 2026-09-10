@@ -264,7 +264,7 @@ class HeroAndTeamImageSeeder extends Seeder
 
         $updated = preg_replace(
             '/(\[hero-banner[^\]]*?\sbackground_image=")[^"]*(")/s',
-            '$1' . $url . '$2',
+            '${1}' . $url . '${2}',
             $content,
             1
         );
@@ -275,7 +275,7 @@ class HeroAndTeamImageSeeder extends Seeder
 
         $injected = preg_replace(
             '/\[hero-banner(\s)/',
-            '[hero-banner background_image="' . $url . '"$1',
+            '[hero-banner background_image="' . $url . '"${1}',
             $content,
             1
         );

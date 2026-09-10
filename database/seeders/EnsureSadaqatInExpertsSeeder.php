@@ -10,12 +10,18 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Ensure Sadaqat Sheikh is public and listed in Meet Our Experts (About Us + Homepage).
+ * Make Sadaqat public, repair corrupted [agents] shortcodes, and list him on About/Home.
+ *
+ * Also fixes the PHP preg_replace pitfall where '$1' . '26...' becomes backref $126
+ * and strips the shortcode opening (leaving raw "6,25,..."][/agents]" on the page).
  *
  * php artisan db:seed --class="Database\\Seeders\\EnsureSadaqatInExpertsSeeder" --force
  */
 class EnsureSadaqatInExpertsSeeder extends Seeder
 {
+    /** Fallback lineup if shortcode is too damaged to parse (live About/Home order). */
+    private const FALLBACK_IDS = [26, 25, 4, 24, 14, 18, 19, 15, 20, 22, 21, 23, 17, 16];
+
     public function run(): void
     {
         $account = Account::query()
@@ -50,41 +56,47 @@ class EnsureSadaqatInExpertsSeeder extends Seeder
             $this->command?->info("Account #{$account->id} ({$account->name}) already public.");
         }
 
-        $id = (int) $account->id;
+        $sadaqatId = (int) $account->id;
+        $homepageId = (int) theme_option('homepage_id');
+
         $pages = Page::query()
-            ->whereIn('name', ['About Us', 'Homepage 2'])
-            ->orWhere('id', (int) theme_option('homepage_id'))
+            ->where(function ($q) use ($homepageId) {
+                $q->whereIn('name', ['About Us', 'Homepage 2']);
+                if ($homepageId > 0) {
+                    $q->orWhere('id', $homepageId);
+                }
+            })
             ->get()
             ->unique('id');
 
         $updatedPages = 0;
         foreach ($pages as $page) {
             $content = (string) DB::table('pages')->where('id', $page->id)->value('content');
-            if ($content === '' || ! str_contains($content, '[agents')) {
+            if ($content === '') {
                 continue;
             }
 
-            if (! preg_match('/\[agents\b[^\]]*?\saccount_ids="([^"]+)"/i', $content, $m)) {
-                continue;
+            $ids = $this->extractAccountIds($content);
+            if ($ids === []) {
+                $ids = self::FALLBACK_IDS;
+                $this->command?->warn("Page #{$page->id}: using fallback account_ids (shortcode was damaged).");
             }
 
-            $ids = array_values(array_filter(array_map('intval', explode(',', $m[1]))));
-            if (in_array($id, $ids, true)) {
-                $this->command?->info("Page #{$page->id} ({$page->name}) already includes #{$id}.");
-                continue;
+            if (! in_array($sadaqatId, $ids, true)) {
+                $ids[] = $sadaqatId;
             }
 
-            $ids[] = $id;
-            $idsCsv = implode(',', $ids);
-            $next = preg_replace(
-                '/(\[agents\b[^\]]*?\saccount_ids=")[^"]*(")/i',
-                '$1' . $idsCsv . '$2',
-                $content,
-                1,
-                $count
+            $subtitle = stripos((string) $page->name, 'about') !== false ? 'Our Team' : 'Our Teams';
+            $inner = sprintf(
+                '[agents style="1" title="Meet Our Experts" subtitle="%s" account_ids="%s" items_per_row="4" background_color="transparent" enable_lazy_loading="yes"][/agents]',
+                $subtitle,
+                implode(',', $ids)
             );
+            $wrapped = '<shortcode>' . $inner . '</shortcode>';
 
-            if (! is_string($next) || $count < 1) {
+            $next = $this->replaceAgentsBlock($content, $wrapped);
+            if ($next === null || $next === $content) {
+                $this->command?->warn("Page #{$page->id} ({$page->name}): could not locate agents block to repair.");
                 continue;
             }
 
@@ -93,11 +105,13 @@ class EnsureSadaqatInExpertsSeeder extends Seeder
                 'updated_at' => now(),
             ]);
             $updatedPages++;
-            $this->command?->info("Added #{$id} to page #{$page->id} ({$page->name}) → {$idsCsv}");
+            $this->command?->info(
+                "Repaired page #{$page->id} ({$page->name}) account_ids → " . implode(',', $ids)
+            );
         }
 
         if ($updatedPages < 1) {
-            $this->command?->warn('No page shortcodes needed ID append (already present or agents block missing).');
+            $this->command?->warn('No pages updated.');
         }
 
         if (class_exists(HomepageFragmentCache::class)) {
@@ -109,5 +123,63 @@ class EnsureSadaqatInExpertsSeeder extends Seeder
         }
 
         $this->command?->info('Caches bumped. Hard-refresh About Us + homepage.');
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function extractAccountIds(string $content): array
+    {
+        if (preg_match('/\[agents\b[^\]]*?\saccount_ids="([^"]+)"/i', $content, $m)) {
+            return $this->parseIdsCsv($m[1]);
+        }
+
+        // Corrupted remnant: 6,25,...31" items_per_row=... (leading digit(s) of first id eaten)
+        if (preg_match('/(?:^|[>\s])(\d[\d,\s]*)"\s*items_per_row="/i', $content, $m)) {
+            $ids = $this->parseIdsCsv($m[1]);
+            // Known corruption from $126 backref: first id 26 became "6"
+            if ($ids !== [] && $ids[0] === 6) {
+                $ids[0] = 26;
+            }
+
+            return $ids;
+        }
+
+        return [];
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function parseIdsCsv(string $csv): array
+    {
+        return array_values(array_unique(array_filter(
+            array_map('intval', explode(',', $csv)),
+            static fn (int $id) => $id > 0
+        )));
+    }
+
+    private function replaceAgentsBlock(string $content, string $replacementWrapped): ?string
+    {
+        $patterns = [
+            // Intact Botble wrapper
+            '/<shortcode>\s*\[agents\b[\s\S]*?\[\/agents\]\s*<\/shortcode>/i',
+            // Bare shortcode
+            '/\[agents\b[\s\S]*?\[\/agents\]/i',
+            // Corrupted remnant inside <shortcode>…[/agents]</shortcode>
+            '/<shortcode>\s*\d[\d,\s]*"\s*items_per_row="[^"]*"\s*background_color="[^"]*"\s*enable_lazy_loading="[^"]*"\]\s*\[\/agents\]\s*<\/shortcode>/i',
+            '/<shortcode>\s*[^<\[]*?items_per_row="[^"]*"[\s\S]*?\[\/agents\]\s*<\/shortcode>/i',
+            // Bare corrupted remnant (no opening [agents)
+            '/\d[\d,\s]*"\s*items_per_row="[^"]*"\s*background_color="[^"]*"\s*enable_lazy_loading="[^"]*"\]\s*\[\/agents\]/i',
+        ];
+
+        foreach ($patterns as $pattern) {
+            $next = preg_replace($pattern, $replacementWrapped, $content, 1, $count);
+            if (is_string($next) && $count > 0) {
+                return $next;
+            }
+        }
+
+        return null;
     }
 }
