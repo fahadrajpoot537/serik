@@ -1469,25 +1469,6 @@ a.tf-btn.primary.serik-hp-nav__cta:hover,
 }
 
 /* Keyboard focus — visible without changing mouse/touch design */
-.serik-skip-link {
-  position: absolute;
-  left: 12px;
-  top: -48px;
-  z-index: 100000;
-  padding: 8px 14px;
-  background: #0b4c9f;
-  color: #fff !important;
-  font-weight: 700;
-  border-radius: 6px;
-  text-decoration: none;
-}
-.serik-skip-link:focus {
-  top: 12px;
-  color: #fff !important;
-  outline: 2px solid #fff;
-  outline-offset: 2px;
-}
-
 a:focus-visible,
 button:focus-visible,
 [role="button"]:focus-visible,
@@ -2246,3 +2227,16 @@ body:has(.blog-list-page) #sectionhead .heading-breadcrumb {
 
 
 
+@media (max-width: 767px) {
+  /* Homepage newsletter popup: hide lead + obligation copy on mobile only */
+  .newsletter-popup .popup-content > p,
+  .newsletter-popup .newsletter-popup-lead,
+  .newsletter-popup .popup-footer {
+    display: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    visibility: hidden !important;
+  }
+}

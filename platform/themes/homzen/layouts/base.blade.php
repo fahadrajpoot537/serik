@@ -241,7 +241,6 @@
     </head>
 
     <body {!! Theme::bodyAttributes() !!}>
-        <a class="serik-skip-link" href="#wrapper">{{ __('Skip to content') }}</a>
         
       
         
