@@ -1753,6 +1753,12 @@ body:has(#page-home) {
   border-radius: 999px !important;
 }
 #page-home .serik-hp-agent-card__body { padding: 0.55rem 1rem 1.05rem; text-align: center; }
+#page-home #about-agent .serik-agent-meta__ctas {
+  justify-content: center;
+}
+#about-agent .serik-agent-meta__ctas {
+  justify-content: center;
+}
 
 #page-home .serik-hp-reviews.flat-testimonial-v2::before {
   display: none !important;
