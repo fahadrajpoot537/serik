@@ -176,7 +176,19 @@
             margin-bottom: 12px;
         }
 
-        .newsletter-popup .popup-content p,
+        /* Mobile-only: hide lead copy + obligation line (keep headline/CTA/checklist). */
+        .newsletter-popup .popup-content > p,
+        .newsletter-popup .newsletter-popup-lead,
+        .newsletter-popup .popup-footer {
+            display: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            height: 0 !important;
+            overflow: hidden !important;
+            visibility: hidden !important;
+        }
+
+        .newsletter-popup .popup-content p.popup-alert,
         .newsletter-popup .popup-alert {
             font-size: 15px !important;
             margin-bottom: 14px;
@@ -219,7 +231,7 @@
             <div class="popup-overlay">
                 <div class="popup-content">
                     <h2>Get up to <span style="color: #013677;">1.5% Cash Back</span> &amp; Save on Closing Costs!</h2>
-                    <p>Serik Realty helps you save thousands on your home purchase with cash back and reduced closing costs — no hidden fees.</p>
+                    <p class="newsletter-popup-lead">Serik Realty helps you save thousands on your home purchase with cash back and reduced closing costs — no hidden fees.</p>
 
                     <a href="https://serik.ca/contact-us" class="whatsapp" target="_blank" rel="noopener">
                         <button type="button" class="btn btn-warning popup-btn" style="background:#013677;color:white;border:1px solid #013677;">

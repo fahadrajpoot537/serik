@@ -26,6 +26,7 @@ final class PageHeroImage
         'faqs' => 'real-estate-investing-tips-ontario.webp',
         'our-services' => 'Tips for Selling Out Your Property.webp',
         'contact-us' => 'cost-of-selling-a-house-in-ontario-canada.webp',
+        'wishlist' => 'wishlist-banner.png',
     ];
 
     public static function urlForRequest(?Request $request = null): ?string
