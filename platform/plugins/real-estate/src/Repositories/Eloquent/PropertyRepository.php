@@ -599,6 +599,21 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
         request()->attributes->set('serik_browse_page_item_count', $items->count());
         $total = $this->resolveBrowseListingTotal($query, $filters);
 
+        // If this page hydrated fewer rows than perPage and we are past the claimed
+        // last page window, clamp total to what was actually reachable.
+        $pageItemCount = $items->count();
+        if ($pageItemCount > 0 && $pageItemCount < $perPage) {
+            $exactEnd = (($page - 1) * $perPage) + $pageItemCount;
+            if ($exactEnd < $total) {
+                $total = $exactEnd;
+            }
+        } elseif ($pageItemCount === 0 && $page > 1) {
+            $exactEnd = ($page - 1) * $perPage;
+            if ($exactEnd < $total) {
+                $total = $exactEnd;
+            }
+        }
+
         return new LengthAwarePaginator(
             $items,
             $total,
@@ -629,42 +644,42 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
                 return collect();
             }
 
-            $rows = (clone $query)
-                ->whereIn('re_properties.id', $meiliIds)
-                ->get()
-                ->keyBy('id');
+            $hydrated = $this->hydrateBrowseIds($query, $meiliIds);
+            if ($hydrated->count() >= min($perPage, count($meiliIds))) {
+                return $hydrated->take($perPage)->values();
+            }
 
-            $hydrated = collect($meiliIds)
-                ->map(fn ($id) => $rows->get((int) $id))
-                ->filter()
-                ->values();
-
+            // Stale/hidden Meili docs dropped by SQL — over-fetch until page is full.
             if ($hydrated->isNotEmpty()) {
-                return $hydrated;
+                $filled = $hydrated->keyBy(static fn ($p) => (int) $p->id);
+                $offset = (($page - 1) * $perPage) + count($meiliIds);
+                for ($guard = 0; $filled->count() < $perPage && $guard < 6; $guard++) {
+                    $batch = max($perPage * 2, 24);
+                    $more = $this->browseMeiliIds($filters, $offset, $batch);
+                    if (! is_array($more) || $more === []) {
+                        break;
+                    }
+                    $offset += count($more);
+                    foreach ($this->hydrateBrowseIds($query, $more) as $row) {
+                        $filled[(int) $row->id] = $row;
+                        if ($filled->count() >= $perPage) {
+                            break;
+                        }
+                    }
+                    if (count($more) < $batch) {
+                        break;
+                    }
+                }
+
+                return $filled->values()->take($perPage)->values();
             }
 
             // Stale Meili IDs (not in SQL filter set) — fall through to SQL path.
         }
 
-        $sqlLimit = (($filters['status'] ?? '') === 'sold') ? 500 : 200;
-        $sqlIds = $this->browsePageIdsViaSqlLocation($filters, $sqlLimit);
-        if ($sqlIds !== []) {
-            request()->attributes->set('serik_browse_sql_ids_total', count($sqlIds));
-            $offset = max(0, ($page - 1) * $perPage);
-            $pageIds = array_slice($sqlIds, $offset, $perPage);
-            if ($pageIds === []) {
-                return collect();
-            }
-
-            $rows = (clone $query)
-                ->whereIn('re_properties.id', $pageIds)
-                ->get()
-                ->keyBy('id');
-
-            return collect($pageIds)
-                ->map(fn ($id) => $rows->get((int) $id))
-                ->filter()
-                ->values();
+        $pageIds = $this->browsePageIdsViaSqlLocation($filters, $page, $perPage);
+        if ($pageIds !== null) {
+            return $this->hydrateBrowseIds($query, $pageIds);
         }
 
         $location = trim((string) ($filters['location'] ?? ''));
@@ -683,9 +698,42 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
     }
 
     /**
+     * @param  list<int>  $ids
+     * @return \Illuminate\Support\Collection<int, \Botble\RealEstate\Models\Property>
+     */
+    protected function hydrateBrowseIds($query, array $ids)
+    {
+        if ($ids === []) {
+            return collect();
+        }
+
+        $rows = (clone $query)
+            ->whereIn('re_properties.id', $ids)
+            ->get()
+            ->keyBy('id');
+
+        return collect($ids)
+            ->map(fn ($id) => $rows->get((int) $id))
+            ->filter()
+            ->values();
+    }
+
+    /**
      * @return int[]|null
      */
     protected function browsePageIdsViaMeili(array $filters, int $page, int $perPage): ?array
+    {
+        return $this->browseMeiliIds(
+            $filters,
+            max(0, ($page - 1) * $perPage),
+            max(1, $perPage)
+        );
+    }
+
+    /**
+     * @return int[]|null  null = Meili unavailable / not applicable
+     */
+    protected function browseMeiliIds(array $filters, int $offset, int $limit): ?array
     {
         if (! empty($filters['open_house'])) {
             return null;
@@ -701,8 +749,8 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
 
         $opts = [
             'residential_only' => true,
-            'limit' => max(1, $perPage),
-            'offset' => max(0, ($page - 1) * $perPage),
+            'limit' => max(1, $limit),
+            'offset' => max(0, $offset),
             'sort' => ['id:desc'],
         ];
 
@@ -783,7 +831,7 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
             ->searchIds('', $opts);
 
         // Empty Meili page for a community must not hide SQL-matched listings.
-        if (is_array($ids) && $ids === [] && $community !== '') {
+        if (is_array($ids) && $ids === [] && $community !== '' && $offset === 0) {
             return null;
         }
 
@@ -810,20 +858,13 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
             }
         }
 
-        $cacheKey = 'serik_browse_count_v3:' . md5(json_encode($this->browseListingCountSignature($filters)));
+        // v4: do not treat the old SQL ID-window cap (200) as inventory total.
+        $cacheKey = 'serik_browse_count_v4:' . md5(json_encode($this->browseListingCountSignature($filters)));
         $ttl = $unfiltered ? 600 : 300;
 
         $cachedTotal = Cache::get($cacheKey);
         if ($cachedTotal !== null) {
             return (int) $cachedTotal;
-        }
-
-        $sqlIdsTotal = request()->attributes->get('serik_browse_sql_ids_total');
-        if (is_numeric($sqlIdsTotal) && (int) $sqlIdsTotal > 0) {
-            $total = (int) $sqlIdsTotal;
-            Cache::put($cacheKey, $total, $ttl);
-
-            return $total;
         }
 
         if (! $this->locationUsesTrebDistricts($filters)) {
@@ -837,6 +878,15 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
                 }
 
                 return $meiliTotal;
+            }
+
+            // Meili down: exact city/subtype SQL COUNT (indexed location LIKE + subtype).
+            $sqlTotal = $this->browseCountViaSqlLocation($filters);
+            if ($sqlTotal !== null) {
+                Cache::put($cacheKey, $sqlTotal, $ttl);
+                Cache::put($cacheKey . ':last', $sqlTotal, 86400);
+
+                return $sqlTotal;
             }
         } else {
             // District ID sets are hundreds of PKs — COUNT is cheap and accurate.
@@ -854,10 +904,8 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
             return (int) $lastKnown;
         }
 
-        // Never invent per_page+1 (=13). Prefer a live Meili estimate; if Meili is
-        // down, schedule a refresh and report the current page size only when the
-        // page is clearly the last (partial). Otherwise keep pagination open via
-        // a soft lower bound without advertising a fake inventory of 13.
+        // Prefer a live Meili estimate; if Meili is down, schedule a refresh and
+        // report the current page size only when the page is clearly the last.
         $meiliRetry = $this->estimateBrowseTotalViaMeili($filters);
         if ($meiliRetry !== null) {
             Cache::put($cacheKey, $meiliRetry, $ttl);
@@ -1104,28 +1152,65 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
     }
 
     /**
-     * Meili-down city + house/condo/townhouse page: newest matching ids via
-     * address LIKE (no newest-N window, no COUNT). Caps at $limit so TTFB
-     * stays ~2s instead of a 30s Eloquent filesort.
+     * Meili-down city + house/condo/townhouse page via address LIKE.
+     * Uses OFFSET/LIMIT (not a capped 200-id window) so pagination matches COUNT.
      *
-     * @return list<int>
+     * @return list<int>|null  null = this SQL path does not apply
      */
-    protected function browsePageIdsViaSqlLocation(array $filters, int $limit = 800): array
+    protected function browsePageIdsViaSqlLocation(array $filters, int $page = 1, int $perPage = 12): ?array
+    {
+        $base = $this->browseSqlLocationQuery($filters);
+        if ($base === null) {
+            return null;
+        }
+
+        $perPage = max(1, $perPage);
+        $offset = max(0, ($page - 1) * $perPage);
+
+        return $base
+            ->orderByDesc('id')
+            ->offset($offset)
+            ->limit($perPage)
+            ->pluck('id')
+            ->map(static fn ($id) => (int) $id)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Exact inventory for Meili-down city/subtype landings.
+     */
+    protected function browseCountViaSqlLocation(array $filters): ?int
+    {
+        $base = $this->browseSqlLocationQuery($filters);
+        if ($base === null) {
+            return null;
+        }
+
+        return (int) $base->count();
+    }
+
+    /**
+     * Shared city + subtype + MLS filters (no order/limit).
+     *
+     * @return \Illuminate\Database\Query\Builder|null
+     */
+    protected function browseSqlLocationQuery(array $filters)
     {
         if (! empty($filters['open_house'])) {
-            return [];
+            return null;
         }
         if (trim((string) ($filters['keyword'] ?? '')) !== '') {
-            return [];
+            return null;
         }
         if ($this->locationUsesTrebDistricts($filters)) {
-            return [];
+            return null;
         }
 
         $location = trim((string) ($filters['location'] ?? ''));
         $city = $location !== '' ? trim(explode(',', $location)[0]) : '';
         if ($city === '' || strcasecmp($city, 'ontario') === 0 || strcasecmp($city, 'on') === 0) {
-            return [];
+            return null;
         }
 
         $wantSold = ($filters['status'] ?? '') === 'sold';
@@ -1146,18 +1231,13 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
         }
         $subtypes = array_values(array_unique(array_filter($subtypes)));
         if ($subtypes === []) {
-            return [];
+            return null;
         }
 
-        $cap = $wantSold ? max(12, min($limit, 500)) : max(12, min($limit, 200));
-
         $query = DB::table('re_properties')
-            ->select('id')
             ->where('location', 'like', '%, ' . addcslashes($city, '%_\\') . ', ON%')
             ->whereIn('PropertySubType', $subtypes)
-            ->where('moderation_status', ModerationStatusEnum::APPROVED)
-            ->orderByDesc('id')
-            ->limit($cap);
+            ->where('moderation_status', ModerationStatusEnum::APPROVED);
 
         if ($wantSold) {
             $query->whereIn('MlsStatus', [
@@ -1185,7 +1265,7 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
             }
         }
 
-        return $query->pluck('id')->map(static fn ($id) => (int) $id)->values()->all();
+        return $query;
     }
 
     protected function locationUsesTrebDistricts(array $filters): bool

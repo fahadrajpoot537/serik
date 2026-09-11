@@ -1264,14 +1264,15 @@ a.tf-btn.primary.serik-hp-nav__cta:hover,
 }
 
 .footer.footer-main .wd-social .list-social a.box-icon {
+  --social-brand: #161e2d;
   display: inline-flex !important;
   align-items: center;
   justify-content: center;
   width: 40px !important;
   height: 40px !important;
-  border: 1px solid #000 !important;
+  border: 1px solid var(--social-brand) !important;
   border-radius: 50% !important;
-  color: #000 !important;
+  color: var(--social-brand) !important;
   background: #fff !important;
   opacity: 1 !important;
   visibility: visible !important;
@@ -1283,9 +1284,9 @@ a.tf-btn.primary.serik-hp-nav__cta:hover,
   display: block !important;
   width: 1.25rem !important;
   height: 1.25rem !important;
-  color: #000 !important;
+  color: var(--social-brand) !important;
   fill: none !important;
-  stroke: #000 !important;
+  stroke: var(--social-brand) !important;
   stroke-width: 2 !important;
   opacity: 1 !important;
   visibility: visible !important;
@@ -1297,22 +1298,55 @@ a.tf-btn.primary.serik-hp-nav__cta:hover,
 .footer.footer-main .wd-social .list-social a.box-icon svg polyline,
 .footer.footer-main .wd-social .list-social a.box-icon svg rect {
   fill: none !important;
-  stroke: #000 !important;
+  stroke: var(--social-brand) !important;
 }
 
-.footer.footer-main .wd-social .list-social a.box-icon:hover,
-.footer.footer-main .wd-social .list-social a.box-icon:hover svg,
-.footer.footer-main .wd-social .list-social a.box-icon:hover i {
-  border-color: #000 !important;
-  background: #000 !important;
+/* Brand / original platform colors */
+.footer.footer-main .wd-social .list-social a.box-icon[title="Facebook"],
+.footer.footer-main .wd-social .list-social a.box-icon:has(.svg-icon-ti-ti-brand-facebook) {
+  --social-brand: #1877f2;
+}
+.footer.footer-main .wd-social .list-social a.box-icon[title="YouTube"],
+.footer.footer-main .wd-social .list-social a.box-icon:has(.svg-icon-ti-ti-brand-youtube) {
+  --social-brand: #ff0000;
+}
+.footer.footer-main .wd-social .list-social a.box-icon[title="Instagram"],
+.footer.footer-main .wd-social .list-social a.box-icon:has(.svg-icon-ti-ti-brand-instagram) {
+  --social-brand: #e4405f;
+}
+.footer.footer-main .wd-social .list-social a.box-icon[title="LinkedIn"],
+.footer.footer-main .wd-social .list-social a.box-icon:has(.svg-icon-ti-ti-brand-linkedin) {
+  --social-brand: #0a66c2;
+}
+.footer.footer-main .wd-social .list-social a.box-icon[title="TikTok"],
+.footer.footer-main .wd-social .list-social a.box-icon:has(.svg-icon-ti-ti-brand-tiktok) {
+  --social-brand: #111111;
+}
+.footer.footer-main .wd-social .list-social a.box-icon[title="Pinterest"],
+.footer.footer-main .wd-social .list-social a.box-icon:has(.svg-icon-ti-ti-brand-pinterest) {
+  --social-brand: #e60023;
+}
+.footer.footer-main .wd-social .list-social a.box-icon[title="Twitter"],
+.footer.footer-main .wd-social .list-social a.box-icon[title="X"],
+.footer.footer-main .wd-social .list-social a.box-icon:has(.svg-icon-ti-ti-brand-x),
+.footer.footer-main .wd-social .list-social a.box-icon:has(.svg-icon-ti-ti-brand-twitter) {
+  --social-brand: #111111;
+}
+
+.footer.footer-main .wd-social .list-social a.box-icon:hover {
+  background: var(--social-brand) !important;
   color: #fff !important;
+  border-color: var(--social-brand) !important;
 }
-
+.footer.footer-main .wd-social .list-social a.box-icon:hover svg,
+.footer.footer-main .wd-social .list-social a.box-icon:hover i,
+.footer.footer-main .wd-social .list-social a.box-icon:hover .icon,
 .footer.footer-main .wd-social .list-social a.box-icon:hover svg path,
 .footer.footer-main .wd-social .list-social a.box-icon:hover svg circle,
 .footer.footer-main .wd-social .list-social a.box-icon:hover svg line,
 .footer.footer-main .wd-social .list-social a.box-icon:hover svg polyline,
 .footer.footer-main .wd-social .list-social a.box-icon:hover svg rect {
+  color: #fff !important;
   stroke: #fff !important;
 }
 
@@ -2272,6 +2306,58 @@ body:has(.blog-list-page) #sectionhead .heading-breadcrumb {
   color: #64748b;
   font-size: 0.9375rem;
   line-height: 1.6;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Site font (Poppins) on blog + FAQs + Contact + Privacy + Terms             */
+/* Overrides Word/paste inline font-family without breaking icon fonts.       */
+/* -------------------------------------------------------------------------- */
+.serik-blog-detail,
+.serik-blog-detail__body,
+.serik-blog-detail__title,
+.serik-blog-detail__meta,
+.serik-blog-detail__toc,
+.serik-blog-detail__aside,
+.serik-faq-list,
+.box-faq,
+.box-faq .faq-header,
+.box-faq .faq-body,
+body[id^="page-"] .ck-content.single-detail,
+body[id^="post-"] .ck-content.single-detail {
+  font-family: var(--primary-font, "Poppins", sans-serif) !important;
+}
+
+.serik-blog-detail h1,
+.serik-blog-detail h2,
+.serik-blog-detail h3,
+.serik-blog-detail h4,
+.serik-blog-detail h5,
+.serik-blog-detail h6,
+.serik-blog-detail__title,
+.box-faq .faq-header,
+body[id^="page-"] .ck-content.single-detail h1,
+body[id^="page-"] .ck-content.single-detail h2,
+body[id^="page-"] .ck-content.single-detail h3,
+body[id^="page-"] .ck-content.single-detail h4,
+body[id^="page-"] .ck-content.single-detail h5,
+body[id^="page-"] .ck-content.single-detail h6,
+body[id^="post-"] .ck-content.single-detail h1,
+body[id^="post-"] .ck-content.single-detail h2,
+body[id^="post-"] .ck-content.single-detail h3,
+body[id^="post-"] .ck-content.single-detail h4,
+body[id^="post-"] .ck-content.single-detail h5,
+body[id^="post-"] .ck-content.single-detail h6 {
+  font-family: var(--heading-font, var(--primary-font, "Poppins"), sans-serif) !important;
+}
+
+.serik-blog-detail [style*="font-family"],
+.serik-faq-list [style*="font-family"],
+.box-faq [style*="font-family"],
+body[id^="page-"] .ck-content.single-detail [style*="font-family"],
+body[id^="post-"] .ck-content.single-detail [style*="font-family"],
+body[id^="page-"] .ck-content.single-detail [style*="font-family"] *,
+body[id^="post-"] .ck-content.single-detail [style*="font-family"] * {
+  font-family: var(--primary-font, "Poppins", sans-serif) !important;
 }
 
 @media (max-width: 991px) {
