@@ -1225,6 +1225,19 @@ a.tf-btn.primary.serik-hp-nav__cta:hover,
   border-bottom: 1px solid var(--p-line);
 }
 
+.footer.footer-main .wd-social {
+  display: flex !important;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.footer.footer-main .wd-social > span,
+.footer.footer-main .wd-social .text {
+  display: inline-block !important;
+  color: #000 !important;
+}
+
 .footer.footer-main .wd-social span,
 .footer.footer-main .wd-social .text,
 .footer.footer-main .footer-cl-1 p,
@@ -1234,18 +1247,57 @@ a.tf-btn.primary.serik-hp-nav__cta:hover,
   color: #000 !important;
 }
 
+.footer.footer-main .wd-social .list-social {
+  display: flex !important;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.footer.footer-main .wd-social .list-social > li {
+  display: list-item !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
 .footer.footer-main .wd-social .list-social a.box-icon {
-  border-color: #000 !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 40px !important;
+  height: 40px !important;
+  border: 1px solid #000 !important;
+  border-radius: 50% !important;
   color: #000 !important;
-  background: transparent !important;
+  background: #fff !important;
+  opacity: 1 !important;
+  visibility: visible !important;
 }
 
 .footer.footer-main .wd-social .list-social a.box-icon svg,
 .footer.footer-main .wd-social .list-social a.box-icon i,
 .footer.footer-main .wd-social .list-social a.box-icon .icon {
+  display: block !important;
+  width: 1.25rem !important;
+  height: 1.25rem !important;
   color: #000 !important;
-  fill: currentColor !important;
-  stroke: currentColor !important;
+  fill: none !important;
+  stroke: #000 !important;
+  stroke-width: 2 !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.footer.footer-main .wd-social .list-social a.box-icon svg path,
+.footer.footer-main .wd-social .list-social a.box-icon svg circle,
+.footer.footer-main .wd-social .list-social a.box-icon svg line,
+.footer.footer-main .wd-social .list-social a.box-icon svg polyline,
+.footer.footer-main .wd-social .list-social a.box-icon svg rect {
+  fill: none !important;
+  stroke: #000 !important;
 }
 
 .footer.footer-main .wd-social .list-social a.box-icon:hover,
@@ -1254,6 +1306,14 @@ a.tf-btn.primary.serik-hp-nav__cta:hover,
   border-color: #000 !important;
   background: #000 !important;
   color: #fff !important;
+}
+
+.footer.footer-main .wd-social .list-social a.box-icon:hover svg path,
+.footer.footer-main .wd-social .list-social a.box-icon:hover svg circle,
+.footer.footer-main .wd-social .list-social a.box-icon:hover svg line,
+.footer.footer-main .wd-social .list-social a.box-icon:hover svg polyline,
+.footer.footer-main .wd-social .list-social a.box-icon:hover svg rect {
+  stroke: #fff !important;
 }
 
 .footer.footer-main .bottom-footer {
