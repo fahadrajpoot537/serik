@@ -654,7 +654,7 @@ a.tf-btn.primary.serik-hp-nav__cta:hover,
   .main-header.serik-hp-nav {
     width: min(1600px, calc(100% - 32px)) !important;
     max-width: min(1600px, calc(100% - 32px)) !important;
-    margin: 14px auto 0 !important;
+    margin: 8px auto 0 !important;
     min-height: 64px !important;
     height: 64px !important;
     padding: 0 22px !important;

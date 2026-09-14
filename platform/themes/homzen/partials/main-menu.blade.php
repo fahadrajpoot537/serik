@@ -700,7 +700,7 @@
 
                                 <a href="{{ url('/free-home-evaluation') }}">&gt; Free Home Evaluation</a>
                                 <a href="{{ url('/tips-for-home-selling') }}">&gt; Tips For Home Selling</a>
-                                <a href="https://www.google.com/search?sca_esv=b2b87a3f75a2d5f7&amp;hl=en-PK&amp;sxsrf=APpeQnvO7RU_-4y49qO7P7Tv6oXOwZ0fYw:1789050551508&amp;q=serik+realty+inc.+reviews&amp;si=APenkKm7iecQ4G6P-TsbSMFKIQtv3EFIqRAFw-i8uEbk55Z-_713vAHWMjgMLK8RdWZb_SloECSBSbeCmDlVk-cmoXLCNraYfid7qM7I4CyfTsin5mncYmMb8XN_D_GQSDfEgaDewSgnLL_uhRhydUEicu5HUWmSKQ%3D%3D&amp;sa=X&amp;ved=2ahUKEwj_9-3UnOSWAxWCVfEDHeV9MuwQ9qsLegQIExAG&amp;biw=360&amp;bih=728&amp;dpr=3#ebo=1" target="_blank" rel="noopener noreferrer">&gt; Customers' testimonials</a>
+                                <a href="https://www.google.com/search?q=Serik+Realty+Inc.+Reviews">&gt; Customers' testimonials</a>
                         </div>
 
                     </div>
@@ -1173,6 +1173,7 @@
             return false;
         }
         const link = e.target && e.target.closest ? e.target.closest('.mega-dropdown a[href]') : null;
+        // Modifier keys / target=_blank: leave new-tab behavior to the browser.
         if (!link || serikMegaShouldNativeNewTab(link, e)) {
             return false;
         }
@@ -1188,6 +1189,12 @@
         closeTimer = null;
         lastPointerX = e.clientX;
         lastPointerY = e.clientY;
+        // Already started from pointerdown — block duplicate mousedown/click navigations.
+        if (megaLinkArmed) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            return true;
+        }
         megaLinkArmed = true;
         e.preventDefault();
         e.stopImmediatePropagation();
@@ -1219,8 +1226,8 @@
         if (!link) {
             return;
         }
+        // Ctrl/Cmd/Shift + click or explicit target=_blank → browser opens new tab only.
         if (serikMegaShouldNativeNewTab(link, e)) {
-            e.stopPropagation();
             return;
         }
         if (!serikMegaHrefIsNavigable(link.getAttribute('href') || '')) {
@@ -1228,7 +1235,9 @@
         }
         e.preventDefault();
         e.stopImmediatePropagation();
-        serikNavigateMegaSameTab(link.href || link.getAttribute('href'));
+        if (!megaLinkArmed) {
+            serikNavigateMegaSameTab(link.href || link.getAttribute('href'));
+        }
     }, true);
 
     document.addEventListener('keydown', (e) => {

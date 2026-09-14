@@ -9,23 +9,29 @@ use Illuminate\Http\Request;
  */
 final class PageHeroImage
 {
+    private const TOP_BANNERS = 'Website Banners (TOp)';
+
     /**
-     * Request path => filename in public/pictures.
+     * Request path => relative path under public/pictures.
      *
      * @var array<string, string>
      */
     private const FILES = [
         'appointment-scheduler' => 'how-to-buy-land-in-ontario-canada.webp',
-        'free-home-evaluation' => 'Mortgage Calculator.webp',
-        'evaluation' => 'Mortgage Calculator.webp',
-        'tips-for-home-selling' => 'how-to-buy-land-in-ontario-canada.webp',
-        'cash-back-calculator' => 'The Benefits of Smart Home Technology.webp',
-        'privacy-policy' => 'Understanding Property Taxes and How to Lower Them.webp',
+        'free-home-evaluation' => self::TOP_BANNERS . '/Home Evalutation.webp',
+        'evaluation' => self::TOP_BANNERS . '/Home Evalutation.webp',
+        'tips-for-home-selling' => self::TOP_BANNERS . '/Tips for Home Selling.webp',
+        'cash-back-calculator' => self::TOP_BANNERS . '/Cashback Calculator.webp',
+        'mortgage-calculator' => self::TOP_BANNERS . '/Mortgage Calculator.webp',
+        'privacy-policy' => self::TOP_BANNERS . '/Cookies & Policies.webp',
+        'cookie-policy' => self::TOP_BANNERS . '/Cookies & Policies.webp',
         'term-and-conditions' => 'Cost of Selling a House in Canada.webp',
         'terms-conditions' => 'Cost of Selling a House in Canada.webp',
-        'faqs' => 'real-estate-investing-tips-ontario.webp',
-        'our-services' => 'Tips for Selling Out Your Property.webp',
-        'contact-us' => 'cost-of-selling-a-house-in-ontario-canada.webp',
+        'faqs' => self::TOP_BANNERS . '/FAQs.webp',
+        'our-services' => self::TOP_BANNERS . '/Our Services.webp',
+        'contact-us' => self::TOP_BANNERS . '/Contact Us.webp',
+        'blog' => self::TOP_BANNERS . '/Blogs.webp',
+        'blogs' => self::TOP_BANNERS . '/Blogs.webp',
         'wishlist' => 'wishlist-banner.png',
     ];
 
@@ -45,12 +51,7 @@ final class PageHeroImage
             return null;
         }
 
-        $absolute = public_path('pictures/' . $file);
-        if (! is_file($absolute)) {
-            return null;
-        }
-
-        return asset('pictures/' . str_replace(' ', '%20', $file));
+        return self::assetUrl($file);
     }
 
     /**
@@ -59,5 +60,19 @@ final class PageHeroImage
     public static function pathMap(): array
     {
         return self::FILES;
+    }
+
+    private static function assetUrl(string $relative): ?string
+    {
+        $relative = str_replace('\\', '/', ltrim($relative, '/'));
+        $absolute = public_path('pictures/' . $relative);
+
+        if (! is_file($absolute)) {
+            return null;
+        }
+
+        $encoded = implode('/', array_map('rawurlencode', explode('/', $relative)));
+
+        return asset('pictures/' . $encoded);
     }
 }

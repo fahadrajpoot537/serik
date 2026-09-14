@@ -249,7 +249,21 @@
             </ul>
         </div>
         <div class="banner-video">
-            @if ($shortcode->image)
+            @php
+                $foundationBannerPath = public_path('pictures/about-foundation-banner.webp');
+                $foundationBannerUrl = is_file($foundationBannerPath)
+                    ? asset('pictures/about-foundation-banner.webp')
+                    : null;
+            @endphp
+            @if ($foundationBannerUrl)
+                <img
+                    src="{{ $foundationBannerUrl }}"
+                    alt="{{ $shortcode->title ?: __('Our Foundation') }}"
+                    loading="lazy"
+                    decoding="async"
+                    class="w-100"
+                >
+            @elseif ($shortcode->image)
                 {{ RvMedia::image($shortcode->image, $shortcode->title) }}
             @endif
 

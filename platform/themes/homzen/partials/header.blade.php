@@ -535,7 +535,7 @@
         }
 
         body.serik-sticky-header {
-            padding-top: calc(var(--serik-top-header-height, 40px) + var(--serik-main-header-height, 78px) + 8px);
+            padding-top: calc(var(--serik-top-header-height, 40px) + var(--serik-main-header-height, 78px));
         }
     }
 
@@ -648,8 +648,12 @@
         const siteHeader = document.getElementById('serikSiteHeader') || document.querySelector('.serik-site-header');
         let mainH = 60;
         if (window.innerWidth >= 992 && siteHeader) {
-            // Includes blue-pill margin-top so content clears the floating navbar.
-            mainH = Math.ceil(siteHeader.getBoundingClientRect().height) || siteHeader.offsetHeight || 78;
+            // Pill margin-top is outside the bar; include it so content clears the floating navbar.
+            const bar = mainHeader || siteHeader.querySelector('#header, .main-header');
+            const barH = bar ? (bar.offsetHeight || 64) : 64;
+            const barStyle = bar ? window.getComputedStyle(bar) : null;
+            const barMarginTop = barStyle ? (parseFloat(barStyle.marginTop) || 0) : 0;
+            mainH = Math.ceil(barH + barMarginTop) || 72;
         } else if (mainHeader) {
             mainH = mainHeader.offsetHeight || 60;
         }
@@ -891,7 +895,7 @@
                          
                             <a href="{{ url('/free-home-evaluation') }}" class="main-city"> Free Home Evaluation</a>
                                 <a href="{{ url('/tips-for-home-selling') }}" class="main-city"> Tips For Home Selling</a>
-                                <a href="https://www.google.com/search?sca_esv=b2b87a3f75a2d5f7&amp;hl=en-PK&amp;sxsrf=APpeQnvO7RU_-4y49qO7P7Tv6oXOwZ0fYw:1789050551508&amp;q=serik+realty+inc.+reviews&amp;si=APenkKm7iecQ4G6P-TsbSMFKIQtv3EFIqRAFw-i8uEbk55Z-_713vAHWMjgMLK8RdWZb_SloECSBSbeCmDlVk-cmoXLCNraYfid7qM7I4CyfTsin5mncYmMb8XN_D_GQSDfEgaDewSgnLL_uhRhydUEicu5HUWmSKQ%3D%3D&amp;sa=X&amp;ved=2ahUKEwj_9-3UnOSWAxWCVfEDHeV9MuwQ9qsLegQIExAG&amp;biw=360&amp;bih=728&amp;dpr=3#ebo=1" class="main-city" target="_blank" rel="noopener noreferrer"> Customers' testimonials</a>
+                                <a href="https://www.google.com/search?q=Serik+Realty+Inc.+Reviews" class="main-city"> Customers' testimonials</a>
                             </div>
                         </div>
                         
