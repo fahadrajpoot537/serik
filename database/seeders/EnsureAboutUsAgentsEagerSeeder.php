@@ -55,7 +55,10 @@ class EnsureAboutUsAgentsEagerSeeder extends Seeder
             \App\Support\HomepageFragmentCache::bump('shortcode:agents');
         }
         if (class_exists(\App\Support\ShortcodeRenderCache::class)) {
-            \App\Support\ShortcodeRenderCache::bump('agents');
+            \App\Support\ShortcodeRenderCache::bumpPropertyDependents();
+        }
+        if (class_exists(\App\Support\HomepageResponseCache::class)) {
+            \App\Support\HomepageResponseCache::bump();
         }
     }
 }
