@@ -1877,6 +1877,66 @@ select:focus-visible {
   flex-direction: column;
 }
 
+/* Meet Our Experts — same circular avatars on About Us + homepage */
+.serik-hp-agents {
+  background: var(--p-page, #fbfcfd);
+}
+.serik-hp-agent-card {
+  background: #fff;
+  border: 1px solid var(--p-line, rgba(22, 30, 45, 0.1));
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: var(--p-shadow, 0 2px 8px rgba(16, 24, 40, 0.04), 0 12px 28px rgba(16, 24, 40, 0.06));
+  height: 100%;
+}
+#about-agent .box-agent .box-img,
+#about-agent .box-agent .serik-hp-agent-card__media,
+.serik-hp-agents .box-agent .box-img,
+.serik-hp-agents .box-agent .serik-hp-agent-card__media {
+  width: min(78%, 168px) !important;
+  aspect-ratio: 1 / 1 !important;
+  height: auto !important;
+  margin: 1.1rem auto 0.35rem !important;
+  border-radius: 50% !important;
+  overflow: hidden !important;
+  border: none !important;
+  position: relative;
+  flex-shrink: 0;
+}
+#about-agent .box-agent .box-img img,
+#about-agent .box-agent .serik-hp-agent-card__media img,
+.serik-hp-agents .box-agent .box-img img,
+.serik-hp-agents .box-agent .serik-hp-agent-card__media img {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  object-fit: cover !important;
+  object-position: center top !important;
+  border-radius: 50% !important;
+  display: block;
+}
+#about-agent .box-agent .box-img .agent-social,
+.serik-hp-agents .box-agent .box-img .agent-social {
+  left: 12% !important;
+  right: 12% !important;
+  bottom: 8% !important;
+  padding: 6px 0 !important;
+  border-radius: 999px !important;
+}
+.serik-hp-agent-card__body {
+  padding: 0.55rem 1rem 1.05rem;
+  text-align: center;
+}
+.serik-hp-agent-card__body h6,
+.serik-hp-agent-card__body .link {
+  color: var(--serik-reference-navy, #0b2340) !important;
+  font-weight: 700 !important;
+}
+#about-agent .serik-agent-meta__ctas,
+.serik-hp-agents .serik-agent-meta__ctas {
+  justify-content: center;
+}
+
 /* Search icon: phones/tablets only (opens the existing overlay panel).
    Desktop navbar already has the inline smart-search field — never show this
    button next to Contact / phone. ID selector beats theme button { display }. */
