@@ -35,6 +35,12 @@ final class PageHeroImage
         $path = trim($request->path(), '/');
 
         $file = self::FILES[$path] ?? null;
+
+        // All blog post detail pages share one hero banner.
+        if ($file === null && (str_starts_with($path, 'blog/') || str_starts_with($path, 'blogs/'))) {
+            $file = 'blog-hero-banner.png';
+        }
+
         if ($file === null) {
             return null;
         }

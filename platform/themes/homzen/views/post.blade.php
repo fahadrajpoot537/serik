@@ -1,23 +1,57 @@
 @php
     $showFeaturedImage = theme_option('blog_show_featured_image_in_post_detail', 'yes') == 'yes';
-    Theme::set('breadcrumbEnabled', $showFeaturedImage ? 'no' : 'yes');
-    Theme::set('breadcrumbStyle', 'without-title');
+    // Hero banner shows the post H1; featured image stays in the article body.
+    Theme::set('breadcrumbEnabled', 'yes');
+    Theme::set('breadcrumbStyle', 'default');
     Theme::set('currentPostId', $post->getKey());
     $bottomPostDetailSidebar = dynamic_sidebar('bottom_post_detail_sidebar');
     Theme::layout('full-width');
     Theme::set('pageTitle', $post->name);
-    Theme::set('pageH1ProvidedByContent', true);
+    Theme::set('pageH1', $post->name);
     $author = (theme_option('blog_show_author_name', 'yes') == 'yes' && class_exists($post->author_type))
         ? ($post->author ?? null)
         : null;
     $authorName = ($author && trim((string) $author->name)) ? trim((string) $author->name) : null;
+    $authorAvatar = $author?->avatar_url ?? null;
+    $shareThumb = $post->image ? RvMedia::getImageUrl($post->image) : null;
+    $shareSocials = \Botble\Theme\Supports\ThemeSupport::getSocialSharingButtons(
+        $post->url,
+        $post->name,
+        $shareThumb
+    );
+    // Theme option may be stored as "[]", which skips package defaults.
+    if (empty($shareSocials)) {
+        $shareUrl = urlencode($post->url);
+        $shareTitle = rawurlencode(strip_tags((string) $post->name));
+        $shareSocials = [
+            'facebook' => [
+                'name' => 'Facebook',
+                'icon' => '<i class="ti ti-brand-facebook" aria-hidden="true"></i>',
+                'url' => 'https://www.facebook.com/sharer.php?u=' . $shareUrl,
+            ],
+            'x' => [
+                'name' => 'X',
+                'icon' => '<i class="ti ti-brand-x" aria-hidden="true"></i>',
+                'url' => 'https://x.com/intent/tweet?url=' . $post->url . '&text=' . $shareTitle,
+            ],
+            'linkedin' => [
+                'name' => 'LinkedIn',
+                'icon' => '<i class="ti ti-brand-linkedin" aria-hidden="true"></i>',
+                'url' => 'https://www.linkedin.com/sharing/share-offsite?url=' . $shareUrl,
+            ],
+            'whatsapp' => [
+                'name' => 'WhatsApp',
+                'icon' => '<i class="ti ti-brand-whatsapp" aria-hidden="true"></i>',
+                'url' => 'https://api.whatsapp.com/send?text=' . $shareTitle . '%20' . $post->url,
+            ],
+            'email' => [
+                'name' => 'Email',
+                'icon' => '<i class="ti ti-mail" aria-hidden="true"></i>',
+                'url' => 'mailto:?subject=' . $shareTitle . '&body=' . $shareUrl,
+            ],
+        ];
+    }
 @endphp
-
-@if ($post->image && $showFeaturedImage)
-    <section class="flat-banner-blog serik-blog-banner" aria-label="{{ __('Featured image') }}">
-        {{ RvMedia::image($post->image, $post->name, lazy: false) }}
-    </section>
-@endif
 
 <section @class(['flat-section-v2 serik-blog-detail', 'flat-section' => ! $bottomPostDetailSidebar])>
     <div class="container">
@@ -33,10 +67,15 @@
             <div class="col-lg-8">
                 <article class="flat-blog-detail serik-blog-detail__article">
                     <header class="serik-blog-detail__header">
+                        @if ($post->image && $showFeaturedImage)
+                            <div class="serik-blog-detail__featured">
+                                {{ RvMedia::image($post->image, $post->name, lazy: false, attributes: ['class' => 'serik-blog-detail__featured-img']) }}
+                            </div>
+                        @endif
+
                         @if($post->firstCategory)
                             <a href="{{ $post->firstCategory->url }}" class="blog-tag primary serik-blog-detail__cat">{{ $post->firstCategory->name }}</a>
                         @endif
-                        <h1 class="serik-blog-detail__title">{!! BaseHelper::clean($post->name) !!}</h1>
                         <div class="serik-blog-detail__meta">
                             @if ($authorName)
                                 <span class="serik-blog-detail__meta-item">{{ $authorName }}</span>
@@ -49,42 +88,52 @@
                         {!! BaseHelper::clean($post->content) !!}
                     </div>
 
-                    <div class="my-40 d-flex justify-content-between flex-wrap gap-16">
-                        @php
-                            $shareSocials = \Botble\Theme\Supports\ThemeSupport::getSocialSharingButtons($post->url, $post->name);
-                        @endphp
-                        @if($shareSocials)
-                            <div class="d-flex flex-wrap align-items-center gap-16">
-                                <span class="text-black">{{ __('Share:') }}</span>
-                                <ul class="d-flex flex-wrap gap-12">
+                    @php
+                        $relatedPosts = get_related_posts($post->id, 5);
+                    @endphp
+
+                    <section class="serik-blog-detail__author-card" id="author" aria-label="{{ __('About the Author') }}">
+                        <div class="serik-blog-detail__author-card-main">
+                            <div class="serik-blog-detail__author-avatar">
+                                @if ($authorAvatar)
+                                    {{ RvMedia::image($authorAvatar, $authorName ?: __('Author'), attributes: ['width' => 96, 'height' => 96]) }}
+                                @else
+                                    <span class="serik-blog-detail__author-avatar-fallback" aria-hidden="true">
+                                        {{ mb_strtoupper(mb_substr($authorName ?: 'S', 0, 1)) }}
+                                    </span>
+                                @endif
+                            </div>
+                            <div class="serik-blog-detail__author-copy">
+                                <p class="serik-blog-detail__author-label">{{ __('About the Author') }}</p>
+                                <h3 class="serik-blog-detail__author-name">{{ $authorName ?: 'Serik Realty' }}</h3>
+                                <p class="serik-blog-detail__author-bio">
+                                    {{ __('We understand that real estate is about more than just transactions — it’s about important life decisions and transitions. We make the process easier by offering clear communication, honest advice, and a professional approach so that every client can move forward with confidence and clarity.') }}
+                                </p>
+                            </div>
+                        </div>
+
+                        @if ($shareSocials)
+                            <div class="serik-blog-detail__share">
+                                <p class="serik-blog-detail__share-label">{{ __('Share this article') }}</p>
+                                <ul class="serik-blog-detail__share-list">
                                     @foreach($shareSocials as $social)
                                         <li>
-                                            <a href="{{ $social['url'] }}" class="box-icon w-40 social square" title="{{ $social['name'] }}">
+                                            <a
+                                                href="{{ $social['url'] }}"
+                                                class="serik-blog-detail__share-btn"
+                                                title="{{ $social['name'] }}"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                            >
                                                 {!! $social['icon'] !!}
+                                                <span>{{ $social['name'] }}</span>
                                             </a>
                                         </li>
                                     @endforeach
                                 </ul>
                             </div>
                         @endif
-                    </div>
-
-                    @php
-                        $relatedPosts = get_related_posts($post->id, 5);
-                    @endphp
-
-                    @if ($authorName)
-                        <div class="mt-12 d-flex align-items-center gap-16 mb-3 serik-blog-detail__author" id="author">
-                            <div class="avatar avt-200 round">
-                                {{ RvMedia::image($author->avatar_url, $authorName) }}
-                            </div>
-                            <div class="post-author style-1">
-                                <span>{{ $authorName }}</span>
-                                <span>{{ Theme::formatDate($post->created_at) }}</span>
-                                <p>{{ __('We understand that real estate is about more than just transactions — it’s about important life decisions and transitions. We make the process easier by offering clear communication, honest advice, and a professional approach so that every client can move forward with confidence and clarity.') }}</p>
-                            </div>
-                        </div>
-                    @endif
+                    </section>
 
                     @if($relatedPosts->isNotEmpty())
                         <div class="post-navigation" id="relposts">
