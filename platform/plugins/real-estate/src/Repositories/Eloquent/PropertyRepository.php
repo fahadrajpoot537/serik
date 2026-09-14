@@ -827,8 +827,25 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
             $opts['community'] = $label !== '' ? $label : $community;
         }
 
-        $ids = app(\Botble\RealEstate\Services\PropertySearchService::class)
-            ->searchIds('', $opts);
+        $search = app(\Botble\RealEstate\Services\PropertySearchService::class);
+
+        // Fragment cities (Ottawa): neighborhood is stored as Meili `city`, so
+        // exact city=Ottawa returns []. Use keyword search instead.
+        if (
+            $locationCity !== ''
+            && strcasecmp($locationCity, 'ontario') !== 0
+            && $search->cityUsesFragmentLocation($locationCity)
+        ) {
+            unset($opts['city']);
+            $ids = $search->searchIds($locationCity, $opts);
+            if (is_array($ids) && $ids === [] && $offset === 0) {
+                return null; // fall through to SQL location LIKE
+            }
+
+            return $ids;
+        }
+
+        $ids = $search->searchIds('', $opts);
 
         // Empty Meili page for a community must not hide SQL-matched listings.
         if (is_array($ids) && $ids === [] && $community !== '' && $offset === 0) {
@@ -1047,12 +1064,19 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
             return null;
         }
 
+        $keyword = '';
         $location = trim((string) ($filters['location'] ?? ''));
         if ($location !== '') {
             $parts = explode(',', $location);
             $city = trim($parts[0]);
             if ($city !== '' && strcasecmp($city, 'ontario') !== 0) {
-                $opts['city'] = $city;
+                $search = app(\Botble\RealEstate\Services\PropertySearchService::class);
+                if ($search->cityUsesFragmentLocation($city)) {
+                    // Keyword path — exact Meili city facet is the neighborhood.
+                    $keyword = $city;
+                } else {
+                    $opts['city'] = $city;
+                }
             }
         }
 
@@ -1104,7 +1128,7 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
         }
 
         return app(\Botble\RealEstate\Services\PropertySearchService::class)
-            ->searchEstimatedTotal('', $opts);
+            ->searchEstimatedTotal($keyword, $opts);
     }
 
     protected function browseListingHasFilters(array $filters): bool
@@ -1235,7 +1259,11 @@ class PropertyRepository extends RepositoriesAbstract implements PropertyInterfa
         }
 
         $query = DB::table('re_properties')
-            ->where('location', 'like', '%, ' . addcslashes($city, '%_\\') . ', ON%')
+            ->where(
+                'location',
+                'like',
+                app(\Botble\RealEstate\Services\PropertySearchService::class)->cityLocationLikePattern($city)
+            )
             ->whereIn('PropertySubType', $subtypes)
             ->where('moderation_status', ModerationStatusEnum::APPROVED);
 

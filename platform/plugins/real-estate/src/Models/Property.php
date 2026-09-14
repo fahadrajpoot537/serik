@@ -807,6 +807,24 @@ class Property extends BaseModel
             $result['community'] = $segments[2];
         }
 
+        // Ottawa-style: city slot is a neighborhood ("Ottawa Centre"). Normalize
+        // Meili `city` to the metro name so city=Ottawa filters work after reindex.
+        $fragmentCities = (array) config('seo_navigation.fragment_location_cities', ['ottawa']);
+        $cityProbe = trim((string) ($result['city'] ?: ($segments[1] ?? '')));
+        foreach ($fragmentCities as $metro) {
+            $metro = trim((string) $metro);
+            if ($metro === '') {
+                continue;
+            }
+            if ($cityProbe !== '' && preg_match('/\b' . preg_quote($metro, '/') . '\b/i', $cityProbe)) {
+                if ($result['community'] === '') {
+                    $result['community'] = $cityProbe;
+                }
+                $result['city'] = ucwords(strtolower($metro));
+                break;
+            }
+        }
+
         return $result;
     }
 }

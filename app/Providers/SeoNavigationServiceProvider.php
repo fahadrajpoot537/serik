@@ -80,52 +80,86 @@ class SeoNavigationServiceProvider extends ServiceProvider
             }
 
             $city = trim((string) ($filters['location'] ?? ''));
-            $cacheKey = 'serik_open_house_ids_v3:' . md5(mb_strtolower($city !== '' ? $city : '_all'));
+            $cacheKey = 'serik_open_house_ids_v4:' . md5(mb_strtolower($city !== '' ? $city : '_all'));
 
-            $ids = \Illuminate\Support\Facades\Cache::remember($cacheKey, 3600, function () use ($city) {
-                $activeStatuses = [
-                    'New',
-                    'Active',
-                    'Ext',
-                    'Extension',
-                    'Price Change',
-                    'Active Under Contract',
-                ];
+            try {
+                $ids = \Illuminate\Support\Facades\Cache::remember($cacheKey, 3600, function () use ($city) {
+                    $activeStatuses = [
+                        'New',
+                        'Active',
+                        'Ext',
+                        'Extension',
+                        'Price Change',
+                        'Active Under Contract',
+                    ];
 
-                // Prefer active inventory only — much smaller scan than all MLS history.
-                $base = \Botble\RealEstate\Models\Property::query()
-                    ->select('re_properties.id')
-                    ->whereIn('MlsStatus', $activeStatuses)
-                    ->where(function ($q): void {
-                        $q->where('description', 'like', '%open house%')
-                            ->orWhere('content', 'like', '%open house%');
-                    })
-                    ->orderByDesc('re_properties.id')
-                    ->limit(4000);
+                    $search = app(PropertySearchService::class);
 
-                if ($city !== '' && strcasecmp($city, 'ontario') !== 0) {
-                    $matched = (clone $base)
-                        ->where('location', 'like', '%' . $city . '%')
-                        ->pluck('id')
-                        ->map(static fn ($id) => (int) $id)
-                        ->all();
+                    // Narrow candidates by city/district first (PK set), then scan
+                    // description/content only inside that set — avoids Ontario-wide
+                    // LONGTEXT LIKE which times out (IIS 500 on open_house=1).
+                    $candidateIds = [];
 
-                    if ($matched !== []) {
-                        return $matched;
+                    if ($city !== '' && strcasecmp($city, 'ontario') !== 0) {
+                        $districtIds = $search->searchDistrictCityIds($city, 8000);
+                        if (is_array($districtIds) && $districtIds !== []) {
+                            $candidateIds = $districtIds;
+                        } else {
+                            $meiliIds = $search->searchCityIds($city, 8000, [
+                                'statuses' => $activeStatuses,
+                            ]);
+                            if (is_array($meiliIds) && $meiliIds !== []) {
+                                $candidateIds = $meiliIds;
+                            }
+                        }
                     }
 
-                    $districtIds = app(PropertySearchService::class)->searchDistrictCityIds($city, 8000);
-                    if (is_array($districtIds) && $districtIds !== []) {
-                        return (clone $base)
-                            ->whereIn('re_properties.id', $districtIds)
+                    if ($candidateIds === []) {
+                        $candidates = \Botble\RealEstate\Models\Property::query()
+                            ->select('re_properties.id')
+                            ->whereIn('MlsStatus', $activeStatuses);
+
+                        if ($city !== '' && strcasecmp($city, 'ontario') !== 0) {
+                            if (! $search->applyCityLocationConstraint($candidates, $city)) {
+                                return [];
+                            }
+                        } else {
+                            // Province-wide open house: cap to newest actives only.
+                            $maxId = (int) \Botble\RealEstate\Models\Property::query()->max('id');
+                            if ($maxId > 80000) {
+                                $candidates->where('re_properties.id', '>=', $maxId - 80000);
+                            }
+                        }
+
+                        $candidateIds = $candidates
+                            ->orderByDesc('re_properties.id')
+                            ->limit(8000)
                             ->pluck('id')
                             ->map(static fn ($id) => (int) $id)
                             ->all();
                     }
-                }
 
-                return $base->pluck('id')->map(static fn ($id) => (int) $id)->all();
-            });
+                    if ($candidateIds === []) {
+                        return [];
+                    }
+
+                    return \Botble\RealEstate\Models\Property::query()
+                        ->select('re_properties.id')
+                        ->whereIn('re_properties.id', $candidateIds)
+                        ->where(function ($q): void {
+                            $q->where('description', 'like', '%open house%')
+                                ->orWhere('content', 'like', '%open house%');
+                        })
+                        ->orderByDesc('re_properties.id')
+                        ->limit(4000)
+                        ->pluck('id')
+                        ->map(static fn ($id) => (int) $id)
+                        ->all();
+                });
+            } catch (\Throwable $e) {
+                report($e);
+                $ids = [];
+            }
 
             return $ids === []
                 ? $query->whereRaw('0 = 1')

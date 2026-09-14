@@ -381,6 +381,22 @@ class PropertySearchService
         $opts = array_merge(['limit' => $limit], $opts);
         unset($opts['residential_only']);
 
+        // Ottawa-style: Meili city facet is the neighborhood ("Ottawa Centre"),
+        // not "Ottawa". Keyword match on location text finds them.
+        if ($this->cityUsesFragmentLocation($city)) {
+            $found = $this->searchIds($city, $opts);
+            if ($found !== null && $found !== []) {
+                return $found;
+            }
+
+            $geoIds = $this->searchCityIdsByGeo($city, $limit, 40.0);
+            if ($geoIds !== null && $geoIds !== []) {
+                return $geoIds;
+            }
+
+            return $found ?? [];
+        }
+
         foreach ([ucwords(strtolower($city)), $city] as $variant) {
             $found = $this->searchIds('', array_merge($opts, ['city' => $variant]));
             if ($found !== null && $found !== []) {
@@ -437,6 +453,72 @@ class PropertySearchService
     public function hasTrebDistrictMapping(string $city): bool
     {
         return $this->trebDistrictCodes($city) !== [];
+    }
+
+    /**
+     * MLS rows use a neighborhood as the address city segment (Ottawa Centre),
+     * not the metro name alone. Exact city filters blank those landings.
+     */
+    public function cityUsesFragmentLocation(string $city): bool
+    {
+        $city = trim($city);
+        if ($city === '') {
+            return false;
+        }
+
+        $slug = \Illuminate\Support\Str::slug($city);
+        $list = (array) config('seo_navigation.fragment_location_cities', []);
+
+        foreach ($list as $entry) {
+            $entry = trim((string) $entry);
+            if ($entry === '') {
+                continue;
+            }
+            if (strcasecmp($entry, $city) === 0 || \Illuminate\Support\Str::slug($entry) === $slug) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * SQL LIKE pattern for pinning a city on UnparsedAddress / location.
+     */
+    public function cityLocationLikePattern(string $city): string
+    {
+        $safe = addcslashes(trim($city), '%_\\');
+        if ($safe === '') {
+            return '';
+        }
+
+        // Ottawa-style: "…, Ottawa Centre, ON …" / "…, Glebe - Ottawa East, ON …"
+        if ($this->cityUsesFragmentLocation($city)) {
+            return '%' . $safe . '%, ON%';
+        }
+
+        // Standard TREB: "123 Main St, Mississauga, ON L5B…"
+        return '%, ' . $safe . ', ON%';
+    }
+
+    /**
+     * Apply the city location LIKE to a query builder (no district JSON scan).
+     */
+    public function applyCityLocationConstraint($query, string $city): bool
+    {
+        $city = trim($city);
+        if ($city === '' || strcasecmp($city, 'ontario') === 0 || strcasecmp($city, 'on') === 0) {
+            return false;
+        }
+
+        $pattern = $this->cityLocationLikePattern($city);
+        if ($pattern === '') {
+            return false;
+        }
+
+        $query->where('location', 'like', $pattern);
+
+        return true;
     }
 
     /**
@@ -585,7 +667,8 @@ class PropertySearchService
         // FULLTEXT + ORDER BY id DESC was 37s on Toronto (huge hit set, filesort).
         // Restrict to recent MLS ids (PRIMARY range) then pin city with a suffix LIKE
         // so page-1 SEO landings stay in-city without scanning the whole table.
-        if (! $skipIdWindow) {
+        // Fragment cities (Ottawa) skip the window — inventory is sparse in newest-N.
+        if (! $skipIdWindow && ! $this->cityUsesFragmentLocation($city)) {
             $maxId = (int) SerikCache::remember('serik_re_properties_max_id_v1', 120, static function () {
                 return (int) DB::table('re_properties')->max('id');
             });
@@ -595,8 +678,11 @@ class PropertySearchService
             }
         }
 
-        $safe = addcslashes($city, '%_\\');
-        $query->where('location', 'like', '%, ' . $safe . ', ON%');
+        $pattern = $this->cityLocationLikePattern($city);
+        if ($pattern === '') {
+            return false;
+        }
+        $query->where('location', 'like', $pattern);
 
         return true;
     }

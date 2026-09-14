@@ -88,6 +88,17 @@ return [
     ],
 
     /**
+     * Cities whose MLS addresses put a neighborhood in the city slot, e.g.
+     * "475 Laurier Ave, Ottawa Centre, ON K1R…" instead of "…, Ottawa, ON…".
+     * Exact `%, City, ON%` / Meili city=City matching returns 0 for these.
+     *
+     * @var list<string>
+     */
+    'fragment_location_cities' => [
+        'ottawa',
+    ],
+
+    /**
      * Former Toronto municipalities are stored in MLS as district codes
      * (e.g. "Toronto C15"), not as "North York". Used when Meili city facet
      * has no exact match.
