@@ -149,4 +149,16 @@ function bootAgentsSwiper(maxRetries = 16) {
 }
 window.addEventListener('DOMContentLoaded', function () { bootAgentsSwiper(); });
 window.addEventListener('load', function () { bootAgentsSwiper(8); });
+document.addEventListener('shortcode.loaded', function (e) {
+    const name = e && e.detail && e.detail.name;
+    if (name && name !== 'agents') {
+        return;
+    }
+    // Lazy-loaded About Us block injects this markup after first boot attempt.
+    document.querySelectorAll('#about-agent .tf-sw-agents').forEach(function (el) {
+        delete el.dataset.swiperReady;
+    });
+    bootAgentsSwiper(12);
+    hideButton();
+});
 </script>

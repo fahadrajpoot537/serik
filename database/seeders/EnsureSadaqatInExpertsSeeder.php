@@ -86,11 +86,16 @@ class EnsureSadaqatInExpertsSeeder extends Seeder
                 $ids[] = $sadaqatId;
             }
 
-            $subtitle = stripos((string) $page->name, 'about') !== false ? 'Our Team' : 'Our Teams';
+            $isAbout = stripos((string) $page->name, 'about') !== false;
+            $subtitle = $isAbout ? 'Our Team' : 'Our Teams';
+            // About Us must render eagerly so Swiper + circular cards match homepage
+            // (homepage-premium.css is home-only; About relies on site-chrome + inline init).
+            $lazy = $isAbout ? 'no' : 'yes';
             $inner = sprintf(
-                '[agents style="1" title="Meet Our Experts" subtitle="%s" account_ids="%s" items_per_row="4" background_color="transparent" enable_lazy_loading="yes"][/agents]',
+                '[agents style="1" title="Meet Our Experts" subtitle="%s" account_ids="%s" items_per_row="4" background_color="transparent" enable_lazy_loading="%s"][/agents]',
                 $subtitle,
-                implode(',', $ids)
+                implode(',', $ids),
+                $lazy
             );
             $wrapped = '<shortcode>' . $inner . '</shortcode>';
 

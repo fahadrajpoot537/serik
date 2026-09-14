@@ -1877,25 +1877,78 @@ select:focus-visible {
   flex-direction: column;
 }
 
-/* Meet Our Experts — same circular avatars on About Us + homepage */
+/* Meet Our Experts — shared homepage look on About Us + any page */
 .serik-hp-agents {
-  background: var(--p-page, #fbfcfd);
+  background: var(--p-page, #fbfcfd) !important;
+  padding-top: clamp(2.5rem, 4vw, 3.75rem);
+  padding-bottom: clamp(2.5rem, 4vw, 3.75rem);
+}
+.serik-hp-agents .serik-hp-section-head,
+#about-agent .serik-hp-section-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  width: 100%;
+  margin-bottom: 1.35rem;
+  gap: 0.35rem;
+}
+.serik-hp-agents .serik-hp-eyebrow,
+#about-agent .serik-hp-eyebrow {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--serik-reference-blue, #0b4c9f);
+}
+.serik-hp-agents .section-title,
+#about-agent .section-title {
+  margin: 0.15rem 0 0 !important;
+  color: var(--serik-reference-navy, #0b2340) !important;
+  font-weight: 700 !important;
+  font-size: clamp(1.5rem, 3vw, 2rem) !important;
+  line-height: 1.25 !important;
+}
+.serik-hp-agents .serik-hp-link-btn,
+#about-agent .serik-hp-link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+  padding: 0.65rem 1.1rem;
+  border-radius: 999px;
+  border: 1px solid var(--p-line, #e5e7eb);
+  color: var(--serik-reference-navy, #0b2340);
+  text-decoration: none;
+  font-weight: 600;
+}
+body[id^="page-"][id*=""]:has(#about-agent) #about-agent .btn-view.button-prop,
+body.about-us #about-agent .btn-view.button-prop,
+#page-10 #about-agent .btn-view.button-prop {
+  display: none !important;
 }
 .serik-hp-agent-card {
-  background: #fff;
-  border: 1px solid var(--p-line, rgba(22, 30, 45, 0.1));
-  border-radius: 16px;
+  background: #fff !important;
+  border: 0 !important;
+  border-radius: 16px !important;
   overflow: hidden;
-  box-shadow: var(--p-shadow, 0 2px 8px rgba(16, 24, 40, 0.04), 0 12px 28px rgba(16, 24, 40, 0.06));
+  box-shadow: var(--p-shadow, 0 2px 8px rgba(16, 24, 40, 0.04), 0 12px 28px rgba(16, 24, 40, 0.06)) !important;
   height: 100%;
+}
+#about-agent .box-agent,
+.serik-hp-agents .box-agent {
+  gap: 0 !important;
 }
 #about-agent .box-agent .box-img,
 #about-agent .box-agent .serik-hp-agent-card__media,
 .serik-hp-agents .box-agent .box-img,
 .serik-hp-agents .box-agent .serik-hp-agent-card__media {
   width: min(78%, 168px) !important;
+  max-width: 168px !important;
   aspect-ratio: 1 / 1 !important;
   height: auto !important;
+  max-height: none !important;
   margin: 1.1rem auto 0.35rem !important;
   border-radius: 50% !important;
   overflow: hidden !important;
@@ -1906,14 +1959,17 @@ select:focus-visible {
 #about-agent .box-agent .box-img img,
 #about-agent .box-agent .serik-hp-agent-card__media img,
 .serik-hp-agents .box-agent .box-img img,
-.serik-hp-agents .box-agent .serik-hp-agent-card__media img {
+.serik-hp-agents .box-agent .serik-hp-agent-card__media img,
+#about-agent .box-agent .box-img .img-style,
+.serik-hp-agents .hover-img .box-img img {
   width: 100% !important;
   height: 100% !important;
   max-width: none !important;
   object-fit: cover !important;
   object-position: center top !important;
   border-radius: 50% !important;
-  display: block;
+  display: block !important;
+  transform: none !important;
 }
 #about-agent .box-agent .box-img .agent-social,
 .serik-hp-agents .box-agent .box-img .agent-social {
@@ -1935,6 +1991,16 @@ select:focus-visible {
 #about-agent .serik-agent-meta__ctas,
 .serik-hp-agents .serik-agent-meta__ctas {
   justify-content: center;
+}
+#about-agent .box-agent .content,
+.serik-hp-agents .box-agent .content {
+  display: block !important;
+  justify-content: center !important;
+}
+#about-agent .serik-hp-agents__carousel .tf-sw-agents,
+.serik-hp-agents .tf-sw-agents {
+  overflow: hidden;
+  padding-bottom: 2rem;
 }
 
 /* Search icon: phones/tablets only (opens the existing overlay panel).
