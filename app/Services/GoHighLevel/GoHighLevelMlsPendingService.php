@@ -55,6 +55,16 @@ class GoHighLevelMlsPendingService
                     ->first();
             }
 
+            // Unique (contact_id, mls_number) — older failed CLI runs used the
+            // Showings record id as contact_id without showing_record_id set.
+            if (! $existing && $contactId !== '') {
+                $existing = GhlMlsSyncTask::query()
+                    ->where('contact_id', $contactId)
+                    ->where('mls_number', $mlsNumber)
+                    ->lockForUpdate()
+                    ->first();
+            }
+
             if ($existing) {
                 $sameShowing = $showingRecordId !== null
                     && strtolower(trim((string) $existing->showing_record_id)) === $showingRecordId;
