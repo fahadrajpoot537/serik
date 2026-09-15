@@ -100,7 +100,34 @@ class ProcessGhlPendingMlsCommand extends Command
             return $fail > 0 ? self::FAILURE : self::SUCCESS;
         }
 
-        // Default: dispatch only (never block schedule / website)
+        // Default: dispatch only (never block schedule / website) — unless the
+        // dedicated ghl worker is down, in which case process pending inline so
+        // Showings still fill without waiting on SerikQueueGhl.
+        $workerDown = SerikWindowsService::isWindows()
+            && ! SerikWindowsService::isRunning(SerikWindowsService::QUEUE_SERVICES['ghl']);
+
+        if ($workerDown) {
+            $this->warn('SerikQueueGhl is not RUNNING — processing pending MLS inline.');
+            $tasks = GhlMlsSyncTask::query()->pending()->orderBy('id')->limit($limit)->get();
+            $ok = 0;
+            $fail = 0;
+            foreach ($tasks as $task) {
+                try {
+                    $sync->processTask($task);
+                    $ok++;
+                    $this->line("OK #{$task->id} {$task->mls_number}");
+                } catch (\Throwable $e) {
+                    $sync->markFailed($task, $e);
+                    $fail++;
+                    $this->error("FAIL #{$task->id}: {$e->getMessage()}");
+                }
+            }
+            $this->info("Inline fallback done: ok={$ok} fail={$fail}");
+            $this->comment('Fix worker: scripts\\windows\\deploy-all-queue-workers.cmd as Administrator');
+
+            return $fail > 0 ? self::FAILURE : self::SUCCESS;
+        }
+
         DispatchPendingGhlMlsSyncJob::dispatch($limit)->onQueue(SerikQueue::ghl());
 
         $depth = (int) \Illuminate\Support\Facades\DB::table('jobs')
@@ -111,13 +138,6 @@ class ProcessGhlPendingMlsCommand extends Command
         $this->line("ghl queue depth now: {$depth}");
         if ($depth === 0) {
             $this->comment('Note: depth 0 usually means a ghl worker already consumed the job, or a unique lock skipped a duplicate DispatchPendingGhlMlsSyncJob still waiting.');
-        }
-
-        if (SerikWindowsService::isWindows()
-            && ! SerikWindowsService::isRunning(SerikWindowsService::QUEUE_SERVICES['ghl'])) {
-            $this->warn('SerikQueueGhl is not RUNNING — auto MLS push will sit in the ghl queue.');
-            $this->comment('Fix: run scripts\\windows\\deploy-all-queue-workers.cmd as Administrator');
-            $this->comment('Or process now: php artisan serik:ghl:process-pending-mls --sync');
         }
 
         return self::SUCCESS;

@@ -29,6 +29,12 @@ return [
         // How often to claim pending MLS→Showings tasks (minutes). 1 = every minute.
         'process_every_minutes' => max(1, (int) env('GOHIGHLEVEL_MLS_PROCESS_EVERY_MINUTES', 1)),
 
+        // Poll GHL Showings for MLS rows missing address/price and fill them.
+        // Works even when the GHL workflow webhook is not configured.
+        'poll_empty_showings' => filter_var(env('GOHIGHLEVEL_POLL_EMPTY_SHOWINGS', true), FILTER_VALIDATE_BOOLEAN),
+        'poll_empty_every_minutes' => max(1, (int) env('GOHIGHLEVEL_POLL_EMPTY_EVERY_MINUTES', 1)),
+        'poll_empty_limit' => max(1, (int) env('GOHIGHLEVEL_POLL_EMPTY_LIMIT', 50)),
+
         // Max pending tasks claimed per morning dispatch
         'batch_size' => (int) env('GOHIGHLEVEL_MLS_BATCH_SIZE', 50),
 

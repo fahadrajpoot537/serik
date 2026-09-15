@@ -291,6 +291,38 @@ $app = Application::configure(basePath: dirname(__DIR__))
             ->withoutOverlapping(max(1, min(30, $ghlEvery)))
             ->appendOutputTo(storage_path('logs/ghl-mls-sync.log'));
 
+        // Poll empty Showings (MLS set, address/price blank) and fill inline.
+        // This is the reliable auto path when GHL workflow webhook is missing
+        // or SerikQueueGhl is stopped.
+        if (config('gohighlevel.mls_sync.poll_empty_showings', true)) {
+            $pollEvery = max(1, (int) config('gohighlevel.mls_sync.poll_empty_every_minutes', 1));
+            $pollLimit = max(1, (int) config('gohighlevel.mls_sync.poll_empty_limit', 50));
+            $schedule->call(function () use ($pollLimit) {
+                try {
+                    @set_time_limit(180);
+                    Artisan::call('serik:ghl:sync-all-showings', [
+                        '--only-empty' => true,
+                        '--sync' => true,
+                        '--limit' => $pollLimit,
+                    ]);
+                    $output = trim((string) Artisan::output());
+                    if ($output !== '') {
+                        echo $output . PHP_EOL;
+                    }
+                } catch (\Throwable $e) {
+                    Log::error('[schedule-safe] serik:ghl:sync-all-showings failed: ' . $e->getMessage());
+                } finally {
+                    SerikScheduler::releaseDatabaseConnections();
+                }
+
+                return 0;
+            })
+                ->name('serik-ghl-poll-empty-showings')
+                ->cron('*/' . $pollEvery . ' * * * *')
+                ->withoutOverlapping(max(2, min(10, $pollEvery * 2)))
+                ->appendOutputTo(storage_path('logs/ghl-mls-sync.log'));
+        }
+
         // Queue ecosystem self-heal — dispatch only (never heavy inline work).
         $schedule->call($safe('serik:queue:heal'))
             ->name('serik-queue-heal-dispatch')
