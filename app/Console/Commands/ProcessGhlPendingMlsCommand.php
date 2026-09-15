@@ -16,7 +16,7 @@ class ProcessGhlPendingMlsCommand extends Command
         {--dispatch : Dispatch pending tasks onto the ghl queue (default)}
         {--sync : Process pending tasks inline (debug only)}
         {--limit= : Max tasks to claim}
-        {--enqueue= : Manually enqueue contactId:MLS for testing}
+        {--enqueue= : Manually enqueue contactId:MLS or showing:RECORD_ID:MLS}
         {--status : Show pending/completed/failed counts}';
 
     protected $description = 'Process pending GoHighLevel MLS → Showings sync tasks (ghl queue)';
@@ -37,14 +37,24 @@ class ProcessGhlPendingMlsCommand extends Command
         }
 
         if ($enqueue = $this->option('enqueue')) {
-            [$contactId, $mls] = array_pad(explode(':', (string) $enqueue, 2), 2, null);
-            if (! $contactId || ! $mls) {
-                $this->error('Use --enqueue=contactId:MLS');
+            $parsed = $this->parseEnqueueOption((string) $enqueue);
+            if ($parsed === null) {
+                $this->error('Use --enqueue=contactId:MLS or --enqueue=showing:RECORD_ID:MLS');
 
                 return self::FAILURE;
             }
-            $task = $pending->enqueue(trim($contactId), trim($mls));
+
+            $task = $pending->enqueue(
+                $parsed['contact_id'],
+                $parsed['mls'],
+                null,
+                [],
+                $parsed['showing_record_id'],
+            );
             $this->info("Enqueued task #{$task->id} ({$task->external_key}) status={$task->status}");
+            if ($parsed['showing_record_id']) {
+                $this->line('showing_record_id=' . $parsed['showing_record_id']);
+            }
 
             // Targeted debug: --enqueue + --sync processes only this contact+MLS pair.
             if ($this->option('sync')) {
@@ -111,5 +121,45 @@ class ProcessGhlPendingMlsCommand extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * @return array{contact_id: string, mls: string, showing_record_id: ?string}|null
+     */
+    private function parseEnqueueOption(string $enqueue): ?array
+    {
+        $enqueue = trim($enqueue);
+        if ($enqueue === '') {
+            return null;
+        }
+
+        // showing:RECORD_ID:MLS  — Showings custom object row (not a Contact)
+        if (preg_match('/^showing:(.+):([A-Za-z]\d+)$/i', $enqueue, $m)) {
+            $showingId = trim($m[1]);
+            $mls = strtoupper(trim($m[2]));
+            if ($showingId === '' || $mls === '') {
+                return null;
+            }
+
+            return [
+                'contact_id' => '',
+                'mls' => $mls,
+                'showing_record_id' => $showingId,
+            ];
+        }
+
+        // contactId:MLS
+        [$contactId, $mls] = array_pad(explode(':', $enqueue, 2), 2, null);
+        $contactId = trim((string) $contactId);
+        $mls = strtoupper(trim((string) $mls));
+        if ($contactId === '' || $mls === '') {
+            return null;
+        }
+
+        return [
+            'contact_id' => $contactId,
+            'mls' => $mls,
+            'showing_record_id' => null,
+        ];
     }
 }
