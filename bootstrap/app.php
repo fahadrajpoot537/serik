@@ -281,13 +281,14 @@ $app = Application::configure(basePath: dirname(__DIR__))
             ->withoutOverlapping(2)
             ->appendOutputTo(storage_path('logs/treb-archive-import.log'));
 
-        // GoHighLevel MLS → Showings: early morning dispatch onto dedicated ghl queue.
-        // Webhooks only create pending rows; this schedule processes them.
-        // Worker: php artisan queue:work --queue=ghl --sleep=1 --tries=8
+        // GoHighLevel MLS → Showings: claim pending tasks onto ghl queue.
+        // Webhooks enqueue pending (+ sync job); this schedule is the safety net.
+        // Worker: php artisan queue:work database --queue=ghl --sleep=1 --tries=8
+        $ghlEvery = max(1, (int) config('gohighlevel.mls_sync.process_every_minutes', 1));
         $schedule->call($safe('serik:ghl:process-pending-mls', ['--dispatch' => true]))
             ->name('serik-ghl-process-pending-mls')
-            ->dailyAt((string) config('gohighlevel.mls_sync.process_at', '05:15'))
-            ->withoutOverlapping(30)
+            ->cron('*/' . $ghlEvery . ' * * * *')
+            ->withoutOverlapping(max(1, min(30, $ghlEvery)))
             ->appendOutputTo(storage_path('logs/ghl-mls-sync.log'));
 
         // Queue ecosystem self-heal — dispatch only (never heavy inline work).

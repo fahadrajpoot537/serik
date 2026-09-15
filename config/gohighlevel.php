@@ -23,8 +23,11 @@ return [
     'mls_sync' => [
         'enabled' => (bool) env('GOHIGHLEVEL_MLS_SYNC_ENABLED', true),
 
-        // Early-morning processor (America/Toronto unless app timezone differs)
+        // Early-morning legacy slot (kept for reference / optional cron tools)
         'process_at' => env('GOHIGHLEVEL_MLS_PROCESS_AT', '05:15'),
+
+        // How often to claim pending MLS→Showings tasks (minutes). 1 = every minute.
+        'process_every_minutes' => max(1, (int) env('GOHIGHLEVEL_MLS_PROCESS_EVERY_MINUTES', 1)),
 
         // Max pending tasks claimed per morning dispatch
         'batch_size' => (int) env('GOHIGHLEVEL_MLS_BATCH_SIZE', 50),
