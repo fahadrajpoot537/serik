@@ -115,6 +115,68 @@ class GoHighLevelShowingObjectRepository
     }
 
     /**
+     * Paginate Showings records (empty query = browse all).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function listAllRecords(int $max = 200, int $pageSize = 50): array
+    {
+        $max = max(1, min(2000, $max));
+        $pageSize = max(1, min(100, $pageSize));
+        $out = [];
+        $page = 1;
+        $guard = 0;
+
+        while (count($out) < $max && $guard < 40) {
+            $guard++;
+            try {
+                $data = $this->http->post(
+                    '/objects/' . $this->objectKey() . '/records/search',
+                    [
+                        'locationId' => $this->http->locationId(),
+                        'page' => $page,
+                        'pageLimit' => $pageSize,
+                        'query' => '',
+                    ]
+                );
+            } catch (\Throwable $e) {
+                Log::channel('ghl_sync')->warning('GoHighLevel Showings list failed', [
+                    'page' => $page,
+                    'message' => $e->getMessage(),
+                ]);
+                break;
+            }
+
+            $records = data_get($data, 'records', data_get($data, 'record', []));
+            if (! is_array($records)) {
+                break;
+            }
+            if (isset($records['id'])) {
+                $records = [$records];
+            }
+
+            $batch = 0;
+            foreach ($records as $record) {
+                if (! is_array($record) || empty($record['id'])) {
+                    continue;
+                }
+                $out[] = $record;
+                $batch++;
+                if (count($out) >= $max) {
+                    break 2;
+                }
+            }
+
+            if ($batch < $pageSize) {
+                break;
+            }
+            $page++;
+        }
+
+        return $out;
+    }
+
+    /**
      * Find an existing Showings record for this MLS (prefer one already linked to contact).
      */
     public function findRecordIdByMls(string $mlsNumber, ?string $contactId = null): ?string
