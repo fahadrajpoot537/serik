@@ -112,12 +112,11 @@ class SyncAllGhlShowingsCommand extends Command
      */
     private function extractMls(array $props, string $objectKey): string
     {
-        $raw = (string) (
-            $props['mls_number']
-            ?? $props[$objectKey . '.mls_number']
-            ?? $props['MLS Number']
-            ?? ''
-        );
+        $raw = $this->propString($props, [
+            'mls_number',
+            $objectKey . '.mls_number',
+            'MLS Number',
+        ]);
         $mls = strtoupper(trim($raw));
         if ($mls === '') {
             return '';
@@ -136,9 +135,35 @@ class SyncAllGhlShowingsCommand extends Command
      */
     private function looksFilled(array $props, string $objectKey): bool
     {
-        $address = trim((string) ($props['address'] ?? $props[$objectKey . '.address'] ?? ''));
-        $price = trim((string) ($props['price'] ?? $props[$objectKey . '.price'] ?? ''));
+        $address = $this->propString($props, ['address', $objectKey . '.address']);
+        $price = $this->propString($props, ['price', $objectKey . '.price']);
 
         return $address !== '' && $price !== '';
+    }
+
+    /**
+     * @param  array<string, mixed>  $props
+     * @param  list<string>  $keys
+     */
+    private function propString(array $props, array $keys): string
+    {
+        foreach ($keys as $key) {
+            if (! array_key_exists($key, $props)) {
+                continue;
+            }
+            $value = $props[$key];
+            if (is_array($value)) {
+                // GHL sometimes returns {value: "..."} or multi-select arrays.
+                $value = $value['value'] ?? $value['label'] ?? reset($value);
+            }
+            if (is_bool($value) || is_numeric($value)) {
+                return trim((string) $value);
+            }
+            if (is_string($value)) {
+                return trim($value);
+            }
+        }
+
+        return '';
     }
 }
