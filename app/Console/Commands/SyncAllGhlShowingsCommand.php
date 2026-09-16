@@ -13,12 +13,14 @@ use Illuminate\Console\Command;
  *
  *   php artisan serik:ghl:sync-all-showings --dry-run
  *   php artisan serik:ghl:sync-all-showings --only-empty --sync --limit=50
+ *   php artisan serik:ghl:sync-all-showings --missing-commission --sync --limit=200
  */
 class SyncAllGhlShowingsCommand extends Command
 {
     protected $signature = 'serik:ghl:sync-all-showings
         {--dry-run : List matching Showings only (no GHL writes)}
         {--only-empty : Skip rows that already have address + price filled}
+        {--missing-commission : Only rows that have MLS but empty commission}
         {--sync : Process inline (otherwise enqueue pending + dispatch job)}
         {--limit=200 : Max Showings records to process}
         {--page-size=50 : GHL search page size}';
@@ -39,8 +41,10 @@ class SyncAllGhlShowingsCommand extends Command
         $limit = max(1, (int) $this->option('limit'));
         $pageSize = max(1, min(100, (int) $this->option('page-size')));
         $onlyEmpty = (bool) $this->option('only-empty');
+        $missingCommission = (bool) $this->option('missing-commission');
         $dryRun = (bool) $this->option('dry-run');
         $inline = (bool) $this->option('sync');
+        $objectKey = $objects->objectKey();
 
         $this->info('Fetching Showings from GHL…');
         $records = $objects->listAllRecords($limit, $pageSize);
@@ -54,28 +58,43 @@ class SyncAllGhlShowingsCommand extends Command
         foreach ($records as $record) {
             $recordId = trim((string) ($record['id'] ?? ''));
             $props = (array) ($record['properties'] ?? []);
-            $mls = $this->extractMls($props, $objects->objectKey());
+            $mls = $this->extractMls($props, $objectKey);
 
             if ($recordId === '' || $mls === '') {
                 $skip++;
                 continue;
             }
 
-            if ($onlyEmpty && $this->looksFilled($props, $objects->objectKey())) {
+            if ($missingCommission) {
+                if (! $this->commissionEmpty($props, $objectKey)) {
+                    $this->line("SKIP has commission {$mls} ({$recordId})");
+                    $skip++;
+                    continue;
+                }
+            } elseif ($onlyEmpty && $this->looksFilled($props, $objectKey)) {
                 $this->line("SKIP filled {$mls} ({$recordId})");
                 $skip++;
                 continue;
             }
 
             if ($dryRun) {
-                $addr = (string) ($props['address'] ?? $props[$objects->objectKey() . '.address'] ?? '');
-                $this->line("DRY {$mls} record={$recordId} address=" . ($addr !== '' ? $addr : '(empty)'));
+                $addr = $this->propString($props, ['address', $objectKey . '.address']);
+                $comm = $this->propString($props, ['commission', $objectKey . '.commission']);
+                $this->line(
+                    "DRY {$mls} record={$recordId} address=" . ($addr !== '' ? $addr : '(empty)')
+                    . ' commission=' . ($comm !== '' ? $comm : '(empty)')
+                );
                 $queued++;
                 continue;
             }
 
             try {
                 $task = $pending->enqueue('', $mls, null, [], $recordId);
+                // Force remap so newly resolved commission / listing_status write.
+                if ($missingCommission || $task->sync_hash) {
+                    $task->sync_hash = null;
+                    $task->save();
+                }
                 if ($inline) {
                     $sync->processTask($task);
                     $this->line("OK {$mls} #{$task->id}");
@@ -101,7 +120,7 @@ class SyncAllGhlShowingsCommand extends Command
         $this->newLine();
         $this->info("Done: ok={$ok} queued={$queued} fail={$fail} skip={$skip}");
         if (! $dryRun && ! $inline && $queued > 0) {
-            $this->comment('Process queue: php artisan queue:work --queue=ghl --stop-when-empty');
+            $this->comment('Process queue: php artisan queue:work database --queue=ghl --stop-when-empty');
         }
 
         return $fail > 0 ? self::FAILURE : self::SUCCESS;
