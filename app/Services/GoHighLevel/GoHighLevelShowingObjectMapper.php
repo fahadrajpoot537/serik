@@ -22,6 +22,7 @@ class GoHighLevelShowingObjectMapper
         'kitchen',
         'contract',
         'status',
+        'listing_status',
         'type',
         'sold_date',
         'fam',
@@ -81,6 +82,10 @@ class GoHighLevelShowingObjectMapper
             $record['MlsStatus'] ?? $record['StandardStatus'] ?? null,
             $defs
         ));
+        // Plain MLS listing status text (Active / Sold / …) — separate from appointment Status.
+        $set('listing_status', $this->string(
+            $record['MlsStatus'] ?? $record['StandardStatus'] ?? null
+        ));
         $set('type', $this->matchOption(
             'type',
             $this->firstListValue($record['PropertySubType'] ?? $record['ArchitecturalStyle'] ?? null),
@@ -94,9 +99,7 @@ class GoHighLevelShowingObjectMapper
         $set('listing_brokerage_phone', $this->propertySource->normalizePhone(
             $this->string($record['ListOfficePhone'] ?? $record['ListOfficePhoneNumber'] ?? null)
         ));
-        $set('commission', $this->string(
-            $record['TransactionBrokerCompensation'] ?? $record['BuyerAgencyCompensation'] ?? null
-        ));
+        $set('commission', $this->resolveCommission($mls, $record));
         $set('sold_price', $this->money($record['ClosePrice'] ?? null));
 
         ksort($properties);
@@ -112,6 +115,40 @@ class GoHighLevelShowingObjectMapper
                 'property_keys' => self::PROPERTY_KEYS,
             ],
         ];
+    }
+
+    /**
+     * AMPRE omits TransactionBrokerCompensation unless fetched with an explicit
+     * filter — reuse the detail-page resolver so Showings commission stays filled.
+     *
+     * @param  array<string, mixed>  $record
+     */
+    protected function resolveCommission(string $mls, array $record): ?string
+    {
+        $inline = $this->string(
+            $record['TransactionBrokerCompensation']
+            ?? $record['BuyerAgencyCompensation']
+            ?? $record['BuyerBrokerageCompensation']
+            ?? null
+        );
+        if ($inline !== null && class_exists(\Theme\homzen\Supports\TrebPropertyHelper::class)) {
+            $formatted = \Theme\homzen\Supports\TrebPropertyHelper::formatCoopCommission($inline);
+
+            return $formatted ?? $inline;
+        }
+        if ($inline !== null) {
+            return $inline;
+        }
+
+        if (! class_exists(\Theme\homzen\Supports\TrebPropertyHelper::class)) {
+            return null;
+        }
+
+        try {
+            return \Theme\homzen\Supports\TrebPropertyHelper::resolveCoopCommissionForDetail($mls);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**

@@ -166,9 +166,7 @@ class GoHighLevelShowingFieldMapper
         $set('contact.builders_phone', $this->normalizePhone(
             $this->string($record['ListOfficePhone'] ?? $record['ListOfficePhoneNumber'] ?? null)
         ));
-        $set('contact.commission', $this->string(
-            $record['TransactionBrokerCompensation'] ?? $record['BuyerAgencyCompensation'] ?? null
-        ));
+        $set('contact.commission', $this->resolveCommission($mls, $record));
         $set('contact.extras', $this->listToText($record['ExteriorFeatures'] ?? null));
         $set('contact.chattels_included', $this->listToText($record['Appliances'] ?? null));
 
@@ -214,6 +212,30 @@ class GoHighLevelShowingFieldMapper
                 'core_fields' => $this->coreShowingFieldKeys(),
             ],
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $record
+     */
+    protected function resolveCommission(string $mls, array $record): ?string
+    {
+        $inline = $this->string(
+            $record['TransactionBrokerCompensation']
+            ?? $record['BuyerAgencyCompensation']
+            ?? $record['BuyerBrokerageCompensation']
+            ?? null
+        );
+        if ($inline !== null) {
+            $formatted = TrebPropertyHelper::formatCoopCommission($inline);
+
+            return $formatted ?? $inline;
+        }
+
+        try {
+            return TrebPropertyHelper::resolveCoopCommissionForDetail($mls);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**

@@ -143,6 +143,14 @@ class SyncAllGhlShowingsCommand extends Command
 
     /**
      * @param  array<string, mixed>  $props
+     */
+    private function commissionEmpty(array $props, string $objectKey): bool
+    {
+        return $this->propString($props, ['commission', $objectKey . '.commission']) === '';
+    }
+
+    /**
+     * @param  array<string, mixed>  $props
      * @param  list<string>  $keys
      */
     private function propString(array $props, array $keys): string
