@@ -1479,7 +1479,8 @@ class TrebPropertyHelper
             'ModificationTimestamp', 'OriginalEntryTimestamp', 'PriceChangeTimestamp',
             'TaxAnnualAmount', 'TaxYear', 'AssociationFee', 'AssociationFeeIncludes', 'YearBuilt',
             'ApproximateAge', 'LivingAreaRange', 'SquareFootSource', 'BuildingAreaTotal',
-            'ParkingTotal', 'ParkingSpaces', 'GarageType', 'ListOfficeName', 'OriginatingSystemName',
+            'ParkingTotal', 'ParkingSpaces', 'GarageType', 'ListOfficeName', 'ListOfficeKey', 'ListOfficePhone',
+            'OriginatingSystemName',
             'SourceSystemName', 'PublicRemarks', 'BedroomsTotal', 'BedroomsAboveGrade', 'BathroomsTotalInteger', 'Locker',
             'BedroomsBelowGrade', 'Basement', 'DaysOnMarket', 'CumulativeDaysOnMarket', 'ArchitecturalStyle',
             'ConstructionMaterials', 'Cooling', 'HeatType', 'HeatSource', 'PetsAllowed', 'CrossStreet',
@@ -1573,6 +1574,105 @@ class TrebPropertyHelper
             }
 
             // Empty / unavailable — hide section; short negative cache.
+            Cache::put($cacheKey, false, 3600);
+        } catch (\Throwable) {
+            Cache::put($cacheKey, false, 600);
+        }
+
+        return null;
+    }
+
+    /**
+     * Resolve listing office phone for GHL Showings.
+     * AMPRE often redacts phone fields on Property; try Property filter then Office by key.
+     */
+    public static function resolveListOfficePhoneForDetail(string $listingKey, ?string $officeKey = null): ?string
+    {
+        $listingKey = strtoupper(trim($listingKey));
+        $officeKey = $officeKey !== null ? trim($officeKey) : '';
+        if ($listingKey === '' && $officeKey === '') {
+            return null;
+        }
+
+        $cacheKey = 'treb_list_office_phone_v1_' . ($listingKey !== '' ? $listingKey : ('off_' . $officeKey));
+        if (Cache::has($cacheKey)) {
+            $cached = Cache::get($cacheKey);
+            if ($cached === false || $cached === null || $cached === '') {
+                return null;
+            }
+
+            return is_string($cached) ? $cached : (string) $cached;
+        }
+
+        $pickPhone = static function (array $row): ?string {
+            foreach ([
+                'ListOfficePhone', 'ListOfficePhoneNumber', 'ListAgentOfficePhone', 'CoListOfficePhone',
+                'OfficePhone', 'OfficePhone2', 'Office800Phone',
+            ] as $field) {
+                $raw = $row[$field] ?? null;
+                if ($raw === null || $raw === '') {
+                    continue;
+                }
+                $digits = preg_replace('/\D+/', '', (string) $raw) ?? '';
+                if ($digits !== '') {
+                    return trim((string) $raw);
+                }
+            }
+
+            return null;
+        };
+
+        try {
+            app()->instance('serik.live_treb_fallback', true);
+
+            if ($listingKey !== '') {
+                $snapshot = self::loadStoredAmpSnapshot($listingKey);
+                if (is_array($snapshot)) {
+                    $fromSnap = $pickPhone($snapshot);
+                    if ($fromSnap !== null) {
+                        Cache::put($cacheKey, $fromSnap, 86400 * 14);
+
+                        return $fromSnap;
+                    }
+                    if ($officeKey === '') {
+                        $officeKey = trim((string) ($snapshot['ListOfficeKey'] ?? ''));
+                    }
+                }
+
+                $filter = rawurlencode("ListingKey eq '{$listingKey}' and ListOfficePhone ne null");
+                $select = rawurlencode('ListingKey,ListOfficeKey,ListOfficeName,ListOfficePhone,ListAgentOfficePhone,CoListOfficePhone');
+                $url = "https://query.ampre.ca/odata/Property?\$filter={$filter}&\$top=1&\$select={$select}";
+                $response = self::ampRequest($url, 6, 1, 'listOfficePhone', $listingKey, 'all');
+                $row = $response['data']['value'][0] ?? null;
+                if (is_array($row)) {
+                    if ($officeKey === '') {
+                        $officeKey = trim((string) ($row['ListOfficeKey'] ?? ''));
+                    }
+                    $phone = $pickPhone($row);
+                    if ($phone !== null) {
+                        Cache::put($cacheKey, $phone, 86400 * 14);
+
+                        return $phone;
+                    }
+                }
+            }
+
+            if ($officeKey !== '') {
+                $filter = rawurlencode("OfficeKey eq '{$officeKey}'");
+                $select = rawurlencode('OfficeKey,OfficeName,OfficePhone,OfficePhone2,Office800Phone');
+                $url = "https://query.ampre.ca/odata/Office?\$filter={$filter}&\$top=1&\$select={$select}";
+                $response = self::ampRequest($url, 6, 1, 'officePhone', $officeKey, 'all');
+                $row = $response['data']['value'][0] ?? null;
+                if (is_array($row)) {
+                    $phone = $pickPhone($row);
+                    if ($phone !== null) {
+                        Cache::put($cacheKey, $phone, 86400 * 14);
+
+                        return $phone;
+                    }
+                }
+            }
+
             Cache::put($cacheKey, false, 3600);
         } catch (\Throwable) {
             Cache::put($cacheKey, false, 600);

@@ -15,6 +15,7 @@ use Illuminate\Console\Command;
  *   php artisan serik:ghl:sync-all-showings --only-empty --sync --limit=50
  *   php artisan serik:ghl:sync-all-showings --missing-commission --sync --limit=200
  *   php artisan serik:ghl:sync-all-showings --missing-listing-status --sync --limit=200
+ *   php artisan serik:ghl:sync-all-showings --missing-type --sync --limit=200
  */
 class SyncAllGhlShowingsCommand extends Command
 {
@@ -23,6 +24,7 @@ class SyncAllGhlShowingsCommand extends Command
         {--only-empty : Skip rows that already have address + price filled}
         {--missing-commission : Only rows that have MLS but empty commission}
         {--missing-listing-status : Only rows that have MLS but empty listing_status}
+        {--missing-type : Only rows that have MLS but empty type}
         {--sync : Process inline (otherwise enqueue pending + dispatch job)}
         {--limit=200 : Max Showings records to process}
         {--page-size=50 : GHL search page size}';
@@ -45,6 +47,7 @@ class SyncAllGhlShowingsCommand extends Command
         $onlyEmpty = (bool) $this->option('only-empty');
         $missingCommission = (bool) $this->option('missing-commission');
         $missingListingStatus = (bool) $this->option('missing-listing-status');
+        $missingType = (bool) $this->option('missing-type');
         $dryRun = (bool) $this->option('dry-run');
         $inline = (bool) $this->option('sync');
         $objectKey = $objects->objectKey();
@@ -68,7 +71,13 @@ class SyncAllGhlShowingsCommand extends Command
                 continue;
             }
 
-            if ($missingListingStatus) {
+            if ($missingType) {
+                if (! $this->typeEmpty($props, $objectKey)) {
+                    $this->line("SKIP has type {$mls} ({$recordId})");
+                    $skip++;
+                    continue;
+                }
+            } elseif ($missingListingStatus) {
                 if (! $this->listingStatusEmpty($props, $objectKey)) {
                     $this->line("SKIP has listing_status {$mls} ({$recordId})");
                     $skip++;
@@ -90,8 +99,10 @@ class SyncAllGhlShowingsCommand extends Command
                 $addr = $this->propString($props, ['address', $objectKey . '.address']);
                 $comm = $this->propString($props, ['commission', $objectKey . '.commission']);
                 $ls = $this->propString($props, ['listing_status', $objectKey . '.listing_status']);
+                $type = $this->propString($props, ['type', $objectKey . '.type']);
                 $this->line(
                     "DRY {$mls} record={$recordId} address=" . ($addr !== '' ? $addr : '(empty)')
+                    . ' type=' . ($type !== '' ? $type : '(empty)')
                     . ' commission=' . ($comm !== '' ? $comm : '(empty)')
                     . ' listing_status=' . ($ls !== '' ? $ls : '(empty)')
                 );
@@ -101,8 +112,8 @@ class SyncAllGhlShowingsCommand extends Command
 
             try {
                 $task = $pending->enqueue('', $mls, null, [], $recordId);
-                // Force remap so newly resolved commission / listing_status write.
-                if ($missingCommission || $missingListingStatus || $task->sync_hash) {
+                // Force remap so newly resolved commission / listing_status / type write.
+                if ($missingCommission || $missingListingStatus || $missingType || $task->sync_hash) {
                     $task->sync_hash = null;
                     $task->save();
                 }
@@ -185,6 +196,14 @@ class SyncAllGhlShowingsCommand extends Command
     private function listingStatusEmpty(array $props, string $objectKey): bool
     {
         return $this->propString($props, ['listing_status', $objectKey . '.listing_status']) === '';
+    }
+
+    /**
+     * @param  array<string, mixed>  $props
+     */
+    private function typeEmpty(array $props, string $objectKey): bool
+    {
+        return $this->propString($props, ['type', $objectKey . '.type']) === '';
     }
 
     /**

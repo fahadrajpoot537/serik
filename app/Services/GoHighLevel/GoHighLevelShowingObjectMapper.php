@@ -86,8 +86,7 @@ class GoHighLevelShowingObjectMapper
         $set('listing_status', $this->string(
             $record['MlsStatus'] ?? $record['StandardStatus'] ?? null
         ));
-        $set('type', $this->matchOption(
-            'type',
+        $set('type', $this->mapPropertyType(
             $this->firstListValue($record['PropertySubType'] ?? $record['ArchitecturalStyle'] ?? null),
             $defs
         ));
@@ -95,10 +94,8 @@ class GoHighLevelShowingObjectMapper
         $set('fam', $this->matchOption('fam', $this->ynToYesNo($record['DenFamilyroomYN'] ?? null), $defs));
         $set('ac', $this->matchOption('ac', $this->firstListValue($record['Cooling'] ?? null), $defs));
         $set('heat', $this->matchOption('heat', $this->firstListValue($record['HeatType'] ?? null), $defs));
-        $set('listing_brokerage', $this->string($record['ListOfficeName'] ?? null));
-        $set('listing_brokerage_phone', $this->propertySource->normalizePhone(
-            $this->string($record['ListOfficePhone'] ?? $record['ListOfficePhoneNumber'] ?? null)
-        ));
+        $set('listing_brokerage', $this->string($record['ListOfficeName'] ?? $record['broker'] ?? null));
+        $set('listing_brokerage_phone', $this->resolveListingOfficePhone($mls, $record));
         $set('commission', $this->resolveCommission($mls, $record));
         $set('sold_price', $this->money($record['ClosePrice'] ?? null));
 
@@ -115,6 +112,112 @@ class GoHighLevelShowingObjectMapper
                 'property_keys' => self::PROPERTY_KEYS,
             ],
         ];
+    }
+
+    /**
+     * Map TREB PropertySubType onto GHL Showings Type option keys.
+     * TREB uses "Condo Apartment"; GHL option is condo_apt / "Condo Apt" —
+     * plain fuzzy contains fails because "condoapt" is not a substring of
+     * "condoapartment".
+     *
+     * @param  array<string, array<string, mixed>>  $defs
+     */
+    protected function mapPropertyType(mixed $raw, array $defs): ?string
+    {
+        $value = $this->firstListValue($raw);
+        if ($value === null) {
+            return null;
+        }
+
+        $direct = $this->matchOption('type', $value, $defs);
+        if ($direct !== null) {
+            return $direct;
+        }
+
+        $normalized = $this->normalizeToken($value);
+        $aliases = [
+            'condoapartment' => 'condo_apt',
+            'condoapt' => 'condo_apt',
+            'condominiumapartment' => 'condo_apt',
+            'condominium' => 'condo_apt',
+            'apartment' => 'condo_apt',
+            'commonelementcondo' => 'condo_apt',
+            'coopapartment' => 'condo_apt',
+            'coownershipapartment' => 'condo_apt',
+            'detachedcondo' => 'condo_apt',
+            'condotownhouse' => 'condo_townhouse',
+            'condotownhome' => 'condo_townhouse',
+            'attrowtownhouse' => 'townhouse',
+            'attrowtwnhouse' => 'townhouse',
+            'rowtownhouse' => 'townhouse',
+            'twnhouse' => 'townhouse',
+            'townhome' => 'townhouse',
+            'semidetached' => 'semi_detached',
+            'semidetachedhouse' => 'semi_detached',
+        ];
+
+        $preferred = $aliases[$normalized] ?? null;
+        if ($preferred === null) {
+            if (str_contains($normalized, 'condo') && (str_contains($normalized, 'apartment') || str_contains($normalized, 'apt'))) {
+                $preferred = 'condo_apt';
+            } elseif (str_contains($normalized, 'condo') && (str_contains($normalized, 'town') || str_contains($normalized, 'row'))) {
+                $preferred = 'condo_townhouse';
+            } elseif (str_contains($normalized, 'townhouse') || str_contains($normalized, 'twnhouse') || str_contains($normalized, 'townhome')) {
+                $preferred = 'townhouse';
+            } elseif (str_contains($normalized, 'semidetach')) {
+                $preferred = 'semi_detached';
+            } elseif ($normalized === 'detached' || str_starts_with($normalized, 'detached')) {
+                $preferred = 'detached';
+            } elseif ($normalized === 'link' || str_contains($normalized, 'linkhome')) {
+                $preferred = 'link';
+            }
+        }
+
+        if ($preferred === null) {
+            return null;
+        }
+
+        return $this->matchOption('type', $preferred, $defs) ?? $preferred;
+    }
+
+    /**
+     * AMPRE often omits ListOfficePhone on Property; try inline fields then a
+     * dedicated Office lookup by ListOfficeKey (best-effort — many feeds redact phones).
+     *
+     * @param  array<string, mixed>  $record
+     */
+    protected function resolveListingOfficePhone(string $mls, array $record): ?string
+    {
+        $inline = $this->string(
+            $record['ListOfficePhone']
+            ?? $record['ListOfficePhoneNumber']
+            ?? $record['ListAgentOfficePhone']
+            ?? $record['CoListOfficePhone']
+            ?? null
+        );
+        if ($inline !== null) {
+            return $this->propertySource->normalizePhone($inline);
+        }
+
+        if (! class_exists(\Theme\homzen\Supports\TrebPropertyHelper::class)) {
+            return null;
+        }
+
+        try {
+            if (method_exists(\Theme\homzen\Supports\TrebPropertyHelper::class, 'resolveListOfficePhoneForDetail')) {
+                $resolved = \Theme\homzen\Supports\TrebPropertyHelper::resolveListOfficePhoneForDetail(
+                    $mls,
+                    $this->string($record['ListOfficeKey'] ?? null)
+                );
+                if ($resolved !== null && trim($resolved) !== '') {
+                    return $this->propertySource->normalizePhone($resolved);
+                }
+            }
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return null;
     }
 
     /**
