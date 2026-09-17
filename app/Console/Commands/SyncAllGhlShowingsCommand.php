@@ -42,6 +42,24 @@ class SyncAllGhlShowingsCommand extends Command
             return self::FAILURE;
         }
 
+        // Bulk inline sync can exceed default max_execution_time (phone/AMP lookups).
+        if (function_exists('set_time_limit')) {
+            @set_time_limit(0);
+        }
+        @ini_set('max_execution_time', '0');
+
+        $dlaConfigured = class_exists(\Theme\homzen\Supports\TrebPropertyHelper::class)
+            && \Theme\homzen\Supports\TrebPropertyHelper::ampTokens('dla') !== [];
+        if ($dlaConfigured) {
+            // Warm DLA office phone directory once (avoids per-MLS Office HTTP).
+            $dir = \Theme\homzen\Supports\TrebPropertyHelper::dlaOfficePhoneDirectory();
+            $this->comment(
+                'DLA OfficePhone directory: ' . count($dir['by_key']) . ' office(s) with phone'
+            );
+        } else {
+            $this->warn('TREB_AUTH3 (DLA) not configured — listing_brokerage_phone will stay empty.');
+        }
+
         $limit = max(1, (int) $this->option('limit'));
         $pageSize = max(1, min(100, (int) $this->option('page-size')));
         $onlyEmpty = (bool) $this->option('only-empty');

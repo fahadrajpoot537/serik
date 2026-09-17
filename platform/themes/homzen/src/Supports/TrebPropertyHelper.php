@@ -1583,19 +1583,96 @@ class TrebPropertyHelper
     }
 
     /**
+     * DLA (TREB_AUTH3) Office phone directory — vendor-scoped (often only own office).
+     * Cached once; used by GHL listing_brokerage_phone resolve (no per-MLS Office HTTP).
+     *
+     * @return array{by_key: array<string, string>, by_name: array<string, string>}
+     */
+    public static function dlaOfficePhoneDirectory(): array
+    {
+        $cacheKey = 'treb_dla_office_phone_dir_v1';
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached) && isset($cached['by_key'], $cached['by_name'])) {
+            return $cached;
+        }
+
+        $byKey = [];
+        $byName = [];
+
+        if (self::ampTokens('dla') === []) {
+            $empty = ['by_key' => [], 'by_name' => []];
+            Cache::put($cacheKey, $empty, 600);
+
+            return $empty;
+        }
+
+        try {
+            app()->instance('serik.live_treb_fallback', true);
+            $url = 'https://query.ampre.ca/odata/Office?$top=100&$select='
+                . rawurlencode('OfficeKey,OfficeName,OfficePhone,OfficePhone2,Office800Phone');
+            $response = self::ampRequest($url, 8, 1, 'dlaOfficeDir', null, 'dla');
+            $rows = $response['data']['value'] ?? [];
+            if (is_array($rows)) {
+                foreach ($rows as $row) {
+                    if (! is_array($row)) {
+                        continue;
+                    }
+                    $phone = null;
+                    foreach (['OfficePhone', 'OfficePhone2', 'Office800Phone'] as $field) {
+                        $raw = trim((string) ($row[$field] ?? ''));
+                        if ($raw !== '' && preg_replace('/\D+/', '', $raw) !== '') {
+                            $phone = $raw;
+                            break;
+                        }
+                    }
+                    if ($phone === null) {
+                        continue;
+                    }
+                    $key = trim((string) ($row['OfficeKey'] ?? ''));
+                    $name = trim((string) ($row['OfficeName'] ?? ''));
+                    if ($key !== '') {
+                        $byKey[$key] = $phone;
+                    }
+                    if ($name !== '') {
+                        $norm = strtolower(preg_replace('/[^a-z0-9]+/', '', $name) ?? '');
+                        if ($norm !== '') {
+                            $byName[$norm] = $phone;
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable) {
+            // fall through to empty / short cache
+        }
+
+        $out = ['by_key' => $byKey, 'by_name' => $byName];
+        Cache::put($cacheKey, $out, $byKey === [] ? 600 : 86400);
+
+        return $out;
+    }
+
+    /**
      * Resolve listing office phone for GHL Showings only → custom_objects.showings.listing_brokerage_phone.
      * IDX/VOW omit phones; DLA (TREB_AUTH3) exposes Office.OfficePhone (vendor-scoped).
-     * Uses auth3 only for Office/DLA Property phone calls — live/historical sync unchanged.
+     * Fast path: match office key/name against a once-cached DLA directory (no per-MLS Office HTTP).
      */
-    public static function resolveListOfficePhoneForDetail(string $listingKey, ?string $officeKey = null): ?string
-    {
+    public static function resolveListOfficePhoneForDetail(
+        string $listingKey,
+        ?string $officeKey = null,
+        ?string $officeName = null
+    ): ?string {
         $listingKey = strtoupper(trim($listingKey));
         $officeKey = $officeKey !== null ? trim($officeKey) : '';
-        if ($listingKey === '' && $officeKey === '') {
+        $officeName = $officeName !== null ? trim($officeName) : '';
+        if ($listingKey === '' && $officeKey === '' && $officeName === '') {
             return null;
         }
 
-        $cacheKey = 'treb_list_office_phone_v4_dla_' . ($listingKey !== '' ? $listingKey : ('off_' . $officeKey));
+        if (self::ampTokens('dla') === []) {
+            return null;
+        }
+
+        $cacheKey = 'treb_list_office_phone_v5_dla_' . md5($listingKey . '|' . $officeKey . '|' . strtolower($officeName));
         if (Cache::has($cacheKey)) {
             $cached = Cache::get($cacheKey);
             if ($cached === false || $cached === null || $cached === '') {
@@ -1605,90 +1682,77 @@ class TrebPropertyHelper
             return is_string($cached) ? $cached : (string) $cached;
         }
 
-        $pickPhone = static function (array $row): ?string {
-            foreach (['OfficePhone', 'OfficePhone2', 'Office800Phone', 'ListOfficePhone', 'ListAgentOfficePhone'] as $field) {
-                $raw = $row[$field] ?? null;
-                if ($raw === null || $raw === '') {
-                    continue;
+        $dir = self::dlaOfficePhoneDirectory();
+        if ($dir['by_key'] === [] && $dir['by_name'] === []) {
+            Cache::put($cacheKey, false, 600);
+
+            return null;
+        }
+
+        $match = static function () use ($dir, &$officeKey, &$officeName): ?string {
+            if ($officeKey !== '' && isset($dir['by_key'][$officeKey])) {
+                return $dir['by_key'][$officeKey];
+            }
+            if ($officeName !== '') {
+                $norm = strtolower(preg_replace('/[^a-z0-9]+/', '', $officeName) ?? '');
+                if ($norm !== '' && isset($dir['by_name'][$norm])) {
+                    return $dir['by_name'][$norm];
                 }
-                $digits = preg_replace('/\D+/', '', (string) $raw) ?? '';
-                if ($digits !== '') {
-                    return trim((string) $raw);
+                // Soft contains (e.g. "SERIK REALTY INC." vs "SERIK REALTY INC")
+                foreach ($dir['by_name'] as $nameNorm => $phone) {
+                    if ($nameNorm !== '' && (str_contains($norm, $nameNorm) || str_contains($nameNorm, $norm))) {
+                        return $phone;
+                    }
                 }
             }
 
             return null;
         };
 
-        $pickOfficeKey = static function (array $row): string {
-            foreach (['ListOfficeKey', 'MainOfficeKey', 'CoListOfficeKey'] as $field) {
-                $v = trim((string) ($row[$field] ?? ''));
-                if ($v !== '') {
-                    return $v;
-                }
+        try {
+            $hit = $match();
+            if ($hit !== null) {
+                Cache::put($cacheKey, $hit, 86400 * 14);
+
+                return $hit;
             }
 
-            return '';
-        };
-
-        try {
-            app()->instance('serik.live_treb_fallback', true);
-
-            // 1) Prefer DLA Property row for this MLS (has ListOfficeKey when listing is in DLA scope).
-            if ($listingKey !== '' && $officeKey === '') {
+            // Only when IDX gave no office identity: one DLA Property probe (Serik listings).
+            if ($listingKey !== '' && $officeKey === '' && $officeName === '') {
+                app()->instance('serik.live_treb_fallback', true);
                 $filter = rawurlencode("ListingKey eq '{$listingKey}'");
                 $select = rawurlencode('ListingKey,ListOfficeKey,MainOfficeKey,ListOfficeName');
                 $url = "https://query.ampre.ca/odata/Property?\$filter={$filter}&\$top=1&\$select={$select}";
-                $response = self::ampRequest($url, 6, 1, 'dlaPropOfficeKey', $listingKey, 'dla');
+                $response = self::ampRequest($url, 4, 1, 'dlaPropOfficeKey', $listingKey, 'dla');
                 $row = $response['data']['value'][0] ?? null;
                 if (is_array($row)) {
-                    $officeKey = $pickOfficeKey($row);
-                }
-            }
+                    foreach (['ListOfficeKey', 'MainOfficeKey'] as $field) {
+                        $v = trim((string) ($row[$field] ?? ''));
+                        if ($v !== '') {
+                            $officeKey = $v;
+                            break;
+                        }
+                    }
+                    $n = trim((string) ($row['ListOfficeName'] ?? ''));
+                    if ($n !== '') {
+                        $officeName = $n;
+                    }
+                    $hit = $match();
+                    if ($hit !== null) {
+                        Cache::put($cacheKey, $hit, 86400 * 14);
 
-            // 2) Fall back to IDX/VOW + snapshot for office key (MainOfficeKey when ListOfficeKey omitted).
-            if ($officeKey === '' && $listingKey !== '') {
-                $snapshot = self::loadStoredAmpSnapshot($listingKey);
-                if (is_array($snapshot)) {
-                    $officeKey = $pickOfficeKey($snapshot);
-                }
-                if ($officeKey === '') {
-                    $filter = rawurlencode("ListingKey eq '{$listingKey}'");
-                    $select = rawurlencode('ListingKey,ListOfficeKey,MainOfficeKey,CoListOfficeKey,ListOfficeName');
-                    $url = "https://query.ampre.ca/odata/Property?\$filter={$filter}&\$top=1&\$select={$select}";
-                    $response = self::ampRequest($url, 6, 1, 'listOfficeKeyForPhone', $listingKey, 'all');
-                    $row = $response['data']['value'][0] ?? null;
-                    if (is_array($row)) {
-                        $officeKey = $pickOfficeKey($row);
+                        return $hit;
                     }
                 }
             }
-
-            if ($officeKey === '') {
-                Cache::put($cacheKey, false, 3600);
-
-                return null;
-            }
-
-            // 3) DLA-only: Office.OfficePhone → GHL listing_brokerage_phone
-            $filter = rawurlencode("OfficeKey eq '{$officeKey}'");
-            $select = rawurlencode('OfficeKey,OfficeName,OfficePhone,OfficePhone2,Office800Phone');
-            $url = "https://query.ampre.ca/odata/Office?\$filter={$filter}&\$top=1&\$select={$select}";
-            $response = self::ampRequest($url, 6, 1, 'officePhoneDla', $officeKey, 'dla');
-            $row = $response['data']['value'][0] ?? null;
-            if (is_array($row)) {
-                $phone = $pickPhone($row);
-                if ($phone !== null) {
-                    Cache::put($cacheKey, $phone, 86400 * 14);
-
-                    return $phone;
-                }
-            }
-
-            Cache::put($cacheKey, false, 3600);
         } catch (\Throwable) {
-            Cache::put($cacheKey, false, 600);
+            Cache::put($cacheKey, false, 300);
+
+            return null;
         }
+
+        // Not in DLA office directory (most IDX/VOW listing brokerages) — fail fast, no Office HTTP.
+        Cache::put($cacheKey, false, 3600);
 
         return null;
     }

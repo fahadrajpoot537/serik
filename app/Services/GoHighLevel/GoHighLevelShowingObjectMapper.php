@@ -212,7 +212,8 @@ class GoHighLevelShowingObjectMapper
                         ?? $record['MainOfficeKey']
                         ?? $record['CoListOfficeKey']
                         ?? null
-                    )
+                    ),
+                    $this->string($record['ListOfficeName'] ?? $record['broker'] ?? null)
                 );
                 if ($resolved !== null && trim($resolved) !== '') {
                     return $this->propertySource->normalizePhone($resolved);
