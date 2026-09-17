@@ -1590,7 +1590,7 @@ class TrebPropertyHelper
      */
     public static function dlaOfficePhoneDirectory(): array
     {
-        $cacheKey = 'treb_dla_office_phone_dir_v2';
+        $cacheKey = 'treb_dla_office_phone_dir_v3';
         $cached = Cache::get($cacheKey);
         if (is_array($cached) && isset($cached['by_key'], $cached['by_name'])) {
             return $cached;
@@ -1644,7 +1644,7 @@ class TrebPropertyHelper
                         $byKey[$key] = $phone;
                     }
                     if ($name !== '') {
-                        $norm = strtolower(preg_replace('/[^a-z0-9]+/', '', $name) ?? '');
+                        $norm = preg_replace('/[^a-z0-9]+/', '', strtolower($name)) ?? '';
                         if ($norm !== '') {
                             $byName[$norm] = $phone;
                         }
@@ -1704,7 +1704,7 @@ class TrebPropertyHelper
                 return $dir['by_key'][$officeKey];
             }
             if ($officeName !== '') {
-                $norm = strtolower(preg_replace('/[^a-z0-9]+/', '', $officeName) ?? '');
+                $norm = preg_replace('/[^a-z0-9]+/', '', strtolower($officeName)) ?? '';
                 if ($norm !== '' && isset($dir['by_name'][$norm])) {
                     return $dir['by_name'][$norm];
                 }
