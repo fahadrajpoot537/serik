@@ -1583,8 +1583,9 @@ class TrebPropertyHelper
     }
 
     /**
-     * Resolve listing office phone for GHL Showings.
-     * AMPRE often redacts phone fields on Property; try Property filter then Office by key.
+     * Resolve listing office phone for GHL Showings only.
+     * IDX/VOW feeds omit ListOfficePhone; DLA (TREB_AUTH3) exposes Office.OfficePhone.
+     * Uses auth3 token profile only for the Office phone call — does not alter live/historical sync.
      */
     public static function resolveListOfficePhoneForDetail(string $listingKey, ?string $officeKey = null): ?string
     {
@@ -1594,7 +1595,7 @@ class TrebPropertyHelper
             return null;
         }
 
-        $cacheKey = 'treb_list_office_phone_v1_' . ($listingKey !== '' ? $listingKey : ('off_' . $officeKey));
+        $cacheKey = 'treb_list_office_phone_v3_dla_' . ($listingKey !== '' ? $listingKey : ('off_' . $officeKey));
         if (Cache::has($cacheKey)) {
             $cached = Cache::get($cacheKey);
             if ($cached === false || $cached === null || $cached === '') {
@@ -1605,10 +1606,7 @@ class TrebPropertyHelper
         }
 
         $pickPhone = static function (array $row): ?string {
-            foreach ([
-                'ListOfficePhone', 'ListOfficePhoneNumber', 'ListAgentOfficePhone', 'CoListOfficePhone',
-                'OfficePhone', 'OfficePhone2', 'Office800Phone',
-            ] as $field) {
+            foreach (['OfficePhone', 'OfficePhone2', 'Office800Phone', 'ListOfficePhone', 'ListAgentOfficePhone'] as $field) {
                 $raw = $row[$field] ?? null;
                 if ($raw === null || $raw === '') {
                     continue;
@@ -1625,51 +1623,42 @@ class TrebPropertyHelper
         try {
             app()->instance('serik.live_treb_fallback', true);
 
-            if ($listingKey !== '') {
+            // Resolve ListOfficeKey from IDX/VOW property feed when missing.
+            if ($officeKey === '' && $listingKey !== '') {
                 $snapshot = self::loadStoredAmpSnapshot($listingKey);
                 if (is_array($snapshot)) {
-                    $fromSnap = $pickPhone($snapshot);
-                    if ($fromSnap !== null) {
-                        Cache::put($cacheKey, $fromSnap, 86400 * 14);
-
-                        return $fromSnap;
-                    }
-                    if ($officeKey === '') {
-                        $officeKey = trim((string) ($snapshot['ListOfficeKey'] ?? ''));
-                    }
+                    $officeKey = trim((string) ($snapshot['ListOfficeKey'] ?? ''));
                 }
-
-                $filter = rawurlencode("ListingKey eq '{$listingKey}' and ListOfficePhone ne null");
-                $select = rawurlencode('ListingKey,ListOfficeKey,ListOfficeName,ListOfficePhone,ListAgentOfficePhone,CoListOfficePhone');
-                $url = "https://query.ampre.ca/odata/Property?\$filter={$filter}&\$top=1&\$select={$select}";
-                $response = self::ampRequest($url, 6, 1, 'listOfficePhone', $listingKey, 'all');
-                $row = $response['data']['value'][0] ?? null;
-                if (is_array($row)) {
-                    if ($officeKey === '') {
+                if ($officeKey === '') {
+                    $filter = rawurlencode("ListingKey eq '{$listingKey}'");
+                    $select = rawurlencode('ListingKey,ListOfficeKey,ListOfficeName');
+                    $url = "https://query.ampre.ca/odata/Property?\$filter={$filter}&\$top=1&\$select={$select}";
+                    $response = self::ampRequest($url, 6, 1, 'listOfficeKeyForPhone', $listingKey, 'all');
+                    $row = $response['data']['value'][0] ?? null;
+                    if (is_array($row)) {
                         $officeKey = trim((string) ($row['ListOfficeKey'] ?? ''));
-                    }
-                    $phone = $pickPhone($row);
-                    if ($phone !== null) {
-                        Cache::put($cacheKey, $phone, 86400 * 14);
-
-                        return $phone;
                     }
                 }
             }
 
-            if ($officeKey !== '') {
-                $filter = rawurlencode("OfficeKey eq '{$officeKey}'");
-                $select = rawurlencode('OfficeKey,OfficeName,OfficePhone,OfficePhone2,Office800Phone');
-                $url = "https://query.ampre.ca/odata/Office?\$filter={$filter}&\$top=1&\$select={$select}";
-                $response = self::ampRequest($url, 6, 1, 'officePhone', $officeKey, 'all');
-                $row = $response['data']['value'][0] ?? null;
-                if (is_array($row)) {
-                    $phone = $pickPhone($row);
-                    if ($phone !== null) {
-                        Cache::put($cacheKey, $phone, 86400 * 14);
+            if ($officeKey === '') {
+                Cache::put($cacheKey, false, 3600);
 
-                        return $phone;
-                    }
+                return null;
+            }
+
+            // DLA-only: OfficePhone is in TREB_AUTH3 feed, not IDX/VOW.
+            $filter = rawurlencode("OfficeKey eq '{$officeKey}'");
+            $select = rawurlencode('OfficeKey,OfficeName,OfficePhone,OfficePhone2,Office800Phone');
+            $url = "https://query.ampre.ca/odata/Office?\$filter={$filter}&\$top=1&\$select={$select}";
+            $response = self::ampRequest($url, 6, 1, 'officePhoneDla', $officeKey, 'dla');
+            $row = $response['data']['value'][0] ?? null;
+            if (is_array($row)) {
+                $phone = $pickPhone($row);
+                if ($phone !== null) {
+                    Cache::put($cacheKey, $phone, 86400 * 14);
+
+                    return $phone;
                 }
             }
 
@@ -3858,6 +3847,7 @@ class TrebPropertyHelper
      * - live: TRREB_AUTH — current/new active inventory
      * - historical: TRREB_AUTH1 — older archive (2000+) that AUTH does not expose
      * - all: AUTH then AUTH1 (fallback for single-listing lookups)
+     * - dla / auth3: TREB_AUTH3 — DLA OfficePhone only (GHL Showings); never mixed into live/historical
      *
      * @return list<string>
      */
@@ -3869,10 +3859,16 @@ class TrebPropertyHelper
         $auth1 = self::normalizeAmpToken(
             config('treb.auth1') ?: self::readEnvFileValue('TRREB_AUTH1')
         );
+        $auth3 = self::normalizeAmpToken(
+            config('treb.auth3')
+            ?: self::readEnvFileValue('TREB_AUTH3')
+            ?: self::readEnvFileValue('TRREB_AUTH3')
+        );
 
         $tokens = match ($profile) {
             'live' => array_values(array_filter([$auth, $auth1])),
             'historical' => array_values(array_filter([$auth1, $auth])),
+            'dla', 'auth3' => array_values(array_filter([$auth3])),
             default => array_values(array_unique(array_filter([$auth, $auth1]))),
         };
 
@@ -3958,7 +3954,7 @@ class TrebPropertyHelper
     }
 
     /**
-     * @param  'live'|'historical'|'all'  $tokenProfile
+     * @param  'live'|'historical'|'all'|'dla'|'auth3'  $tokenProfile
      * @return array{ok:bool,data:?array,status:?int,url:string,body:?string,error:?string,token_profile:?string}
      */
     public static function ampRequest(

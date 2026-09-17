@@ -6,6 +6,10 @@ return [
 
     // Isolated 14-year Archive sold feed (never reuse auth / auth1).
     'auth2' => env('TRREB_AUTH2', env('TREB_AUTH2')),
+
+    // DLA feed — OfficePhone for GHL Showings MLS sync only (not mixed into live/historical).
+    'auth3' => env('TRREB_AUTH3', env('TREB_AUTH3')),
+
     'archive_odata_url' => env('TREB_ARCHIVE_ODATA_URL', 'https://query.ampre.ca/odata/Property'),
 
     /*
