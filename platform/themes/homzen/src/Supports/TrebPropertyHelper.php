@@ -1590,7 +1590,7 @@ class TrebPropertyHelper
      */
     public static function dlaOfficePhoneDirectory(): array
     {
-        $cacheKey = 'treb_dla_office_phone_dir_v1';
+        $cacheKey = 'treb_dla_office_phone_dir_v2';
         $cached = Cache::get($cacheKey);
         if (is_array($cached) && isset($cached['by_key'], $cached['by_name'])) {
             return $cached;
@@ -1608,10 +1608,20 @@ class TrebPropertyHelper
 
         try {
             app()->instance('serik.live_treb_fallback', true);
-            $url = 'https://query.ampre.ca/odata/Office?$top=100&$select='
+            $url = 'https://query.ampre.ca/odata/Office?$filter='
+                . rawurlencode('OfficePhone ne null')
+                . '&$top=100&$select='
                 . rawurlencode('OfficeKey,OfficeName,OfficePhone,OfficePhone2,Office800Phone');
             $response = self::ampRequest($url, 8, 1, 'dlaOfficeDir', null, 'dla');
             $rows = $response['data']['value'] ?? [];
+            // Fallback: some DLA tokens reject OfficePhone filter — browse Office top N.
+            if (! is_array($rows) || $rows === []) {
+                $url = 'https://query.ampre.ca/odata/Office?$top=100&$select='
+                    . rawurlencode('OfficeKey,OfficeName,OfficePhone,OfficePhone2,Office800Phone');
+                $response = self::ampRequest($url, 8, 1, 'dlaOfficeDirBrowse', null, 'dla');
+                $rows = $response['data']['value'] ?? [];
+            }
+
             if (is_array($rows)) {
                 foreach ($rows as $row) {
                     if (! is_array($row)) {
