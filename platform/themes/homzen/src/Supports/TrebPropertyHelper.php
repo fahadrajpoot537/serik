@@ -1479,7 +1479,7 @@ class TrebPropertyHelper
             'ModificationTimestamp', 'OriginalEntryTimestamp', 'PriceChangeTimestamp',
             'TaxAnnualAmount', 'TaxYear', 'AssociationFee', 'AssociationFeeIncludes', 'YearBuilt',
             'ApproximateAge', 'LivingAreaRange', 'SquareFootSource', 'BuildingAreaTotal',
-            'ParkingTotal', 'ParkingSpaces', 'GarageType', 'ListOfficeName', 'ListOfficeKey', 'ListOfficePhone',
+            'ParkingTotal', 'ParkingSpaces', 'GarageType', 'ListOfficeName', 'ListOfficeKey', 'MainOfficeKey', 'ListOfficePhone',
             'OriginatingSystemName',
             'SourceSystemName', 'PublicRemarks', 'BedroomsTotal', 'BedroomsAboveGrade', 'BathroomsTotalInteger', 'Locker',
             'BedroomsBelowGrade', 'Basement', 'DaysOnMarket', 'CumulativeDaysOnMarket', 'ArchitecturalStyle',
@@ -1583,9 +1583,9 @@ class TrebPropertyHelper
     }
 
     /**
-     * Resolve listing office phone for GHL Showings only.
-     * IDX/VOW feeds omit ListOfficePhone; DLA (TREB_AUTH3) exposes Office.OfficePhone.
-     * Uses auth3 token profile only for the Office phone call — does not alter live/historical sync.
+     * Resolve listing office phone for GHL Showings only → custom_objects.showings.listing_brokerage_phone.
+     * IDX/VOW omit phones; DLA (TREB_AUTH3) exposes Office.OfficePhone (vendor-scoped).
+     * Uses auth3 only for Office/DLA Property phone calls — live/historical sync unchanged.
      */
     public static function resolveListOfficePhoneForDetail(string $listingKey, ?string $officeKey = null): ?string
     {
@@ -1595,7 +1595,7 @@ class TrebPropertyHelper
             return null;
         }
 
-        $cacheKey = 'treb_list_office_phone_v3_dla_' . ($listingKey !== '' ? $listingKey : ('off_' . $officeKey));
+        $cacheKey = 'treb_list_office_phone_v4_dla_' . ($listingKey !== '' ? $listingKey : ('off_' . $officeKey));
         if (Cache::has($cacheKey)) {
             $cached = Cache::get($cacheKey);
             if ($cached === false || $cached === null || $cached === '') {
@@ -1620,23 +1620,46 @@ class TrebPropertyHelper
             return null;
         };
 
+        $pickOfficeKey = static function (array $row): string {
+            foreach (['ListOfficeKey', 'MainOfficeKey', 'CoListOfficeKey'] as $field) {
+                $v = trim((string) ($row[$field] ?? ''));
+                if ($v !== '') {
+                    return $v;
+                }
+            }
+
+            return '';
+        };
+
         try {
             app()->instance('serik.live_treb_fallback', true);
 
-            // Resolve ListOfficeKey from IDX/VOW property feed when missing.
+            // 1) Prefer DLA Property row for this MLS (has ListOfficeKey when listing is in DLA scope).
+            if ($listingKey !== '' && $officeKey === '') {
+                $filter = rawurlencode("ListingKey eq '{$listingKey}'");
+                $select = rawurlencode('ListingKey,ListOfficeKey,MainOfficeKey,ListOfficeName');
+                $url = "https://query.ampre.ca/odata/Property?\$filter={$filter}&\$top=1&\$select={$select}";
+                $response = self::ampRequest($url, 6, 1, 'dlaPropOfficeKey', $listingKey, 'dla');
+                $row = $response['data']['value'][0] ?? null;
+                if (is_array($row)) {
+                    $officeKey = $pickOfficeKey($row);
+                }
+            }
+
+            // 2) Fall back to IDX/VOW + snapshot for office key (MainOfficeKey when ListOfficeKey omitted).
             if ($officeKey === '' && $listingKey !== '') {
                 $snapshot = self::loadStoredAmpSnapshot($listingKey);
                 if (is_array($snapshot)) {
-                    $officeKey = trim((string) ($snapshot['ListOfficeKey'] ?? ''));
+                    $officeKey = $pickOfficeKey($snapshot);
                 }
                 if ($officeKey === '') {
                     $filter = rawurlencode("ListingKey eq '{$listingKey}'");
-                    $select = rawurlencode('ListingKey,ListOfficeKey,ListOfficeName');
+                    $select = rawurlencode('ListingKey,ListOfficeKey,MainOfficeKey,CoListOfficeKey,ListOfficeName');
                     $url = "https://query.ampre.ca/odata/Property?\$filter={$filter}&\$top=1&\$select={$select}";
                     $response = self::ampRequest($url, 6, 1, 'listOfficeKeyForPhone', $listingKey, 'all');
                     $row = $response['data']['value'][0] ?? null;
                     if (is_array($row)) {
-                        $officeKey = trim((string) ($row['ListOfficeKey'] ?? ''));
+                        $officeKey = $pickOfficeKey($row);
                     }
                 }
             }
@@ -1647,7 +1670,7 @@ class TrebPropertyHelper
                 return null;
             }
 
-            // DLA-only: OfficePhone is in TREB_AUTH3 feed, not IDX/VOW.
+            // 3) DLA-only: Office.OfficePhone → GHL listing_brokerage_phone
             $filter = rawurlencode("OfficeKey eq '{$officeKey}'");
             $select = rawurlencode('OfficeKey,OfficeName,OfficePhone,OfficePhone2,Office800Phone');
             $url = "https://query.ampre.ca/odata/Office?\$filter={$filter}&\$top=1&\$select={$select}";

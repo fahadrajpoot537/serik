@@ -207,7 +207,12 @@ class GoHighLevelShowingObjectMapper
             if (method_exists(\Theme\homzen\Supports\TrebPropertyHelper::class, 'resolveListOfficePhoneForDetail')) {
                 $resolved = \Theme\homzen\Supports\TrebPropertyHelper::resolveListOfficePhoneForDetail(
                     $mls,
-                    $this->string($record['ListOfficeKey'] ?? null)
+                    $this->string(
+                        $record['ListOfficeKey']
+                        ?? $record['MainOfficeKey']
+                        ?? $record['CoListOfficeKey']
+                        ?? null
+                    )
                 );
                 if ($resolved !== null && trim($resolved) !== '') {
                     return $this->propertySource->normalizePhone($resolved);
