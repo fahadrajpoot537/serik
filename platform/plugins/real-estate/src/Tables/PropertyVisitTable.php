@@ -105,7 +105,10 @@ class PropertyVisitTable extends TableAbstract
             ])
             ->queryUsing(function ($query) {
                 return $query
-                    ->with(['account', 'property'])
+                    // Do not eager-load full Property: geo_point (MySQL POINT) is binary and
+                    // breaks DataTables JsonResponse ("Malformed UTF-8"). Visit row already
+                    // stores property_name / property_id for display + edit links.
+                    ->with(['account'])
                     ->withTrashed()
                     ->select([
                         'id',
