@@ -25,6 +25,54 @@ function Write-Step([string]$Msg) {
     Write-Host ("==== {0} ====" -f $Msg) -ForegroundColor Cyan
 }
 
+function Find-Nssm {
+    $candidates = @(
+        $env:SERIK_NSSM,
+        (Get-Command nssm -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source),
+        'C:\nssm\nssm.exe',
+        'C:\nssm\win64\nssm.exe',
+        'C:\tools\nssm\nssm.exe',
+        'C:\Program Files\nssm\nssm.exe'
+    ) | Where-Object { $_ -and (Test-Path $_) }
+    if ($candidates) { return [string]$candidates[0] }
+    return $null
+}
+
+function Restart-SerikService([string]$Name, [string]$NssmPath) {
+    $svc = Get-Service -Name $Name -ErrorAction SilentlyContinue
+    if (-not $svc) {
+        Write-Host ("{0} : not installed (skip)" -f $Name)
+        return
+    }
+    Write-Host ("{0} : before={1}" -f $Name, $svc.Status)
+    if ($Name -eq "SerikMeilisearch") {
+        if ($svc.Status -ne "Running") {
+            try { Start-Service -Name $Name -ErrorAction Stop; Write-Host ("{0} : started" -f $Name) }
+            catch { Write-Host ("{0} : start failed: {1}" -f $Name, $_.Exception.Message) }
+        }
+        return
+    }
+    try {
+        if ($NssmPath) {
+            & $NssmPath restart $Name 2>&1 | ForEach-Object { Write-Host $_ }
+        } else {
+            Restart-Service -Name $Name -Force -ErrorAction Stop
+        }
+    } catch {
+        try {
+            Stop-Service -Name $Name -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 1
+            Start-Service -Name $Name -ErrorAction Stop
+        } catch {
+            Write-Host ("{0} : restart failed: {1}" -f $Name, $_.Exception.Message)
+            return
+        }
+    }
+    Start-Sleep -Seconds 1
+    $after = (Get-Service -Name $Name -ErrorAction SilentlyContinue).Status
+    Write-Host ("{0} : after={1}" -f $Name, $after)
+}
+
 if (-not (Test-Path $Root)) {
     throw ("Root not found: {0}" -f $Root)
 }
@@ -37,25 +85,24 @@ Write-Host ("User: {0}" -f $env:USERNAME)
 git -C $Root rev-parse --short HEAD 2>$null
 git -C $Root status -sb 2>$null
 
-Write-Step "1) Restart NSSM queue workers (release log file locks)"
-$services = @("SerikQueueHigh", "SerikQueueLow", "SerikQueueGhl", "SerikQueueSearch", "SerikMeilisearch")
+Write-Step "1) Restart queue workers (Get-Service; nssm optional)"
+$nssm = Find-Nssm
+if ($nssm) {
+    Write-Host ("nssm: {0}" -f $nssm)
+} else {
+    Write-Host "nssm not on PATH - using Restart-Service"
+}
+$services = @(
+    "SerikQueueHigh",
+    "SerikQueueLow",
+    "SerikQueueGhl",
+    "SerikQueueSearch",
+    "SerikQueueImages",
+    "SerikQueueImports",
+    "SerikMeilisearch"
+)
 foreach ($svc in $services) {
-    $status = & nssm status $svc 2>$null
-    if ($LASTEXITCODE -ne 0 -and -not $status) {
-        Write-Host ("{0} : not installed (skip)" -f $svc)
-        continue
-    }
-    Write-Host ("{0} : before={1}" -f $svc, $status)
-    if ($svc -eq "SerikMeilisearch") {
-        if ("$status" -notmatch "SERVICE_RUNNING") {
-            & nssm start $svc 2>$null | Out-Null
-        }
-        continue
-    }
-    & nssm restart $svc 2>&1 | ForEach-Object { Write-Host $_ }
-    Start-Sleep -Seconds 1
-    $after = & nssm status $svc 2>$null
-    Write-Host ("{0} : after={1}" -f $svc, $after)
+    Restart-SerikService -Name $svc -NssmPath $nssm
 }
 
 Write-Step "2) Fix storage\logs permissions + recreate laravel logs"
@@ -133,16 +180,17 @@ if (-not $SkipGitPull) {
 }
 
 # File cache: artisan cache:clear walks every file and often fails on IIS locks.
-# Wipe folders instead, then clear only view/route/config.
+# cmd rd /s /q is much faster than Remove-Item on huge trees.
 $cacheData = Join-Path $Root "storage\framework\cache\data"
-$sessionFiles = Join-Path $Root "storage\framework\sessions"
 $viewCache = Join-Path $Root "storage\framework\views"
 $bootCache = Join-Path $Root "bootstrap\cache"
 
 foreach ($dir in @($cacheData, $viewCache)) {
     if (Test-Path $dir) {
-        Write-Host ("Wiping {0} ..." -f $dir)
-        Get-ChildItem -Path $dir -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+        Write-Host ("Wiping {0} (cmd rd) ..." -f $dir)
+        cmd /c "rd /s /q `"$dir`"" 2>$null | Out-Null
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+        Write-Host ("Wiped {0}" -f $dir)
     }
 }
 
