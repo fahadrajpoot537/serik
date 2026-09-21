@@ -3,6 +3,7 @@
 namespace Botble\RealEstate\Tables;
 
 use Botble\Base\Facades\BaseHelper;
+use Botble\Base\Facades\Html;
 use Botble\RealEstate\Enums\ModerationStatusEnum;
 use Botble\RealEstate\Enums\PropertyStatusEnum;
 use Botble\RealEstate\Models\Project;
@@ -20,11 +21,12 @@ use Botble\Table\Columns\CreatedAtColumn;
 use Botble\Table\Columns\EnumColumn;
 use Botble\Table\Columns\FormattedColumn;
 use Botble\Table\Columns\IdColumn;
-use Botble\Table\Columns\ImageColumn;
 use Botble\Table\Columns\NameColumn;
 use Botble\Table\Columns\StatusColumn;
 use Botble\Table\HeaderActions\CreateHeaderAction;
 use Botble\Table\HeaderActions\HeaderAction;
+use App\Support\SerikMediaUrl;
+use Botble\Media\Facades\RvMedia;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Eloquent\Relations\Relation as EloquentRelation;
@@ -35,7 +37,8 @@ class PropertyTable extends TableAbstract
 {
     public function setup(): void
     {
-        $this->defaultSortColumnName = 'created_at';
+        // id DESC uses PK; created_at DESC on ~600k+ rows made admin Ajax hang (~15s+).
+        $this->defaultSortColumnName = 'id';
 
         $this
             ->model(Property::class)
@@ -64,9 +67,20 @@ class PropertyTable extends TableAbstract
             ])
             ->addColumns([
                 IdColumn::make(),
-                ImageColumn::make()
+                FormattedColumn::make('image_val')
+                    ->title(trans('core/base::tables.image'))
+                    ->orderable(false)
                     ->searchable(false)
-                    ->orderable(false),
+                    ->width(50)
+                    ->getValueUsing(function (FormattedColumn $column) {
+                        $item = $column->getItem();
+                        $raw = (string) ($item->image_val ?: '');
+                        $url = $raw !== ''
+                            ? (SerikMediaUrl::toPublic($raw) ?: RvMedia::getDefaultImage())
+                            : RvMedia::getDefaultImage();
+
+                        return Html::image($url, trans('core/base::tables.image'), ['width' => 50])->toHtml();
+                    }),
                 NameColumn::make()->route('property.edit'),
                 FormattedColumn::make('views')
                     ->title(trans('plugins/real-estate::property.views'))
@@ -114,7 +128,7 @@ class PropertyTable extends TableAbstract
                     ->select([
                         'id',
                         'name',
-                        'images',
+                        'image_val',
                         'views',
                         'status',
                         'moderation_status',
