@@ -380,6 +380,17 @@ $app->booting(function () use ($app): void {
         \App\Support\SerikSiteMapManager::class
     );
 
+    // Optional ops override when .env is not writable by IIS (see clear-serik-cache fix_logs).
+    $logOverride = $app->basePath('bootstrap/cache/serik-log-channel.php');
+    if (is_file($logOverride)) {
+        $channel = include $logOverride;
+        if (is_string($channel) && $channel !== '') {
+            putenv('LOG_CHANNEL=' . $channel);
+            $_ENV['LOG_CHANNEL'] = $channel;
+            $_SERVER['LOG_CHANNEL'] = $channel;
+        }
+    }
+
     \App\Support\SerikLogging::ensureWritableOrFallback($app);
 });
 

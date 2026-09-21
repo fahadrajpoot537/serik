@@ -40,6 +40,16 @@ class Property extends BaseModel
 
     protected $table = 're_properties';
 
+    /**
+     * MySQL POINT is binary; including it in JSON (DataTables / API) causes
+     * "Malformed UTF-8" → HTTP 500 on many admin Ajax tables.
+     *
+     * @var list<string>
+     */
+    protected $hidden = [
+        'geo_point',
+    ];
+
     protected $fillable = [
         'name',
         'type',

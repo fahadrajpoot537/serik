@@ -346,6 +346,54 @@ if (isset($_GET['diag_cron']) && (string) $_GET['diag_cron'] === '1') {
     exit;
 }
 
+// Lightweight infra snapshot for admin 500 / DataTables Ajax failures.
+if (isset($_GET['diag_infra']) && (string) $_GET['diag_infra'] === '1') {
+    header('Content-Type: text/plain; charset=utf-8');
+    echo "=== infra diagnostic (admin 500) ===\n\n";
+    try {
+        require $base . '/vendor/autoload.php';
+        $app = require $base . '/bootstrap/app.php';
+        $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+
+        echo 'now=' . now() . ' tz=' . config('app.timezone') . "\n";
+        echo 'logging.default=' . config('logging.default') . "\n";
+        echo 'cache.default=' . config('cache.default') . "\n";
+        echo 'session.driver=' . config('session.driver') . "\n";
+        echo 'queue.default=' . config('queue.default') . "\n";
+
+        $logDir = $base . '/storage/logs';
+        $today = $logDir . '/laravel-' . date('Y-m-d') . '.log';
+        $single = $logDir . '/laravel.log';
+        echo 'logs.dir_writable=' . (is_writable($logDir) ? 'yes' : 'no') . "\n";
+        foreach ([$today, $single] as $path) {
+            $ok = @file_put_contents($path, '[' . date('Y-m-d H:i:s') . '] production.DEBUG: diag_infra probe' . PHP_EOL, FILE_APPEND);
+            echo 'logs.write ' . basename($path) . '=' . ($ok !== false ? 'OK' : 'FAILED') . "\n";
+        }
+
+        $t0 = microtime(true);
+        Illuminate\Support\Facades\DB::select('SELECT 1');
+        echo 'db.select1_ms=' . round((microtime(true) - $t0) * 1000, 1) . "\n";
+
+        try {
+            $t0 = microtime(true);
+            Illuminate\Support\Facades\Redis::connection()->ping();
+            echo 'redis.ping_ms=' . round((microtime(true) - $t0) * 1000, 1) . "\n";
+        } catch (Throwable $e) {
+            echo 'redis.ping=FAIL ' . $e->getMessage() . "\n";
+        }
+
+        echo 'jobs.high=' . Illuminate\Support\Facades\DB::table('jobs')->where('queue', 'high')->count() . "\n";
+        echo 'jobs.low=' . Illuminate\Support\Facades\DB::table('jobs')->where('queue', 'low')->count() . "\n";
+        echo 'failed_jobs=' . Illuminate\Support\Facades\DB::table('failed_jobs')->count() . "\n";
+        echo 'SerikLogging=' . (is_file($base . '/app/Support/SerikLogging.php') ? 'present' : 'MISSING') . "\n";
+        echo "\nIf logs.write FAILED: restart SerikQueue* via ops/windows/Fix-SerikAdmin500.ps1\n";
+        echo "If redis.ping FAIL and session.driver=redis: admin pages will 500 until Memurai is up.\n";
+    } catch (Throwable $e) {
+        echo 'ERROR: ' . $e->getMessage() . "\n";
+    }
+    exit;
+}
+
 // Fix locked / unwritable Laravel daily logs (IIS Permission denied → homepage properties blank).
 if (isset($_GET['fix_logs']) && (string) $_GET['fix_logs'] === '1') {
     header('Content-Type: text/plain; charset=utf-8');
@@ -359,6 +407,18 @@ if (isset($_GET['fix_logs']) && (string) $_GET['fix_logs'] === '1') {
         @mkdir($logDir, 0775, true);
     }
 
+    // Best-effort: release Windows file locks held by NSSM queue workers.
+    if (strncasecmp(PHP_OS, 'WIN', 3) === 0) {
+        echo "--- nssm restart (best effort) ---\n";
+        foreach (['SerikQueueHigh', 'SerikQueueLow', 'SerikQueueGhl', 'SerikQueueSearch'] as $svc) {
+            $out = @shell_exec('nssm restart ' . escapeshellarg($svc) . ' 2>&1');
+            echo $svc . ': ' . trim((string) $out) . "\n";
+        }
+        echo "\n";
+        // Brief pause so handles release before recreate.
+        usleep(800000);
+    }
+
     $deleted = 0;
     $kept = 0;
     foreach (glob($logDir . '/laravel*.log') ?: [] as $file) {
@@ -367,33 +427,45 @@ if (isset($_GET['fix_logs']) && (string) $_GET['fix_logs'] === '1') {
             echo "deleted: {$name}\n";
             $deleted++;
         } else {
-            echo "COULD NOT DELETE (still locked?): {$name}\n";
-            $kept++;
+            // Rename aside so Monolog can create a fresh file even if unlink is blocked.
+            $aside = $file . '.locked-' . date('YmdHis');
+            if (@rename($file, $aside)) {
+                echo "renamed(locked): {$name} -> " . basename($aside) . "\n";
+                $deleted++;
+            } else {
+                echo "COULD NOT DELETE (still locked?): {$name}\n";
+                $kept++;
+            }
         }
     }
 
     // Touch a fresh writable log so Monolog can append.
     $today = $logDir . '/laravel-' . date('Y-m-d') . '.log';
-    $ok = @file_put_contents($today, '[' . date('Y-m-d H:i:s') . '] local.INFO: log permissions probe' . PHP_EOL, FILE_APPEND);
-    echo "\nprobe write " . basename($today) . ': ' . ($ok !== false ? 'OK' : 'FAILED') . "\n";
+    $single = $logDir . '/laravel.log';
+    $okToday = @file_put_contents($today, '[' . date('Y-m-d H:i:s') . '] local.INFO: log permissions probe' . PHP_EOL, FILE_APPEND);
+    $okSingle = @file_put_contents($single, '[' . date('Y-m-d H:i:s') . '] local.INFO: log permissions probe' . PHP_EOL, FILE_APPEND);
+    echo "\nprobe write " . basename($today) . ': ' . ($okToday !== false ? 'OK' : 'FAILED') . "\n";
+    echo 'probe write ' . basename($single) . ': ' . ($okSingle !== false ? 'OK' : 'FAILED') . "\n";
+    $ok = ($okToday !== false) || ($okSingle !== false);
 
     $envPath = $base . '/.env';
-    if ($ok === false) {
-        echo "\n--- applying LOG_CHANNEL=errorlog fallback in .env ---\n";
-        if (upsertEnvValue($envPath, 'LOG_CHANNEL', 'errorlog')) {
-            echo "LOG_CHANNEL=errorlog saved\n";
-        } else {
-            echo "WARN: could not write .env — set LOG_CHANNEL=errorlog manually\n";
-        }
-        $cfg = deleteFile($base . '/bootstrap/cache/config.php');
-        echo 'bootstrap/cache/config.php deleted: ' . ($cfg ? 'yes' : 'no/missing') . "\n";
+    // Prefer stack (ignore_exceptions) over bare daily — daily bypasses the stack guard.
+    if (upsertEnvValue($envPath, 'LOG_CHANNEL', 'stack')) {
+        echo "LOG_CHANNEL=stack saved\n";
+    } else {
+        echo "WARN: could not write .env — set LOG_CHANNEL=stack manually\n";
+        // Drop-in override readable early if .env is locked for the app pool identity.
+        $override = $base . '/bootstrap/cache/serik-log-channel.php';
+        $written = @file_put_contents($override, "<?php\nreturn 'errorlog';\n");
+        echo 'bootstrap/cache/serik-log-channel.php: ' . ($written !== false ? 'written' : 'FAILED') . "\n";
     }
+    $cfg = deleteFile($base . '/bootstrap/cache/config.php');
+    echo 'bootstrap/cache/config.php deleted: ' . ($cfg ? 'yes' : 'no/missing') . "\n";
 
     echo "deleted={$deleted} kept={$kept}\n\n";
-    echo "If probe FAILED: queue workers may lock laravel-*.log.\n";
-    echo "Run as admin: icacls storage\\logs /grant \"IIS_IUSRS:(OI)(CI)M\" /T\n";
-    echo "Then: git pull && php artisan config:clear && php artisan view:clear\n";
-    echo "Test property: https://serik.ca/clear-serik-cache.php?key=serik2026clear&diag_property=1&slug=156-sparling-street-huron-east-on-n0k-1w0-x12501646\n";
+    echo "If probe FAILED: run as Admin ops\\windows\\Fix-SerikAdmin500.ps1 on C:\\project\\serik\n";
+    echo "Then: git pull && php artisan optimize:clear\n";
+    echo "Diag: https://serik.ca/clear-serik-cache.php?key=serik2026clear&diag_infra=1\n";
     exit;
 }
 

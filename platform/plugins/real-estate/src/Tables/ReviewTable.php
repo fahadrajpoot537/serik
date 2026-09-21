@@ -90,6 +90,7 @@ class ReviewTable extends TableAbstract
                         'status',
                         'created_at',
                     ])
+                    // Property::$hidden excludes geo_point (binary POINT → DataTables UTF-8 500).
                     ->with(['author', 'reviewable']);
             })
             ->onAjax(function (self $table) {
