@@ -55,8 +55,10 @@
         }
         window.gtag('js', new Date());
         window.gtag('config', 'G-G0KFZYXM3D');
-        window.gtag('config', 'AW-18147434933');
-        window.__serikAdsAwConfigured = true;
+        if (!window.__serikAdsAwConfigured) {
+            window.gtag('config', 'AW-18147434933');
+            window.__serikAdsAwConfigured = true;
+        }
 
         (function (w, d, s, l, i) {
             w[l] = w[l] || [];

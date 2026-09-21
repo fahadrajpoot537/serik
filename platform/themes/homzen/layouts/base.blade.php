@@ -240,6 +240,17 @@
             }
         </style>
         <!--End of Tawk.to Script-->
+@if ($isSerikHomepage)
+        <!-- Google tag (gtag.js) — Google Ads -->
+        <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18147434933"></script>
+        <script>
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'AW-18147434933');
+            window.__serikAdsAwConfigured = true;
+        </script>
+@endif
     </head>
 
     <body {!! Theme::bodyAttributes() !!}>
