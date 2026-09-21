@@ -6,9 +6,9 @@
 # What this does:
 # 1) Restarts NSSM queue workers that lock storage\logs\laravel*.log
 # 2) Clears / recreates log files
-# 3) Forces LOG_CHANNEL=stack (ignore_exceptions) in .env
-# 4) git pull + optimize:clear + IIS app pool recycle
-# 5) Prints diag_infra URL result hint
+# 3) Forces LOG_CHANNEL=stack in .env
+# 4) git pull + FAST cache wipe (file-cache safe) + IIS app pool recycle
+# 5) Prints verify hints
 
 [CmdletBinding()]
 param(
@@ -22,18 +22,18 @@ $ErrorActionPreference = "Continue"
 
 function Write-Step([string]$Msg) {
     Write-Host ""
-    Write-Host "==== $Msg ====" -ForegroundColor Cyan
+    Write-Host ("==== {0} ====" -f $Msg) -ForegroundColor Cyan
 }
 
 if (-not (Test-Path $Root)) {
-    throw "Root not found: $Root"
+    throw ("Root not found: {0}" -f $Root)
 }
 
 Set-Location $Root
 
 Write-Step "0) Pre-check"
-Write-Host "Root: $Root"
-Write-Host "User: $env:USERNAME"
+Write-Host ("Root: {0}" -f $Root)
+Write-Host ("User: {0}" -f $env:USERNAME)
 git -C $Root rev-parse --short HEAD 2>$null
 git -C $Root status -sb 2>$null
 
@@ -42,12 +42,11 @@ $services = @("SerikQueueHigh", "SerikQueueLow", "SerikQueueGhl", "SerikQueueSea
 foreach ($svc in $services) {
     $status = & nssm status $svc 2>$null
     if ($LASTEXITCODE -ne 0 -and -not $status) {
-        Write-Host "$svc : not installed (skip)"
+        Write-Host ("{0} : not installed (skip)" -f $svc)
         continue
     }
-    Write-Host "$svc : before=$status"
+    Write-Host ("{0} : before={1}" -f $svc, $status)
     if ($svc -eq "SerikMeilisearch") {
-        # Do not bounce search unless it is stopped
         if ("$status" -notmatch "SERVICE_RUNNING") {
             & nssm start $svc 2>$null | Out-Null
         }
@@ -56,7 +55,7 @@ foreach ($svc in $services) {
     & nssm restart $svc 2>&1 | ForEach-Object { Write-Host $_ }
     Start-Sleep -Seconds 1
     $after = & nssm status $svc 2>$null
-    Write-Host "$svc : after=$after"
+    Write-Host ("{0} : after={1}" -f $svc, $after)
 }
 
 Write-Step "2) Fix storage\logs permissions + recreate laravel logs"
@@ -66,39 +65,39 @@ try {
     & icacls $logDir /grant "IIS_IUSRS:(OI)(CI)M" /T | Out-Null
     & icacls $logDir /grant "IUSR:(OI)(CI)M" /T | Out-Null
 } catch {
-    Write-Host "icacls warn: $($_.Exception.Message)"
+    Write-Host ("icacls warn: {0}" -f $_.Exception.Message)
 }
 
 Get-ChildItem -Path $logDir -Filter "laravel*.log" -ErrorAction SilentlyContinue | ForEach-Object {
     try {
         Remove-Item $_.FullName -Force -ErrorAction Stop
-        Write-Host "deleted $($_.Name)"
+        Write-Host ("deleted {0}" -f $_.Name)
     } catch {
-        $aside = "$($_.FullName).locked-$(Get-Date -Format 'yyyyMMddHHmmss')"
+        $aside = "{0}.locked-{1}" -f $_.FullName, (Get-Date -Format "yyyyMMddHHmmss")
         try {
             Move-Item $_.FullName $aside -Force
-            Write-Host "renamed $($_.Name) -> $(Split-Path $aside -Leaf)"
+            Write-Host ("renamed {0} -> {1}" -f $_.Name, (Split-Path $aside -Leaf))
         } catch {
-            Write-Host "LOCKED $($_.Name): $($_.Exception.Message)"
+            Write-Host ("LOCKED {0}: {1}" -f $_.Name, $_.Exception.Message)
         }
     }
 }
 
 $stamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-$probeLine = "[$stamp] production.INFO: Fix-SerikAdmin500 probe`r`n"
+$probeLine = "[{0}] production.INFO: Fix-SerikAdmin500 probe" -f $stamp
 $today = Join-Path $logDir ("laravel-{0}.log" -f (Get-Date -Format "yyyy-MM-dd"))
 $single = Join-Path $logDir "laravel.log"
 try {
     Add-Content -Path $today -Value $probeLine -Encoding utf8
-    Write-Host "probe OK: $(Split-Path $today -Leaf)"
+    Write-Host ("probe OK: {0}" -f (Split-Path $today -Leaf))
 } catch {
-    Write-Host "probe FAIL today: $($_.Exception.Message)" -ForegroundColor Yellow
+    Write-Host ("probe FAIL today: {0}" -f $_.Exception.Message) -ForegroundColor Yellow
 }
 try {
     Add-Content -Path $single -Value $probeLine -Encoding utf8
     Write-Host "probe OK: laravel.log"
 } catch {
-    Write-Host "probe FAIL single: $($_.Exception.Message)" -ForegroundColor Yellow
+    Write-Host ("probe FAIL single: {0}" -f $_.Exception.Message) -ForegroundColor Yellow
 }
 
 Write-Step "3) Force LOG_CHANNEL=stack in .env"
@@ -125,23 +124,57 @@ if (Test-Path $cfg) {
     Write-Host "deleted bootstrap\cache\config.php"
 }
 
-Write-Step "4) git pull + optimize:clear"
+Write-Step "4) git pull + FAST file-cache wipe (skip slow artisan cache:clear)"
 if (-not $SkipGitPull) {
     git -C $Root fetch origin 2>&1 | ForEach-Object { Write-Host $_ }
     git -C $Root pull --ff-only origin main 2>&1 | ForEach-Object { Write-Host $_ }
 } else {
-    Write-Host "SkipGitPull set — not pulling"
+    Write-Host "SkipGitPull set - not pulling"
 }
 
-php artisan optimize:clear 2>&1 | ForEach-Object { Write-Host $_ }
+# File cache: artisan cache:clear walks every file and often fails on IIS locks.
+# Wipe folders instead, then clear only view/route/config.
+$cacheData = Join-Path $Root "storage\framework\cache\data"
+$sessionFiles = Join-Path $Root "storage\framework\sessions"
+$viewCache = Join-Path $Root "storage\framework\views"
+$bootCache = Join-Path $Root "bootstrap\cache"
+
+foreach ($dir in @($cacheData, $viewCache)) {
+    if (Test-Path $dir) {
+        Write-Host ("Wiping {0} ..." -f $dir)
+        Get-ChildItem -Path $dir -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+try {
+    & icacls (Join-Path $Root "storage") /grant "IIS_IUSRS:(OI)(CI)M" /T | Out-Null
+    & icacls (Join-Path $Root "storage") /grant "IUSR:(OI)(CI)M" /T | Out-Null
+    & icacls $bootCache /grant "IIS_IUSRS:(OI)(CI)M" /T | Out-Null
+} catch {
+    Write-Host ("storage icacls warn: {0}" -f $_.Exception.Message)
+}
+
+Get-ChildItem -Path $bootCache -Filter "*.php" -ErrorAction SilentlyContinue | ForEach-Object {
+    try {
+        Remove-Item $_.FullName -Force -ErrorAction Stop
+        Write-Host ("deleted bootstrap cache {0}" -f $_.Name)
+    } catch {
+        Write-Host ("bootstrap cache locked {0}" -f $_.Name)
+    }
+}
+
+php artisan view:clear 2>&1 | ForEach-Object { Write-Host $_ }
+php artisan route:clear 2>&1 | ForEach-Object { Write-Host $_ }
+php artisan config:clear 2>&1 | ForEach-Object { Write-Host $_ }
+Write-Host "Skipped artisan cache:clear (too slow / permission errors on file driver)"
 
 Write-Step "5) Recycle IIS app pool"
 try {
     Import-Module WebAdministration -ErrorAction Stop
     Restart-WebAppPool -Name $AppPool
-    Write-Host "Recycled app pool: $AppPool"
+    Write-Host ("Recycled app pool: {0}" -f $AppPool)
 } catch {
-    Write-Host "App pool recycle skipped ($AppPool): $($_.Exception.Message)"
+    Write-Host ("App pool recycle skipped ({0}): {1}" -f $AppPool, $_.Exception.Message)
     Write-Host "Fallback: iisreset /noforce (manual if needed)"
 }
 
@@ -150,8 +183,9 @@ php artisan tinker --execute="echo 'log='.config('logging.default').PHP_EOL.'cac
 
 Write-Host ""
 Write-Host "Browser checks:" -ForegroundColor Green
-Write-Host "  https://serik.ca/clear-serik-cache.php?key=serik2026clear&diag_infra=1"
-Write-Host "  https://serik.ca/health/live"
-Write-Host "  https://serik.ca/admin  (login, open Properties / Property Visits / Reviews)"
+Write-Host '  https://serik.ca/clear-serik-cache.php?key=serik2026clear&diag_infra=1'
+Write-Host '  https://serik.ca/health/live'
+Write-Host '  https://serik.ca/admin'
 Write-Host ""
 Write-Host "Done."
+Write-Host "Note: CACHE_STORE=file is slow. Prefer CACHE_STORE=redis + SESSION_DRIVER=redis on live."
