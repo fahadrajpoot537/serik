@@ -168,22 +168,15 @@ class HandleFrontPages
                     (bool) $request->boolean('iframe')
                 );
 
-                // Map iframe: skip similar listings entirely on first paint (hydrate via API).
-                // Also skip the after-response warm — rapid pin switching was queueing
-                // many related builds and making modal opens feel stuck/slow.
-                $relatedService = app(RelatedPropertiesService::class);
-                if ($request->boolean('iframe') || ! $relatedService->hasCached($property)) {
-                    // Same similar-homes payload as RelatedPropertiesService::build(),
-                    // loaded via existing GET /api/v1/related-properties/{id} so the
-                    // HTML request does not wait on a cold city query (p95 was ~10s).
-                    $relatedPropertiesPayload = [
-                        'relatedProperties' => collect(),
-                        'sectionTitle' => __('Similar Properties'),
-                        'deferPropertyId' => (int) $property->getKey(),
-                    ];
-                } else {
-                    $relatedPropertiesPayload = $relatedService->build($property);
-                }
+                // Never run similar-homes SQL on the HTML request (even on cache hit).
+                // Hydrate can still contend with Redis locks / DB under load and tip IIS
+                // into 0-byte timeouts that users see as HTTP 500. Similar homes load via
+                // GET /api/v1/related-properties/{id} after first paint.
+                $relatedPropertiesPayload = [
+                    'relatedProperties' => collect(),
+                    'sectionTitle' => __('Similar Properties'),
+                    'deferPropertyId' => (int) $property->getKey(),
+                ];
 
                 return [
                     'view' => 'real-estate.property',
