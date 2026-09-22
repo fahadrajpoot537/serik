@@ -145,9 +145,12 @@ final class HomepageResponseCache
         $request ??= request();
         if ($request instanceof Request) {
             $html = self::alignLoopbackOrigins($html, $request);
+            $html = self::scrubPersonalizedFlags($html);
             if (! self::htmlMatchesRequestOrigin($html, $request)) {
                 return null;
             }
+        } else {
+            $html = self::scrubPersonalizedFlags($html);
         }
 
         return $html;
@@ -205,6 +208,23 @@ final class HomepageResponseCache
     }
 
     /**
+     * Shared homepage HTML must never carry one-shot session flags (e.g. wishlist
+     * login prompt). Otherwise one guest miss poisons openLogin:true for everyone.
+     */
+    public static function scrubPersonalizedFlags(string $html): string
+    {
+        if ($html === '' || ! str_contains($html, 'openLogin')) {
+            return $html;
+        }
+
+        return (string) preg_replace(
+            '/\bopenLogin\s*:\s*true\b/',
+            'openLogin: false',
+            $html
+        );
+    }
+
+    /**
      * Cached HTML baked on :8000 must not be served on Apache :80 (or localhost vs 127.0.0.1).
      * Absolute CSS hrefs would be cross-origin and CSP style-src 'self' would block them.
      */
@@ -253,6 +273,7 @@ final class HomepageResponseCache
         }
 
         $html = self::alignLoopbackOrigins($html, $request);
+        $html = self::scrubPersonalizedFlags($html);
         if (! self::htmlMatchesRequestOrigin($html, $request)) {
             return null;
         }
@@ -283,6 +304,7 @@ final class HomepageResponseCache
         }
 
         $html = self::alignLoopbackOrigins($html, $request);
+        $html = self::scrubPersonalizedFlags($html);
 
         SerikCache::put(self::cacheKey($request), self::packEntry($html), self::ttl());
     }

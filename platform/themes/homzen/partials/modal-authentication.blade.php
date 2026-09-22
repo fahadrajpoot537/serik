@@ -846,6 +846,15 @@
                 openAuthModal('register');
             }
         }, true);
+
+        // One-shot deep link from wishlist (and similar) — never use session flash in HTML cache.
+        if (window.location.hash === '#modalLogin') {
+            openAuthModal('login');
+            history.replaceState(null, '', window.location.pathname + window.location.search);
+        } else if (window.location.hash === '#modalRegister') {
+            openAuthModal('register');
+            history.replaceState(null, '', window.location.pathname + window.location.search);
+        }
     });
 
     // Toggle logic for sliding panel

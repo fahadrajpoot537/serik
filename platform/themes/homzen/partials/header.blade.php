@@ -1539,7 +1539,7 @@ window.SERIK_WISHLIST = {
     stateUrl: @json(route('public.ajax.wishlist.state')),
     csrfUrl: @json(route('auth.csrf-token')),
     pageUrl: @json(route('public.wishlist')),
-    openLogin: @json((bool) session('serik_open_login')),
+    openLogin: false,
 };
 const SOLD_STATUSES = ['Sold', 'Leased', 'Sold Conditional', 'Sold Conditional Escape', 'Leased Conditional'];
 let skip = 0;

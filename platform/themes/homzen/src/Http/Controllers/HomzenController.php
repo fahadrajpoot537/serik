@@ -230,11 +230,15 @@ class homzenController extends PublicController
 
         if (! auth('account')->check()) {
             $request->session()->put('url.intended', route('public.wishlist'));
-            $request->session()->flash('serik_open_login', true);
 
             $previous = url()->previous();
             $fallback = BaseHelper::getHomepageUrl();
             $target = ($previous && $previous !== $request->fullUrl()) ? $previous : $fallback;
+            // Use URL hash — never session flash. Flash was baked into shared
+            // homepage HTML cache as openLogin:true and auto-opened login for everyone.
+            if (! str_contains($target, '#modalLogin') && ! str_contains($target, '#modalRegister')) {
+                $target .= '#modalLogin';
+            }
 
             return redirect()->to($target);
         }
