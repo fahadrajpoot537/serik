@@ -41,6 +41,8 @@ class PropertyDetailPayloadService
 
                 if (! $isIframe && $listingKey !== '') {
                     $listingHistory = TrebPropertyHelper::fetchListingHistoryForDetail($listingKey, $localData, $factRecord);
+                    // Price changes: local observation log only on SSR. Sibling-history
+                    // scans are warmed async (fetchPriceChanges already defers on web).
                     $priceChanges = $isLocked ? [] : TrebPropertyHelper::fetchPriceChanges($listingKey);
                 } elseif ($listingKey !== '' && $factRecord !== []) {
                     $listingHistory = [[

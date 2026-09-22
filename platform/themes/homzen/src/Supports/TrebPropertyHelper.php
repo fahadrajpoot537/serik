@@ -1552,6 +1552,11 @@ class TrebPropertyHelper
             }
         }
 
+        // Never block property HTML on live AMP (IIS 500 / FastCGI timeout).
+        if (self::shouldSkipRemoteAmpFetch()) {
+            return null;
+        }
+
         // AMPRE strips this field unless the filter references it.
         try {
             app()->instance('serik.live_treb_fallback', true);
@@ -3037,22 +3042,11 @@ class TrebPropertyHelper
                 return $localChanges;
             }
 
-            // Sibling address history is local-DB capable; try without AMP.
-            try {
-                $history = self::fetchListingHistory($listingKey, $local);
-                $fromHistory = self::extractPriceChangesFromHistory($history);
-                $merged = self::dedupePriceChangeRows(array_merge($localChanges, $fromHistory));
-                if ($merged !== []) {
-                    Cache::put($cacheKey, $merged, 1800);
-                }
-                self::schedulePriceChangesWarm($listingKey, $local, $cacheKey);
+            // Never run fetchListingHistory on HTML SSR — rural address FULLTEXT/Meili
+            // scans can take 10–20s+ and tip IIS into HTTP 500. Warm after response.
+            self::schedulePriceChangesWarm($listingKey, $local, $cacheKey);
 
-                return $merged;
-            } catch (\Throwable) {
-                self::schedulePriceChangesWarm($listingKey, $local, $cacheKey);
-
-                return $localChanges;
-            }
+            return $localChanges;
         }
 
         try {
