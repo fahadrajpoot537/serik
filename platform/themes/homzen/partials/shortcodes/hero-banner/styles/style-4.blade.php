@@ -6431,6 +6431,10 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     if (window.location.hash === '#modalLogin' || window.location.hash === '#modalRegister') {
+        const mode = window.location.hash === '#modalRegister' ? 'register' : 'login';
+        if (typeof window.openAuthModal === 'function') {
+            window.openAuthModal(mode);
+        }
         history.replaceState(null, '', window.location.pathname + window.location.search);
     }
     
