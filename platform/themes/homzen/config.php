@@ -20,8 +20,9 @@ return [
                 $theme->asset()->usePath()->add('animate', 'css/animate.min.css');
             }
             $theme->asset()->usePath()->add('swiper', 'plugins/swiper/swiper-bundle.min.css');
-            $theme->asset()->usePath()->add('style', 'css/style.css', version: $version);
-            $theme->asset()->usePath()->add('site-chrome', 'css/site-chrome.css', version: $version . '-sc61');
+            $theme->asset()->usePath()->add('style', 'css/style.css', version: $version . '-fd1');
+            // site-chrome is linked once at the end of layouts/base.blade.php so it
+            // overrides style.css without a second render-blocking download.
 
             $theme->asset()->container('footer')->usePath()->add('jquery', 'js/jquery.min.js');
             $theme->asset()->container('footer')->usePath()->add('popper', 'js/popper.min.js', ['jquery']);

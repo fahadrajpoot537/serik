@@ -76,6 +76,15 @@ return [
         'household_type_total' => '100',
         'couple_with_children' => '103',
         'one_parent_family_households' => '105',
+        'religion_total' => '1935',
+        'income_group_total' => '246',
+        'age_total' => '8',
+        'visible_minority_total' => '1670',
+        'mother_tongue_total' => '377',
+        'construction_total' => '1426',
+        'occupation_total' => '2248',
+        'structural_type_total' => '41',
+        'commute_total' => '2603',
     ],
 
     /*
@@ -87,6 +96,7 @@ return [
         'household_income' => [
             'label' => 'Household Income',
             'mode' => 'aggregate',
+            'universe_id' => '246',
             'slices' => [
                 ['label' => '$0 - $29,999', 'ids' => ['247', '248', '249', '250', '251', '252']],
                 ['label' => '$30,000 - $59,999', 'ids' => ['253', '254', '255', '256', '257']],
@@ -100,6 +110,7 @@ return [
         'age' => [
             'label' => 'Age',
             'mode' => 'items',
+            'universe_id' => '8',
             'items' => [
                 ['label' => '0 to 14', 'id' => '9'],
                 ['label' => '15 to 24', 'ids' => ['14', '15']],
@@ -113,6 +124,7 @@ return [
         'education' => [
             'label' => 'Education',
             'mode' => 'items',
+            'universe_id' => '2014',
             'items' => [
                 ['label' => 'No certificate', 'id' => '2015'],
                 ['label' => 'High school', 'id' => '2016'],
@@ -126,6 +138,7 @@ return [
             'label' => 'Ethnicity (Top 10)',
             'mode' => 'top_n',
             'top' => 10,
+            'universe_id' => '1670',
             'items' => [
                 ['label' => 'South Asian', 'id' => '1671'],
                 ['label' => 'Chinese', 'id' => '1672'],
@@ -146,6 +159,7 @@ return [
             'label' => 'Language (Top 10)',
             'mode' => 'top_n',
             'top' => 10,
+            'universe_id' => '377',
             'items' => [
                 ['label' => 'English', 'id' => '382'],
                 ['label' => 'French', 'id' => '383'],
@@ -172,6 +186,7 @@ return [
         'religion' => [
             'label' => 'Religion',
             'mode' => 'items',
+            'universe_id' => '1935',
             'items' => [
                 ['label' => 'Christian', 'id' => '1937'],
                 ['label' => 'Muslim', 'id' => '1955'],
@@ -179,6 +194,7 @@ return [
                 ['label' => 'Jewish', 'id' => '1954'],
                 ['label' => 'Sikh', 'id' => '1956'],
                 ['label' => 'Buddhist', 'id' => '1936'],
+                ['label' => 'Traditional spirituality', 'id' => '1957'],
                 ['label' => 'Other religions', 'id' => '1958'],
                 ['label' => 'No religion', 'id' => '1959'],
             ],
@@ -186,6 +202,7 @@ return [
         'construction' => [
             'label' => 'Construction',
             'mode' => 'items',
+            'universe_id' => '1426',
             'items' => [
                 ['label' => '1960 or before', 'id' => '1427'],
                 ['label' => '1961 to 1980', 'id' => '1428'],
@@ -200,6 +217,7 @@ return [
         'occupation' => [
             'label' => 'Occupation',
             'mode' => 'items',
+            'universe_id' => '2248',
             'items' => [
                 ['label' => 'Business / finance / admin', 'id' => '2250'],
                 ['label' => 'Natural & applied sciences', 'id' => '2251'],
@@ -216,6 +234,7 @@ return [
         'housing' => [
             'label' => 'Housing',
             'mode' => 'items',
+            'universe_id' => '41',
             'items' => [
                 ['label' => 'Single-detached', 'id' => '42'],
                 ['label' => 'Semi-detached', 'id' => '43'],
@@ -230,6 +249,7 @@ return [
         'commute' => [
             'label' => 'Commute Method',
             'mode' => 'items',
+            'universe_id' => '2603',
             'items' => [
                 ['label' => 'Car / truck / van', 'id' => '2604'],
                 ['label' => 'Public transit', 'id' => '2607'],

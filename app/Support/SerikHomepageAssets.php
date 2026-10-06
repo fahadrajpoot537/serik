@@ -34,6 +34,7 @@ final class SerikHomepageAssets
         'intlTelInput',
         'fancybox',
         'tabler-icons',
+        'swiper-bundle.min.css',
     ];
 
     /**

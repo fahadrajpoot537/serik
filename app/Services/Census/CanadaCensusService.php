@@ -29,7 +29,7 @@ class CanadaCensusService
     {
         $propertyId = (int) $property->getKey();
         $ttl = max(3600, (int) config('census.cache_ttl', 2592000));
-        $cacheKey = 'census:property:' . $propertyId . ':v3';
+        $cacheKey = 'census:property:' . $propertyId . ':v4';
 
         $cached = Cache::get($cacheKey);
         if (is_array($cached) && isset($cached['status'])) {
@@ -445,7 +445,7 @@ class CanadaCensusService
             return null;
         }
 
-        $cacheKey = 'census:dguid:' . $dguid . ':v3';
+        $cacheKey = 'census:dguid:' . $dguid . ':v4';
         $cached = Cache::get($cacheKey);
         if (is_array($cached) && isset($cached['values'])) {
             return $cached;
@@ -466,8 +466,7 @@ class CanadaCensusService
      */
     public function getCensusProfile(string $dguid): ?array
     {
-        $base = rtrim((string) config('census.statcan.profile_url'), '/');
-        if ($base === '') {
+        if (rtrim((string) config('census.statcan.profile_url'), '/') === '') {
             Log::warning('census.profile.missing_url');
 
             return null;
@@ -485,11 +484,39 @@ class CanadaCensusService
             return null;
         }
 
-        // Request only needed characteristics (full DF_DA profile is ~1MB and often times out).
-        // SDMX multi-value syntax: id1+id2+id3
+        $values = [];
+        foreach (array_chunk($charIds, 25) as $chunk) {
+            $part = $this->fetchProfileChunk($dguid, $chunk);
+            if (! is_array($part)) {
+                continue;
+            }
+            foreach ($part as $id => $val) {
+                if (! array_key_exists($id, $values) || $values[$id] === null || $values[$id] === '') {
+                    $values[$id] = $val;
+                }
+            }
+        }
+
+        if ($values === []) {
+            Log::warning('census.profile.empty', ['dguid' => $dguid]);
+
+            return null;
+        }
+
+        return ['values' => $values];
+    }
+
+    /**
+     * @param  list<string>  $charIds
+     * @return array<string, float|int|string|null>|null
+     */
+    protected function fetchProfileChunk(string $dguid, array $charIds): ?array
+    {
+        $base = rtrim((string) config('census.statcan.profile_url'), '/');
         $charKey = implode('+', $charIds);
         $url = $base . '/A5.' . rawurlencode($dguid) . '.1.' . $charKey . '.1';
-        $timeout = max(60, (int) config('census.statcan.timeout', 45));
+        $timeout = max(45, (int) config('census.statcan.timeout', 45));
+        $verify = ! app()->environment('local') || (bool) config('census.statcan.geo_ssl_verify', true);
 
         try {
             $body = null;
@@ -507,10 +534,9 @@ class CanadaCensusService
                         'Accept: application/json',
                         'User-Agent: SerikRealtyCensus/1.0 (+https://serik.ca)',
                     ],
-                    CURLOPT_SSL_VERIFYPEER => ! app()->environment('local') || (bool) config('census.statcan.geo_ssl_verify', true),
-                    CURLOPT_SSL_VERIFYHOST => (! app()->environment('local') || (bool) config('census.statcan.geo_ssl_verify', true)) ? 2 : 0,
+                    CURLOPT_SSL_VERIFYPEER => $verify,
+                    CURLOPT_SSL_VERIFYHOST => $verify ? 2 : 0,
                 ]);
-                // Local TLS inspection: prefer insecure when configured.
                 if (app()->environment('local') && ! (bool) config('census.statcan.geo_ssl_verify', true)) {
                     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
                     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
@@ -539,9 +565,10 @@ class CanadaCensusService
             }
 
             if ($body === null) {
-                Log::warning('census.profile.http_failed', [
+                Log::warning('census.profile.chunk_failed', [
                     'dguid' => $dguid,
                     'error' => $lastError,
+                    'chars' => count($charIds),
                 ]);
 
                 return null;
@@ -554,16 +581,9 @@ class CanadaCensusService
                 return null;
             }
 
-            $values = $this->extractCharacteristicValues($json);
-            if ($values === []) {
-                Log::warning('census.profile.empty', ['dguid' => $dguid]);
-
-                return null;
-            }
-
-            return ['values' => $values];
+            return $this->extractCharacteristicValues($json);
         } catch (Throwable $e) {
-            Log::warning('census.profile.exception', [
+            Log::warning('census.profile.chunk_exception', [
                 'dguid' => $dguid,
                 'message' => $e->getMessage(),
             ]);
@@ -578,22 +598,26 @@ class CanadaCensusService
      */
     protected function extractCharacteristicValues(array $json): array
     {
-        $seriesDims = $json['data']['structures'][0]['dimensions']['series'] ?? [];
-        $charDim = null;
-        foreach ($seriesDims as $dim) {
-            if (($dim['id'] ?? '') === 'CHARACTERISTIC') {
-                $charDim = $dim;
-                break;
-            }
-        }
-
-        if (! is_array($charDim) || empty($charDim['values'])) {
+        $structure = $json['data']['structures'][0] ?? $json['data']['structure'] ?? [];
+        $seriesDims = $structure['dimensions']['series'] ?? [];
+        if (! is_array($seriesDims) || $seriesDims === []) {
             return [];
         }
 
+        $dimIds = [];
         $idByIndex = [];
-        foreach ($charDim['values'] as $idx => $v) {
-            $idByIndex[$idx] = (string) ($v['id'] ?? '');
+        foreach ($seriesDims as $pos => $dim) {
+            $dimIds[$pos] = (string) ($dim['id'] ?? '');
+            foreach (($dim['values'] ?? []) as $idx => $v) {
+                $idByIndex[$pos][(int) $idx] = (string) ($v['id'] ?? '');
+            }
+        }
+
+        $charPos = array_search('CHARACTERISTIC', $dimIds, true);
+        $statPos = array_search('STATISTIC', $dimIds, true);
+        $genderPos = array_search('GENDER', $dimIds, true);
+        if ($charPos === false) {
+            return [];
         }
 
         $series = $json['data']['dataSets'][0]['series'] ?? [];
@@ -601,15 +625,29 @@ class CanadaCensusService
 
         foreach ($series as $key => $obs) {
             $parts = explode(':', (string) $key);
-            // freq:geo:gender:characteristic:statistic
-            if (count($parts) < 5) {
+            if (! isset($parts[$charPos])) {
                 continue;
             }
-            $charIdx = (int) $parts[3];
-            $charId = $idByIndex[$charIdx] ?? null;
-            if ($charId === null || $charId === '') {
+
+            if ($statPos !== false && isset($parts[$statPos])) {
+                $statId = $idByIndex[$statPos][(int) $parts[$statPos]] ?? '';
+                if ($statId !== '' && $statId !== '1') {
+                    continue;
+                }
+            }
+
+            if ($genderPos !== false && isset($parts[$genderPos])) {
+                $genderId = $idByIndex[$genderPos][(int) $parts[$genderPos]] ?? '';
+                if ($genderId !== '' && $genderId !== '1') {
+                    continue;
+                }
+            }
+
+            $charId = $idByIndex[$charPos][(int) $parts[$charPos]] ?? '';
+            if ($charId === '') {
                 continue;
             }
+
             $out[$charId] = $obs['observations']['0'][0] ?? null;
         }
 
@@ -729,6 +767,9 @@ class CanadaCensusService
     {
         $ids = [];
         foreach (config('census.charts', []) as $chart) {
+            if (! empty($chart['universe_id'])) {
+                $ids[] = (string) $chart['universe_id'];
+            }
             if (! empty($chart['slices']) && is_array($chart['slices'])) {
                 foreach ($chart['slices'] as $slice) {
                     foreach (($slice['ids'] ?? []) as $id) {
@@ -768,18 +809,30 @@ class CanadaCensusService
                 continue;
             }
 
-            $total = array_sum(array_column($slices, 'value'));
+            $sliceSum = (float) array_sum(array_column($slices, 'value'));
+            $universe = null;
+            if (! empty($def['universe_id'])) {
+                $universe = $this->num($values, (string) $def['universe_id']);
+            }
+            // Official StatCan total when it is a true parent of the slices; otherwise
+            // fall back to the slice sum so percents stay internally consistent.
+            $total = ($universe !== null && $universe > 0 && $sliceSum <= ($universe * 1.15))
+                ? $universe
+                : $sliceSum;
             if ($total <= 0) {
                 continue;
             }
 
             $outSlices = [];
             foreach ($slices as $i => $slice) {
+                $count = (int) round($slice['value']);
                 $pct = round(($slice['value'] / $total) * 100, 1);
                 $outSlices[] = [
                     'label' => $slice['label'],
                     'value' => $slice['value'],
+                    'count' => $count,
                     'percent' => $pct,
+                    'display' => number_format($pct, 1) . '% (' . number_format($count) . ')',
                     'color' => $colors[$i % max(1, count($colors))] ?? '#5B8DEF',
                 ];
             }

@@ -215,7 +215,7 @@
                 var c = palette[i % palette.length];
                 return '<span class="hs-census-legend-item">' +
                     '<span class="hs-census-legend-swatch" style="background:' + esc(c) + '"></span>' +
-                    esc(s.label) +
+                    esc(s.label) + ' ' + esc(s.display || ((s.percent != null ? s.percent + '%' : '') + (s.count != null ? ' (' + s.count + ')' : ''))) +
                     '</span>';
             }).join('');
         }
@@ -271,8 +271,12 @@
                         callbacks: {
                             label: function (ctx) {
                                 var slice = chart.slices[ctx.dataIndex] || {};
+                                if (slice.display) {
+                                    return (ctx.label || '') + ': ' + slice.display;
+                                }
                                 var pct = slice.percent != null ? slice.percent + '%' : ctx.formattedValue;
-                                return (ctx.label || '') + ': ' + pct;
+                                var count = slice.count != null ? ' (' + slice.count + ')' : '';
+                                return (ctx.label || '') + ': ' + pct + count;
                             }
                         }
                     }
