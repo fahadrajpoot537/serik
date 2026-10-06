@@ -7484,9 +7484,9 @@ class PropertyController extends BaseController
 
     public function getPropertyCensus($propertyId)
     {
-        // Service uses its own wall-clock budget; keep PHP limit above ADA/CSD fallback fetches.
-        @set_time_limit(app()->environment('local') ? 120 : 110);
-        @ini_set('max_execution_time', app()->environment('local') ? '120' : '110');
+        // Service uses its own wall-clock budget; keep PHP limit above full chart fetch.
+        @set_time_limit(app()->environment('local') ? 130 : 120);
+        @ini_set('max_execution_time', app()->environment('local') ? '130' : '120');
 
         $property = Property::query()->find((int) $propertyId);
 

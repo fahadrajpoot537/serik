@@ -29,7 +29,7 @@ class CanadaCensusService
     {
         $propertyId = (int) $property->getKey();
         $ttl = max(3600, (int) config('census.cache_ttl', 2592000));
-        $cacheKey = 'census:property:' . $propertyId . ':v9';
+        $cacheKey = 'census:property:' . $propertyId . ':v10';
 
         $cached = Cache::get($cacheKey);
         if (is_array($cached) && isset($cached['status'])) {
@@ -709,7 +709,7 @@ class CanadaCensusService
             return null;
         }
 
-        $cacheKey = 'census:dguid:' . $dguid . ':v9';
+        $cacheKey = 'census:dguid:' . $dguid . ':v10';
         $cached = Cache::get($cacheKey);
         if (is_array($cached) && isset($cached['values'])) {
             return $cached;
@@ -740,40 +740,73 @@ class CanadaCensusService
             return null;
         }
 
-        if (Cache::get('census:dguid:' . $dguid . ':v9:miss')) {
+        if (Cache::get('census:dguid:' . $dguid . ':v10:miss')) {
             return null;
         }
 
-        $priorityIds = array_values(array_unique(array_filter(array_map(
-            'strval',
-            array_values(config('census.characteristics', []))
-        ))));
-        // Religion first among charts — matches HouseSigma and avoids incomplete pies.
-        $religionIds = ['1935', '1936', '1937', '1953', '1954', '1955', '1956', '1957', '1958', '1959'];
-        $chartIds = array_values(array_diff(
-            array_values(array_unique(array_filter(array_map('strval', $this->collectChartCharacteristicIds())))),
-            array_merge($priorityIds, $religionIds)
+        // Charts first as complete groups (never split a tab across chunks), then metrics.
+        // Counts-only (.1) — rates(1+2) previously doubled latency and starved remaining tabs.
+        $chartGroups = $this->collectChartIdGroups();
+        $chartIdsFlat = [];
+        foreach ($chartGroups as $group) {
+            foreach ($group as $id) {
+                $chartIdsFlat[$id] = true;
+            }
+        }
+        $metricIds = array_values(array_diff(
+            array_values(array_unique(array_filter(array_map(
+                'strval',
+                array_values(config('census.characteristics', []))
+            )))),
+            array_keys($chartIdsFlat)
         ));
-        $allIds = array_values(array_unique(array_merge($priorityIds, $religionIds, $chartIds)));
+        if ($metricIds !== []) {
+            $chartGroups[] = $metricIds;
+        }
 
-        if ($allIds === []) {
+        if ($chartGroups === []) {
             return null;
         }
 
         $values = [];
         $rates = [];
         $started = microtime(true);
-        // ADA/CSD chunks often need ~12–18s each; leave room for 3–4 chunks.
-        $budgetSeconds = app()->environment('local') ? 78.0 : 70.0;
-        // DA hangs forever on some networks — fail that level fast and fall through.
+        $budgetSeconds = app()->environment('local') ? 85.0 : 95.0;
         if ($level === 'da') {
-            $budgetSeconds = app()->environment('local') ? 8.0 : 28.0;
+            $budgetSeconds = app()->environment('local') ? 8.0 : 32.0;
         }
-        $chunkSize = $level === 'da' ? 22 : 55;
+        $chunkSize = $level === 'da' ? 28 : 70;
         $consecutiveFails = 0;
-        $maxFails = 1;
+        $maxFails = $level === 'da' ? 1 : 2;
 
-        foreach (array_chunk($allIds, $chunkSize) as $chunk) {
+        // Pack whole chart groups into chunks so Age/Ethnicity/etc. stay complete.
+        $chunks = [];
+        $current = [];
+        foreach ($chartGroups as $group) {
+            $group = array_values(array_unique($group));
+            if ($group === []) {
+                continue;
+            }
+            if ($current !== [] && (count($current) + count($group)) > $chunkSize) {
+                $chunks[] = $current;
+                $current = [];
+            }
+            // Oversized single chart (e.g. language): send alone, never merge-split mid-group.
+            if (count($group) > $chunkSize) {
+                if ($current !== []) {
+                    $chunks[] = $current;
+                    $current = [];
+                }
+                $chunks[] = $group;
+                continue;
+            }
+            $current = array_merge($current, $group);
+        }
+        if ($current !== []) {
+            $chunks[] = $current;
+        }
+
+        foreach ($chunks as $chunk) {
             if ((microtime(true) - $started) >= $budgetSeconds) {
                 Log::warning('census.profile.budget_stop', [
                     'dguid' => $dguid,
@@ -789,7 +822,8 @@ class CanadaCensusService
                 $chunk,
                 $budgetSeconds - (microtime(true) - $started),
                 $base,
-                $level
+                $level,
+                false
             );
             if (! is_array($part) || (($part['counts'] ?? []) === [] && ($part['rates'] ?? []) === [])) {
                 $consecutiveFails++;
@@ -810,9 +844,28 @@ class CanadaCensusService
                     $values[$id] = $val;
                 }
             }
-            foreach (($part['rates'] ?? []) as $id => $val) {
+        }
+
+        // Small rates-only pass for religion (HouseSigma-compatible %) if time remains.
+        $religionIds = ['1935', '1936', '1937', '1953', '1954', '1955', '1956', '1957', '1958', '1959'];
+        $remaining = $budgetSeconds - (microtime(true) - $started);
+        if ($remaining >= 8 && $values !== []) {
+            $ratePart = $this->fetchProfileChunk(
+                $dguid,
+                $religionIds,
+                $remaining,
+                $base,
+                $level,
+                true
+            );
+            foreach (($ratePart['rates'] ?? []) as $id => $val) {
                 if (is_numeric($val)) {
                     $rates[(string) $id] = (float) $val;
+                }
+            }
+            foreach (($ratePart['counts'] ?? []) as $id => $val) {
+                if (! array_key_exists($id, $values) || $values[$id] === null || $values[$id] === '') {
+                    $values[$id] = $val;
                 }
             }
         }
@@ -835,19 +888,21 @@ class CanadaCensusService
         array $charIds,
         ?float $remainingBudget = null,
         ?string $profileBaseUrl = null,
-        string $level = 'da'
+        string $level = 'da',
+        bool $withRates = false
     ): ?array {
         $base = rtrim((string) ($profileBaseUrl ?: config('census.statcan.profile_url')), '/');
         $charKey = implode('+', $charIds);
-        // Statistic 1=counts, 2=rates (HouseSigma-style % uses official rates).
-        $url = $base . '/A5.' . $dguid . '.1.' . $charKey . '.1+2';
+        // Counts (1) by default — faster. Rates (2) only for small religion pass.
+        $statKey = $withRates ? '1+2' : '1';
+        $url = $base . '/A5.' . $dguid . '.1.' . $charKey . '.' . $statKey;
         $configured = (int) config('census.statcan.timeout', 45);
         // ADA/CSD typically respond in 10–18s; DA either answers quickly or never (0-byte hang).
         $timeout = $level === 'da'
             ? (app()->environment('local') ? 6 : 12)
             : (app()->environment('local')
-                ? max(14, min(28, $configured > 0 ? $configured : 28))
-                : max(14, min(30, $configured > 0 ? $configured : 30)));
+                ? max(14, min(26, $configured > 0 ? $configured : 26))
+                : max(14, min(28, $configured > 0 ? $configured : 28)));
         if ($remainingBudget !== null) {
             $timeout = max(3, min($timeout, (int) floor($remainingBudget)));
         }
@@ -1119,7 +1174,25 @@ class CanadaCensusService
     protected function collectChartCharacteristicIds(): array
     {
         $ids = [];
+        foreach ($this->collectChartIdGroups() as $group) {
+            foreach ($group as $id) {
+                $ids[] = $id;
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
+     * One ID list per chart definition (keeps each tab fetchable as a unit).
+     *
+     * @return array<int, list<string>>
+     */
+    protected function collectChartIdGroups(): array
+    {
+        $groups = [];
         foreach (config('census.charts', []) as $chart) {
+            $ids = [];
             if (! empty($chart['universe_id'])) {
                 $ids[] = (string) $chart['universe_id'];
             }
@@ -1140,9 +1213,13 @@ class CanadaCensusService
                     }
                 }
             }
+            $ids = array_values(array_unique(array_filter($ids)));
+            if ($ids !== []) {
+                $groups[] = $ids;
+            }
         }
 
-        return $ids;
+        return $groups;
     }
 
     /**
