@@ -66,7 +66,8 @@
                 .tf-sw-categories,
                 .tf-sw-testimonial,
                 .city-swiper,
-                .serik-blog-m {
+                .serik-blog-m,
+                .serik-hp-reviews__cards {
                     touch-action: pan-x pan-y;
                 }
             }
@@ -138,10 +139,15 @@
 @if ($isSerikHomepage)
 {{-- MUST load AFTER Theme::header() so redesign beats style.css --}}
 {{-- Path-only href so CSS stays same-origin (CSP 'self') on :8000, localhost, or XAMPP. --}}
-<link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp73">
+<link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp75">
 @endif
 {{-- Site chrome last: shared navbar/footer + compact laptop scaling --}}
+@if ($isSerikHomepage)
+<link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc62" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc62"></noscript>
+@else
 <link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc62">
+@endif
         <script>
         (function () {
             if (window.__serikDeferredThirdParty) {

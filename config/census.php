@@ -32,6 +32,7 @@ return [
             'trim',
             explode(',', (string) env(
                 'CENSUS_PROFILE_LEVELS',
+                // Local: DF_DA often hangs (0-byte). Production: DA first (HouseSigma parity), then ADA/CSD.
                 env('APP_ENV') === 'local' ? 'ada,csd' : 'da,ada,csd'
             ))
         ))),

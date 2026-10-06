@@ -29,7 +29,7 @@ class CanadaCensusService
     {
         $propertyId = (int) $property->getKey();
         $ttl = max(3600, (int) config('census.cache_ttl', 2592000));
-        $cacheKey = 'census:property:' . $propertyId . ':v8';
+        $cacheKey = 'census:property:' . $propertyId . ':v9';
 
         $cached = Cache::get($cacheKey);
         if (is_array($cached) && isset($cached['status'])) {
@@ -113,7 +113,7 @@ class CanadaCensusService
 
         $profile = $resolved['profile'];
         $metrics = $this->calculateMetrics($profile['values'] ?? []);
-        $charts = $this->buildCharts($profile['values'] ?? []);
+        $charts = $this->buildCharts($profile['values'] ?? [], $profile['rates'] ?? []);
         $dguid = (string) $resolved['dguid'];
 
         return [
@@ -709,7 +709,7 @@ class CanadaCensusService
             return null;
         }
 
-        $cacheKey = 'census:dguid:' . $dguid . ':v8';
+        $cacheKey = 'census:dguid:' . $dguid . ':v9';
         $cached = Cache::get($cacheKey);
         if (is_array($cached) && isset($cached['values'])) {
             return $cached;
@@ -729,7 +729,7 @@ class CanadaCensusService
     }
 
     /**
-     * @return array{values: array<string, float|int|string|null>}|null
+     * @return array{values: array<string, float|int|string|null>, rates: array<string, float>}|null
      */
     public function getCensusProfile(string $dguid, ?string $profileBaseUrl = null, string $level = 'da'): ?array
     {
@@ -740,7 +740,7 @@ class CanadaCensusService
             return null;
         }
 
-        if (Cache::get('census:dguid:' . $dguid . ':v8:miss')) {
+        if (Cache::get('census:dguid:' . $dguid . ':v9:miss')) {
             return null;
         }
 
@@ -748,26 +748,28 @@ class CanadaCensusService
             'strval',
             array_values(config('census.characteristics', []))
         ))));
+        // Religion first among charts — matches HouseSigma and avoids incomplete pies.
+        $religionIds = ['1935', '1936', '1937', '1953', '1954', '1955', '1956', '1957', '1958', '1959'];
         $chartIds = array_values(array_diff(
             array_values(array_unique(array_filter(array_map('strval', $this->collectChartCharacteristicIds())))),
-            $priorityIds
+            array_merge($priorityIds, $religionIds)
         ));
-        // One ordered list so chart series are not starved after metric chunks.
-        $allIds = array_values(array_unique(array_merge($priorityIds, $chartIds)));
+        $allIds = array_values(array_unique(array_merge($priorityIds, $religionIds, $chartIds)));
 
         if ($allIds === []) {
             return null;
         }
 
         $values = [];
+        $rates = [];
         $started = microtime(true);
         // ADA/CSD chunks often need ~12–18s each; leave room for 3–4 chunks.
         $budgetSeconds = app()->environment('local') ? 78.0 : 70.0;
         // DA hangs forever on some networks — fail that level fast and fall through.
         if ($level === 'da') {
-            $budgetSeconds = app()->environment('local') ? 8.0 : 22.0;
+            $budgetSeconds = app()->environment('local') ? 8.0 : 28.0;
         }
-        $chunkSize = $level === 'da' ? 20 : 55;
+        $chunkSize = $level === 'da' ? 22 : 55;
         $consecutiveFails = 0;
         $maxFails = 1;
 
@@ -789,7 +791,7 @@ class CanadaCensusService
                 $base,
                 $level
             );
-            if (! is_array($part) || $part === []) {
+            if (! is_array($part) || (($part['counts'] ?? []) === [] && ($part['rates'] ?? []) === [])) {
                 $consecutiveFails++;
                 if ($consecutiveFails >= $maxFails) {
                     Log::warning('census.profile.abort_after_fails', [
@@ -803,9 +805,14 @@ class CanadaCensusService
             }
 
             $consecutiveFails = 0;
-            foreach ($part as $id => $val) {
+            foreach (($part['counts'] ?? []) as $id => $val) {
                 if (! array_key_exists($id, $values) || $values[$id] === null || $values[$id] === '') {
                     $values[$id] = $val;
+                }
+            }
+            foreach (($part['rates'] ?? []) as $id => $val) {
+                if (is_numeric($val)) {
+                    $rates[(string) $id] = (float) $val;
                 }
             }
         }
@@ -816,12 +823,12 @@ class CanadaCensusService
             return null;
         }
 
-        return ['values' => $values];
+        return ['values' => $values, 'rates' => $rates];
     }
 
     /**
      * @param  list<string>  $charIds
-     * @return array<string, float|int|string|null>|null
+     * @return array{counts: array<string, float|int|string|null>, rates: array<string, float>}|null
      */
     protected function fetchProfileChunk(
         string $dguid,
@@ -832,8 +839,8 @@ class CanadaCensusService
     ): ?array {
         $base = rtrim((string) ($profileBaseUrl ?: config('census.statcan.profile_url')), '/');
         $charKey = implode('+', $charIds);
-        // DGUIDs rarely need encoding; keep dots intact for CT-style ids if ever used.
-        $url = $base . '/A5.' . $dguid . '.1.' . $charKey . '.1';
+        // Statistic 1=counts, 2=rates (HouseSigma-style % uses official rates).
+        $url = $base . '/A5.' . $dguid . '.1.' . $charKey . '.1+2';
         $configured = (int) config('census.statcan.timeout', 45);
         // ADA/CSD typically respond in 10–18s; DA either answers quickly or never (0-byte hang).
         $timeout = $level === 'da'
@@ -930,14 +937,14 @@ class CanadaCensusService
 
     /**
      * @param  array<string, mixed>  $json
-     * @return array<string, float|int|string|null>
+     * @return array{counts: array<string, float|int|string|null>, rates: array<string, float>}
      */
     protected function extractCharacteristicValues(array $json): array
     {
         $structure = $json['data']['structures'][0] ?? $json['data']['structure'] ?? [];
         $seriesDims = $structure['dimensions']['series'] ?? [];
         if (! is_array($seriesDims) || $seriesDims === []) {
-            return [];
+            return ['counts' => [], 'rates' => []];
         }
 
         $dimIds = [];
@@ -953,23 +960,17 @@ class CanadaCensusService
         $statPos = array_search('STATISTIC', $dimIds, true);
         $genderPos = array_search('GENDER', $dimIds, true);
         if ($charPos === false) {
-            return [];
+            return ['counts' => [], 'rates' => []];
         }
 
         $series = $json['data']['dataSets'][0]['series'] ?? [];
-        $out = [];
+        $counts = [];
+        $rates = [];
 
         foreach ($series as $key => $obs) {
             $parts = explode(':', (string) $key);
             if (! isset($parts[$charPos])) {
                 continue;
-            }
-
-            if ($statPos !== false && isset($parts[$statPos])) {
-                $statId = $idByIndex[$statPos][(int) $parts[$statPos]] ?? '';
-                if ($statId !== '' && $statId !== '1') {
-                    continue;
-                }
             }
 
             if ($genderPos !== false && isset($parts[$genderPos])) {
@@ -984,10 +985,26 @@ class CanadaCensusService
                 continue;
             }
 
-            $out[$charId] = $obs['observations']['0'][0] ?? null;
+            $val = $obs['observations']['0'][0] ?? null;
+            $statId = '1';
+            if ($statPos !== false && isset($parts[$statPos])) {
+                $statId = $idByIndex[$statPos][(int) $parts[$statPos]] ?? '1';
+            }
+
+            if ($statId === '2') {
+                if (is_numeric($val)) {
+                    $rates[$charId] = (float) $val;
+                }
+                continue;
+            }
+
+            // Default / statistic 1 = counts
+            if ($statId === '' || $statId === '1') {
+                $counts[$charId] = $val;
+            }
         }
 
-        return $out;
+        return ['counts' => $counts, 'rates' => $rates];
     }
 
     /**
@@ -1131,10 +1148,11 @@ class CanadaCensusService
     /**
      * Build pie-chart datasets for the neighbourhood demographics UI.
      *
-     * @param  array<string, float|int|string|null>  $values
+     * @param  array<string, float|int|string|null>  $values  Counts
+     * @param  array<string, float>  $rates  Official StatCan rates (statistic=2)
      * @return array<int, array<string, mixed>>
      */
-    public function buildCharts(array $values): array
+    public function buildCharts(array $values, array $rates = []): array
     {
         $colors = array_values(config('census.chart_colors', []));
         $charts = [];
@@ -1159,10 +1177,15 @@ class CanadaCensusService
                 continue;
             }
 
+            $useOfficialRates = $this->chartHasOfficialRates($def, $rates);
             $outSlices = [];
             foreach ($slices as $i => $slice) {
                 $count = (int) round($slice['value']);
-                $pct = round(($slice['value'] / $total) * 100, 1);
+                $officialRate = $useOfficialRates ? $this->sliceOfficialRate($def, $slice, $rates) : null;
+                // Prefer StatCan rates (HouseSigma-compatible). Else count/universe.
+                $pct = $officialRate !== null
+                    ? round($officialRate, 1)
+                    : round(($slice['value'] / $total) * 100, 1);
                 $outSlices[] = [
                     'label' => $slice['label'],
                     'value' => $slice['value'],
@@ -1173,6 +1196,17 @@ class CanadaCensusService
                 ];
             }
 
+            if ($useOfficialRates) {
+                $rateSum = (float) array_sum(array_column($outSlices, 'percent'));
+                if ($rateSum > 0 && ($rateSum < 85 || $rateSum > 115)) {
+                    foreach ($outSlices as &$s) {
+                        $s['percent'] = round(($s['value'] / $total) * 100, 1);
+                        $s['display'] = number_format($s['percent'], 1) . '% (' . number_format($s['count']) . ')';
+                    }
+                    unset($s);
+                }
+            }
+
             $charts[] = [
                 'key' => (string) $key,
                 'label' => (string) ($def['label'] ?? $key),
@@ -1181,6 +1215,88 @@ class CanadaCensusService
         }
 
         return $charts;
+    }
+
+    /**
+     * @param  array<string, mixed>  $def
+     * @param  array<string, float>  $rates
+     */
+    protected function chartHasOfficialRates(array $def, array $rates): bool
+    {
+        if ($rates === []) {
+            return false;
+        }
+        $ids = [];
+        foreach (($def['items'] ?? []) as $item) {
+            if (! empty($item['id'])) {
+                $ids[] = (string) $item['id'];
+            }
+            foreach (($item['ids'] ?? []) as $id) {
+                $ids[] = (string) $id;
+            }
+        }
+        foreach (($def['slices'] ?? []) as $slice) {
+            foreach (($slice['ids'] ?? []) as $id) {
+                $ids[] = (string) $id;
+            }
+        }
+        $unique = array_values(array_unique($ids));
+        if ($unique === []) {
+            return false;
+        }
+        $hit = 0;
+        foreach ($unique as $id) {
+            if (isset($rates[$id])) {
+                $hit++;
+            }
+        }
+
+        return $hit >= max(2, (int) floor(count($unique) * 0.5));
+    }
+
+    /**
+     * @param  array<string, mixed>  $def
+     * @param  array{label: string, value: float}  $slice
+     * @param  array<string, float>  $rates
+     */
+    protected function sliceOfficialRate(array $def, array $slice, array $rates): ?float
+    {
+        $label = (string) ($slice['label'] ?? '');
+        foreach (($def['items'] ?? []) as $item) {
+            if ((string) ($item['label'] ?? '') !== $label) {
+                continue;
+            }
+            if (! empty($item['id']) && isset($rates[(string) $item['id']])) {
+                return (float) $rates[(string) $item['id']];
+            }
+            $sum = 0.0;
+            $any = false;
+            foreach (($item['ids'] ?? []) as $id) {
+                if (isset($rates[(string) $id])) {
+                    $sum += (float) $rates[(string) $id];
+                    $any = true;
+                }
+            }
+
+            return $any ? $sum : null;
+        }
+        foreach (($def['slices'] ?? []) as $agg) {
+            if ((string) ($agg['label'] ?? '') !== $label) {
+                continue;
+            }
+            $sum = 0.0;
+            $any = false;
+            foreach (($agg['ids'] ?? []) as $id) {
+                if (isset($rates[(string) $id])) {
+                    $sum += (float) $rates[(string) $id];
+                    $any = true;
+                }
+            }
+
+            return $any ? $sum : null;
+        }
+
+        return null;
     }
 
     /**

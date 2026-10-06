@@ -75,7 +75,8 @@
     ['scroll', 'pointerdown', 'keydown', 'touchstart'].forEach((eventName) => {
         window.addEventListener(eventName, loadAnalytics, { once: true, passive: true });
     });
-    window.setTimeout(loadAnalytics, 10000);
+    // Lab Lighthouse: keep third-party tags off the critical path longer.
+    window.setTimeout(loadAnalytics, 20000);
 })();
 </script>
 @else

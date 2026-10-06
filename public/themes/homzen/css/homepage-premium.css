@@ -1628,6 +1628,41 @@ body:has(#page-home) {
 /* Locations                                                                  */
 /* -------------------------------------------------------------------------- */
 #page-home .serik-hp-locations { background: var(--p-surface) !important; }
+/* Before Swiper init: show 4 cards in a row (never one giant full-width slide) */
+#page-home .serik-hp-locations .tf-sw-locations:not(.swiper-initialized) {
+  overflow: hidden;
+}
+#page-home .serik-hp-locations .tf-sw-locations:not(.swiper-initialized) .swiper-wrapper {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+  transform: none !important;
+  width: 100% !important;
+}
+#page-home .serik-hp-locations .tf-sw-locations:not(.swiper-initialized) .swiper-slide {
+  width: auto !important;
+  max-width: none !important;
+  margin: 0 !important;
+  height: auto !important;
+}
+@media (max-width: 991.98px) {
+  #page-home .serik-hp-locations .tf-sw-locations:not(.swiper-initialized) .swiper-wrapper {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 575.98px) {
+  #page-home .serik-hp-locations .tf-sw-locations:not(.swiper-initialized) .swiper-wrapper {
+    display: flex !important;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    gap: 12px;
+  }
+  #page-home .serik-hp-locations .tf-sw-locations:not(.swiper-initialized) .swiper-slide {
+    flex: 0 0 min(78vw, 16rem);
+    scroll-snap-align: start;
+  }
+}
 #page-home .serik-hp-loc-card__media,
 #page-home .flat-location-v2 .box-location-v2 .box-img {
   position: relative;
@@ -2572,19 +2607,35 @@ body#page-home .serik-split-hero h2.serik-split-hero__cashback{color:var(--serik
     max-height: none;
     aspect-ratio: 4 / 3;
   }
+  /* Mobile: horizontal swipe carousel (no Swiper dependency) */
   #page-home .serik-hp-reviews__cards {
     margin-left: 0;
     margin-top: -2.75rem;
-    grid-template-columns: 1fr;
+    display: flex !important;
+    grid-template-columns: none !important;
+    gap: 0.9rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    padding: 0.15rem 0.15rem 0.85rem;
+    scrollbar-width: none;
+  }
+  #page-home .serik-hp-reviews__cards::-webkit-scrollbar {
+    display: none;
+  }
+  #page-home .serik-hp-reviews__cards .serik-hp-review-card {
+    flex: 0 0 min(86vw, 20.5rem);
+    max-width: min(86vw, 20.5rem);
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
   }
 }
 @media (min-width: 640px) and (max-width: 991.98px) {
-  #page-home .serik-hp-reviews__cards {
-    grid-template-columns: 1fr 1fr;
-  }
-  #page-home .serik-hp-reviews__cards .serik-hp-review-card:last-child {
-    grid-column: 1 / -1;
-    max-width: 24rem;
+  #page-home .serik-hp-reviews__cards .serik-hp-review-card {
+    flex: 0 0 min(48vw, 18.5rem);
+    max-width: min(48vw, 18.5rem);
   }
 }
 

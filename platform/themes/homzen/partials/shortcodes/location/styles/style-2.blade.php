@@ -78,16 +78,16 @@ function initOntarioLocationsSwiper() {
 }
 function bootOntarioLocationsSwiper(maxRetries) {
     var retries = 0;
-    var limit = maxRetries || 12;
+    var limit = maxRetries || 40;
     var tick = function () {
         initOntarioLocationsSwiper();
         var el = document.querySelector('.flat-location-v2 .tf-sw-locations');
         if (el && (el.dataset.swiperReady === '1' || el.swiper)) return;
         retries++;
-        if (retries < limit) setTimeout(tick, 180);
+        if (retries < limit) setTimeout(tick, 150);
     };
     tick();
 }
-window.addEventListener('DOMContentLoaded', function () { bootOntarioLocationsSwiper(); });
-window.addEventListener('load', function () { bootOntarioLocationsSwiper(6); });
+window.addEventListener('DOMContentLoaded', function () { bootOntarioLocationsSwiper(40); });
+window.addEventListener('load', function () { bootOntarioLocationsSwiper(20); });
 </script>

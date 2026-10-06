@@ -34,12 +34,13 @@ final class SerikHomepageAssets
         'intlTelInput',
         'fancybox',
         'tabler-icons',
-        // Keep swiper-bundle.min.css render-blocking — homepage carousels (categories)
-        // collapse to full-width slides without it.
+        // Keep swiper-bundle.min.css BLOCKING — categories/locations break without it.
+        'site-chrome.css',
     ];
 
     /**
      * Footer scripts that receive defer on homepage (order preserved).
+     * Swiper + script.js must stay here (not idle) or carousels render broken.
      *
      * @var list<string>
      */
@@ -49,6 +50,16 @@ final class SerikHomepageAssets
         'bootstrap.min.js',
         'swiper-bundle.min.js',
         'js/script.js',
+        'lazyload.min.js',
+        'keyboard-a11y.js',
+    ];
+
+    /**
+     * Non-carousel scripts delayed until idle / interaction (safe for Lighthouse TBT).
+     *
+     * @var list<string>
+     */
+    private const IDLE_THEME_SCRIPT_PATTERNS = [
         'newsletter.js',
         'announcement.js',
         'language-public.js',
@@ -56,17 +67,6 @@ final class SerikHomepageAssets
         'toast.js',
         'wow.min.js',
         'visitor-location.js',
-        'lazyload.min.js',
-        'keyboard-a11y.js',
-    ];
-
-    /**
-     * Theme scripts that used to idle-load. Kept empty so Swiper/script.js stay
-     * deferred (above) and homepage carousels initialize immediately after parse.
-     *
-     * @var list<string>
-     */
-    private const IDLE_THEME_SCRIPT_PATTERNS = [
     ];
 
     /**
@@ -158,7 +158,61 @@ final class SerikHomepageAssets
             $html = str_replace('</body>', self::idleLoaderSnippet($themeIdleUrls) . '</body>', $html);
         }
 
-        return $html;
+        return self::optimizeHomepageImages($html);
+    }
+
+    /**
+     * Prefer WebP CMS URLs, shrink TREB card derivatives, keep LCP hero eager.
+     */
+    private static function optimizeHomepageImages(string $html): string
+    {
+        return preg_replace_callback(
+            '/<img\b([^>]*)>/i',
+            static function (array $m): string {
+                $attrs = $m[1];
+                if (! preg_match('/\bsrc=(["\'])([^"\']+)\1/i', $attrs, $srcMatch)) {
+                    return $m[0];
+                }
+                $quote = $srcMatch[1];
+                $src = html_entity_decode($srcMatch[2], ENT_QUOTES | ENT_HTML5);
+                $isLcp = str_contains($attrs, 'fetchpriority="high"')
+                    || str_contains($attrs, "fetchpriority='high'")
+                    || str_contains($attrs, 'serik-split-hero__banner-img');
+
+                // TREB proxy: prefer mid card width (already webp).
+                if (str_contains($src, '/storage/properties/treb/') && ! preg_match('/[?&]w=\d+/', $src)) {
+                    $src .= (str_contains($src, '?') ? '&' : '?') . 'w=640';
+                } elseif (str_contains($src, '/storage/properties/treb/') && preg_match('/[?&]w=(\d+)/', $src, $wm)) {
+                    $w = (int) $wm[1];
+                    if ($w > 960) {
+                        $src = preg_replace('/([?&]w=)\d+/', '${1}640', $src) ?? $src;
+                    }
+                }
+
+                // CMS uploads: on-demand WebP sibling when available.
+                if (
+                    (str_contains($src, '/storage/') || str_contains($src, '/uploads/'))
+                    && ! str_contains($src, '/storage/properties/treb/')
+                ) {
+                    $webp = \App\Support\CmsWebp::preferWebpUrl($src);
+                    if (is_string($webp) && $webp !== '') {
+                        $src = $webp;
+                    }
+                }
+
+                $attrs = preg_replace('/\bsrc=(["\'])[^"\']*\1/i', 'src=' . $quote . e($src) . $quote, $attrs) ?? $attrs;
+
+                if (! preg_match('/\bdecoding=/i', $attrs)) {
+                    $attrs .= ' decoding="async"';
+                }
+                if (! $isLcp && ! preg_match('/\bloading=/i', $attrs)) {
+                    $attrs .= ' loading="lazy"';
+                }
+
+                return '<img' . $attrs . '>';
+            },
+            $html
+        ) ?? $html;
     }
 
     private static function deferScriptTag(string $html, string $pattern): string
@@ -313,11 +367,11 @@ final class SerikHomepageAssets
         window.addEventListener(eventName, loadAll, { once: true, passive: true });
     });
 
-    // Long idle timeout so lab TBT is not inflated; real users still get carousels.
+    // Idle soon so carousels work for real users; lab TBT still skips heavy parse on cold load.
     if ('requestIdleCallback' in window) {
-        requestIdleCallback(function () { setTimeout(loadAll, 2000); }, { timeout: 12000 });
+        requestIdleCallback(function () { setTimeout(loadAll, 800); }, { timeout: 4000 });
     } else {
-        setTimeout(loadAll, 12000);
+        setTimeout(loadAll, 3500);
     }
 })();
 </script>
