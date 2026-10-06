@@ -13,10 +13,9 @@
             break;
         }
     }
-    // medium (~smaller bytes) is enough for the framed hero banner; large was bloating LCP.
     $heroMediaUrl = $firstSlider
-        ? SerikMediaUrl::cmsImageUrl($firstSlider, 'medium')
-        : ($shortcode->background_image ? SerikMediaUrl::cmsImageUrl($shortcode->background_image, 'medium') : null);
+        ? SerikMediaUrl::cmsImageUrl($firstSlider, 'large')
+        : ($shortcode->background_image ? SerikMediaUrl::cmsImageUrl($shortcode->background_image, 'large') : null);
     if (is_string($heroMediaUrl) && $heroMediaUrl !== '') {
         $heroMediaUrl = CmsWebp::preferWebpUrl($heroMediaUrl) ?: $heroMediaUrl;
     }
@@ -88,11 +87,11 @@
                                         {{ RvMedia::image(
                                             $shortcode->{"slider_image_$i"},
                                             ImageAlt::resolve($shortcode->title, $shortcode->{"slider_image_$i"}, $heroAltContext),
-                                            'medium',
+                                            'large',
                                             lazy: $heroSlideIndex > 1,
                                             attributes: $heroSlideIndex === 1
-                                                ? ['data-bb-lazy' => 'false', 'fetchpriority' => 'high', 'loading' => 'eager', 'decoding' => 'async', 'width' => 800, 'height' => 600, 'class' => 'serik-split-hero__banner-img']
-                                                : ['data-bb-lazy' => 'true', 'loading' => 'lazy', 'decoding' => 'async', 'width' => 800, 'height' => 600, 'class' => 'serik-split-hero__banner-img']
+                                                ? ['data-bb-lazy' => 'false', 'fetchpriority' => 'high', 'loading' => 'eager', 'decoding' => 'async', 'width' => 1200, 'height' => 900, 'class' => 'serik-split-hero__banner-img']
+                                                : ['data-bb-lazy' => 'true', 'loading' => 'lazy', 'decoding' => 'async', 'width' => 1200, 'height' => 900, 'class' => 'serik-split-hero__banner-img']
                                         ) }}
                                     </div>
                                 </div>

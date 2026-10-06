@@ -158,61 +158,9 @@ final class SerikHomepageAssets
             $html = str_replace('</body>', self::idleLoaderSnippet($themeIdleUrls) . '</body>', $html);
         }
 
-        return self::optimizeHomepageImages($html);
-    }
-
-    /**
-     * Prefer WebP CMS URLs, shrink TREB card derivatives, keep LCP hero eager.
-     */
-    private static function optimizeHomepageImages(string $html): string
-    {
-        return preg_replace_callback(
-            '/<img\b([^>]*)>/i',
-            static function (array $m): string {
-                $attrs = $m[1];
-                if (! preg_match('/\bsrc=(["\'])([^"\']+)\1/i', $attrs, $srcMatch)) {
-                    return $m[0];
-                }
-                $quote = $srcMatch[1];
-                $src = html_entity_decode($srcMatch[2], ENT_QUOTES | ENT_HTML5);
-                $isLcp = str_contains($attrs, 'fetchpriority="high"')
-                    || str_contains($attrs, "fetchpriority='high'")
-                    || str_contains($attrs, 'serik-split-hero__banner-img');
-
-                // TREB proxy: prefer mid card width (already webp).
-                if (str_contains($src, '/storage/properties/treb/') && ! preg_match('/[?&]w=\d+/', $src)) {
-                    $src .= (str_contains($src, '?') ? '&' : '?') . 'w=640';
-                } elseif (str_contains($src, '/storage/properties/treb/') && preg_match('/[?&]w=(\d+)/', $src, $wm)) {
-                    $w = (int) $wm[1];
-                    if ($w > 960) {
-                        $src = preg_replace('/([?&]w=)\d+/', '${1}640', $src) ?? $src;
-                    }
-                }
-
-                // CMS uploads: on-demand WebP sibling when available.
-                if (
-                    (str_contains($src, '/storage/') || str_contains($src, '/uploads/'))
-                    && ! str_contains($src, '/storage/properties/treb/')
-                ) {
-                    $webp = \App\Support\CmsWebp::preferWebpUrl($src);
-                    if (is_string($webp) && $webp !== '') {
-                        $src = $webp;
-                    }
-                }
-
-                $attrs = preg_replace('/\bsrc=(["\'])[^"\']*\1/i', 'src=' . $quote . e($src) . $quote, $attrs) ?? $attrs;
-
-                if (! preg_match('/\bdecoding=/i', $attrs)) {
-                    $attrs .= ' decoding="async"';
-                }
-                if (! $isLcp && ! preg_match('/\bloading=/i', $attrs)) {
-                    $attrs .= ' loading="lazy"';
-                }
-
-                return '<img' . $attrs . '>';
-            },
-            $html
-        ) ?? $html;
+        // Do NOT rewrite img src/data-src here — lazy placeholders use src=placeholder
+        // and a naive \bsrc= replace also matches data-src= / this.src=, wiping real URLs.
+        return $html;
     }
 
     private static function deferScriptTag(string $html, string $pattern): string
