@@ -1317,6 +1317,29 @@ body:has(#page-home) {
 #page-home .serik-hp-cats .swiper-slide {
   height: auto;
 }
+/* Fallback before Swiper JS runs — prevent one full-width broken card */
+#page-home .serik-hp-cats .tf-sw-categories:not(.swiper-initialized) .swiper-wrapper {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  transform: none !important;
+  width: 100% !important;
+}
+#page-home .serik-hp-cats .tf-sw-categories:not(.swiper-initialized) .swiper-slide {
+  width: auto !important;
+  max-width: none !important;
+  margin: 0 !important;
+}
+@media (max-width: 991.98px) {
+  #page-home .serik-hp-cats .tf-sw-categories:not(.swiper-initialized) .swiper-wrapper {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 575.98px) {
+  #page-home .serik-hp-cats .tf-sw-categories:not(.swiper-initialized) .swiper-wrapper {
+    grid-template-columns: 1fr;
+  }
+}
 #page-home .serik-hp-cat-card,
 #page-home .flat-categories .homeya-categories {
   min-height: 122px !important;

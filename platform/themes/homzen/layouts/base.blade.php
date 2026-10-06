@@ -138,7 +138,7 @@
 @if ($isSerikHomepage)
 {{-- MUST load AFTER Theme::header() so redesign beats style.css --}}
 {{-- Path-only href so CSS stays same-origin (CSP 'self') on :8000, localhost, or XAMPP. --}}
-<link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp72">
+<link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp73">
 @endif
 {{-- Site chrome last: shared navbar/footer + compact laptop scaling --}}
 <link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc62">
@@ -219,7 +219,15 @@
             ['scroll', 'pointerdown', 'keydown', 'touchstart'].forEach(function (eventName) {
                 window.addEventListener(eventName, loadThirdParty, { once: true, passive: true });
             });
+            @if ($isSerikHomepage)
+            if ('requestIdleCallback' in window) {
+                requestIdleCallback(function () { window.setTimeout(loadThirdParty, 3000); }, { timeout: 15000 });
+            } else {
+                window.setTimeout(loadThirdParty, 15000);
+            }
+            @else
             window.setTimeout(loadThirdParty, 8000);
+            @endif
         })();
         </script>
         <style>
@@ -240,17 +248,7 @@
             }
         </style>
         <!--End of Tawk.to Script-->
-@if ($isSerikHomepage)
-        <!-- Google tag (gtag.js) — Google Ads -->
-        <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18147434933"></script>
-        <script>
-            window.dataLayer = window.dataLayer || [];
-            function gtag(){dataLayer.push(arguments);}
-            gtag('js', new Date());
-            gtag('config', 'AW-18147434933');
-            window.__serikAdsAwConfigured = true;
-        </script>
-@endif
+{{-- Homepage Google Ads loads via deferred-analytics (after interaction / idle) to cut TBT --}}
     </head>
 
     <body {!! Theme::bodyAttributes() !!}>

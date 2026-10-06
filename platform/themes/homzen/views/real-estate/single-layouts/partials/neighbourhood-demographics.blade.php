@@ -149,7 +149,7 @@
         <p>{{ __('2021 Census data for the property\'s local Census area') }}</p>
     </div>
     <div class="hs-census-body">
-        <div class="hs-census-status">{{ __('Loading neighbourhood demographics… (first load can take up to a minute)') }}</div>
+        <div class="hs-census-status">{{ __('Loading neighbourhood demographics…') }}</div>
     </div>
 </section>
 
@@ -357,6 +357,12 @@
 
         var sourceBits = [];
         sourceBits.push('Source: ' + esc(data.source || 'Statistics Canada — 2021 Census'));
+        if (data.geography_level && data.geography_level !== 'da') {
+            var levelLabel = data.geography_level === 'ada'
+                ? 'Aggregate dissemination area'
+                : (data.geography_level === 'csd' ? 'Census subdivision' : String(data.geography_level));
+            sourceBits.push('Geography: ' + esc(levelLabel));
+        }
 
         root.classList.remove('is-loading');
         root.setAttribute('aria-busy', 'false');
@@ -372,45 +378,72 @@
     }
 
     var url = '/api/v1/property-census/' + encodeURIComponent(propertyId);
-    var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-    var timer = setTimeout(function () {
-        if (controller) controller.abort();
-    }, 90000);
 
-    fetch(url, {
-        method: 'GET',
-        credentials: 'same-origin',
-        signal: controller ? controller.signal : undefined,
-        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
-    })
-        .then(function (r) {
-            return r.text().then(function (text) {
-                var j = null;
-                try { j = JSON.parse(text); } catch (e) { j = null; }
-                return { ok: r.ok, status: r.status, json: j };
-            });
+    function loadCensus() {
+        if (window.__serikCensusStarted) {
+            return;
+        }
+        window.__serikCensusStarted = true;
+
+        var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        var timer = setTimeout(function () {
+            if (controller) controller.abort();
+        }, 90000);
+
+        fetch(url, {
+            method: 'GET',
+            credentials: 'same-origin',
+            signal: controller ? controller.signal : undefined,
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
         })
-        .then(function (res) {
-            clearTimeout(timer);
-            var data = res.json || {};
-            if (!res.json) {
+            .then(function (r) {
+                return r.text().then(function (text) {
+                    var j = null;
+                    try { j = JSON.parse(text); } catch (e) { j = null; }
+                    return { ok: r.ok, status: r.status, json: j };
+                });
+            })
+            .then(function (res) {
+                clearTimeout(timer);
+                var data = res.json || {};
+                if (!res.json) {
+                    // Laravel FatalError HTML pages say "Server Error" — never show that raw.
+                    renderError('Census data temporarily unavailable.');
+                    return;
+                }
+                var msg = String(data.message || '');
+                if (/server error/i.test(msg) || /maximum execution/i.test(msg)) {
+                    msg = 'Census data temporarily unavailable.';
+                }
+                if (data.status && data.status !== 'ok') {
+                    renderError(msg || 'Census data temporarily unavailable.');
+                    return;
+                }
+                if (!res.ok || data.success === false) {
+                    renderError(msg || 'Census data temporarily unavailable.');
+                    return;
+                }
+                renderOk(data);
+            })
+            .catch(function () {
+                clearTimeout(timer);
                 renderError('Census data temporarily unavailable.');
-                return;
+            });
+    }
+
+    if ('IntersectionObserver' in window) {
+        var io = new IntersectionObserver(function (entries) {
+            if (entries.some(function (e) { return e.isIntersecting; })) {
+                io.disconnect();
+                loadCensus();
             }
-            if (data.status && data.status !== 'ok') {
-                renderError(data.message || 'Census data temporarily unavailable.');
-                return;
-            }
-            if (!res.ok || data.success === false) {
-                renderError(data.message || 'Census data temporarily unavailable.');
-                return;
-            }
-            renderOk(data);
-        })
-        .catch(function () {
-            clearTimeout(timer);
-            renderError('Census data temporarily unavailable.');
-        });
+        }, { rootMargin: '200px 0px' });
+        io.observe(root);
+    } else if ('requestIdleCallback' in window) {
+        requestIdleCallback(function () { setTimeout(loadCensus, 1000); }, { timeout: 5000 });
+    } else {
+        setTimeout(loadCensus, 3000);
+    }
 })();
 </script>
 @endif

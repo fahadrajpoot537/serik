@@ -7484,6 +7484,10 @@ class PropertyController extends BaseController
 
     public function getPropertyCensus($propertyId)
     {
+        // Service uses its own wall-clock budget; keep PHP limit above ADA/CSD fallback fetches.
+        @set_time_limit(app()->environment('local') ? 120 : 110);
+        @ini_set('max_execution_time', app()->environment('local') ? '120' : '110');
+
         $property = Property::query()->find((int) $propertyId);
 
         if (! $property) {
@@ -7501,7 +7505,7 @@ class PropertyController extends BaseController
 
             return response()->json(array_merge([
                 'success' => $ok,
-            ], $payload), $ok ? 200 : 200);
+            ], $payload), 200);
         } catch (\Throwable $e) {
             report($e);
 

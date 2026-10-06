@@ -211,7 +211,7 @@
 
         <div class="gallery-main">
             <a href="{{ $images[0] }}" data-gallery-index="0" class="js-property-gallery-open" style="height:100%">
-                <img src="{{ $images[0] }}" alt="{{ $galleryAlt }}" onerror="this.src='{{ RvMedia::getDefaultImage() }}'">
+                <img src="{{ $images[0] }}" alt="{{ $galleryAlt }}" loading="eager" fetchpriority="high" decoding="async" onerror="this.src='{{ RvMedia::getDefaultImage() }}'">
                 <span class="badge-sale @if($property->isSoldHistory()) status-sold-wrap @endif" aria-label="{{ __('MLS status') }}: {{ $status['display_label'] ?? $statusLabel }}">
                     @if($property->isSoldHistory())
                         {!! TrebPropertyHelper::soldStatusBadgeHtml($property->MlsStatus) !!}
@@ -226,7 +226,7 @@
             <div class="gallery-row">
                 @foreach(array_slice($images, 1, 2) as $offset => $image)
                     <a href="{{ $image }}" data-gallery-index="{{ $offset + 1 }}" class="js-property-gallery-open">
-                        <img src="{{ $image }}" alt="{{ $galleryAlt }}" loading="eager" onerror="this.style.display='none'">
+                        <img src="{{ $image }}" alt="{{ $galleryAlt }}" loading="lazy" decoding="async" onerror="this.style.display='none'">
                     </a>
                 @endforeach
             </div>
@@ -315,41 +315,50 @@
 
     const currentCount = getGalleryImages().length;
 
-    fetch('/api/v1/getPropertyImages/' + encodeURIComponent(listingKey))
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => {
-            const images = data && Array.isArray(data.images) ? data.images.filter(Boolean) : [];
-            if (images.length <= currentCount) {
-                return;
-            }
+    function enrichGalleryImages() {
+        fetch('/api/v1/getPropertyImages/' + encodeURIComponent(listingKey))
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => {
+                const images = data && Array.isArray(data.images) ? data.images.filter(Boolean) : [];
+                if (images.length <= currentCount) {
+                    return;
+                }
 
-            gallery.dataset.images = JSON.stringify(images);
+                gallery.dataset.images = JSON.stringify(images);
 
-            const statusHtml = gallery.querySelector('.badge-sale');
-            const statusBadge = statusHtml ? statusHtml.outerHTML : '';
-            const propertyName = @json($galleryAlt);
-            const defaultImg = @json(RvMedia::getDefaultImage());
+                const statusHtml = gallery.querySelector('.badge-sale');
+                const statusBadge = statusHtml ? statusHtml.outerHTML : '';
+                const propertyName = @json($galleryAlt);
+                const defaultImg = @json(RvMedia::getDefaultImage());
 
-            const sideRows = (start, count) => images.slice(start, start + count).map((src, i) =>
-                `<a href="${src}" data-gallery-index="${start + i}" class="js-property-gallery-open"><img src="${src}" alt="${propertyName}" loading="lazy" onerror="this.style.display='none'"></a>`
-            ).join('');
+                const sideRows = (start, count) => images.slice(start, start + count).map((src, i) =>
+                    `<a href="${src}" data-gallery-index="${start + i}" class="js-property-gallery-open"><img src="${src}" alt="${propertyName}" loading="lazy" decoding="async" onerror="this.style.display='none'"></a>`
+                ).join('');
 
-            gallery.innerHTML = `
-                <div class="gallery-grid">
-                    <div class="gallery-main">
-                        <a href="${images[0]}" data-gallery-index="0" class="js-property-gallery-open" style="height:100%">
-                            <img src="${images[0]}" alt="${propertyName}" onerror="this.src='${defaultImg}'">
-                            ${statusBadge}
-                        </a>
+                gallery.innerHTML = `
+                    <div class="gallery-grid">
+                        <div class="gallery-main">
+                            <a href="${images[0]}" data-gallery-index="0" class="js-property-gallery-open" style="height:100%">
+                                <img src="${images[0]}" alt="${propertyName}" loading="eager" fetchpriority="high" decoding="async" onerror="this.src='${defaultImg}'">
+                                ${statusBadge}
+                            </a>
+                        </div>
+                        <div class="gallery-side">
+                            <div class="gallery-row">${sideRows(1, 2)}</div>
+                            <div class="gallery-row">${sideRows(3, 2)}</div>
+                            <button type="button" class="see-all-btn js-property-gallery-open-all">See all ${images.length} photos</button>
+                        </div>
                     </div>
-                    <div class="gallery-side">
-                        <div class="gallery-row">${sideRows(1, 2)}</div>
-                        <div class="gallery-row">${sideRows(3, 2)}</div>
-                        <button type="button" class="see-all-btn js-property-gallery-open-all">See all ${images.length} photos</button>
-                    </div>
-                </div>
-            `;
-        })
-        .catch(() => {});
+                `;
+            })
+            .catch(() => {});
+    }
+
+    // After first paint — avoids competing with hero image on php artisan serve.
+    if ('requestIdleCallback' in window) {
+        requestIdleCallback(function () { setTimeout(enrichGalleryImages, 800); }, { timeout: 4000 });
+    } else {
+        setTimeout(enrichGalleryImages, 2500);
+    }
 })();
 </script>

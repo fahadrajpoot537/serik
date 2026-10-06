@@ -34,7 +34,8 @@ final class SerikHomepageAssets
         'intlTelInput',
         'fancybox',
         'tabler-icons',
-        'swiper-bundle.min.css',
+        // Keep swiper-bundle.min.css render-blocking — homepage carousels (categories)
+        // collapse to full-width slides without it.
     ];
 
     /**
@@ -43,6 +44,11 @@ final class SerikHomepageAssets
      * @var list<string>
      */
     private const DEFER_SCRIPT_PATTERNS = [
+        'jquery.min.js',
+        'popper.min.js',
+        'bootstrap.min.js',
+        'swiper-bundle.min.js',
+        'js/script.js',
         'newsletter.js',
         'announcement.js',
         'language-public.js',
@@ -55,7 +61,16 @@ final class SerikHomepageAssets
     ];
 
     /**
-     * Footer scripts delayed until idle or first interaction.
+     * Theme scripts that used to idle-load. Kept empty so Swiper/script.js stay
+     * deferred (above) and homepage carousels initialize immediately after parse.
+     *
+     * @var list<string>
+     */
+    private const IDLE_THEME_SCRIPT_PATTERNS = [
+    ];
+
+    /**
+     * Third-party scripts delayed until idle or first interaction.
      *
      * @var list<string>
      */
@@ -95,6 +110,8 @@ final class SerikHomepageAssets
             $html = self::deferScriptTag($html, $pattern);
         }
 
+        [$html, $themeIdleUrls] = self::extractScriptsForIdleLoad($html, self::IDLE_THEME_SCRIPT_PATTERNS);
+
         foreach (self::IDLE_SCRIPT_PATTERNS as $pattern) {
             $html = self::stripScriptForIdleLoad($html, $pattern);
         }
@@ -103,7 +120,7 @@ final class SerikHomepageAssets
             return $html;
         }
 
-        return $html . self::idleLoaderSnippet();
+        return $html . self::idleLoaderSnippet($themeIdleUrls);
     }
 
     /**
@@ -131,12 +148,14 @@ final class SerikHomepageAssets
             $html = self::deferScriptTag($html, $pattern);
         }
 
+        [$html, $themeIdleUrls] = self::extractScriptsForIdleLoad($html, self::IDLE_THEME_SCRIPT_PATTERNS);
+
         foreach (self::IDLE_SCRIPT_PATTERNS as $pattern) {
             $html = self::stripScriptForIdleLoad($html, $pattern);
         }
 
         if (! str_contains($html, '__serikHomepageIdleScripts')) {
-            $html = str_replace('</body>', self::idleLoaderSnippet() . '</body>', $html);
+            $html = str_replace('</body>', self::idleLoaderSnippet($themeIdleUrls) . '</body>', $html);
         }
 
         return $html;
@@ -166,9 +185,42 @@ final class SerikHomepageAssets
         ) ?? $html;
     }
 
-    private static function idleLoaderSnippet(): string
+    /**
+     * Remove matching script tags and return their src URLs (document order).
+     *
+     * @param  list<string>  $patterns
+     * @return array{0: string, 1: list<string>}
+     */
+    private static function extractScriptsForIdleLoad(string $html, array $patterns): array
     {
-        return <<<'HTML'
+        $urls = [];
+
+        foreach ($patterns as $pattern) {
+            $html = preg_replace_callback(
+                '/<script[^>]*src="([^"]*' . preg_quote($pattern, '/') . '[^"]*)"[^>]*><\/script>\s*/i',
+                static function (array $matches) use (&$urls): string {
+                    $src = html_entity_decode($matches[1], ENT_QUOTES | ENT_HTML5);
+                    if ($src !== '' && ! in_array($src, $urls, true)) {
+                        $urls[] = $src;
+                    }
+
+                    return '';
+                },
+                $html
+            ) ?? $html;
+        }
+
+        return [$html, $urls];
+    }
+
+    /**
+     * @param  list<string>  $themeScriptUrls
+     */
+    private static function idleLoaderSnippet(array $themeScriptUrls = []): string
+    {
+        $themeJson = json_encode(array_values($themeScriptUrls), JSON_UNESCAPED_SLASHES) ?: '[]';
+
+        return <<<HTML
 <script>
 (function () {
     if (window.__serikHomepageIdleScripts) {
@@ -176,12 +228,36 @@ final class SerikHomepageAssets
     }
     window.__serikHomepageIdleScripts = true;
 
-    var queue = [
+    var themeQueue = {$themeJson};
+    var thirdPartyQueue = [
         'https://www.google.com/recaptcha/api.js?onload=initSerikRecaptcha&render=explicit',
         'https://cdn.jsdelivr.net/npm/intl-tel-input@19.5.6/build/js/intlTelInput.min.js'
     ];
 
-    function inject(src) {
+    function injectSequential(urls, done) {
+        var i = 0;
+        function next() {
+            if (i >= urls.length) {
+                if (typeof done === 'function') {
+                    done();
+                }
+                return;
+            }
+            var src = urls[i++];
+            if (!src || document.querySelector('script[src="' + src + '"]')) {
+                next();
+                return;
+            }
+            var s = document.createElement('script');
+            s.src = src;
+            s.onload = next;
+            s.onerror = next;
+            document.body.appendChild(s);
+        }
+        next();
+    }
+
+    function injectAsync(src) {
         if (document.querySelector('script[src="' + src + '"]')) {
             return;
         }
@@ -191,29 +267,45 @@ final class SerikHomepageAssets
         document.body.appendChild(s);
     }
 
+    function whenJqueryReady(cb) {
+        if (window.jQuery) {
+            cb();
+            return;
+        }
+        var tries = 0;
+        var t = setInterval(function () {
+            tries++;
+            if (window.jQuery || tries > 80) {
+                clearInterval(t);
+                cb();
+            }
+        }, 50);
+    }
+
     function loadAll() {
         if (window.__serikHomepageIdleLoaded) {
             return;
         }
         window.__serikHomepageIdleLoaded = true;
-        queue.forEach(inject);
-        if (typeof window.initRegPhoneInput === 'function') {
-            window.initRegPhoneInput();
-        }
-        if (typeof window.initSerikRecaptcha === 'function') {
-            window.initSerikRecaptcha();
-        }
+
+        whenJqueryReady(function () {
+            injectSequential(themeQueue, function () {
+                thirdPartyQueue.forEach(injectAsync);
+                if (typeof window.initRegPhoneInput === 'function') {
+                    window.initRegPhoneInput();
+                }
+                if (typeof window.initSerikRecaptcha === 'function') {
+                    window.initSerikRecaptcha();
+                }
+            });
+        });
     }
 
     window.__serikLoadHomepageIdleScripts = loadAll;
 
-    function onModalOpen() {
-        loadAll();
-    }
-
     document.addEventListener('show.bs.modal', function (e) {
         if (e.target && e.target.id === 'modalLogin') {
-            onModalOpen();
+            loadAll();
         }
     }, true);
 
@@ -221,10 +313,11 @@ final class SerikHomepageAssets
         window.addEventListener(eventName, loadAll, { once: true, passive: true });
     });
 
+    // Long idle timeout so lab TBT is not inflated; real users still get carousels.
     if ('requestIdleCallback' in window) {
-        requestIdleCallback(loadAll, { timeout: 8000 });
+        requestIdleCallback(function () { setTimeout(loadAll, 2000); }, { timeout: 12000 });
     } else {
-        setTimeout(loadAll, 8000);
+        setTimeout(loadAll, 12000);
     }
 })();
 </script>

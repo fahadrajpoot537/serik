@@ -24,10 +24,35 @@ return [
             'https://geo.statcan.gc.ca/geo_wa/rest/services/2021/Digital_boundary_files/MapServer/identify'
         ),
         'da_layer' => env('STATCAN_DA_LAYER', 'all:12'),
+        'ada_layer' => (int) env('STATCAN_ADA_LAYER', 10),
+        'csd_layer' => (int) env('STATCAN_CSD_LAYER', 9),
+        // DF_DA is frequently unreachable (hangs 0 bytes); ADA/CSD SDMX dataflows remain healthy.
+        // Production still prefers DA when it responds; local skips DA to avoid artisan-serve stalls.
+        'profile_levels' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env(
+                'CENSUS_PROFILE_LEVELS',
+                env('APP_ENV') === 'local' ? 'ada,csd' : 'da,ada,csd'
+            ))
+        ))),
         'profile_url' => env(
             'STATCAN_CENSUS_PROFILE_URL',
             'https://api.statcan.gc.ca/census-recensement/profile/sdmx/rest/data/STC_CP,DF_DA,1.3'
         ),
+        'profile_urls' => [
+            'da' => env(
+                'STATCAN_CENSUS_PROFILE_URL_DA',
+                'https://api.statcan.gc.ca/census-recensement/profile/sdmx/rest/data/STC_CP,DF_DA,1.3'
+            ),
+            'ada' => env(
+                'STATCAN_CENSUS_PROFILE_URL_ADA',
+                'https://api.statcan.gc.ca/census-recensement/profile/sdmx/rest/data/STC_CP,DF_ADA,1.3'
+            ),
+            'csd' => env(
+                'STATCAN_CENSUS_PROFILE_URL_CSD',
+                'https://api.statcan.gc.ca/census-recensement/profile/sdmx/rest/data/STC_CP,DF_CSD,1.3'
+            ),
+        ],
         'profile_page_url' => env(
             'STATCAN_PROFILE_PAGE_URL',
             'https://www12.statcan.gc.ca/census-recensement/2021/dp-pd/prof/details/page.cfm'

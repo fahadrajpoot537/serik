@@ -519,26 +519,41 @@ document.addEventListener('DOMContentLoaded', function () {
         })
         .catch(() => 0);
 
-        // First paint from local Fast history; one delayed refresh picks up AMP siblings
-        // imported by afterResponse sync (does not block SSR / first request).
-        loadListingHistory().then((count) => {
-            window.setTimeout(() => {
-                loadListingHistory().then((nextCount) => {
-                    if (nextCount > count) {
-                        loadListingHistory();
-                    }
-                });
-            }, 4500);
+        // After first paint / when history tabs are opened — avoids API flood on artisan serve.
+        let historyBooted = false;
+        const bootHistoryApis = () => {
+            if (historyBooted) {
+                return;
+            }
+            historyBooted = true;
+            loadListingHistory().then((count) => {
+                window.setTimeout(() => {
+                    loadListingHistory().then((nextCount) => {
+                        if (nextCount > count) {
+                            loadListingHistory();
+                        }
+                    });
+                }, 6000);
+            });
+            loadPriceChanges().then((count) => {
+                window.setTimeout(() => {
+                    loadPriceChanges().then((nextCount) => {
+                        if (nextCount > count) {
+                            loadPriceChanges();
+                        }
+                    });
+                }, 7000);
+            });
+        };
+
+        document.querySelectorAll('[data-tab="hs-listing-history"], [data-tab="hs-price-change"]').forEach((btn) => {
+            btn.addEventListener('click', bootHistoryApis, { once: true });
         });
-        loadPriceChanges().then((count) => {
-            window.setTimeout(() => {
-                loadPriceChanges().then((nextCount) => {
-                    if (nextCount > count) {
-                        loadPriceChanges();
-                    }
-                });
-            }, 5000);
-        });
+        if ('requestIdleCallback' in window) {
+            requestIdleCallback(function () { setTimeout(bootHistoryApis, 1200); }, { timeout: 5000 });
+        } else {
+            setTimeout(bootHistoryApis, 3000);
+        }
     }
 
     let roomsLoaded = {{ count($rooms) > 0 ? 'true' : 'false' }};

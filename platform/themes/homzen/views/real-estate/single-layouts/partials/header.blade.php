@@ -183,24 +183,39 @@ document.addEventListener("DOMContentLoaded", function () {
     let listingKey = "{{ $model->external_id }}";
     const apiBase = "{{ url('/api/v1') }}";
 
-    fetch(`${apiBase}/getPropertyDetails/${listingKey}`)
-        .then(response => response.json())
-        .then(res => {
-            if (!res.data) return;
-            let item = res.data;
-            document.getElementById('cityRegion').innerText = [item.City, item.CityRegion].filter(Boolean).join(' - ');
-            document.getElementById('propertyType').innerText = item.PropertySubType ?? '';
-            const listingEl = document.getElementById('listingDate');
-            if (listingEl && item.ListingContractDate) {
-                listingEl.innerText = relativeListedLabel(item.ListingContractDate, 'Listed');
-            }
-            const soldDate = item.PurchaseContractDate;
-            if (soldDate) {
-                const soldEl = document.getElementById('soldDate');
-                if (soldEl) soldEl.innerText = String(soldDate).split('T')[0];
-            }
-        })
-        .catch(function () {});
+    function loadHeaderDetails() {
+        if (window.__serikPropertyHeaderDetailsLoaded) {
+            return;
+        }
+        window.__serikPropertyHeaderDetailsLoaded = true;
+
+        fetch(`${apiBase}/getPropertyDetails/${listingKey}`)
+            .then(response => response.json())
+            .then(res => {
+                if (!res.data) return;
+                let item = res.data;
+                const cityEl = document.getElementById('cityRegion');
+                const typeEl = document.getElementById('propertyType');
+                if (cityEl) cityEl.innerText = [item.City, item.CityRegion].filter(Boolean).join(' - ');
+                if (typeEl) typeEl.innerText = item.PropertySubType ?? '';
+                const listingEl = document.getElementById('listingDate');
+                if (listingEl && item.ListingContractDate) {
+                    listingEl.innerText = relativeListedLabel(item.ListingContractDate, 'Listed');
+                }
+                const soldDate = item.PurchaseContractDate;
+                if (soldDate) {
+                    const soldEl = document.getElementById('soldDate');
+                    if (soldEl) soldEl.innerText = String(soldDate).split('T')[0];
+                }
+            })
+            .catch(function () {});
+    }
+
+    if ('requestIdleCallback' in window) {
+        requestIdleCallback(function () { setTimeout(loadHeaderDetails, 600); }, { timeout: 3500 });
+    } else {
+        setTimeout(loadHeaderDetails, 2000);
+    }
     @endunless
 });
 </script>

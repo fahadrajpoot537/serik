@@ -29,17 +29,17 @@ class CanadaCensusService
     {
         $propertyId = (int) $property->getKey();
         $ttl = max(3600, (int) config('census.cache_ttl', 2592000));
-        $cacheKey = 'census:property:' . $propertyId . ':v5';
+        $cacheKey = 'census:property:' . $propertyId . ':v8';
 
         $cached = Cache::get($cacheKey);
         if (is_array($cached) && isset($cached['status'])) {
             return $cached;
         }
 
-        $lock = Cache::lock('serik:cache:sf:' . md5($cacheKey), 60);
+        $lock = Cache::lock('serik:cache:sf:' . md5($cacheKey), 45);
 
         try {
-            $payload = $lock->block(20, function () use ($cacheKey, $ttl, $property) {
+            $payload = $lock->block(app()->environment('local') ? 3 : 15, function () use ($cacheKey, $ttl, $property) {
                 $again = Cache::get($cacheKey);
                 if (is_array($again) && isset($again['status'])) {
                     return $again;
@@ -93,45 +93,40 @@ class CanadaCensusService
             ]);
         }
 
-        $geo = $this->findDisseminationArea((float) $coords['lat'], (float) $coords['lng']);
-        if ($geo === null) {
-            return $this->errorPayload(self::STATUS_GEOGRAPHY_UNAVAILABLE, [
-                'property_id' => (int) $property->getKey(),
-                'address' => $address,
-                'latitude' => $coords['lat'],
-                'longitude' => $coords['lng'],
-                'message' => 'Census geography unavailable.',
-            ]);
-        }
+        $lat = (float) $coords['lat'];
+        $lng = (float) $coords['lng'];
+        $daGeo = $this->findDisseminationArea($lat, $lng);
 
-        $profile = $this->getCensusProfileCached((string) $geo['dguid']);
-        if ($profile === null) {
+        $resolved = $this->resolveCensusProfileForPoint($lat, $lng, $daGeo);
+        if ($resolved === null) {
             return $this->errorPayload(self::STATUS_CENSUS_UNAVAILABLE, [
                 'property_id' => (int) $property->getKey(),
                 'address' => $address,
-                'latitude' => $coords['lat'],
-                'longitude' => $coords['lng'],
-                'dauid' => $geo['dauid'],
-                'dguid' => $geo['dguid'],
-                'pruid' => $geo['pruid'],
+                'latitude' => $lat,
+                'longitude' => $lng,
+                'dauid' => $daGeo['dauid'] ?? null,
+                'dguid' => $daGeo['dguid'] ?? null,
+                'pruid' => $daGeo['pruid'] ?? null,
                 'message' => 'Census data temporarily unavailable.',
             ]);
         }
 
+        $profile = $resolved['profile'];
         $metrics = $this->calculateMetrics($profile['values'] ?? []);
         $charts = $this->buildCharts($profile['values'] ?? []);
-        $dguid = (string) $geo['dguid'];
+        $dguid = (string) $resolved['dguid'];
 
         return [
             'status' => self::STATUS_OK,
             'message' => null,
             'property_id' => (int) $property->getKey(),
             'address' => $address,
-            'latitude' => (float) $coords['lat'],
-            'longitude' => (float) $coords['lng'],
-            'dauid' => (string) $geo['dauid'],
+            'latitude' => $lat,
+            'longitude' => $lng,
+            'dauid' => (string) ($daGeo['dauid'] ?? $resolved['geo_id'] ?? ''),
             'dguid' => $dguid,
-            'pruid' => (string) $geo['pruid'],
+            'pruid' => (string) ($daGeo['pruid'] ?? $resolved['pruid'] ?? ''),
+            'geography_level' => (string) $resolved['level'],
             'metrics' => $metrics,
             'charts' => $charts,
             'categories' => $this->buildCategorySnapshot($profile['values'] ?? []),
@@ -139,6 +134,159 @@ class CanadaCensusService
             'source_url' => $this->profilePageUrl($dguid),
             'synced_at' => now()->toIso8601String(),
         ];
+    }
+
+    /**
+     * Try SDMX profile dataflows in configured order (DA → ADA → CSD).
+     * DF_DA often hangs with 0 bytes from some networks; ADA/CSD stay reachable.
+     *
+     * @param  array{dauid: string, dguid: string, pruid: string}|null  $daGeo
+     * @return array{profile: array{values: array}, dguid: string, level: string, geo_id: string, pruid: string}|null
+     */
+    protected function resolveCensusProfileForPoint(float $lat, float $lng, ?array $daGeo): ?array
+    {
+        $levels = config('census.statcan.profile_levels', ['da', 'ada', 'csd']);
+        if (! is_array($levels) || $levels === []) {
+            $levels = ['da', 'ada', 'csd'];
+        }
+
+        foreach ($levels as $level) {
+            $level = strtolower(trim((string) $level));
+            $candidate = match ($level) {
+                'da' => $daGeo !== null ? [
+                    'dguid' => (string) $daGeo['dguid'],
+                    'geo_id' => (string) $daGeo['dauid'],
+                    'pruid' => (string) $daGeo['pruid'],
+                ] : null,
+                'ada' => $this->findBoundaryGeo($lat, $lng, 'ada'),
+                'csd' => $this->findBoundaryGeo($lat, $lng, 'csd'),
+                default => null,
+            };
+
+            if ($candidate === null || ($candidate['dguid'] ?? '') === '') {
+                continue;
+            }
+
+            $baseUrl = (string) (config('census.statcan.profile_urls.' . $level)
+                ?: config('census.statcan.profile_url'));
+            if ($baseUrl === '') {
+                continue;
+            }
+
+            $profile = $this->getCensusProfileCached((string) $candidate['dguid'], $baseUrl, $level);
+            if ($profile === null) {
+                Log::info('census.profile.level_miss', [
+                    'level' => $level,
+                    'dguid' => $candidate['dguid'],
+                ]);
+
+                continue;
+            }
+
+            Log::info('census.profile.level_hit', [
+                'level' => $level,
+                'dguid' => $candidate['dguid'],
+            ]);
+
+            return [
+                'profile' => $profile,
+                'dguid' => (string) $candidate['dguid'],
+                'level' => $level,
+                'geo_id' => (string) ($candidate['geo_id'] ?? ''),
+                'pruid' => (string) ($candidate['pruid'] ?? ''),
+            ];
+        }
+
+        if ($daGeo === null) {
+            Log::warning('census.geography.all_levels_failed', ['lat' => $lat, 'lng' => $lng]);
+        }
+
+        return null;
+    }
+
+    /**
+     * Point-in-polygon for ADA (layer 10) or CSD (layer 9).
+     *
+     * @return array{dguid: string, geo_id: string, pruid: string}|null
+     */
+    public function findBoundaryGeo(float $lat, float $lng, string $level): ?array
+    {
+        $level = strtolower($level);
+        $layer = match ($level) {
+            'ada' => (int) config('census.statcan.ada_layer', 10),
+            'csd' => (int) config('census.statcan.csd_layer', 9),
+            default => 0,
+        };
+        if ($layer < 1) {
+            return null;
+        }
+
+        $cacheKey = 'census:' . $level . ':' . round($lat, 5) . ':' . round($lng, 5) . ':v8';
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached) && ! empty($cached['dguid'])) {
+            return $cached;
+        }
+
+        $identify = rtrim((string) config('census.statcan.da_identify_url'), '/');
+        $url = str_ends_with($identify, '/identify')
+            ? substr($identify, 0, -strlen('identify')) . $layer . '/query'
+            : 'https://geo.statcan.gc.ca/geo_wa/rest/services/2021/Digital_boundary_files/MapServer/' . $layer . '/query';
+
+        $outFields = $level === 'ada' ? 'ADAUID,DGUID,PRUID' : 'CSDUID,DGUID,PRUID';
+        $params = [
+            'geometry' => $lng . ',' . $lat,
+            'geometryType' => 'esriGeometryPoint',
+            'inSR' => '4326',
+            'spatialRel' => 'esriSpatialRelIntersects',
+            'outFields' => $outFields,
+            'returnGeometry' => 'false',
+            'f' => 'json',
+        ];
+
+        $verify = (bool) config('census.statcan.geo_ssl_verify', true);
+        if (app()->environment('local')) {
+            $verify = false;
+        }
+
+        $lastError = null;
+        $body = $this->requestStatCanGeo($url, $params, $verify, $lastError, 'features');
+        if ($body === null && $verify) {
+            $body = $this->requestStatCanGeo($url, $params, false, $lastError, 'features');
+        }
+        if ($body === null) {
+            Log::warning('census.' . $level . '.no_result', [
+                'lat' => $lat,
+                'lng' => $lng,
+                'error' => $lastError,
+            ]);
+
+            return null;
+        }
+
+        $json = json_decode($body, true);
+        $attrs = $json['features'][0]['attributes'] ?? null;
+        if (! is_array($attrs)) {
+            return null;
+        }
+
+        $dguid = trim((string) ($attrs['DGUID'] ?? ''));
+        $geoId = trim((string) ($attrs[$level === 'ada' ? 'ADAUID' : 'CSDUID'] ?? ''));
+        $pruid = trim((string) ($attrs['PRUID'] ?? ''));
+        if ($dguid === '') {
+            return null;
+        }
+        if ($pruid === '' && $geoId !== '' && strlen($geoId) >= 2) {
+            $pruid = substr($geoId, 0, 2);
+        }
+
+        $geo = [
+            'dguid' => $dguid,
+            'geo_id' => $geoId,
+            'pruid' => $pruid,
+        ];
+        Cache::put($cacheKey, $geo, max(3600, (int) config('census.cache_ttl', 2592000)));
+
+        return $geo;
     }
 
     public function buildAddress(Property $property): string
@@ -155,8 +303,8 @@ class CanadaCensusService
                     : $localData;
 
                 if (is_array($record) && $record !== []) {
-                    // Civic street only — "412 - 455 Rosewell" makes geocoders use 412 as the house number.
-                    $street = trim((string) $helper::formatStreetLine($record));
+                    // Civic street only — unit tokens make geocoders pick the wrong point/DA.
+                    $street = $this->stripLeadingUnit(trim((string) $helper::formatStreetLine($record)));
                     $line = (string) $helper::formatLocationLine($record);
                     $postal = trim((string) ($record['PostalCode'] ?? $property->zip_code ?? ''));
                     foreach ([$street, $line, $postal, 'Canada'] as $p) {
@@ -201,14 +349,23 @@ class CanadaCensusService
     }
 
     /**
-     * Drop leading unit tokens ("412 - 455 Rosewell" → "455 Rosewell").
+     * Drop unit tokens that confuse geocoders.
+     * "412 - 455 Rosewell" → "455 Rosewell"
+     * "448 Burnhamthorpe Rd W 5611" → "448 Burnhamthorpe Rd W"
      */
     protected function stripLeadingUnit(string $address): string
     {
         $address = trim($address);
         $address = preg_replace('/^(?:unit|apt|suite|#)?\s*\d+\s*[-–]\s*/i', '', $address) ?? $address;
+        // Trailing condo/unit number after a street suffix word.
+        $address = preg_replace(
+            '/\s+\d{1,6}\s*(?=,|$)/',
+            '',
+            $address,
+            1
+        ) ?? $address;
 
-        return trim($address);
+        return trim(preg_replace('/\s+/', ' ', $address) ?? $address);
     }
 
     protected function sanitizeAddress(string $address): string
@@ -404,8 +561,9 @@ class CanadaCensusService
             ? substr($identify, 0, -strlen('identify')) . '12/query'
             : 'https://geo.statcan.gc.ca/geo_wa/rest/services/2021/Digital_boundary_files/MapServer/12/query';
 
+        // Plain "lng,lat" — JSON geometry objects currently 500 on StatCan's adaptor.
         $params = [
-            'geometry' => json_encode(['x' => $lng, 'y' => $lat, 'spatialReference' => ['wkid' => 4326]]),
+            'geometry' => $lng . ',' . $lat,
             'geometryType' => 'esriGeometryPoint',
             'inSR' => '4326',
             'spatialRel' => 'esriSpatialRelIntersects',
@@ -496,14 +654,16 @@ class CanadaCensusService
     protected function requestStatCanGeo(string $url, array $params, bool $verify, ?string &$lastError, string $okNeedle = 'results'): ?string
     {
         $fullUrl = $url . (str_contains($url, '?') ? '&' : '?') . http_build_query($params);
-        $timeout = max(15, (int) config('census.statcan.timeout', 45));
+        $timeout = app()->environment('local')
+            ? 10
+            : max(12, min(20, (int) config('census.statcan.timeout', 45)));
 
         if (function_exists('curl_init')) {
             $ch = curl_init($fullUrl);
             curl_setopt_array($ch, [
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_TIMEOUT => $timeout,
-                CURLOPT_CONNECTTIMEOUT => 20,
+                CURLOPT_CONNECTTIMEOUT => app()->environment('local') ? 4 : 10,
                 CURLOPT_FOLLOWLOCATION => true,
                 CURLOPT_SSL_VERIFYPEER => $verify,
                 CURLOPT_SSL_VERIFYHOST => $verify ? 2 : 0,
@@ -542,21 +702,24 @@ class CanadaCensusService
     /**
      * @return array{values: array<string, float|int|string|null>, raw_keys?: array}|null
      */
-    public function getCensusProfileCached(string $dguid): ?array
+    public function getCensusProfileCached(string $dguid, ?string $profileBaseUrl = null, string $level = 'da'): ?array
     {
         $dguid = trim($dguid);
         if ($dguid === '') {
             return null;
         }
 
-        $cacheKey = 'census:dguid:' . $dguid . ':v5';
+        $cacheKey = 'census:dguid:' . $dguid . ':v8';
         $cached = Cache::get($cacheKey);
         if (is_array($cached) && isset($cached['values'])) {
             return $cached;
         }
 
-        $profile = $this->getCensusProfile($dguid);
+        $profile = $this->getCensusProfile($dguid, $profileBaseUrl, $level);
         if ($profile === null) {
+            // Brief negative cache — avoids hammering StatCan / max_execution FatalErrors.
+            Cache::put($cacheKey . ':miss', 1, 90);
+
             return null;
         }
 
@@ -568,32 +731,78 @@ class CanadaCensusService
     /**
      * @return array{values: array<string, float|int|string|null>}|null
      */
-    public function getCensusProfile(string $dguid): ?array
+    public function getCensusProfile(string $dguid, ?string $profileBaseUrl = null, string $level = 'da'): ?array
     {
-        if (rtrim((string) config('census.statcan.profile_url'), '/') === '') {
+        $base = rtrim((string) ($profileBaseUrl ?: config('census.statcan.profile_url')), '/');
+        if ($base === '') {
             Log::warning('census.profile.missing_url');
 
             return null;
         }
 
-        $charIds = array_values(array_unique(array_filter(array_map(
-            'strval',
-            array_merge(
-                array_values(config('census.characteristics', [])),
-                $this->collectChartCharacteristicIds()
-            )
-        ))));
+        if (Cache::get('census:dguid:' . $dguid . ':v8:miss')) {
+            return null;
+        }
 
-        if ($charIds === []) {
+        $priorityIds = array_values(array_unique(array_filter(array_map(
+            'strval',
+            array_values(config('census.characteristics', []))
+        ))));
+        $chartIds = array_values(array_diff(
+            array_values(array_unique(array_filter(array_map('strval', $this->collectChartCharacteristicIds())))),
+            $priorityIds
+        ));
+        // One ordered list so chart series are not starved after metric chunks.
+        $allIds = array_values(array_unique(array_merge($priorityIds, $chartIds)));
+
+        if ($allIds === []) {
             return null;
         }
 
         $values = [];
-        foreach (array_chunk($charIds, 25) as $chunk) {
-            $part = $this->fetchProfileChunk($dguid, $chunk);
-            if (! is_array($part)) {
+        $started = microtime(true);
+        // ADA/CSD chunks often need ~12–18s each; leave room for 3–4 chunks.
+        $budgetSeconds = app()->environment('local') ? 78.0 : 70.0;
+        // DA hangs forever on some networks — fail that level fast and fall through.
+        if ($level === 'da') {
+            $budgetSeconds = app()->environment('local') ? 8.0 : 22.0;
+        }
+        $chunkSize = $level === 'da' ? 20 : 55;
+        $consecutiveFails = 0;
+        $maxFails = 1;
+
+        foreach (array_chunk($allIds, $chunkSize) as $chunk) {
+            if ((microtime(true) - $started) >= $budgetSeconds) {
+                Log::warning('census.profile.budget_stop', [
+                    'dguid' => $dguid,
+                    'level' => $level,
+                    'elapsed' => round(microtime(true) - $started, 2),
+                    'have' => count($values),
+                ]);
+                break;
+            }
+
+            $part = $this->fetchProfileChunk(
+                $dguid,
+                $chunk,
+                $budgetSeconds - (microtime(true) - $started),
+                $base,
+                $level
+            );
+            if (! is_array($part) || $part === []) {
+                $consecutiveFails++;
+                if ($consecutiveFails >= $maxFails) {
+                    Log::warning('census.profile.abort_after_fails', [
+                        'dguid' => $dguid,
+                        'level' => $level,
+                    ]);
+                    break;
+                }
+
                 continue;
             }
+
+            $consecutiveFails = 0;
             foreach ($part as $id => $val) {
                 if (! array_key_exists($id, $values) || $values[$id] === null || $values[$id] === '') {
                     $values[$id] = $val;
@@ -602,7 +811,7 @@ class CanadaCensusService
         }
 
         if ($values === []) {
-            Log::warning('census.profile.empty', ['dguid' => $dguid]);
+            Log::warning('census.profile.empty', ['dguid' => $dguid, 'level' => $level]);
 
             return null;
         }
@@ -614,13 +823,32 @@ class CanadaCensusService
      * @param  list<string>  $charIds
      * @return array<string, float|int|string|null>|null
      */
-    protected function fetchProfileChunk(string $dguid, array $charIds): ?array
-    {
-        $base = rtrim((string) config('census.statcan.profile_url'), '/');
+    protected function fetchProfileChunk(
+        string $dguid,
+        array $charIds,
+        ?float $remainingBudget = null,
+        ?string $profileBaseUrl = null,
+        string $level = 'da'
+    ): ?array {
+        $base = rtrim((string) ($profileBaseUrl ?: config('census.statcan.profile_url')), '/');
         $charKey = implode('+', $charIds);
-        $url = $base . '/A5.' . rawurlencode($dguid) . '.1.' . $charKey . '.1';
-        $timeout = max(45, (int) config('census.statcan.timeout', 45));
-        $verify = ! app()->environment('local') || (bool) config('census.statcan.geo_ssl_verify', true);
+        // DGUIDs rarely need encoding; keep dots intact for CT-style ids if ever used.
+        $url = $base . '/A5.' . $dguid . '.1.' . $charKey . '.1';
+        $configured = (int) config('census.statcan.timeout', 45);
+        // ADA/CSD typically respond in 10–18s; DA either answers quickly or never (0-byte hang).
+        $timeout = $level === 'da'
+            ? (app()->environment('local') ? 6 : 12)
+            : (app()->environment('local')
+                ? max(14, min(28, $configured > 0 ? $configured : 28))
+                : max(14, min(30, $configured > 0 ? $configured : 30)));
+        if ($remainingBudget !== null) {
+            $timeout = max(3, min($timeout, (int) floor($remainingBudget)));
+        }
+        $connectTimeout = app()->environment('local') ? 4 : 8;
+        // Local Windows TLS inspection often breaks StatCan; always skip verify in local.
+        $verify = app()->environment('local')
+            ? false
+            : (bool) config('census.statcan.geo_ssl_verify', true);
 
         try {
             $body = null;
@@ -629,22 +857,24 @@ class CanadaCensusService
             if (function_exists('curl_init')) {
                 $full = $url . '?detail=dataonly&format=jsondata';
                 $ch = curl_init($full);
-                curl_setopt_array($ch, [
+                $opts = [
                     CURLOPT_RETURNTRANSFER => true,
                     CURLOPT_TIMEOUT => $timeout,
-                    CURLOPT_CONNECTTIMEOUT => 20,
+                    CURLOPT_CONNECTTIMEOUT => $connectTimeout,
                     CURLOPT_FOLLOWLOCATION => true,
                     CURLOPT_HTTPHEADER => [
                         'Accept: application/json',
+                        'Accept-Encoding: gzip, deflate',
                         'User-Agent: SerikRealtyCensus/1.0 (+https://serik.ca)',
                     ],
+                    CURLOPT_ENCODING => '',
                     CURLOPT_SSL_VERIFYPEER => $verify,
                     CURLOPT_SSL_VERIFYHOST => $verify ? 2 : 0,
-                ]);
-                if (app()->environment('local') && ! (bool) config('census.statcan.geo_ssl_verify', true)) {
-                    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-                    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+                ];
+                if (defined('CURL_IPRESOLVE_V4')) {
+                    $opts[CURLOPT_IPRESOLVE] = CURL_IPRESOLVE_V4;
                 }
+                curl_setopt_array($ch, $opts);
                 $raw = curl_exec($ch);
                 $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
                 $err = curl_error($ch);
@@ -671,6 +901,7 @@ class CanadaCensusService
             if ($body === null) {
                 Log::warning('census.profile.chunk_failed', [
                     'dguid' => $dguid,
+                    'level' => $level,
                     'error' => $lastError,
                     'chars' => count($charIds),
                 ]);
@@ -680,7 +911,7 @@ class CanadaCensusService
 
             $json = json_decode($body, true);
             if (! is_array($json)) {
-                Log::warning('census.profile.bad_json', ['dguid' => $dguid]);
+                Log::warning('census.profile.bad_json', ['dguid' => $dguid, 'level' => $level]);
 
                 return null;
             }
@@ -689,6 +920,7 @@ class CanadaCensusService
         } catch (Throwable $e) {
             Log::warning('census.profile.chunk_exception', [
                 'dguid' => $dguid,
+                'level' => $level,
                 'message' => $e->getMessage(),
             ]);
 
