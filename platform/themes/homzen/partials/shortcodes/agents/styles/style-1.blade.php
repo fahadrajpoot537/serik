@@ -25,7 +25,7 @@
                         <div class="swiper-slide">
                             <div class="box-agent hover-img wow fadeIn serik-hp-agent-card" data-wow-delay=".2s" data-wow-duration="2000ms">
                                 <div class="box-img img-style mb-2 serik-hp-agent-card__media">
-                                    {{ RvMedia::image($account->avatar_url, $account->name, attributes: ['width' => 300, 'height' => 400, 'decoding' => 'async', 'loading' => 'lazy']) }}
+                                    {{ RvMedia::image($account->avatar_url, $account->name, 'small', true, ['width' => 300, 'height' => 400, 'decoding' => 'async', 'loading' => 'lazy'], null, true) }}
                                     {!! Theme::partial('shortcodes.agents.partials.social-links', compact('account')) !!}
                                 </div>
                                 <div class="content serik-hp-agent-card__body">

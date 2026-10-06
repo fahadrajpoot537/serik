@@ -1,5 +1,7 @@
+@unless (\App\Support\SerikHomepage::isHomepageRequest())
 <link rel="preload" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
 <noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.css"></noscript>
+@endunless
 
 <section
     class="flat-section-v3 flat-service-v2 serik-hp-why"
@@ -106,8 +108,19 @@
     }
 
     let fancyboxReady = false;
+    function loadFancyboxCss() {
+        if (document.querySelector('link[data-serik-fancybox-css]')) {
+            return;
+        }
+        var link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.css';
+        link.setAttribute('data-serik-fancybox-css', '1');
+        document.head.appendChild(link);
+    }
     function loadFancybox(callback) {
         if (fancyboxReady && window.Fancybox) { callback(); return; }
+        loadFancyboxCss();
         const script = document.createElement('script');
         script.src = 'https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.umd.js';
         script.onload = function () { fancyboxReady = true; callback(); };

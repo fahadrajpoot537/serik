@@ -29,7 +29,7 @@ class CanadaCensusService
     {
         $propertyId = (int) $property->getKey();
         $ttl = max(3600, (int) config('census.cache_ttl', 2592000));
-        $cacheKey = 'census:property:' . $propertyId . ':v10';
+        $cacheKey = 'census:property:' . $propertyId . ':v11';
 
         $cached = Cache::get($cacheKey);
         if (is_array($cached) && isset($cached['status'])) {
@@ -709,7 +709,7 @@ class CanadaCensusService
             return null;
         }
 
-        $cacheKey = 'census:dguid:' . $dguid . ':v10';
+        $cacheKey = 'census:dguid:' . $dguid . ':v11';
         $cached = Cache::get($cacheKey);
         if (is_array($cached) && isset($cached['values'])) {
             return $cached;
@@ -740,12 +740,12 @@ class CanadaCensusService
             return null;
         }
 
-        if (Cache::get('census:dguid:' . $dguid . ':v10:miss')) {
+        if (Cache::get('census:dguid:' . $dguid . ':v11:miss')) {
             return null;
         }
 
-        // Charts first as complete groups (never split a tab across chunks), then metrics.
-        // Counts-only (.1) — rates(1+2) previously doubled latency and starved remaining tabs.
+        // Summary metrics FIRST (HouseSigma top cards), then complete chart groups.
+        // Charts-first previously starved population/income/renters/etc. → all N/A.
         $chartGroups = $this->collectChartIdGroups();
         $chartIdsFlat = [];
         foreach ($chartGroups as $group) {
@@ -753,18 +753,24 @@ class CanadaCensusService
                 $chartIdsFlat[$id] = true;
             }
         }
-        $metricIds = array_values(array_diff(
-            array_values(array_unique(array_filter(array_map(
-                'strval',
-                array_values(config('census.characteristics', []))
-            )))),
-            array_keys($chartIdsFlat)
-        ));
+        // Always request the full metric ID set first (overlap with charts is fine / cacheable).
+        $metricIds = array_values(array_unique(array_filter(array_map(
+            'strval',
+            array_values(config('census.characteristics', []))
+        ))));
+        $fetchGroups = [];
         if ($metricIds !== []) {
-            $chartGroups[] = $metricIds;
+            $fetchGroups[] = $metricIds;
+        }
+        foreach ($chartGroups as $group) {
+            // Skip IDs already covered by the metrics pass to keep chart chunks smaller/faster.
+            $remaining = array_values(array_diff($group, $metricIds));
+            if ($remaining !== []) {
+                $fetchGroups[] = $remaining;
+            }
         }
 
-        if ($chartGroups === []) {
+        if ($fetchGroups === []) {
             return null;
         }
 
@@ -779,10 +785,10 @@ class CanadaCensusService
         $consecutiveFails = 0;
         $maxFails = $level === 'da' ? 1 : 2;
 
-        // Pack whole chart groups into chunks so Age/Ethnicity/etc. stay complete.
+        // Pack groups into chunks; never split a chart group. Metrics may split by size.
         $chunks = [];
         $current = [];
-        foreach ($chartGroups as $group) {
+        foreach ($fetchGroups as $groupIndex => $group) {
             $group = array_values(array_unique($group));
             if ($group === []) {
                 continue;
@@ -791,11 +797,17 @@ class CanadaCensusService
                 $chunks[] = $current;
                 $current = [];
             }
-            // Oversized single chart (e.g. language): send alone, never merge-split mid-group.
             if (count($group) > $chunkSize) {
                 if ($current !== []) {
                     $chunks[] = $current;
                     $current = [];
+                }
+                // First group is the summary-metric pass — safe to split by size.
+                if ($groupIndex === 0 && $metricIds !== []) {
+                    foreach (array_chunk($group, $chunkSize) as $metricChunk) {
+                        $chunks[] = $metricChunk;
+                    }
+                    continue;
                 }
                 $chunks[] = $group;
                 continue;

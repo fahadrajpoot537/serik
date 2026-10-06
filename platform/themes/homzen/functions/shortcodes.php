@@ -512,8 +512,11 @@ Event::listen(RouteMatched::class, function (): void {
     });
 
     Shortcode::register('about-us', __('About Us'), __('About Us'), function (ShortcodeCompiler $shortcode) {
-        Theme::asset()->usePath()->add('fancybox', 'plugins/fancybox/jquery.fancybox.min.css');
-        Theme::asset()->container('footer')->usePath()->add('fancybox', 'plugins/fancybox/jquery.fancybox.min.js');
+        // Homepage: skip render-blocking fancybox; gallery can load on interaction elsewhere.
+        if (! \App\Support\SerikHomepage::isHomepageRequest()) {
+            Theme::asset()->usePath()->add('fancybox', 'plugins/fancybox/jquery.fancybox.min.css');
+            Theme::asset()->container('footer')->usePath()->add('fancybox', 'plugins/fancybox/jquery.fancybox.min.js');
+        }
 
         return Theme::partial('shortcodes.about-us.index', compact('shortcode'));
     });

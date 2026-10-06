@@ -139,7 +139,7 @@
 @if ($isSerikHomepage)
 {{-- MUST load AFTER Theme::header() so redesign beats style.css --}}
 {{-- Path-only href so CSS stays same-origin (CSP 'self') on :8000, localhost, or XAMPP. --}}
-<link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp75">
+<link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp76">
 @endif
 {{-- Site chrome last: shared navbar/footer + compact laptop scaling --}}
 @if ($isSerikHomepage)
@@ -227,9 +227,9 @@
             });
             @if ($isSerikHomepage)
             if ('requestIdleCallback' in window) {
-                requestIdleCallback(function () { window.setTimeout(loadThirdParty, 3000); }, { timeout: 15000 });
+                requestIdleCallback(function () { window.setTimeout(loadThirdParty, 12000); }, { timeout: 20000 });
             } else {
-                window.setTimeout(loadThirdParty, 15000);
+                window.setTimeout(loadThirdParty, 20000);
             }
             @else
             window.setTimeout(loadThirdParty, 8000);

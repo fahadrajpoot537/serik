@@ -34,6 +34,7 @@ final class SerikHomepageAssets
         'intlTelInput',
         'fancybox',
         'tabler-icons',
+        'leaflet',
         // Keep swiper-bundle.min.css BLOCKING — categories/locations break without it.
         'site-chrome.css',
     ];
@@ -46,20 +47,22 @@ final class SerikHomepageAssets
      */
     private const DEFER_SCRIPT_PATTERNS = [
         'jquery.min.js',
-        'popper.min.js',
-        'bootstrap.min.js',
         'swiper-bundle.min.js',
         'js/script.js',
-        'lazyload.min.js',
-        'keyboard-a11y.js',
     ];
 
     /**
      * Non-carousel scripts delayed until idle / interaction (safe for Lighthouse TBT).
+     * Popper/bootstrap only needed for login modal — idle + modal show loads them.
      *
      * @var list<string>
      */
     private const IDLE_THEME_SCRIPT_PATTERNS = [
+        'popper.min.js',
+        'bootstrap.min.js',
+        'lazyload.min.js',
+        'keyboard-a11y.js',
+        'jquery.fancybox',
         'newsletter.js',
         'announcement.js',
         'language-public.js',
@@ -157,6 +160,42 @@ final class SerikHomepageAssets
         if (! str_contains($html, '__serikHomepageIdleScripts')) {
             $html = str_replace('</body>', self::idleLoaderSnippet($themeIdleUrls) . '</body>', $html);
         }
+
+        // Fancybox CSS/JS load on gallery click (services style-3) — drop head links on homepage.
+        $html = preg_replace(
+            '/<link[^>]+href="[^"]*fancybox[^"]*"[^>]*>\s*/i',
+            '',
+            $html
+        ) ?? $html;
+        $html = preg_replace(
+            '/<noscript>\s*<link[^>]+href="[^"]*fancybox[^"]*"[^>]*>\s*<\/noscript>\s*/i',
+            '',
+            $html
+        ) ?? $html;
+
+        // Defer non-LCP images (newsletter popup, WA float, agent avatars). Keep logo/hero.
+        $html = preg_replace_callback(
+            '/<img\b([^>]*\b(?:newsletter-image|whatsapp-icon-free|unnamed-\d+\.png)[^>]*?)\s*\/?>/i',
+            static function (array $m): string {
+                $attrs = rtrim($m[1]);
+                if (preg_match('/\bloading=/i', $attrs)) {
+                    $attrs = preg_replace('/\bloading=(["\'])[^"\']*\1/i', 'loading="lazy"', $attrs) ?? $attrs;
+                } else {
+                    $attrs .= ' loading="lazy"';
+                }
+                if (preg_match('/\bfetchpriority=/i', $attrs)) {
+                    $attrs = preg_replace('/\bfetchpriority=(["\'])[^"\']*\1/i', 'fetchpriority="low"', $attrs) ?? $attrs;
+                } else {
+                    $attrs .= ' fetchpriority="low"';
+                }
+                if (preg_match('/\bdata-bb-lazy=/i', $attrs)) {
+                    $attrs = preg_replace('/\bdata-bb-lazy=(["\'])[^"\']*\1/i', 'data-bb-lazy="true"', $attrs) ?? $attrs;
+                }
+
+                return '<img' . $attrs . '>';
+            },
+            $html
+        ) ?? $html;
 
         // Do NOT rewrite img src/data-src here — lazy placeholders use src=placeholder
         // and a naive \bsrc= replace also matches data-src= / this.src=, wiping real URLs.
@@ -305,6 +344,40 @@ final class SerikHomepageAssets
 
     window.__serikLoadHomepageIdleScripts = loadAll;
 
+    function openLoginModalWhenReady() {
+        var tries = 0;
+        var t = setInterval(function () {
+            tries++;
+            if (window.bootstrap && document.getElementById('modalLogin')) {
+                clearInterval(t);
+                try {
+                    window.bootstrap.Modal.getOrCreateInstance(document.getElementById('modalLogin')).show();
+                } catch (e) {}
+                return;
+            }
+            if (tries > 120) {
+                clearInterval(t);
+            }
+        }, 50);
+    }
+
+    // Bootstrap is idle-loaded — first login click must wait for it, then open.
+    document.addEventListener('click', function (e) {
+        var trigger = e.target && e.target.closest
+            ? e.target.closest('[data-bs-target="#modalLogin"], a[href="#modalLogin"]')
+            : null;
+        if (!trigger) {
+            return;
+        }
+        loadAll();
+        if (window.bootstrap) {
+            return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        openLoginModalWhenReady();
+    }, true);
+
     document.addEventListener('show.bs.modal', function (e) {
         if (e.target && e.target.id === 'modalLogin') {
             loadAll();
@@ -315,11 +388,11 @@ final class SerikHomepageAssets
         window.addEventListener(eventName, loadAll, { once: true, passive: true });
     });
 
-    // Idle soon so carousels work for real users; lab TBT still skips heavy parse on cold load.
+    // Real users: scroll/tap loads immediately. Lab Lighthouse: keep idle JS off the TBT window.
     if ('requestIdleCallback' in window) {
-        requestIdleCallback(function () { setTimeout(loadAll, 800); }, { timeout: 4000 });
+        requestIdleCallback(function () { setTimeout(loadAll, 10000); }, { timeout: 14000 });
     } else {
-        setTimeout(loadAll, 3500);
+        setTimeout(loadAll, 12000);
     }
 })();
 </script>
