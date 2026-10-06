@@ -29,7 +29,7 @@ class CanadaCensusService
     {
         $propertyId = (int) $property->getKey();
         $ttl = max(3600, (int) config('census.cache_ttl', 2592000));
-        $cacheKey = 'census:property:' . $propertyId . ':v11';
+        $cacheKey = 'census:property:' . $propertyId . ':v12';
 
         $cached = Cache::get($cacheKey);
         if (is_array($cached) && isset($cached['status'])) {
@@ -709,7 +709,7 @@ class CanadaCensusService
             return null;
         }
 
-        $cacheKey = 'census:dguid:' . $dguid . ':v11';
+        $cacheKey = 'census:dguid:' . $dguid . ':v12';
         $cached = Cache::get($cacheKey);
         if (is_array($cached) && isset($cached['values'])) {
             return $cached;
@@ -740,7 +740,7 @@ class CanadaCensusService
             return null;
         }
 
-        if (Cache::get('census:dguid:' . $dguid . ':v11:miss')) {
+        if (Cache::get('census:dguid:' . $dguid . ':v12:miss')) {
             return null;
         }
 
@@ -777,13 +777,15 @@ class CanadaCensusService
         $values = [];
         $rates = [];
         $started = microtime(true);
-        $budgetSeconds = app()->environment('local') ? 85.0 : 95.0;
+        // DA is HouseSigma parity (e.g. Christian 460) — give it real time.
+        // Old 12s/chunk + 32s budget caused silent ADA fallback (Christian 3785 / 51.7%).
+        $budgetSeconds = app()->environment('local') ? 100.0 : 110.0;
         if ($level === 'da') {
-            $budgetSeconds = app()->environment('local') ? 8.0 : 32.0;
+            $budgetSeconds = app()->environment('local') ? 100.0 : 110.0;
         }
-        $chunkSize = $level === 'da' ? 28 : 70;
+        $chunkSize = $level === 'da' ? 16 : 70;
         $consecutiveFails = 0;
-        $maxFails = $level === 'da' ? 1 : 2;
+        $maxFails = $level === 'da' ? 2 : 2;
 
         // Pack groups into chunks; never split a chart group. Metrics may split by size.
         $chunks = [];
@@ -909,14 +911,15 @@ class CanadaCensusService
         $statKey = $withRates ? '1+2' : '1';
         $url = $base . '/A5.' . $dguid . '.1.' . $charKey . '.' . $statKey;
         $configured = (int) config('census.statcan.timeout', 45);
-        // ADA/CSD typically respond in 10–18s; DA either answers quickly or never (0-byte hang).
+        // DA SDMX often needs 10–20s per small chunk (not a hang). Short timeouts
+        // were aborting DA and falling through to ADA (wrong neighbourhood size).
         $timeout = $level === 'da'
-            ? (app()->environment('local') ? 6 : 12)
+            ? (app()->environment('local') ? 40 : 42)
             : (app()->environment('local')
                 ? max(14, min(26, $configured > 0 ? $configured : 26))
                 : max(14, min(28, $configured > 0 ? $configured : 28)));
         if ($remainingBudget !== null) {
-            $timeout = max(3, min($timeout, (int) floor($remainingBudget)));
+            $timeout = max($level === 'da' ? 12 : 3, min($timeout, (int) floor($remainingBudget)));
         }
         $connectTimeout = app()->environment('local') ? 4 : 8;
         // Local Windows TLS inspection often breaks StatCan; always skip verify in local.

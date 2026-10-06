@@ -245,7 +245,7 @@ return [
             'api/v1/map-property-bundle/*' => (int) env('SERIK_HTTP_MAP_BUNDLE_MAX_SECONDS', 45),
             'api/v1/geocode-community' => (int) env('SERIK_HTTP_GEOCODE_COMMUNITY_MAX_SECONDS', 35),
             // First census hit may need ADA/CSD SDMX chunks (~50–80s); cached after that.
-            'api/v1/property-census/*' => (int) env('SERIK_HTTP_PROPERTY_CENSUS_MAX_SECONDS', 130),
+            'api/v1/property-census/*' => (int) env('SERIK_HTTP_PROPERTY_CENSUS_MAX_SECONDS', 150),
         ],
     ],
 
