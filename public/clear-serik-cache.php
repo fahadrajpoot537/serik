@@ -314,6 +314,7 @@ if (isset($_GET['diag_images']) && (string) $_GET['diag_images'] === '1') {
 // Cron / queue health snapshot (writes same idea as serik-live-health.bat).
 if (isset($_GET['diag_cron']) && (string) $_GET['diag_cron'] === '1') {
     header('Content-Type: text/plain; charset=utf-8');
+    @set_time_limit(45);
     echo "=== cron / queue diagnostic ===\n\n";
     try {
         require $base . '/vendor/autoload.php';
@@ -321,13 +322,51 @@ if (isset($_GET['diag_cron']) && (string) $_GET['diag_cron'] === '1') {
         $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
         echo 'now=' . now() . ' tz=' . config('app.timezone') . "\n";
-        echo 'high=' . Illuminate\Support\Facades\DB::table('jobs')->where('queue', 'high')->count() . "\n";
-        echo 'low=' . Illuminate\Support\Facades\DB::table('jobs')->where('queue', 'low')->count() . "\n";
+        foreach (['high', 'low', 'images', 'imports', 'default'] as $q) {
+            echo $q . '=' . Illuminate\Support\Facades\DB::table('jobs')->where('queue', $q)->count() . "\n";
+        }
         echo 'failed=' . Illuminate\Support\Facades\DB::table('failed_jobs')->count() . "\n";
-        echo 'updated_3h=' . \Botble\RealEstate\Models\Property::where('updated_at', '>=', now()->subHours(3))->count() . "\n";
-        echo 'created_3h=' . \Botble\RealEstate\Models\Property::where('created_at', '>=', now()->subHours(3))->where('created_at', '<', '2100-01-01')->count() . "\n";
 
-        foreach (['treb-sync-live.log', 'queue-high.log', 'queue-low.log'] as $log) {
+        // Avoid full-table COUNT(*) on re_properties (can 500 under IIS). Sample newest rows instead.
+        try {
+            $newest = Illuminate\Support\Facades\DB::table('re_properties')
+                ->select('id', 'external_id', 'created_at', 'updated_at')
+                ->where('created_at', '<', '2100-01-01')
+                ->orderByDesc('created_at')
+                ->limit(5)
+                ->get();
+            echo "newest_created:\n";
+            foreach ($newest as $row) {
+                echo "  id={$row->id} key={$row->external_id} created={$row->created_at} updated={$row->updated_at}\n";
+            }
+            $newestUp = Illuminate\Support\Facades\DB::table('re_properties')
+                ->select('id', 'external_id', 'created_at', 'updated_at')
+                ->orderByDesc('updated_at')
+                ->limit(5)
+                ->get();
+            echo "newest_updated:\n";
+            foreach ($newestUp as $row) {
+                echo "  id={$row->id} key={$row->external_id} created={$row->created_at} updated={$row->updated_at}\n";
+            }
+        } catch (Throwable $e) {
+            echo 'property_sample_error=' . $e->getMessage() . "\n";
+        }
+
+        try {
+            $recentFailed = Illuminate\Support\Facades\DB::table('failed_jobs')
+                ->orderByDesc('failed_at')
+                ->limit(5)
+                ->get(['id', 'queue', 'failed_at', 'exception']);
+            echo "recent_failed:\n";
+            foreach ($recentFailed as $row) {
+                $ex = preg_replace('/\s+/', ' ', substr((string) $row->exception, 0, 180));
+                echo "  id={$row->id} queue={$row->queue} at={$row->failed_at} ex={$ex}\n";
+            }
+        } catch (Throwable $e) {
+            echo 'failed_sample_error=' . $e->getMessage() . "\n";
+        }
+
+        foreach (['treb-sync-live.log', 'queue-high.log', 'queue-low.log', 'laravel.log'] as $log) {
             $p = $base . '/storage/logs/' . $log;
             if (is_file($p)) {
                 echo $log . ' mtime=' . date('Y-m-d H:i:s', filemtime($p)) . ' size=' . filesize($p) . "\n";
