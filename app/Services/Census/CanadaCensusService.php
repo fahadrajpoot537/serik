@@ -29,7 +29,7 @@ class CanadaCensusService
     {
         $propertyId = (int) $property->getKey();
         $ttl = max(3600, (int) config('census.cache_ttl', 2592000));
-        $cacheKey = 'census:property:' . $propertyId . ':v4';
+        $cacheKey = 'census:property:' . $propertyId . ':v5';
 
         $cached = Cache::get($cacheKey);
         if (is_array($cached) && isset($cached['status'])) {
@@ -145,11 +145,6 @@ class CanadaCensusService
     {
         $parts = [];
 
-        $google = trim((string) ($property->google_formatted_address ?? ''));
-        if ($google !== '') {
-            return $this->sanitizeAddress($google);
-        }
-
         try {
             if (class_exists(\Theme\homzen\Supports\TrebPropertyHelper::class)) {
                 $helper = \Theme\homzen\Supports\TrebPropertyHelper::class;
@@ -160,7 +155,8 @@ class CanadaCensusService
                     : $localData;
 
                 if (is_array($record) && $record !== []) {
-                    $street = (string) $helper::formatDisplayAddress($record);
+                    // Civic street only — "412 - 455 Rosewell" makes geocoders use 412 as the house number.
+                    $street = trim((string) $helper::formatStreetLine($record));
                     $line = (string) $helper::formatLocationLine($record);
                     $postal = trim((string) ($record['PostalCode'] ?? $property->zip_code ?? ''));
                     foreach ([$street, $line, $postal, 'Canada'] as $p) {
@@ -179,14 +175,19 @@ class CanadaCensusService
         }
 
         if ($parts === []) {
+            $google = trim((string) ($property->google_formatted_address ?? ''));
+            if ($google !== '') {
+                return $this->sanitizeAddress($this->stripLeadingUnit($google));
+            }
+
             $location = trim((string) ($property->location ?? ''));
             if ($location !== '') {
-                $parts[] = $location;
+                $parts[] = $this->stripLeadingUnit($location);
             } else {
                 $name = trim((string) ($property->name ?? ''));
                 $city = trim((string) ($property->cityName ?? ''));
                 $zip = trim((string) ($property->zip_code ?? ''));
-                foreach ([$name, $city, $zip, 'Canada'] as $p) {
+                foreach ([$this->stripLeadingUnit($name), $city, $zip, 'Canada'] as $p) {
                     if ($p !== '') {
                         $parts[] = $p;
                     }
@@ -197,6 +198,17 @@ class CanadaCensusService
         $joined = implode(', ', array_values(array_unique($parts)));
 
         return $this->sanitizeAddress($joined);
+    }
+
+    /**
+     * Drop leading unit tokens ("412 - 455 Rosewell" → "455 Rosewell").
+     */
+    protected function stripLeadingUnit(string $address): string
+    {
+        $address = trim($address);
+        $address = preg_replace('/^(?:unit|apt|suite|#)?\s*\d+\s*[-–]\s*/i', '', $address) ?? $address;
+
+        return trim($address);
     }
 
     protected function sanitizeAddress(string $address): string
@@ -212,6 +224,13 @@ class CanadaCensusService
      */
     public function resolveCoordinates(Property $property, string $address): ?array
     {
+        // Geocode the civic building address first. Listing pins are often on a
+        // neighbouring DA (condo unit vs street number), which skews percents vs HouseSigma.
+        $geo = $this->geocodeAddress($address);
+        if ($geo !== null) {
+            return $geo;
+        }
+
         $lat = $this->toFloatOrNull($property->latitude ?? null);
         $lng = $this->toFloatOrNull($property->longitude ?? null);
 
@@ -219,7 +238,7 @@ class CanadaCensusService
             return ['lat' => $lat, 'lng' => $lng];
         }
 
-        return $this->geocodeAddress($address);
+        return null;
     }
 
     /**
@@ -302,6 +321,20 @@ class CanadaCensusService
             return $cached;
         }
 
+        $verify = (bool) config('census.statcan.geo_ssl_verify', true);
+        // Local Windows TLS inspection often breaks StatCan's cert chain.
+        if (app()->environment('local') && ! $verify) {
+            $verify = false;
+        }
+
+        $lastError = null;
+        $fromQuery = $this->queryDisseminationArea($lat, $lng, $verify, $lastError);
+        if ($fromQuery !== null) {
+            Cache::put($cacheKey, $fromQuery, max(3600, (int) config('census.cache_ttl', 2592000)));
+
+            return $fromQuery;
+        }
+
         $url = (string) config('census.statcan.da_identify_url');
         if ($url === '') {
             Log::warning('census.da.missing_url');
@@ -309,14 +342,7 @@ class CanadaCensusService
             return null;
         }
 
-        $verify = (bool) config('census.statcan.geo_ssl_verify', true);
-        // Local Windows TLS inspection often breaks StatCan's cert chain.
-        if (app()->environment('local') && ! $verify) {
-            $verify = false;
-        }
-
         $deltas = [0.0008, 0.002, 0.005];
-        $lastError = null;
 
         foreach ($deltas as $delta) {
             $params = [
@@ -347,28 +373,10 @@ class CanadaCensusService
                 continue;
             }
 
-            $attrs = $results[0]['attributes'] ?? [];
-            $dauid = (string) ($attrs['DAUID'] ?? $results[0]['value'] ?? '');
-            $dguid = (string) ($attrs['DGUID'] ?? '');
-            $pruid = (string) ($attrs['PRUID'] ?? '');
-
-            if ($dguid === '' && preg_match('/^\d{8}$/', $dauid)) {
-                $dguid = '2021S0512' . $dauid;
-            }
-
-            if ($dguid === '' || $dauid === '') {
+            $geo = $this->geoFromIdentifyResults($results);
+            if ($geo === null) {
                 continue;
             }
-
-            if ($pruid === '' && strlen($dauid) >= 2) {
-                $pruid = substr($dauid, 0, 2);
-            }
-
-            $geo = [
-                'dauid' => $dauid,
-                'dguid' => $dguid,
-                'pruid' => $pruid,
-            ];
 
             Cache::put($cacheKey, $geo, max(3600, (int) config('census.cache_ttl', 2592000)));
 
@@ -385,11 +393,107 @@ class CanadaCensusService
     }
 
     /**
+     * Point-in-polygon on DA layer 12 (avoids Identify returning Province as result[0]).
+     *
+     * @return array{dauid: string, dguid: string, pruid: string}|null
+     */
+    protected function queryDisseminationArea(float $lat, float $lng, bool $verify, ?string &$lastError): ?array
+    {
+        $identify = rtrim((string) config('census.statcan.da_identify_url'), '/');
+        $url = str_ends_with($identify, '/identify')
+            ? substr($identify, 0, -strlen('identify')) . '12/query'
+            : 'https://geo.statcan.gc.ca/geo_wa/rest/services/2021/Digital_boundary_files/MapServer/12/query';
+
+        $params = [
+            'geometry' => json_encode(['x' => $lng, 'y' => $lat, 'spatialReference' => ['wkid' => 4326]]),
+            'geometryType' => 'esriGeometryPoint',
+            'inSR' => '4326',
+            'spatialRel' => 'esriSpatialRelIntersects',
+            'outFields' => 'DAUID,DGUID,PRUID',
+            'returnGeometry' => 'false',
+            'f' => 'json',
+        ];
+
+        $body = $this->requestStatCanGeo($url, $params, $verify, $lastError, 'features');
+        if ($body === null && $verify && app()->environment('local')) {
+            $body = $this->requestStatCanGeo($url, $params, false, $lastError, 'features');
+        }
+        if ($body === null) {
+            return null;
+        }
+
+        $json = json_decode($body, true);
+        $attrs = $json['features'][0]['attributes'] ?? null;
+        if (! is_array($attrs)) {
+            return null;
+        }
+
+        return $this->normalizeDaGeo($attrs);
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $results
+     * @return array{dauid: string, dguid: string, pruid: string}|null
+     */
+    protected function geoFromIdentifyResults(array $results): ?array
+    {
+        foreach ($results as $result) {
+            $layer = strtoupper((string) ($result['layerName'] ?? ''));
+            $attrs = is_array($result['attributes'] ?? null) ? $result['attributes'] : [];
+            $dauid = (string) ($attrs['DAUID'] ?? '');
+            $isDa = str_contains($layer, 'DA -') || str_contains($layer, 'DA—') || preg_match('/^\d{8}$/', $dauid);
+            if (! $isDa) {
+                continue;
+            }
+
+            $geo = $this->normalizeDaGeo($attrs + ['value' => $result['value'] ?? '']);
+            if ($geo !== null) {
+                return $geo;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $attrs
+     * @return array{dauid: string, dguid: string, pruid: string}|null
+     */
+    protected function normalizeDaGeo(array $attrs): ?array
+    {
+        $dauid = (string) ($attrs['DAUID'] ?? $attrs['value'] ?? '');
+        $dguid = (string) ($attrs['DGUID'] ?? '');
+        $pruid = (string) ($attrs['PRUID'] ?? '');
+
+        if ($dguid === '' && preg_match('/^\d{8}$/', $dauid)) {
+            $dguid = '2021S0512' . $dauid;
+        }
+
+        if ($dauid === '' && preg_match('/^2021S0512(\d{8})$/', $dguid, $m)) {
+            $dauid = $m[1];
+        }
+
+        if ($dguid === '' || $dauid === '' || ! preg_match('/^\d{8}$/', $dauid)) {
+            return null;
+        }
+
+        if ($pruid === '' && strlen($dauid) >= 2) {
+            $pruid = substr($dauid, 0, 2);
+        }
+
+        return [
+            'dauid' => $dauid,
+            'dguid' => $dguid,
+            'pruid' => $pruid,
+        ];
+    }
+
+    /**
      * Prefer cURL for StatCan geo (Laravel HTTP + Accept: application/json is flaky with their ArcGIS adaptor).
      *
      * @param  array<string, scalar>  $params
      */
-    protected function requestStatCanGeo(string $url, array $params, bool $verify, ?string &$lastError): ?string
+    protected function requestStatCanGeo(string $url, array $params, bool $verify, ?string &$lastError, string $okNeedle = 'results'): ?string
     {
         $fullUrl = $url . (str_contains($url, '?') ? '&' : '?') . http_build_query($params);
         $timeout = max(15, (int) config('census.statcan.timeout', 45));
@@ -410,7 +514,7 @@ class CanadaCensusService
             $err = curl_error($ch);
             curl_close($ch);
 
-            if ($body === false || $code < 200 || $code >= 300 || ! is_string($body) || ! str_contains($body, 'results')) {
+            if ($body === false || $code < 200 || $code >= 300 || ! is_string($body) || ! str_contains($body, $okNeedle)) {
                 $lastError = $err !== '' ? $err : ('HTTP ' . $code);
 
                 return null;
@@ -445,7 +549,7 @@ class CanadaCensusService
             return null;
         }
 
-        $cacheKey = 'census:dguid:' . $dguid . ':v4';
+        $cacheKey = 'census:dguid:' . $dguid . ':v5';
         $cached = Cache::get($cacheKey);
         if (is_array($cached) && isset($cached['values'])) {
             return $cached;
