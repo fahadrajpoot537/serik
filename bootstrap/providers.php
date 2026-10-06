@@ -5,4 +5,5 @@ return [
     App\Providers\EventServiceProvider::class,
     App\Providers\HomepageFragmentCacheServiceProvider::class,
     App\Providers\SeoNavigationServiceProvider::class,
+    App\Providers\CensusServiceProvider::class,
 ];

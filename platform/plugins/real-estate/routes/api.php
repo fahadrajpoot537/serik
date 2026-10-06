@@ -104,6 +104,8 @@ Route::group([
         Route::get('map-property-bundle/{listingKey}', 'PropertyController@getMapPropertyBundle');
         Route::get('related-properties/{propertyId}', 'PropertyController@getRelatedProperties')
             ->whereNumber('propertyId');
+        Route::get('property-census/{propertyId}', 'PropertyController@getPropertyCensus')
+            ->whereNumber('propertyId');
         Route::get('getPropertyDetails/{listingKey}', 'PropertyController@getPropertyDetails');
         Route::get('listing-history/{listingKey}', 'PropertyController@getListingHistory');
         Route::get('price-changes/{listingKey}', 'PropertyController@getPriceChanges');

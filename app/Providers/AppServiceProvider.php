@@ -455,7 +455,7 @@ HTML;
         }
 
         $argv = implode(' ', array_map('strval', $_SERVER['argv'] ?? []));
-        if (! preg_match('/queue:(?:work|listen)\b/', $argv)) {
+        if (! preg_match('/(?:queue:(?:work|listen)\b|\bserve\b)/', $argv)) {
             return;
         }
 

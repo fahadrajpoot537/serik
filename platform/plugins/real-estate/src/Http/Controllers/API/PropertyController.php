@@ -7482,6 +7482,38 @@ class PropertyController extends BaseController
         ]);
     }
 
+    public function getPropertyCensus($propertyId)
+    {
+        $property = Property::query()->find((int) $propertyId);
+
+        if (! $property) {
+            return response()->json([
+                'success' => false,
+                'status' => 'not_found',
+                'message' => 'Census data unavailable for this property.',
+                'metrics' => [],
+            ], 404);
+        }
+
+        try {
+            $payload = app(\App\Services\Census\CanadaCensusService::class)->getPropertyCensusData($property);
+            $ok = ($payload['status'] ?? null) === \App\Services\Census\CanadaCensusService::STATUS_OK;
+
+            return response()->json(array_merge([
+                'success' => $ok,
+            ], $payload), $ok ? 200 : 200);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'success' => false,
+                'status' => 'census_unavailable',
+                'message' => 'Census data temporarily unavailable.',
+                'metrics' => [],
+            ], 200);
+        }
+    }
+
     public function getPropertyImages($listingKey)
     {
         $property = Property::where('external_id', $listingKey)->first();
