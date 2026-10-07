@@ -343,6 +343,11 @@ body:has(#page-home) {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
+  transition: opacity 0.2s var(--p-ease), transform 0.2s var(--p-ease) !important;
+}
+#page-home .serik-hp-topbar__auth .serik-hp-topbar__auth-btn,
+#page-home .serik-hp-topbar__auth a.tf-btn {
+  transition: opacity 0.2s var(--p-ease), transform 0.2s var(--p-ease) !important;
 }
 #page-home .top-header a:hover { color: var(--primary-color) !important; }
 #page-home .serik-hp-topbar__account,
@@ -447,7 +452,7 @@ body:has(#page-home) {
   border-radius: 999px;
   line-height: 1.3 !important;
   white-space: nowrap !important;
-  transition: background-color 0.2s var(--p-ease), color 0.2s var(--p-ease) !important;
+  transition: opacity 0.2s var(--p-ease), transform 0.2s var(--p-ease) !important;
 }
 
 /* Kill theme blue underline (::before / ::after) */

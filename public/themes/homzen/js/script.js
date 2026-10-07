@@ -478,33 +478,47 @@
             if (!progressPath) {
                 return
             }
+            // Read once, then batch writes across frames (avoids forced reflow).
             const pathLength = progressPath.getTotalLength()
-            progressPath.style.transition = progressPath.style.WebkitTransition = 'none'
-            progressPath.style.strokeDasharray = pathLength + ' ' + pathLength
-            progressPath.style.strokeDashoffset = pathLength
-            progressPath.getBoundingClientRect()
-            progressPath.style.transition = progressPath.style.WebkitTransition = 'stroke-dashoffset 10ms linear'
-            const updateprogress = function () {
-                const scroll = $(window).scrollTop()
-                const height = $(document).height() - $(window).height()
-                const progress = pathLength - (scroll * pathLength) / height
-                progressPath.style.strokeDashoffset = progress
-            }
-            updateprogress()
-            $(window).scroll(updateprogress)
             const offset = 200
             const duration = 550
-            jQuery(window).on('scroll', function () {
-                if (jQuery(this).scrollTop() > offset) {
-                    jQuery('.progress-wrap').addClass('active-progress')
-                } else {
-                    jQuery('.progress-wrap').removeClass('active-progress')
+            let progressRaf = 0
+
+            const updateprogress = function () {
+                if (progressRaf) {
+                    return
                 }
-            })
-            jQuery('.progress-wrap').on('click', function (event) {
-                event.preventDefault()
-                jQuery('html, body').animate({scrollTop: 0}, duration)
-                return false
+                progressRaf = requestAnimationFrame(function () {
+                    progressRaf = 0
+                    const scroll = $(window).scrollTop()
+                    const height = $(document).height() - $(window).height()
+                    const progress = pathLength - (scroll * pathLength) / Math.max(height, 1)
+                    progressPath.style.strokeDashoffset = progress
+                })
+            }
+
+            requestAnimationFrame(function () {
+                progressPath.style.transition = progressPath.style.WebkitTransition = 'none'
+                progressPath.style.strokeDasharray = pathLength + ' ' + pathLength
+                progressPath.style.strokeDashoffset = pathLength
+                requestAnimationFrame(function () {
+                    progressPath.style.transition = progressPath.style.WebkitTransition =
+                        'stroke-dashoffset 10ms linear'
+                    updateprogress()
+                    $(window).scroll(updateprogress)
+                    jQuery(window).on('scroll', function () {
+                        if (jQuery(this).scrollTop() > offset) {
+                            jQuery('.progress-wrap').addClass('active-progress')
+                        } else {
+                            jQuery('.progress-wrap').removeClass('active-progress')
+                        }
+                    })
+                    jQuery('.progress-wrap').on('click', function (event) {
+                        event.preventDefault()
+                        jQuery('html, body').animate({scrollTop: 0}, duration)
+                        return false
+                    })
+                })
             })
         }
     }
@@ -1210,6 +1224,72 @@
         Spanizer.init()
     }
 
+    // Defer below-fold Swiper CPU until near viewport (or idle). Hero inits stay immediate.
+    const serikDeferSwiper = function (selector, initFn) {
+        const el = document.querySelector(selector)
+        if (!el || typeof initFn !== 'function') {
+            return
+        }
+        const run = function () {
+            if (el.dataset.serikSwiperBound === '1') {
+                return
+            }
+            el.dataset.serikSwiperBound = '1'
+            initFn()
+        }
+        const top = el.getBoundingClientRect().top
+        if (top < (window.innerHeight || 800) + 240) {
+            run()
+            return
+        }
+        if (typeof IntersectionObserver === 'undefined') {
+            if (typeof window.requestIdleCallback === 'function') {
+                window.requestIdleCallback(run, { timeout: 2500 })
+            } else {
+                setTimeout(run, 1200)
+            }
+            return
+        }
+        const io = new IntersectionObserver(
+            function (entries) {
+                if (entries.some(function (e) {
+                    return e.isIntersecting
+                })) {
+                    io.disconnect()
+                    run()
+                }
+            },
+            { rootMargin: '240px 0px' }
+        )
+        io.observe(el)
+    }
+
+    const serikStartAutoplayAfterLoad = function (swiper, autoplayOpts) {
+        if (!swiper) {
+            return
+        }
+        const start = function () {
+            try {
+                swiper.params.autoplay = autoplayOpts
+                if (swiper.autoplay && typeof swiper.autoplay.start === 'function') {
+                    swiper.autoplay.start()
+                }
+            } catch (e) {}
+        }
+        const schedule = function () {
+            if (typeof window.requestIdleCallback === 'function') {
+                window.requestIdleCallback(start, { timeout: 2000 })
+            } else {
+                setTimeout(start, 400)
+            }
+        }
+        if (document.readyState === 'complete') {
+            schedule()
+        } else {
+            window.addEventListener('load', schedule, { once: true })
+        }
+    }
+
     if ($('.thumbs-swiper-column').length > 0) {
         const swiperthumbs = new Swiper('.thumbs-swiper-column1', {
             rtl: Theme.isRtl(),
@@ -1223,10 +1303,7 @@
         const swiper2 = new Swiper('.thumbs-swiper-column', {
             rtl: Theme.isRtl(),
             spaceBetween: 0,
-            autoplay: {
-                delay: 3000,
-                disableOnInteraction: false,
-            },
+            autoplay: false,
             speed: 500,
             effect: 'fade',
             fadeEffect: {
@@ -1236,28 +1313,36 @@
                 swiper: swiperthumbs,
             },
         })
+        serikStartAutoplayAfterLoad(swiper2, {
+            delay: 3000,
+            disableOnInteraction: false,
+        })
     }
 
     if ($('.slider-sw-home2').length > 0) {
         const swiper2 = new Swiper('.slider-sw-home2', {
             rtl: Theme.isRtl(),
             spaceBetween: 0,
-            autoplay: {
-                delay: 2000,
-                disableOnInteraction: false,
-            },
+            autoplay: false,
             speed: 2000,
             effect: 'fade',
             fadeEffect: {
                 crossFade: true,
             },
         })
+        serikStartAutoplayAfterLoad(swiper2, {
+            delay: 2000,
+            disableOnInteraction: false,
+        })
     }
 
-    if ($('.tf-sw-auto').length > 0) {
+    serikDeferSwiper('.tf-sw-auto', function () {
+        if ($('.tf-sw-auto').length < 1) {
+            return
+        }
         const loop = $('.tf-sw-auto').data('loop')
 
-        const swiper = new Swiper('.tf-sw-auto', {
+        new Swiper('.tf-sw-auto', {
             rtl: Theme.isRtl(),
             autoplay: {
                 delay: 1500,
@@ -1274,55 +1359,65 @@
                 prevEl: '.nav-next-category',
             },
         })
-    }
-
-    const pagithumbs = new Swiper('.thumbs-sw-pagi', {
-        rtl: Theme.isRtl(),
-        spaceBetween: 14,
-        slidesPerView: 'auto',
-        freeMode: true,
-        watchSlidesProgress: true,
-        breakpoints: {
-            375: {
-                slidesPerView: 3,
-                spaceBetween: 14,
-            },
-            500: {
-                slidesPerView: 'auto',
-            },
-        },
     })
 
-    const swiperSingle = new Swiper('.sw-single', {
-        rtl: Theme.isRtl(),
-        spaceBetween: 16,
-        autoplay: {
+    const pagithumbs = $('.thumbs-sw-pagi').length
+        ? new Swiper('.thumbs-sw-pagi', {
+            rtl: Theme.isRtl(),
+            spaceBetween: 14,
+            slidesPerView: 'auto',
+            freeMode: true,
+            watchSlidesProgress: true,
+            breakpoints: {
+                375: {
+                    slidesPerView: 3,
+                    spaceBetween: 14,
+                },
+                500: {
+                    slidesPerView: 'auto',
+                },
+            },
+        })
+        : null
+
+    if ($('.sw-single').length > 0) {
+        const swiperSingle = new Swiper('.sw-single', {
+            rtl: Theme.isRtl(),
+            spaceBetween: 16,
+            autoplay: false,
+            speed: 500,
+            effect: 'fade',
+            fadeEffect: {
+                crossFade: true,
+            },
+            thumbs: pagithumbs
+                ? {
+                    swiper: pagithumbs,
+                }
+                : undefined,
+            navigation: {
+                clickable: true,
+                nextEl: '.nav-prev-single',
+                prevEl: '.nav-next-single',
+            },
+        })
+        serikStartAutoplayAfterLoad(swiperSingle, {
             delay: 3000,
             disableOnInteraction: false,
-        },
-        speed: 500,
-        effect: 'fade',
-        fadeEffect: {
-            crossFade: true,
-        },
-        thumbs: {
-            swiper: pagithumbs,
-        },
-        navigation: {
-            clickable: true,
-            nextEl: '.nav-prev-single',
-            prevEl: '.nav-next-single',
-        },
-    })
+        })
+    }
 
-    if ($('.tf-latest-property').length > 0) {
+    serikDeferSwiper('.tf-latest-property', function () {
+        if ($('.tf-latest-property').length < 1) {
+            return
+        }
         const previewLg = $('.tf-latest-property').data('preview-lg')
         const previewMd = $('.tf-latest-property').data('preview-md')
         const previewSm = $('.tf-latest-property').data('preview-sm')
         const spacing = $('.tf-latest-property').data('space')
         const centered = $('.tf-latest-property').data('centered')
         const loop = $('.tf-latest-property').data('loop')
-        const swiper = new Swiper('.tf-latest-property', {
+        new Swiper('.tf-latest-property', {
             rtl: Theme.isRtl(),
             autoplay: {
                 delay: 2000,
@@ -1353,7 +1448,7 @@
                 },
             },
         })
-    }
+    })
 
     const initImageSlider = () => {
         if ($('.tf-sw-partner').length > 0) {
@@ -1645,14 +1740,13 @@
         }
     }
 
-    initImageSlider()
-    initImageSlider()
-    initLocation()
+    serikDeferSwiper('.tf-sw-partner', initImageSlider)
+    serikDeferSwiper('.tf-sw-location', initLocation)
     initPropertiesTab()
-    initPropertyCategories()
-    initProperties()
-    initServices()
-    initTestimonials()
+    serikDeferSwiper('.tf-sw-categories', initPropertyCategories)
+    serikDeferSwiper('.tf-sw-property', initProperties)
+    serikDeferSwiper('.tf-sw-benefit', initServices)
+    serikDeferSwiper('.tf-sw-testimonial', initTestimonials)
 
     $('[data-bb-toggle="detail-map"]').each((index, element) => {
         const $element = $(element)

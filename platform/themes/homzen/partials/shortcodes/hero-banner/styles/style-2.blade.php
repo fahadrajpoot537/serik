@@ -37,6 +37,17 @@
   LEFT  = heading
   RIGHT = cashback banner — framed, fully visible, never cropped
 --}}
+<style>
+    /* First hero slide visible before Swiper initializes; autoplay starts after window load. */
+    .serik-split-hero__swiper:not(.swiper-initialized) .swiper-slide {
+        opacity: 0;
+        pointer-events: none;
+    }
+    .serik-split-hero__swiper:not(.swiper-initialized) .swiper-slide:first-child {
+        opacity: 1;
+        pointer-events: auto;
+    }
+</style>
 <section class="flat-slider home-2 serik-split-hero" aria-label="{{ __('Ontario property search') }}">
     <div class="container serik-split-hero__container">
         <div class="serik-split-hero__grid">
