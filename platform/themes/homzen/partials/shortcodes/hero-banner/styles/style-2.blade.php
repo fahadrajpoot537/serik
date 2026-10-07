@@ -20,8 +20,9 @@
     if (is_string($heroMediaUrl) && $heroMediaUrl !== '') {
         // Homepage: preload the same resized WebP the <img> will use (never alter original file).
         if (\App\Support\SerikHomepage::isHomepageRequest()) {
-            $heroSrcset = \App\Support\SerikHomepageImage::srcset($heroMediaUrl, [574, 720, 960], 82);
-            $heroMediaUrl = \App\Support\SerikHomepageImage::optimizedUrl($heroMediaUrl, 720, 82) ?: $heroMediaUrl;
+            // Displayed ~574px wide — default + preload at 574 (not 720) for Desktop PSI.
+            $heroSrcset = \App\Support\SerikHomepageImage::srcset($heroMediaUrl, [480, 574, 720], 72);
+            $heroMediaUrl = \App\Support\SerikHomepageImage::optimizedUrl($heroMediaUrl, 574, 72) ?: $heroMediaUrl;
         } else {
             $heroMediaUrl = CmsWebp::preferWebpUrl($heroMediaUrl) ?: $heroMediaUrl;
         }
@@ -117,9 +118,18 @@
                                                     'height' => 900,
                                                     'class' => 'serik-split-hero__banner-img',
                                                     'srcset' => $heroSrcset !== '' ? $heroSrcset : null,
-                                                    'sizes' => $heroSrcset !== '' ? '(max-width: 768px) 92vw, (max-width: 1200px) 55vw, 720px' : null,
+                                                    'sizes' => $heroSrcset !== '' ? '(max-width: 768px) 92vw, 574px' : null,
                                                 ])
-                                                : ['data-bb-lazy' => 'true', 'loading' => 'lazy', 'decoding' => 'async', 'width' => 1200, 'height' => 900, 'class' => 'serik-split-hero__banner-img']
+                                                : array_filter([
+                                                    'data-bb-lazy' => 'true',
+                                                    'loading' => 'lazy',
+                                                    'decoding' => 'async',
+                                                    'width' => 1200,
+                                                    'height' => 900,
+                                                    'class' => 'serik-split-hero__banner-img',
+                                                    'srcset' => $heroSrcset !== '' ? $heroSrcset : null,
+                                                    'sizes' => $heroSrcset !== '' ? '(max-width: 768px) 92vw, 574px' : null,
+                                                ])
                                         ) }}
                                     </div>
                                 </div>

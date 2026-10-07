@@ -18,7 +18,8 @@ final class TrebImageDerivative
 
     private const DISK = 'public';
 
-    private const CACHE_DIR = 'properties/treb-cache';
+    // v2: stronger WebP compression for card thumbs (?w=320). Old treb-cache/ ignored.
+    private const CACHE_DIR = 'properties/treb-cache-v2';
 
     public static function normalizeWidth(?int $width): ?int
     {
@@ -73,8 +74,12 @@ final class TrebImageDerivative
                 $image->scaleDown(width: $width);
             }
 
-            // Card thumbnails (?w=320) stay lighter; larger widths keep sharper quality.
-            $quality = $width <= 320 ? 65 : 82;
+            // Card thumbs (?w=320) are ~300px CSS — compress hard for PSI "Improve image delivery".
+            $quality = match (true) {
+                $width <= 320 => 52,
+                $width <= 640 => 68,
+                default => 76,
+            };
 
             return (string) $image->encode(new WebpEncoder(quality: $quality));
         } catch (\Throwable) {

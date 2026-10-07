@@ -14,7 +14,7 @@ final class HomepageResponseCache
 {
     private const VERSION_KEY = 'homepage_response_cache_version_v4';
 
-    private const KEY_PREFIX = 'homepage_html_v14:';
+    private const KEY_PREFIX = 'homepage_html_v15:';
 
     private const TRACKING_QUERY_KEYS = [
         'utm_source',
@@ -52,10 +52,12 @@ final class HomepageResponseCache
         SerikCache::forget($legacyKey);
         SerikCache::forget('homepage_html_v5:' . $oldVersion . ':' . $locale . ':shared');
         SerikCache::forget('homepage_html_v13:' . $oldVersion . ':' . $locale . ':shared');
+        SerikCache::forget('homepage_html_v14:' . $oldVersion . ':' . $locale . ':shared');
         SerikCache::forget(self::KEY_PREFIX . self::version() . ':' . $locale . ':shared');
         SerikCache::forget('homepage_html_v4:' . self::version() . ':' . $locale . ':shared');
         SerikCache::forget('homepage_html_v5:' . self::version() . ':' . $locale . ':shared');
         SerikCache::forget('homepage_html_v13:' . self::version() . ':' . $locale . ':shared');
+        SerikCache::forget('homepage_html_v14:' . self::version() . ':' . $locale . ':shared');
     }
 
     public static function forget(): void

@@ -32,7 +32,7 @@ final class SerikResponsiveImage
         'medium-square' => '(max-width: 768px) 40vw, 400px',
         'medium-rectangle-column' => '(max-width: 768px) 45vw, 400px',
         'large' => '(max-width: 768px) 90vw, (max-width: 1200px) 55vw, 720px',
-        'hero' => '(max-width: 768px) 92vw, (max-width: 1200px) 55vw, 720px',
+        'hero' => '(max-width: 768px) 92vw, 574px',
     ];
 
     public static function enhance(
@@ -59,9 +59,9 @@ final class SerikResponsiveImage
             ? [960, 720]
             : (self::DISPLAY_SIZES[$sizeKey] ?? self::DISPLAY_SIZES['medium-rectangle']);
 
-        $widths = $isHero ? [574, 720, 960] : [240, 400, 560];
-        $defaultWidth = $isHero ? 720 : 400;
-        $quality = $isHero ? 82 : 68;
+        $widths = $isHero ? [480, 574, 720] : [240, 400, 560];
+        $defaultWidth = $isHero ? 574 : 400;
+        $quality = $isHero ? 72 : 64;
 
         $defaultSrc = SerikHomepageImage::optimizedUrl($url, $defaultWidth, $quality);
         if (! is_string($defaultSrc) || $defaultSrc === '') {
@@ -140,9 +140,9 @@ final class SerikResponsiveImage
                     || str_contains($attrs, 'fetchpriority="high"')
                     || str_contains($attrs, "fetchpriority='high'");
 
-                $defaultWidth = $isHero ? 720 : 400;
-                $widths = $isHero ? [574, 720, 960] : [240, 400, 560];
-                $quality = $isHero ? 82 : 68;
+                $defaultWidth = $isHero ? 574 : 400;
+                $widths = $isHero ? [480, 574, 720] : [240, 400, 560];
+                $quality = $isHero ? 72 : 64;
 
                 $optimized = SerikHomepageImage::optimizedUrl($src, $defaultWidth, $quality);
                 if (! is_string($optimized) || $optimized === '' || $optimized === $src) {
