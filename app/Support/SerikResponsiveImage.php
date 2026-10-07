@@ -32,7 +32,7 @@ final class SerikResponsiveImage
         'medium-square' => '(max-width: 768px) 40vw, 400px',
         'medium-rectangle-column' => '(max-width: 768px) 45vw, 400px',
         'large' => '(max-width: 768px) 90vw, (max-width: 1200px) 55vw, 720px',
-        'hero' => '(max-width: 768px) 92vw, 574px',
+        'hero' => '(max-width: 768px) 88vw, 480px',
     ];
 
     public static function enhance(
@@ -59,9 +59,9 @@ final class SerikResponsiveImage
             ? [960, 720]
             : (self::DISPLAY_SIZES[$sizeKey] ?? self::DISPLAY_SIZES['medium-rectangle']);
 
-        $widths = $isHero ? [480, 574, 720] : [240, 400, 560];
-        $defaultWidth = $isHero ? 574 : 400;
-        $quality = $isHero ? 72 : 64;
+        $widths = $isHero ? [360, 480, 574] : [240, 400, 560];
+        $defaultWidth = $isHero ? 480 : 360;
+        $quality = $isHero ? 68 : 60;
 
         $defaultSrc = SerikHomepageImage::optimizedUrl($url, $defaultWidth, $quality);
         if (! is_string($defaultSrc) || $defaultSrc === '') {
@@ -130,19 +130,28 @@ final class SerikResponsiveImage
                     return '<img' . $attrs . '>';
                 }
 
-                // Skip tiny chrome / already-sized thumbs.
-                if (preg_match('/-150x150\./i', $src) || preg_match('/whatsapp-image-2025/i', $src)) {
+                // Tiny thumbs stay as-is. Site logo PNG must be rewritten (was skipped → 160KB PSI hit).
+                if (preg_match('/-150x150\./i', $src)) {
                     return '<img' . $attrs . '>';
                 }
+
+                $isLogo = (bool) preg_match('/whatsapp-image-2025|\/logo|serik-logo/i', $src)
+                    || (str_contains($attrs, 'max-height: 44px') && (bool) preg_match('/\bwidth=["\']160["\']/', $attrs));
 
                 $isHero = self::isHeroMarkup($attrs, [], null)
                     || str_contains($attrs, 'serik-split-hero__banner-img')
                     || str_contains($attrs, 'fetchpriority="high"')
                     || str_contains($attrs, "fetchpriority='high'");
 
-                $defaultWidth = $isHero ? 574 : 400;
-                $widths = $isHero ? [480, 574, 720] : [240, 400, 560];
-                $quality = $isHero ? 72 : 64;
+                if ($isLogo) {
+                    $defaultWidth = 320;
+                    $widths = [160, 320];
+                    $quality = 82;
+                } else {
+                    $defaultWidth = $isHero ? 480 : 360;
+                    $widths = $isHero ? [360, 480, 574] : [240, 400, 560];
+                    $quality = $isHero ? 68 : 60;
+                }
 
                 $optimized = SerikHomepageImage::optimizedUrl($src, $defaultWidth, $quality);
                 if (! is_string($optimized) || $optimized === '' || $optimized === $src) {

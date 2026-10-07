@@ -21,9 +21,9 @@
     $isExternal = is_string($coverImage) && str_starts_with($coverImage, 'http') && ! $isProxyWebp;
     $responsiveAttrs = $isProxyWebp ? TrebResponsiveImage::cardAttributes($coverImage, $lazy) : [];
 
-    // Default card src uses a mid-width WebP derivative so browsers never get raw JPEG.
+    // Default src = 320w (card CSS ~280–300px). Srcset upgrades to 480/640 for DPR.
     if ($isProxyWebp) {
-        $coverImage = TrebResponsiveImage::urlWithWidth($coverImage, 640);
+        $coverImage = TrebResponsiveImage::urlWithWidth($coverImage, 320);
     }
 
     $placeholder = SerikMediaUrl::placeholder();

@@ -22,14 +22,15 @@ final class SerikHomepageImage
     /**
      * Return a cached resized WebP URL for homepage delivery, or the original URL on failure.
      */
-    public static function optimizedUrl(?string $url, int $maxWidth, int $quality = 78): ?string
+    public static function optimizedUrl(?string $url, int $maxWidth, int $quality = 78, bool $force = false): ?string
     {
         $url = trim((string) $url);
         if ($url === '' || $maxWidth < 32) {
             return $url;
         }
 
-        if (! SerikHomepage::isHomepageRequest()) {
+        // Site logo must shrink on every page (mobile PSI); other assets stay homepage-only.
+        if (! $force && ! SerikHomepage::isHomepageRequest()) {
             return $url;
         }
 

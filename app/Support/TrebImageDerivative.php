@@ -13,13 +13,13 @@ use Intervention\Image\ImageManager;
  */
 final class TrebImageDerivative
 {
-  /** @var list<int> */
-    public const WIDTHS = [320, 640, 960, 1280];
+    /** @var list<int> */
+    public const WIDTHS = [320, 480, 640, 960, 1280];
 
     private const DISK = 'public';
 
-    // v2: stronger WebP compression for card thumbs (?w=320). Old treb-cache/ ignored.
-    private const CACHE_DIR = 'properties/treb-cache-v2';
+    // v3: harder WebP + 480w rung so mobile DPR does not jump straight to heavy 640.
+    private const CACHE_DIR = 'properties/treb-cache-v3';
 
     public static function normalizeWidth(?int $width): ?int
     {
@@ -74,11 +74,12 @@ final class TrebImageDerivative
                 $image->scaleDown(width: $width);
             }
 
-            // Card thumbs (?w=320) are ~300px CSS — compress hard for PSI "Improve image delivery".
+            // Card thumbs are ~280–300px CSS; keep files small for PSI image delivery.
             $quality = match (true) {
-                $width <= 320 => 52,
-                $width <= 640 => 68,
-                default => 76,
+                $width <= 320 => 46,
+                $width <= 480 => 52,
+                $width <= 640 => 56,
+                default => 68,
             };
 
             return (string) $image->encode(new WebpEncoder(quality: $quality));

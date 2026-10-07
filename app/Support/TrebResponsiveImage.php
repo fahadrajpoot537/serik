@@ -8,7 +8,7 @@ namespace App\Support;
 final class TrebResponsiveImage
 {
     /** @var list<int> */
-    private const CARD_WIDTHS = [320, 640, 960];
+    private const CARD_WIDTHS = [320, 480, 640];
 
     public static function isProxyUrl(?string $url): bool
     {
@@ -35,7 +35,8 @@ final class TrebResponsiveImage
 
         $attrs = [
             'srcset' => $srcset,
-            'sizes' => '(max-width: 576px) 50vw, (max-width: 992px) 33vw, 300px',
+            // Match homepage card CSS (~291px). Avoid overstating so DPR does not force 960.
+            'sizes' => '(max-width: 576px) 46vw, (max-width: 992px) 30vw, 280px',
             'decoding' => 'async',
             'loading' => $lazy ? 'lazy' : 'eager',
         ];
