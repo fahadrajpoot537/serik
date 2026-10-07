@@ -17,7 +17,12 @@
         ? SerikMediaUrl::cmsImageUrl($firstSlider, 'large')
         : ($shortcode->background_image ? SerikMediaUrl::cmsImageUrl($shortcode->background_image, 'large') : null);
     if (is_string($heroMediaUrl) && $heroMediaUrl !== '') {
-        $heroMediaUrl = CmsWebp::preferWebpUrl($heroMediaUrl) ?: $heroMediaUrl;
+        // Homepage: preload the same resized WebP the <img> will use (never alter original file).
+        if (\App\Support\SerikHomepage::isHomepageRequest()) {
+            $heroMediaUrl = \App\Support\SerikHomepageImage::optimizedUrl($heroMediaUrl, 720, 82) ?: $heroMediaUrl;
+        } else {
+            $heroMediaUrl = CmsWebp::preferWebpUrl($heroMediaUrl) ?: $heroMediaUrl;
+        }
     }
 @endphp
 

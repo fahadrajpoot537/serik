@@ -49,18 +49,21 @@ final class SerikHomepageAssets
         'jquery.min.js',
         'swiper-bundle.min.js',
         'js/script.js',
+        // Must stay deferred (not idle): Botble images use data-src + placeholder
+        // and ThemeSupport inits LazyLoad on DOMContentLoaded.
+        'lazyload.min.js',
     ];
 
     /**
      * Non-carousel scripts delayed until idle / interaction (safe for Lighthouse TBT).
      * Popper/bootstrap only needed for login modal — idle + modal show loads them.
+     * Never idle-defer lazyload.min.js — homepage images stay on placeholder otherwise.
      *
      * @var list<string>
      */
     private const IDLE_THEME_SCRIPT_PATTERNS = [
         'popper.min.js',
         'bootstrap.min.js',
-        'lazyload.min.js',
         'keyboard-a11y.js',
         'jquery.fancybox',
         'newsletter.js',
@@ -197,9 +200,72 @@ final class SerikHomepageAssets
             $html
         ) ?? $html;
 
-        // Do NOT rewrite img src/data-src here — lazy placeholders use src=placeholder
-        // and a naive \bsrc= replace also matches data-src= / this.src=, wiping real URLs.
+        // Promote data-src → src when Botble left a placeholder (works even if
+        // LazyLoad is late). Native loading="lazy" still defers offscreen work.
+        $html = self::hydrateLazyPlaceholders($html);
+
+        // Homepage-only: swap storage image src to cached resized WebP (+ srcset).
+        // Touches HTML only — originals on disk / DB URLs are never modified.
+        $html = SerikResponsiveImage::enhanceHomepageHtml($html);
+
+        // Do NOT use naive \bsrc= rewrite (matches data-src / this.src and wipes URLs).
         return $html;
+    }
+
+    /**
+     * Botble lazy-load leaves src=placeholder + data-src=real. If LazyLoad.js is
+     * missing/late, every homepage image stays blank — promote real URLs here.
+     */
+    public static function hydrateLazyPlaceholders(string $html): string
+    {
+        return preg_replace_callback(
+            '/<img\b([^>]*)>/i',
+            static function (array $m): string {
+                $attrs = $m[1];
+                if (! preg_match('/\bdata-src=(["\'])([^"\']+)\1/i', $attrs, $dataSrcMatch)) {
+                    return '<img' . $attrs . '>';
+                }
+
+                $real = html_entity_decode($dataSrcMatch[2], ENT_QUOTES | ENT_HTML5);
+                if ($real === '' || str_starts_with($real, 'data:') || str_contains($real, '${')) {
+                    return '<img' . $attrs . '>';
+                }
+
+                $src = '';
+                if (preg_match('/(?:^|\s)src=(["\'])([^"\']*)\1/i', $attrs, $srcMatch)) {
+                    $src = html_entity_decode($srcMatch[2], ENT_QUOTES | ENT_HTML5);
+                }
+
+                $needsPromote = $src === ''
+                    || str_contains($src, 'placeholder')
+                    || str_contains($src, 'data:image');
+
+                if (! $needsPromote) {
+                    return '<img' . $attrs . '>';
+                }
+
+                if (preg_match('/(?:^|\s)src=(["\'])[^"\']*\1/i', $attrs)) {
+                    $attrs = preg_replace(
+                        '/(?:^|\s)src=(["\'])[^"\']*\1/i',
+                        ' src="' . e($real) . '"',
+                        $attrs,
+                        1
+                    ) ?? $attrs;
+                } else {
+                    $attrs .= ' src="' . e($real) . '"';
+                }
+
+                $attrs = preg_replace('/\sdata-src=(["\'])[^"\']*\1/i', '', $attrs) ?? $attrs;
+                $attrs = preg_replace(
+                    '/\bdata-bb-lazy=(["\'])[^"\']*\1/i',
+                    'data-bb-lazy="false"',
+                    $attrs
+                ) ?? $attrs;
+
+                return '<img' . $attrs . '>';
+            },
+            $html
+        ) ?? $html;
     }
 
     private static function deferScriptTag(string $html, string $pattern): string

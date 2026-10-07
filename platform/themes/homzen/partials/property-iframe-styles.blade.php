@@ -5,6 +5,22 @@
         display: none !important;
     }
 
+    /* Parent map/listing page already has Tawk — hide any nested chat bubble (tawk-icon-right). */
+    iframe[title*="chat"],
+    iframe[title*="Chat"],
+    .widget-visible,
+    .tawk-icon-right,
+    .tawk-min-container,
+    #tawkchat-minified-wrapper,
+    #tawkchat-container,
+    div[class*="tawk-"],
+    a.whatsapp {
+        display: none !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+        opacity: 0 !important;
+    }
+
     html {
         overflow-x: hidden !important;
         overflow-y: scroll !important;
@@ -151,6 +167,26 @@
             }
         } catch (e) {}
     }
+
+    function suppressNestedTawk() {
+        try {
+            window.__serikTawkLoaded = true;
+            window.__serikDeferredThirdParty = true;
+            if (window.Tawk_API && typeof window.Tawk_API.hideWidget === 'function') {
+                window.Tawk_API.hideWidget();
+            }
+            document.querySelectorAll(
+                'iframe[title*="chat"], iframe[title*="Chat"], .tawk-icon-right, .widget-visible, #tawkchat-minified-wrapper, #tawkchat-container'
+            ).forEach(function (el) {
+                el.style.setProperty('display', 'none', 'important');
+                el.style.setProperty('visibility', 'hidden', 'important');
+            });
+        } catch (e) {}
+    }
+    suppressNestedTawk();
+    document.addEventListener('DOMContentLoaded', suppressNestedTawk);
+    window.setTimeout(suppressNestedTawk, 1500);
+    window.setTimeout(suppressNestedTawk, 5000);
 
     // Signal as soon as this script runs (before full DOMContentLoaded).
     notifyParentReady();

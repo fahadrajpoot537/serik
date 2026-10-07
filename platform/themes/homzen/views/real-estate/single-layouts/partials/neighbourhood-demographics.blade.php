@@ -138,6 +138,19 @@
 </style>
 
 @if ($model instanceof \Botble\RealEstate\Models\Property)
+@php
+    $censusBootstrap = null;
+    try {
+        $censusCached = \Illuminate\Support\Facades\Cache::get(
+            'census:property:' . (int) $model->getKey() . ':v12'
+        );
+        if (is_array($censusCached) && ($censusCached['status'] ?? null) === 'ok') {
+            $censusBootstrap = $censusCached;
+        }
+    } catch (\Throwable $e) {
+        $censusBootstrap = null;
+    }
+@endphp
 <section
     class="single-property-element hs-census-section is-loading"
     id="neighbourhoodDemographics"
@@ -152,6 +165,9 @@
         <div class="hs-census-status">{{ __('Loading neighbourhood demographics…') }}</div>
     </div>
 </section>
+@if ($censusBootstrap)
+<script type="application/json" id="hsCensusBootstrap">{!! json_encode($censusBootstrap, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_UNESCAPED_UNICODE) !!}</script>
+@endif
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
 <script>
@@ -377,18 +393,61 @@
         }
     }
 
-    var url = '/api/v1/property-census/' + encodeURIComponent(propertyId);
+    // Absolute URL — map property popup loads this page inside an iframe (?iframe=1).
+    var url;
+    try {
+        url = new URL('/api/v1/property-census/' + encodeURIComponent(propertyId), window.location.href).toString();
+    } catch (e) {
+        url = (window.location.origin || '') + '/api/v1/property-census/' + encodeURIComponent(propertyId);
+    }
+    var isIframeEmbed = false;
+    try {
+        isIframeEmbed = /(?:\?|&)iframe=1(?:&|$)/.test(String(window.location.search || ''))
+            || (window.self !== window.top);
+    } catch (e) {
+        isIframeEmbed = true;
+    }
 
-    function loadCensus() {
-        if (window.__serikCensusStarted) {
-            return;
+    function applyCensusPayload(data) {
+        if (!data || typeof data !== 'object') {
+            return false;
         }
-        window.__serikCensusStarted = true;
+        var msg = String(data.message || '');
+        if (/server error/i.test(msg) || /maximum execution/i.test(msg)) {
+            msg = 'Census data temporarily unavailable.';
+        }
+        if (data.status && data.status !== 'ok') {
+            renderError(msg || 'Census data temporarily unavailable.');
+            return true;
+        }
+        if (data.success === false) {
+            renderError(msg || 'Census data temporarily unavailable.');
+            return true;
+        }
+        if (data.status === 'ok' || data.success === true || (data.metrics && data.metrics.length)) {
+            var payload = data;
+            if (data.success == null) {
+                payload = Object.assign({ success: true }, data);
+            }
+            renderOk(payload);
+            return true;
+        }
+        return false;
+    }
 
+    function loadCensus(isRetry) {
+        if (!isRetry) {
+            if (window.__serikCensusStarted) {
+                return;
+            }
+            window.__serikCensusStarted = true;
+        }
+
+        // DA census can take ~90–120s cold; keep client wait aligned with server budget.
         var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
         var timer = setTimeout(function () {
             if (controller) controller.abort();
-        }, 90000);
+        }, 150000);
 
         fetch(url, {
             method: 'GET',
@@ -405,44 +464,59 @@
             })
             .then(function (res) {
                 clearTimeout(timer);
-                var data = res.json || {};
                 if (!res.json) {
                     // Laravel FatalError HTML pages say "Server Error" — never show that raw.
+                    if (!isRetry) {
+                        window.setTimeout(function () { loadCensus(true); }, 1200);
+                        return;
+                    }
                     renderError('Census data temporarily unavailable.');
                     return;
                 }
-                var msg = String(data.message || '');
-                if (/server error/i.test(msg) || /maximum execution/i.test(msg)) {
-                    msg = 'Census data temporarily unavailable.';
+                if (!applyCensusPayload(res.json)) {
+                    renderError('Census data temporarily unavailable.');
                 }
-                if (data.status && data.status !== 'ok') {
-                    renderError(msg || 'Census data temporarily unavailable.');
-                    return;
-                }
-                if (!res.ok || data.success === false) {
-                    renderError(msg || 'Census data temporarily unavailable.');
-                    return;
-                }
-                renderOk(data);
             })
             .catch(function () {
                 clearTimeout(timer);
+                if (!isRetry) {
+                    window.setTimeout(function () { loadCensus(true); }, 1200);
+                    return;
+                }
                 renderError('Census data temporarily unavailable.');
             });
     }
 
-    if ('IntersectionObserver' in window) {
+    // Prefer server-embedded cache (map iframe skips a long API round-trip when
+    // the full property page already warmed census:property:{id}:v12).
+    var bootEl = document.getElementById('hsCensusBootstrap');
+    var bootData = null;
+    if (bootEl) {
+        try { bootData = JSON.parse(bootEl.textContent || ''); } catch (e) { bootData = null; }
+    }
+    if (bootData && applyCensusPayload(bootData)) {
+        window.__serikCensusStarted = true;
+        return;
+    }
+
+    // Map popup iframe: IntersectionObserver often never fires (odd overflow roots),
+    // so kick off census promptly instead of waiting for scroll.
+    if (isIframeEmbed) {
+        window.setTimeout(function () { loadCensus(false); }, 300);
+    } else if ('IntersectionObserver' in window) {
         var io = new IntersectionObserver(function (entries) {
             if (entries.some(function (e) { return e.isIntersecting; })) {
                 io.disconnect();
-                loadCensus();
+                loadCensus(false);
             }
         }, { rootMargin: '200px 0px' });
         io.observe(root);
+        // Safety: if IO never intersects (rare layout), still load.
+        window.setTimeout(function () { loadCensus(false); }, 12000);
     } else if ('requestIdleCallback' in window) {
-        requestIdleCallback(function () { setTimeout(loadCensus, 1000); }, { timeout: 5000 });
+        requestIdleCallback(function () { setTimeout(function () { loadCensus(false); }, 1000); }, { timeout: 5000 });
     } else {
-        setTimeout(loadCensus, 3000);
+        setTimeout(function () { loadCensus(false); }, 3000);
     }
 })();
 </script>

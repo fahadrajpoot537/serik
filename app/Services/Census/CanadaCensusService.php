@@ -36,10 +36,11 @@ class CanadaCensusService
             return $cached;
         }
 
-        $lock = Cache::lock('serik:cache:sf:' . md5($cacheKey), 45);
+        // DA SDMX cold builds can exceed 90s — lock must outlive the compute.
+        $lock = Cache::lock('serik:cache:sf:' . md5($cacheKey), 160);
 
         try {
-            $payload = $lock->block(app()->environment('local') ? 3 : 15, function () use ($cacheKey, $ttl, $property) {
+            $payload = $lock->block(app()->environment('local') ? 5 : 120, function () use ($cacheKey, $ttl, $property) {
                 $again = Cache::get($cacheKey);
                 if (is_array($again) && isset($again['status'])) {
                     return $again;

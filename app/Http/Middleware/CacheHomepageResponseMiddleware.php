@@ -78,6 +78,14 @@ class CacheHomepageResponseMiddleware
                 $response->headers->set('ETag', $etag);
             }
         } elseif (
+            $request->getPathInfo() === '/'
+            && $response->getStatusCode() === 200
+            && str_contains((string) $response->headers->get('Content-Type'), 'text/html')
+        ) {
+            // Non-cacheable homepage (cookies / extra query): still promote placeholders.
+            $html = SerikHomepageAssets::hydrateLazyPlaceholders((string) $response->getContent());
+            $response->setContent($html);
+        } elseif (
             $response->getStatusCode() === 200
             && str_contains((string) $response->headers->get('Content-Type'), 'text/html')
             && ! auth()->check()

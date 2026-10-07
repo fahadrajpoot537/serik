@@ -148,8 +148,17 @@
 @else
 <link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc62">
 @endif
+@if (! request()->boolean('iframe'))
         <script>
         (function () {
+            // Map/listing property modal loads pages with ?iframe=1 — never boot a second Tawk.
+            try {
+                if (window.self !== window.top) {
+                    return;
+                }
+            } catch (e) {
+                return;
+            }
             if (window.__serikDeferredThirdParty) {
                 return;
             }
@@ -254,6 +263,7 @@
             }
         </style>
         <!--End of Tawk.to Script-->
+@endif
 {{-- Homepage Google Ads loads via deferred-analytics (after interaction / idle) to cut TBT --}}
     </head>
 

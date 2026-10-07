@@ -14,7 +14,7 @@ final class HomepageResponseCache
 {
     private const VERSION_KEY = 'homepage_response_cache_version_v4';
 
-    private const KEY_PREFIX = 'homepage_html_v10:';
+    private const KEY_PREFIX = 'homepage_html_v12:';
 
     private const TRACKING_QUERY_KEYS = [
         'utm_source',
@@ -153,7 +153,8 @@ final class HomepageResponseCache
             $html = self::scrubPersonalizedFlags($html);
         }
 
-        return $html;
+        // Stale cached HTML may still have placeholder+data-src without LazyLoad.
+        return SerikHomepageAssets::hydrateLazyPlaceholders($html);
     }
 
     /**
@@ -278,7 +279,8 @@ final class HomepageResponseCache
             return null;
         }
 
-        return $html;
+        // Stale cached HTML may still have placeholder+data-src without LazyLoad.
+        return SerikHomepageAssets::hydrateLazyPlaceholders($html);
     }
 
     public static function getEtag(Request $request): ?string
