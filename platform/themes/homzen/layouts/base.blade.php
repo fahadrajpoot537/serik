@@ -218,12 +218,11 @@
                 };
 
                 var s1 = document.createElement('script');
-                var s0 = document.getElementsByTagName('script')[0];
                 s1.async = true;
                 s1.src = 'https://embed.tawk.to/6a6d0ff4f9ea531d4e9995a8/1jut0cl8v';
                 s1.charset = 'UTF-8';
-                s1.setAttribute('crossorigin', '*');
-                s0.parentNode.insertBefore(s1, s0);
+                // No crossorigin attr — '*' is invalid and triggers console CORS noise.
+                document.body.appendChild(s1);
             }
 
             function loadThirdParty() {
@@ -234,16 +233,8 @@
             ['scroll', 'pointerdown', 'keydown', 'touchstart'].forEach(function (eventName) {
                 window.addEventListener(eventName, loadThirdParty, { once: true, passive: true });
             });
-            @if ($isSerikHomepage)
-            // Keep Clarity/Tawk off the Lighthouse TBT window.
-            if ('requestIdleCallback' in window) {
-                requestIdleCallback(function () { window.setTimeout(loadThirdParty, 20000); }, { timeout: 25000 });
-            } else {
-                window.setTimeout(loadThirdParty, 20000);
-            }
-            @else
-            window.setTimeout(loadThirdParty, 8000);
-            @endif
+            // Interaction OR ~3.5s — same policy site-wide (PSI TBT).
+            window.setTimeout(loadThirdParty, 3500);
         })();
         </script>
         <style>

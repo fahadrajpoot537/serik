@@ -410,15 +410,10 @@
     }
 
     function detectFromIp() {
+        // Prefer first-party API only — never hit ipinfo.io / ipapi.co from the browser
+        // (CORS errors + third-party cost on critical path). Safe fallback is Ontario default.
         return detectFromServer().then(function (serverLocation) {
-            if (serverLocation) {
-                return serverLocation;
-            }
-
-            // Server unavailable (localhost / failed providers) — use public IP APIs.
-            return detectFromIpApi().then(function (location) {
-                return location || detectFromIpInfo();
-            });
+            return serverLocation || null;
         });
     }
 
