@@ -35,7 +35,11 @@ final class SerikHomepageAssets
         'fancybox',
         'tabler-icons',
         'leaflet',
-        // Keep swiper-bundle.min.css BLOCKING — categories/locations break without it.
+        // Heavy theme CSS: async on homepage (homepage-premium stays blocking for above-fold).
+        'bootstrap.min.css',
+        'bootstrap.rtl.min.css',
+        'css/style.css',
+        'swiper-bundle.min.css',
         'site-chrome.css',
         'fonts.googleapis.com',
         'fonts.gstatic.com',
@@ -526,17 +530,24 @@ HTML;
     private static function makeStylesheetAsync(string $html, string $pattern): string
     {
         return preg_replace_callback(
-            '/<link([^>]*href="[^"]*' . preg_quote($pattern, '/') . '[^"]*"[^>]*)>/i',
+            '/<link([^>]*href="([^"]*' . preg_quote($pattern, '/') . '[^"]*)"[^>]*)>/i',
             static function (array $matches): string {
                 $attrs = $matches[1];
+                $href = $matches[2] ?? '';
 
                 if (str_contains($attrs, 'onload=')) {
                     return $matches[0];
                 }
 
                 $attrs = preg_replace('/\smedia=(["\']).*?\1/i', '', $attrs) ?? $attrs;
+                // Preload so download starts immediately without blocking first paint.
+                $preload = $href !== ''
+                    ? '<link rel="preload" as="style" href="' . e($href) . '">'
+                    : '';
 
-                return '<link' . $attrs . ' media="print" onload="this.media=\'all\'">';
+                return $preload
+                    . '<link' . $attrs . ' media="print" onload="this.media=\'all\'">'
+                    . ($href !== '' ? '<noscript><link rel="stylesheet" href="' . e($href) . '"></noscript>' : '');
             },
             $html
         ) ?? $html;

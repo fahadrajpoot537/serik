@@ -725,21 +725,13 @@
         } catch (e) {}
     }
 
-    const authCsrfRefreshUrl = @json(route('auth.csrf-token'));
-    let authCsrfRefreshPromise = null;
-    let authCsrfLastOkAt = 0;
-
     function refreshAuthCsrfTokens(force = false) {
-        const now = Date.now();
-        // Reuse in-flight / recent refresh so open + show.bs.modal don't double-hit (~500ms+).
-        if (!force && authCsrfRefreshPromise && (now - authCsrfLastOkAt) < 30000) {
-            return authCsrfRefreshPromise;
+        // Prefer site-wide helper from base.blade (single in-flight request).
+        if (typeof window.__serikRefreshCsrf === 'function') {
+            return window.__serikRefreshCsrf(!!force);
         }
-        if (!force && authCsrfRefreshPromise) {
-            return authCsrfRefreshPromise;
-        }
-
-        authCsrfRefreshPromise = fetch(authCsrfRefreshUrl, {
+        const authCsrfRefreshUrl = @json(route('auth.csrf-token'));
+        return fetch(authCsrfRefreshUrl, {
             method: 'GET',
             credentials: 'same-origin',
             headers: {
@@ -752,33 +744,19 @@
                 if (!data || !data.token) {
                     return false;
                 }
-
                 const modal = document.getElementById('modalLogin');
                 if (modal) {
                     modal.querySelectorAll('input[name="_token"]').forEach((input) => {
                         input.value = data.token;
                     });
                 }
-
                 const meta = document.querySelector('meta[name="csrf-token"]');
                 if (meta) {
                     meta.setAttribute('content', data.token);
                 }
-
-                authCsrfLastOkAt = Date.now();
                 return true;
             })
-            .catch(() => false)
-            .finally(() => {
-                // Keep resolved promise briefly so concurrent callers reuse it.
-                setTimeout(() => {
-                    if (Date.now() - authCsrfLastOkAt > 2500) {
-                        authCsrfRefreshPromise = null;
-                    }
-                }, 2600);
-            });
-
-        return authCsrfRefreshPromise;
+            .catch(() => false);
     }
 
     function openAuthModal(mode = 'login') {
@@ -851,12 +829,12 @@
         const modalEl = document.getElementById('modalLogin');
         getAuthModal();
 
-        // Warm CSRF in idle time so first Login/Register click is not waiting on network.
-        const warmCsrf = () => refreshAuthCsrfTokens();
+        // Warm CSRF after load/idle — base.blade already schedules the same shared call.
+        const warmCsrf = () => refreshAuthCsrfTokens(false);
         if ('requestIdleCallback' in window) {
-            requestIdleCallback(warmCsrf, { timeout: 1200 });
+            requestIdleCallback(warmCsrf, { timeout: 5000 });
         } else {
-            setTimeout(warmCsrf, 400);
+            setTimeout(warmCsrf, 2500);
         }
 
         modalEl?.addEventListener('show.bs.modal', () => {

@@ -291,32 +291,61 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
         {!! Theme::footer() !!}
 
-        {{-- Keep CSRF fresh on guest HTML-cache hits (homepage / CMS / blog). --}}
+        {{-- CSRF refresh: one shared idle call (not on critical path / LCP). --}}
         <script>
         (function () {
-            if (window.__serikCsrfRefreshBound) {
+            if (window.__serikRefreshCsrf) {
                 return;
             }
-            window.__serikCsrfRefreshBound = true;
             var url = @json(route('auth.csrf-token'));
-            fetch(url, {
-                credentials: 'same-origin',
-                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
-            }).then(function (r) {
-                return r.ok ? r.json() : null;
-            }).then(function (data) {
-                var token = data && (data.token || data.csrf_token);
-                if (!token) {
-                    return;
+            var inflight = null;
+            var lastOk = 0;
+            window.__serikRefreshCsrf = function (force) {
+                var now = Date.now();
+                if (!force && inflight) {
+                    return inflight;
                 }
-                var meta = document.querySelector('meta[name="csrf-token"]');
-                if (meta) {
-                    meta.setAttribute('content', token);
+                if (!force && lastOk && (now - lastOk) < 30000) {
+                    return Promise.resolve(true);
                 }
-                document.querySelectorAll('input[name="_token"]').forEach(function (el) {
-                    el.value = token;
+                inflight = fetch(url, {
+                    credentials: 'same-origin',
+                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+                }).then(function (r) {
+                    return r.ok ? r.json() : null;
+                }).then(function (data) {
+                    var token = data && (data.token || data.csrf_token);
+                    if (!token) {
+                        return false;
+                    }
+                    var meta = document.querySelector('meta[name="csrf-token"]');
+                    if (meta) {
+                        meta.setAttribute('content', token);
+                    }
+                    document.querySelectorAll('input[name="_token"]').forEach(function (el) {
+                        el.value = token;
+                    });
+                    lastOk = Date.now();
+                    return true;
+                }).catch(function () {
+                    return false;
+                }).finally(function () {
+                    setTimeout(function () { inflight = null; }, 2500);
                 });
-            }).catch(function () {});
+                return inflight;
+            };
+            var schedule = function () {
+                if (typeof window.requestIdleCallback === 'function') {
+                    window.requestIdleCallback(function () { window.__serikRefreshCsrf(false); }, { timeout: 5000 });
+                } else {
+                    setTimeout(function () { window.__serikRefreshCsrf(false); }, 2500);
+                }
+            };
+            if (document.readyState === 'complete') {
+                schedule();
+            } else {
+                window.addEventListener('load', schedule, { once: true });
+            }
         })();
         </script>
 

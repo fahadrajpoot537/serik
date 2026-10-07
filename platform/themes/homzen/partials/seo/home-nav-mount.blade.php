@@ -178,8 +178,9 @@
       })
       .catch(function () {});
   };
-  if ('requestIdleCallback' in window) requestIdleCallback(load, { timeout: 400 });
-  else setTimeout(load, 50);
+  // Far off critical path — do not compete with LCP/CSS (PSI chain was ~5.6s).
+  if ('requestIdleCallback' in window) requestIdleCallback(load, { timeout: 6000 });
+  else setTimeout(load, 3000);
 
   if (!window.__serikSeoNavAccordionBound) {
     window.__serikSeoNavAccordionBound = true;
