@@ -126,6 +126,7 @@
                 )
 
                 instance.show()
+                document.body.style.paddingRight = '0'
                 popupShown = true
                 return
             }
@@ -135,6 +136,8 @@
             popup.style.zIndex = '99999999'
             popup.setAttribute('aria-hidden', 'false')
             document.body.classList.add('modal-open', 'newsletter-popup-open')
+            document.body.style.paddingRight = '0'
+            document.body.style.overflow = 'hidden'
 
             if (!document.querySelector('.newsletter-popup-backdrop')) {
                 const backdrop = document.createElement('div')
@@ -164,7 +167,8 @@
 
             const run = () => {
                 waitForBootstrap(() => {
-                    setTimeout(showNewsletterModal, newsletterDelayTime)
+                    const delay = Math.max(newsletterDelayTime || 5000, 8000)
+                    setTimeout(showNewsletterModal, delay)
                 })
             }
 

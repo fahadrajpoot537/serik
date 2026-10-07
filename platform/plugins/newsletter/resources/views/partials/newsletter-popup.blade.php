@@ -40,6 +40,9 @@
         popup.style.zIndex = '99999999';
         popup.setAttribute('aria-hidden', 'false');
         document.body.classList.add('modal-open', 'newsletter-popup-open');
+        // Avoid Bootstrap scrollbar compensation shifting the whole page (CLS).
+        document.body.style.paddingRight = '0';
+        document.body.style.overflow = 'hidden';
 
         if (!document.querySelector('.newsletter-popup-backdrop')) {
             var backdrop = document.createElement('div');
@@ -56,8 +59,10 @@
                 }
                 window.bootstrap.Modal.getOrCreateInstance(popup, {
                     backdrop: true,
-                    keyboard: true
+                    keyboard: true,
+                    focus: true
                 }).show();
+                document.body.style.paddingRight = '0';
             } catch (e) {}
         }
     }
@@ -105,8 +110,17 @@
         if (!delay || delay < 0) {
             delay = 5;
         }
+        // Never open during the first paint/LCP window (mobile PSI).
+        var ms = Math.max(delay * 1000, 8000);
 
-        setTimeout(showPopup, delay * 1000);
+        var run = function () {
+            if (typeof window.requestIdleCallback === 'function') {
+                window.requestIdleCallback(showPopup, { timeout: ms + 2000 });
+            } else {
+                setTimeout(showPopup, ms);
+            }
+        };
+        setTimeout(run, ms);
     }
 
     function bindEvents() {

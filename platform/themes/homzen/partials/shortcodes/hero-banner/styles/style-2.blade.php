@@ -50,6 +50,25 @@
         opacity: 1;
         pointer-events: auto;
     }
+    /* Reserve 4:3 box before image decode (width/height attrs alone were overridden by CSS). */
+    .serik-split-hero__frame,
+    .serik-split-hero__swiper,
+    .serik-split-hero__slide {
+        aspect-ratio: 4 / 3;
+        width: 100%;
+    }
+    .serik-split-hero__banner-img {
+        width: 100%;
+        height: 100%;
+        aspect-ratio: 4 / 3;
+        object-fit: contain;
+        object-position: center center;
+        display: block;
+    }
+    .serik-split-hero__cashback,
+    .serik-typewriter {
+        min-height: 1.15em;
+    }
 </style>
 <section class="flat-slider home-2 serik-split-hero" aria-label="{{ __('Ontario property search') }}">
     <div class="container serik-split-hero__container">
@@ -76,7 +95,7 @@
                             id="serikHeroTypewriter"
                             data-phrases="{{ e(json_encode(array_values($cashbackBits), JSON_UNESCAPED_UNICODE)) }}"
                         >
-                            <span class="serik-typewriter__text"></span><span class="serik-typewriter__cursor" aria-hidden="true"></span>
+                            <span class="serik-typewriter__text">{{ $cashbackBits[0] }}</span><span class="serik-typewriter__cursor" aria-hidden="true"></span>
                         </span>
                     </h2>
                     <p class="serik-split-hero__terms">*{{ __('Terms and Conditions Apply') }}</p>
@@ -207,12 +226,30 @@
         setTimeout(tick, deleteMs);
     }
 
+    // Seed first phrase in HTML to avoid CLS from typing empty → full.
+    textEl.textContent = phrases[0];
+    charIndex = phrases[0].length;
+
     if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        textEl.textContent = phrases[0];
         return;
     }
 
-    tick();
+    if (phrases.length < 2) {
+        return;
+    }
+
+    // Start cycle after paint so LCP/CLS are not affected by typing.
+    var startCycle = function () {
+        deleting = true;
+        setTimeout(tick, holdMs);
+    };
+    if (document.readyState === 'complete') {
+        setTimeout(startCycle, 1200);
+    } else {
+        window.addEventListener('load', function () {
+            setTimeout(startCycle, 1200);
+        }, { once: true });
+    }
 })();
 </script>
 

@@ -1229,17 +1229,13 @@ if (!el || typeof initFn !== 'function') {
 return
 }
 const run = function () {
-if (el.dataset.serikSwiperBound === '1') {
+if (el.dataset.serikSwiperBound === '1' || el.swiper) {
 return
 }
 el.dataset.serikSwiperBound = '1'
 initFn()
 }
-const top = el.getBoundingClientRect().top
-if (top < (window.innerHeight || 800) + 240) {
-run()
-return
-}
+// Never sync-measure geometry here (avoids forced reflow). Always IO / idle.
 if (typeof IntersectionObserver === 'undefined') {
 if (typeof window.requestIdleCallback === 'function') {
 window.requestIdleCallback(run, { timeout: 2500 })
@@ -1257,7 +1253,7 @@ io.disconnect()
 run()
 }
 },
-{ rootMargin: '240px 0px' }
+{ rootMargin: '200px 0px' }
 )
 io.observe(el)
 }
@@ -1318,9 +1314,14 @@ disableOnInteraction: false,
 }
 
 if ($('.slider-sw-home2').length > 0) {
-// After first paint so Swiper layout reads do not force sync reflow during boot.
+// After first paint + load so Swiper layout reads stay off the LCP/TBT window.
 const serikInitHome2Swiper = function () {
-const swiper2 = new Swiper('.slider-sw-home2', {
+const root = document.querySelector('.slider-sw-home2')
+if (!root || root.dataset.serikSwiperBound === '1' || root.swiper) {
+return
+}
+root.dataset.serikSwiperBound = '1'
+const swiper2 = new Swiper(root, {
 rtl: Theme.isRtl(),
 spaceBetween: 0,
 autoplay: false,
@@ -1329,15 +1330,32 @@ effect: 'fade',
 fadeEffect: {
 crossFade: true,
 },
+observer: false,
+observeParents: false,
+watchOverflow: true,
 })
 serikStartAutoplayAfterLoad(swiper2, {
 delay: 2000,
 disableOnInteraction: false,
 })
 }
+const serikScheduleHome2 = function () {
+const start = function () {
+if (typeof window.requestIdleCallback === 'function') {
+window.requestIdleCallback(serikInitHome2Swiper, { timeout: 2000 })
+} else {
+setTimeout(serikInitHome2Swiper, 400)
+}
+}
 requestAnimationFrame(function () {
-requestAnimationFrame(serikInitHome2Swiper)
+requestAnimationFrame(start)
 })
+}
+if (document.readyState === 'complete') {
+serikScheduleHome2()
+} else {
+window.addEventListener('load', serikScheduleHome2, { once: true })
+}
 }
 
 serikDeferSwiper('.tf-sw-auto', function () {

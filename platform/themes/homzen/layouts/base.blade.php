@@ -118,12 +118,30 @@
     $serikPoppinsLatin600 = asset('storage/fonts/82ced711bf/spoppinsv24pxibyp8kv8jhgfvrlej6z1xlfd2jqek.woff2');
 @endphp
 @if ($isSerikHomepage)
-<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+{{-- Homepage uses self-hosted Poppins (no Google Fonts critical chain). --}}
 <link rel="preload" as="font" type="font/woff2" href="{{ $serikPoppinsLatin400 }}" crossorigin>
 <link rel="preload" as="font" type="font/woff2" href="{{ $serikPoppinsLatin600 }}" crossorigin>
 <link href="{{ $serikTablerIconsCss }}" rel="stylesheet" media="print" onload="this.media='all'">
 <noscript><link href="{{ $serikTablerIconsCss }}" rel="stylesheet"></noscript>
+<style>
+    /* Stable sticky offset before setHeights runs (prevents header CLS). */
+    :root {
+        --serik-top-header-height: 42px;
+        --serik-main-header-height: 64px;
+    }
+    html { scrollbar-gutter: stable; }
+    /* Newsletter/auth modal must not shift layout via scrollbar padding. */
+    body.modal-open,
+    body.newsletter-popup-open {
+        padding-right: 0 !important;
+    }
+    .top-header.serik-hp-topbar {
+        min-height: 42px;
+    }
+    .top-header .top-header-right {
+        min-height: 32px;
+    }
+</style>
 @else
 <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -148,9 +166,9 @@
 @endphp
 @if ($isSerikHomepage)
 {{-- Path-only href so CSS stays same-origin (CSP 'self'). Async: critical vars already inlined above. --}}
-<link rel="preload" as="style" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp80">
-<link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp80" media="print" onload="this.media='all'">
-<noscript><link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp80"></noscript>
+<link rel="preload" as="style" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp81">
+<link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp81" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp81"></noscript>
 @endif
 {{-- Site chrome last: shared navbar/footer + compact laptop scaling --}}
 @if ($isSerikHomepage)

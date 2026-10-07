@@ -79,18 +79,30 @@ class GoogleFonts
             return null;
         }
 
-        if (! str_contains($localizedCss, $this->files->url('fonts'))) {
-            $uploadFolder = 'storage';
+        $uploadFolder = 'storage';
 
-            if (setting('media_customize_upload_path')) {
-                $uploadFolder = trim(setting('media_upload_path'), '/');
-            }
+        if (setting('media_customize_upload_path')) {
+            $uploadFolder = trim(setting('media_upload_path'), '/');
+        }
 
+        // Normalize absolute/local-dev font URLs to root-relative paths so cached
+        // fonts.css works on every host (avoids 127.0.0.1 / stale CDN hosts).
+        $normalizedCss = preg_replace(
+            '/url\((?:https?:)?\/\/[^\/]+\/' . preg_quote($uploadFolder, '/') . '\/fonts\//i',
+            'url(/' . $uploadFolder . '/fonts/',
+            $localizedCss
+        ) ?? $localizedCss;
+
+        if ($normalizedCss !== $localizedCss) {
+            $localizedCss = $normalizedCss;
+            $this->files->put($fontCssPath, $localizedCss);
+        } elseif (! str_contains($localizedCss, $this->files->url('fonts'))
+            && ! str_contains($localizedCss, '/' . $uploadFolder . '/fonts/')) {
             $localizedCss = preg_replace(
-                '/(http|https):\/\/.*?\/' . $uploadFolder . '\/fonts\//i',
+                '/(http|https):\/\/.*?\/' . preg_quote($uploadFolder, '/') . '\/fonts\//i',
                 $this->files->url('fonts/'),
                 $localizedCss
-            );
+            ) ?? $localizedCss;
 
             $this->files->put($fontCssPath, $localizedCss);
         }
@@ -118,7 +130,7 @@ class GoogleFonts
         $localizedCss = $response->body();
 
         try {
-            $extractedFonts = $this->extractFontUrls($response);
+            $extractedFonts = $this->extractFontUrls($localizedCss);
         } catch (Exception) {
             return null;
         }

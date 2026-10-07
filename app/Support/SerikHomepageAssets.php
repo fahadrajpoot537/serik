@@ -106,7 +106,7 @@ final class SerikHomepageAssets
             $html = self::makeStylesheetAsync($html, $pattern);
         }
 
-        return $html;
+        return self::replaceGoogleFontsWithLocalPoppins($html);
     }
 
     public static function optimizeFooterHtml(?string $html): ?string
@@ -159,6 +159,15 @@ final class SerikHomepageAssets
             return true;
         }
 
+        // Stale HTML still pulling render-blocking Google Fonts CSS.
+        if (preg_match('/<link[^>]+href=["\'][^"\']*fonts\.googleapis\.com\/css2[^"\']*["\'][^>]*>/i', $html)) {
+            return true;
+        }
+
+        if (! str_contains($html, '__serikLocalPoppins')) {
+            return true;
+        }
+
         return false;
     }
 
@@ -199,6 +208,9 @@ final class SerikHomepageAssets
 
         // Drop duplicate stylesheet hrefs (e.g. tabler / site-chrome listed twice).
         $html = self::dedupeStylesheetLinks($html);
+
+        // Local Poppins only — remove Google Fonts critical-path chain.
+        $html = self::replaceGoogleFontsWithLocalPoppins($html);
 
         foreach (self::DEFER_SCRIPT_PATTERNS as $pattern) {
             $html = self::deferScriptTag($html, $pattern);
@@ -524,6 +536,52 @@ final class SerikHomepageAssets
 })();
 </script>
 HTML;
+    }
+
+    /**
+     * Swap render-blocking Google Fonts CSS for self-hosted latin Poppins faces.
+     * Preloaded 400/600 files in base.blade already match these filenames.
+     */
+    private static function replaceGoogleFontsWithLocalPoppins(string $html): string
+    {
+        // Blocking remote font CSS (googleapis / bunny).
+        $html = preg_replace(
+            '/<link\b[^>]*href=["\'][^"\']*(?:fonts\.googleapis\.com|fonts\.bunny\.net)\/css2\?[^"\']*["\'][^>]*>\s*/i',
+            '',
+            $html
+        ) ?? $html;
+
+        // Preconnects are useless once we stop calling Google Fonts.
+        $html = preg_replace(
+            '/<link\b[^>]*rel=["\']preconnect["\'][^>]*href=["\']https:\/\/fonts\.(?:googleapis|gstatic)\.com\/?["\'][^>]*>\s*/i',
+            '',
+            $html
+        ) ?? $html;
+        $html = preg_replace(
+            '/<link\b[^>]*href=["\']https:\/\/fonts\.(?:googleapis|gstatic)\.com\/?["\'][^>]*rel=["\']preconnect["\'][^>]*>\s*/i',
+            '',
+            $html
+        ) ?? $html;
+
+        if (str_contains($html, '__serikLocalPoppins')) {
+            return $html;
+        }
+
+        $dir = '/storage/fonts/82ced711bf';
+        $faces = <<<CSS
+<style id="__serikLocalPoppins">
+@font-face{font-family:'Poppins';font-style:normal;font-weight:400;font-display:swap;src:url({$dir}/spoppinsv24pxieyp8kv8jhgfvrjjfecnfhgpc.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'Poppins';font-style:normal;font-weight:500;font-display:swap;src:url({$dir}/spoppinsv24pxibyp8kv8jhgfvrlgt9z1xlfd2jqek.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'Poppins';font-style:normal;font-weight:600;font-display:swap;src:url({$dir}/spoppinsv24pxibyp8kv8jhgfvrlej6z1xlfd2jqek.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'Poppins';font-style:normal;font-weight:700;font-display:swap;src:url({$dir}/spoppinsv24pxibyp8kv8jhgfvrlcz7z1xlfd2jqek.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+</style>
+CSS;
+
+        if (str_contains($html, '</head>')) {
+            return str_replace('</head>', $faces . '</head>', $html);
+        }
+
+        return $faces . $html;
     }
 
     private static function makeStylesheetAsync(string $html, string $pattern): string
