@@ -1318,6 +1318,8 @@ disableOnInteraction: false,
 }
 
 if ($('.slider-sw-home2').length > 0) {
+// After first paint so Swiper layout reads do not force sync reflow during boot.
+const serikInitHome2Swiper = function () {
 const swiper2 = new Swiper('.slider-sw-home2', {
 rtl: Theme.isRtl(),
 spaceBetween: 0,
@@ -1331,6 +1333,10 @@ crossFade: true,
 serikStartAutoplayAfterLoad(swiper2, {
 delay: 2000,
 disableOnInteraction: false,
+})
+}
+requestAnimationFrame(function () {
+requestAnimationFrame(serikInitHome2Swiper)
 })
 }
 

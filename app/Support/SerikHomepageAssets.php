@@ -41,8 +41,7 @@ final class SerikHomepageAssets
         'css/style.css',
         'swiper-bundle.min.css',
         'site-chrome.css',
-        'fonts.googleapis.com',
-        'fonts.gstatic.com',
+        // Do NOT list fonts.googleapis.com / fonts.gstatic.com — that breaks <link rel=preconnect>.
     ];
 
     /**
@@ -534,13 +533,19 @@ HTML;
             static function (array $matches): string {
                 $attrs = $matches[1];
                 $href = $matches[2] ?? '';
+                $full = $matches[0];
+
+                // Only stylesheets — never touch preconnect / preload / icons.
+                if (! preg_match('/\brel=["\']stylesheet["\']/i', $attrs)
+                    && ! preg_match('/\brel=["\']stylesheet["\']/i', $full)) {
+                    return $full;
+                }
 
                 if (str_contains($attrs, 'onload=')) {
-                    return $matches[0];
+                    return $full;
                 }
 
                 $attrs = preg_replace('/\smedia=(["\']).*?\1/i', '', $attrs) ?? $attrs;
-                // Preload so download starts immediately without blocking first paint.
                 $preload = $href !== ''
                     ? '<link rel="preload" as="style" href="' . e($href) . '">'
                     : '';

@@ -829,13 +829,7 @@
         const modalEl = document.getElementById('modalLogin');
         getAuthModal();
 
-        // Warm CSRF after load/idle — base.blade already schedules the same shared call.
-        const warmCsrf = () => refreshAuthCsrfTokens(false);
-        if ('requestIdleCallback' in window) {
-            requestIdleCallback(warmCsrf, { timeout: 5000 });
-        } else {
-            setTimeout(warmCsrf, 2500);
-        }
+        // CSRF warm is owned by base.blade (__serikRefreshCsrf) — no eager call here.
 
         modalEl?.addEventListener('show.bs.modal', () => {
             document.body.classList.add('serik-auth-open');

@@ -167,7 +167,10 @@
     });
   }
 
+  var loaded = false;
   var load = function () {
+    if (loaded) return;
+    loaded = true;
     fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'text/html' } })
       .then(function (r) { return r.ok ? r.text() : ''; })
       .then(function (html) {
@@ -178,9 +181,17 @@
       })
       .catch(function () {});
   };
-  // Far off critical path — do not compete with LCP/CSS (PSI chain was ~5.6s).
-  if ('requestIdleCallback' in window) requestIdleCallback(load, { timeout: 6000 });
-  else setTimeout(load, 3000);
+  // Only when the SEO block nears the viewport (or late fallback) — not on LCP path.
+  if ('IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function (entries) {
+      if (entries.some(function (e) { return e.isIntersecting; })) {
+        io.disconnect();
+        load();
+      }
+    }, { rootMargin: '200px 0px' });
+    io.observe(mount);
+  }
+  setTimeout(load, 12000);
 
   if (!window.__serikSeoNavAccordionBound) {
     window.__serikSeoNavAccordionBound = true;

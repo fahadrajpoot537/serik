@@ -413,13 +413,25 @@ class AppServiceProvider extends ServiceProvider
             run();
             return;
         }
-        if ('requestIdleCallback' in window) {
-            requestIdleCallback(function () { setTimeout(run, 1500); }, { timeout: 4000 });
-        } else {
-            setTimeout(run, 2500);
-        }
+        // Far off LCP: interaction with auth UI, or 10s after load.
+        var armed = false;
+        var arm = function () {
+            if (armed) return;
+            armed = true;
+            setTimeout(run, 200);
+        };
+        document.addEventListener('pointerdown', function (e) {
+            if (e.target && e.target.closest && e.target.closest('.js-auth-open-login, .js-auth-open-register, #modalLogin, .serik-hp-topbar__auth')) {
+                arm();
+            }
+        }, { passive: true });
+        setTimeout(run, 10000);
     }
-    serikAuthNavSync(false);
+    if (document.readyState === 'complete') {
+        serikAuthNavSync(false);
+    } else {
+        window.addEventListener('load', function () { serikAuthNavSync(false); }, { once: true });
+    }
     window.addEventListener('pageshow', function (e) {
         if (e.persisted) serikAuthNavSync(true);
     });

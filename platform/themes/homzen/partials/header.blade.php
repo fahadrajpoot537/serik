@@ -643,28 +643,38 @@
 (function () {
     const topBar = document.querySelector('.top-header');
     const mainHeader = document.getElementById('header');
+    let heightRaf = 0;
     const setHeights = () => {
-        const topH = window.innerWidth >= 992 && topBar ? topBar.offsetHeight : 0;
-        const siteHeader = document.getElementById('serikSiteHeader') || document.querySelector('.serik-site-header');
-        let mainH = 60;
-        if (window.innerWidth >= 992 && siteHeader) {
-            // Pill margin-top is outside the bar; include it so content clears the floating navbar.
-            const bar = mainHeader || siteHeader.querySelector('#header, .main-header');
-            const barH = bar ? (bar.offsetHeight || 64) : 64;
-            const barStyle = bar ? window.getComputedStyle(bar) : null;
-            const barMarginTop = barStyle ? (parseFloat(barStyle.marginTop) || 0) : 0;
-            mainH = Math.ceil(barH + barMarginTop) || 72;
-        } else if (mainHeader) {
-            mainH = mainHeader.offsetHeight || 60;
-        }
-        document.documentElement.style.setProperty('--serik-top-header-height', topH + 'px');
-        document.documentElement.style.setProperty('--serik-main-header-height', mainH + 'px');
+        if (heightRaf) return;
+        heightRaf = requestAnimationFrame(function () {
+            heightRaf = 0;
+            // Batch reads, then write CSS vars (avoids forced reflow).
+            const topH = window.innerWidth >= 992 && topBar ? topBar.offsetHeight : 0;
+            const siteHeader = document.getElementById('serikSiteHeader') || document.querySelector('.serik-site-header');
+            let mainH = 60;
+            let barMarginTop = 0;
+            let barH = 64;
+            if (window.innerWidth >= 992 && siteHeader) {
+                const bar = mainHeader || siteHeader.querySelector('#header, .main-header');
+                barH = bar ? (bar.offsetHeight || 64) : 64;
+                const barStyle = bar ? window.getComputedStyle(bar) : null;
+                barMarginTop = barStyle ? (parseFloat(barStyle.marginTop) || 0) : 0;
+                mainH = Math.ceil(barH + barMarginTop) || 72;
+            } else if (mainHeader) {
+                mainH = mainHeader.offsetHeight || 60;
+            }
+            requestAnimationFrame(function () {
+                document.documentElement.style.setProperty('--serik-top-header-height', topH + 'px');
+                document.documentElement.style.setProperty('--serik-main-header-height', mainH + 'px');
+            });
+        });
     };
     document.documentElement.classList.add('serik-sticky-header-enabled');
     if (mainHeader?.classList.contains('fixed-header')) {
         document.body.classList.add('serik-sticky-header');
     }
-    setHeights();
+    // After first paint — not during sync parse.
+    requestAnimationFrame(function () { requestAnimationFrame(setHeights); });
     window.addEventListener('resize', setHeights);
     window.addEventListener('load', setHeights);
 })();

@@ -147,11 +147,10 @@
     };
 @endphp
 @if ($isSerikHomepage)
-{{-- MUST load AFTER Theme::header() so redesign beats style.css --}}
-{{-- Path-only href so CSS stays same-origin (CSP 'self') on :8000, localhost, or XAMPP. --}}
-{{-- Critical chrome already inlined above; homepage-premium stays blocking (async caused FOUC). --}}
-<link rel="preload" as="style" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp79">
-<link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp79">
+{{-- Path-only href so CSS stays same-origin (CSP 'self'). Async: critical vars already inlined above. --}}
+<link rel="preload" as="style" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp80">
+<link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp80" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp80"></noscript>
 @endif
 {{-- Site chrome last: shared navbar/footer + compact laptop scaling --}}
 @if ($isSerikHomepage)
@@ -334,13 +333,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 });
                 return inflight;
             };
-            var schedule = function () {
-                if (typeof window.requestIdleCallback === 'function') {
-                    window.requestIdleCallback(function () { window.__serikRefreshCsrf(false); }, { timeout: 5000 });
-                } else {
-                    setTimeout(function () { window.__serikRefreshCsrf(false); }, 2500);
-                }
-            };
+            // Off critical path: first form/auth interaction, else ~8s after load.
+            var kick = function () { window.__serikRefreshCsrf(false); };
+            ['pointerdown', 'keydown', 'focusin'].forEach(function (evt) {
+                document.addEventListener(evt, kick, { once: true, capture: true, passive: true });
+            });
+            var schedule = function () { setTimeout(kick, 8000); };
             if (document.readyState === 'complete') {
                 schedule();
             } else {
