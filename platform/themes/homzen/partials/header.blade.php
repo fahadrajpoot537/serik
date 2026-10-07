@@ -1086,10 +1086,10 @@
         <small>Map</small>
     </a>
 
-    <a href="javascript:void(0)" id="openMobileSearchBottom" class="nav-item">
+    <button type="button" id="openMobileSearchBottom" class="nav-item" aria-label="{{ __('Open search') }}">
         <x-core::icon name="ti ti-search" />
         <small>Search</small>
-    </a>
+    </button>
 
     <a href="{{ url('/mortgage-calculator') }}" class="nav-item">
         <x-core::icon name="ti ti-calculator" />

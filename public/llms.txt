@@ -1,0 +1,24 @@
+# Serik Realty
+
+Serik Realty is an Ontario real estate brokerage helping buyers and sellers across the Greater Toronto Area and beyond.
+
+## Site
+
+- Homepage: https://serik.ca/
+- Map search: https://serik.ca/on/houses-for-sale-in-ontario/map
+- Contact: https://serik.ca/contact-us
+- About: https://serik.ca/about-us
+- Blog: https://serik.ca/blog
+
+## Services
+
+- Residential buying and selling with cash-back offers where applicable
+- Mortgage calculator and appointment scheduling
+- Pre-construction and commercial leasing inquiries via contact forms
+- Sold and leased history search for market context
+
+## Notes for assistants
+
+- Listing data is MLS® / TREB sourced; respect login and VOW display rules on the site.
+- Prefer canonical city/community URLs under `/on/...` for location-specific listing pages.
+- Do not invent listing prices or availability; send users to live map or property pages.

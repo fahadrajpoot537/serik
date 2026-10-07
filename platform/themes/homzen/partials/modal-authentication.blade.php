@@ -226,19 +226,29 @@
         cursor: pointer;
     }
 
-    .auth-switch a:hover {
+    .auth-switch a:hover,
+    .auth-switch .auth-text-btn:hover {
         text-decoration: underline;
+    }
+
+    .auth-switch .auth-text-btn,
+    .auth-forgot-link {
+        display: inline;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        background: none;
+        font: inherit;
+        color: rgb(2, 85, 161);
+        font-weight: 600;
+        cursor: pointer;
+        text-decoration: none;
     }
 
     .auth-forgot-link {
         display: inline-block;
         margin-top: 8px;
-        margin-bottom: 0;
-        color: rgb(2, 85, 161);
         font-size: 12px;
-        font-weight: 600;
-        cursor: pointer;
-        text-decoration: none;
     }
 
     .auth-forgot-link:hover {
@@ -483,9 +493,9 @@
                                 <button type="submit" class="btn-auth-primary" id="btnLoginSubmit">Sign In</button>
 
                                 <div class="auth-switch">
-                                    Don't have an account? <a onclick="toggleAuthMode('register')">Create Account</a>
+                                    Don't have an account? <button type="button" class="auth-text-btn" onclick="toggleAuthMode('register')">Create Account</button>
                                 </div>
-                                <a class="auth-forgot-link" onclick="toggleForgotPassword(true)">Forgot Password?</a>
+                                <button type="button" class="auth-forgot-link" onclick="toggleForgotPassword(true)">Forgot Password?</button>
                             </form>
                         </div>
 
@@ -502,7 +512,7 @@
                                     We will email you a new 6-digit PIN. Use that PIN as your password to sign in.
                                 </p>
                                 <button type="submit" class="btn-auth-primary" id="btnForgotSubmit">Send New PIN</button>
-                                <a class="auth-forgot-link" onclick="toggleForgotPassword(false)">← Back to Sign In</a>
+                                <button type="button" class="auth-forgot-link" onclick="toggleForgotPassword(false)">← Back to Sign In</button>
                             </form>
                         </div>
 
@@ -531,7 +541,7 @@
                                 </div>
                                 <button type="button" class="btn-auth-primary" onclick="nextStep(2)">Continue</button>
                                 <div class="auth-switch">
-                                    Already have an account? <a onclick="toggleAuthMode('login')">Sign In</a>
+                                    Already have an account? <button type="button" class="auth-text-btn" onclick="toggleAuthMode('login')">Sign In</button>
                                 </div>
                             </div>
 

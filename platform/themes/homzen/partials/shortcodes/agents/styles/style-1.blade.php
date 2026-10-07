@@ -31,9 +31,9 @@
                                 <div class="content serik-hp-agent-card__body">
                                     <div class="info">
                                         @if (\Botble\RealEstate\Facades\RealEstateHelper::isDisabledPublicProfile())
-                                            <h6>{{ $account->name }} {!! $account->badge !!}</h6>
+                                            <h3 class="agent-card-name">{{ $account->name }} {!! $account->badge !!}</h3>
                                         @else
-                                            <a href="{{ $account->url }}"><h6 class="link">{{ $account->name }} {!! $account->badge !!}</h6></a>
+                                            <a href="{{ $account->url }}"><h3 class="link agent-card-name">{{ $account->name }} {!! $account->badge !!}</h3></a>
                                         @endif
                                         {!! Theme::partial('shortcodes.agents.partials.info', compact('account')) !!}
                                     </div>

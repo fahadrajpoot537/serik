@@ -182,7 +182,7 @@
                         </div>
 
                         <div class="content" style="height: 70%;">
-                            <h6>{!! BaseHelper::clean($service['title']) !!}</h6>
+                            <h3 class="title">{!! BaseHelper::clean($service['title']) !!}</h3>
 
                             <p class="description">
                                 {!! BaseHelper::clean(nl2br($service['description'])) !!}

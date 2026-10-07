@@ -43,7 +43,7 @@
                             <a href="{{ $seoUrl }}" class="homeya-categories serik-hp-cat-card serik-hp-cat-card--{{ ($categoryIndex % 4) + 1 }}" title="{{ $category->PropertySubType }}">
                                 <div class="content text-center serik-hp-cat-card__content">
                                     <span class="serik-hp-cat-card__count">{{ number_format((int) $category->total) }}</span>
-                                    <h6 class="main-heading-cat">{{ $label }}</h6>
+                                    <h3 class="main-heading-cat">{{ $label }}</h3>
                                     <p class="mt-4 text-variant-1 serik-hp-cat-card__meta">
                                         @if ($category->total == 1)
                                             1 Property

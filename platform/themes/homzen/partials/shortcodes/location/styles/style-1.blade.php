@@ -23,7 +23,7 @@
                                     {{ RvMedia::image($location->image, $location->name) }}
                                 </div>
                                 <div class="content">
-                                    <h6 class="title">{{ $location->name }}</h6>
+                                    <h3 class="title">{{ $location->name }}</h3>
                                 </div>
                             </a>
                         </div>

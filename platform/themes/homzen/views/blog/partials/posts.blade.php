@@ -61,7 +61,7 @@
                             <p class="description" style="text-align:justify">{!! BaseHelper::clean(Str::limit($post->description)) !!}</p>
                         @endif
                         <div class="serik-blog-card__foot">
-                            <a href="{{ $post->url }}" class="serik-blog-card__read">
+                            <a href="{{ $post->url }}" class="serik-blog-card__read" aria-label="{{ __('Read more about :title', ['title' => $post->name]) }}">
                                 {{ __('Read More') }}
                                 <x-core::icon name="ti ti-arrow-right" />
                             </a>

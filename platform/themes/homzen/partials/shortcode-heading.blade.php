@@ -94,7 +94,7 @@
         @if($hasButton )
             </div>
 
-            <a href="{{ $buttonUrl }}" class="btn-view button-prop" style="float:right; margin-top:-70px;">
+            <a href="{{ $buttonUrl }}" class="btn-view button-prop" style="float:right; margin-top:-70px;" aria-label="{{ $buttonLabel }}{{ $shortcode->title ? ': ' . trim(strip_tags((string) $shortcode->title)) : '' }}">
                 <span class="text" style="font-weight: 500;">{{ $buttonLabel }}</span>
                 <x-core::icon name="ti ti-arrow-right" class="icon" style="stroke-width: 2" />
             </a>
@@ -103,7 +103,7 @@
         @if($shortcode->subtitle == 'Latest News' )
            
 
-            <a href="{{ get_blog_page_url() }}" class="btn-view button-prop" style="float:right; margin-top:-70px;">
+            <a href="{{ get_blog_page_url() }}" class="btn-view button-prop" style="float:right; margin-top:-70px;" aria-label="{{ __('View all latest news articles') }}">
                 <span class="text" style="font-weight: 700;">View All</span>
                 <x-core::icon name="ti ti-arrow-right" class="icon" style="stroke-width: 2" />
             </a>
