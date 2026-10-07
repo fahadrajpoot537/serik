@@ -373,12 +373,16 @@
     }
 
     function detectFromServer() {
+        var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        var timer = ctrl ? setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, 3000) : null;
+
         return fetch('/api/v1/visitor-location', {
             credentials: 'same-origin',
             headers: {
                 'Accept': 'application/json',
                 'X-Requested-With': 'XMLHttpRequest',
             },
+            signal: ctrl ? ctrl.signal : undefined,
         })
             .then(function (response) {
                 return response.ok ? response.json() : null;
@@ -406,6 +410,11 @@
             })
             .catch(function () {
                 return null;
+            })
+            .finally(function () {
+                if (timer) {
+                    clearTimeout(timer);
+                }
             });
     }
 

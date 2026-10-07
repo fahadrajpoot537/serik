@@ -176,20 +176,48 @@
   }
 
   function hydrateFromApi() {
-    fetch('/api/v1/visitor-location', { credentials: 'same-origin', headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } })
+    // Off critical path — short timeout so a slow geo call cannot stall anything.
+    var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, 3000) : null;
+    fetch('/api/v1/visitor-location', {
+      credentials: 'same-origin',
+      headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      signal: ctrl ? ctrl.signal : undefined
+    })
       .then(function (res) { return res.ok ? res.json() : null; })
       .then(function (data) {
         if (fromLocation(data)) return;
         var city = visitorCity();
         if (city) hydrateWith(city);
       })
-      .catch(function () {});
+      .catch(function () {})
+      .finally(function () { if (timer) clearTimeout(timer); });
+  }
+
+  function hydrateFromCacheOnly() {
+    if (section.dataset.hydrated === '1') return true;
+    try {
+      var cached = window.SerikVisitorLocation && window.SerikVisitorLocation.getSessionLocation && window.SerikVisitorLocation.getSessionLocation();
+      if (fromLocation(cached)) return true;
+    } catch (e) {}
+    var city = visitorCity();
+    if (city) {
+      hydrateWith(city);
+      return section.dataset.hydrated === '1';
+    }
+    return false;
   }
 
   function hydrate(event) {
     if (section.dataset.hydrated === '1') return;
     if (event && event.detail && fromLocation(event.detail)) return;
+    if (hydrateFromCacheOnly()) return;
+  }
 
+  function hydrateWhenIdle() {
+    if (section.dataset.hydrated === '1') return;
+    if (hydrateFromCacheOnly()) return;
+    // API only after the section is near viewport AND the long idle window.
     if (window.SerikVisitorLocation && typeof window.SerikVisitorLocation.detectLocation === 'function') {
       window.SerikVisitorLocation.detectLocation({ preferCached: true, preferBrowser: false })
         .then(function (loc) {
@@ -199,26 +227,41 @@
         .catch(hydrateFromApi);
       return;
     }
-
-    try {
-      var cached = window.SerikVisitorLocation && window.SerikVisitorLocation.getSessionLocation && window.SerikVisitorLocation.getSessionLocation();
-      if (fromLocation(cached)) return;
-    } catch (e) {}
-
-    var city = visitorCity();
-    if (city) {
-      hydrateWith(city);
-      return;
-    }
     hydrateFromApi();
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', hydrate);
-  } else {
-    hydrate();
-  }
+  // Never call visitor-location on DOMContentLoaded (was on the critical path).
   document.addEventListener('serik:visitor-location', hydrate);
+
+  var started = false;
+  function startHydratePipeline() {
+    if (started) return;
+    started = true;
+    hydrateFromCacheOnly();
+    if (typeof IntersectionObserver === 'undefined') {
+      setTimeout(hydrateWhenIdle, 10000);
+      return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      if (!entries.some(function (e) { return e.isIntersecting; })) return;
+      io.disconnect();
+      if (typeof window.requestIdleCallback === 'function') {
+        window.requestIdleCallback(hydrateWhenIdle, { timeout: 10000 });
+      } else {
+        setTimeout(hydrateWhenIdle, 10000);
+      }
+    }, { rootMargin: '200px 0px' });
+    io.observe(section);
+  }
+
+  ['scroll', 'pointerdown', 'keydown', 'touchstart'].forEach(function (evt) {
+    window.addEventListener(evt, startHydratePipeline, { once: true, passive: true });
+  });
+  if (document.readyState === 'complete') {
+    setTimeout(startHydratePipeline, 10000);
+  } else {
+    window.addEventListener('load', function () { setTimeout(startHydratePipeline, 10000); }, { once: true });
+  }
 })();
 </script>
 @endif

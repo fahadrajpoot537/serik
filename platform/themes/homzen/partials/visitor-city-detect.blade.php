@@ -14,12 +14,17 @@
         window.SerikVisitorLocation.detectCityInBackground();
     }
 
-    if (window.SerikVisitorLocation) {
-        runDetect();
-        return;
-    }
-
     function loadVisitorScript() {
+        if (window.__serikVisitorLocationScheduled) {
+            return;
+        }
+        window.__serikVisitorLocationScheduled = true;
+
+        if (window.SerikVisitorLocation) {
+            runDetect();
+            return;
+        }
+
         if (document.querySelector('script[data-serik-visitor-location="1"]')) {
             return;
         }
@@ -32,10 +37,18 @@
         document.head.appendChild(script);
     }
 
-    if ('requestIdleCallback' in window) {
-        requestIdleCallback(loadVisitorScript, { timeout: 2000 });
+    // Off critical path: first interaction OR ~10s after window.load.
+    ['scroll', 'pointerdown', 'keydown', 'touchstart'].forEach(function (eventName) {
+        window.addEventListener(eventName, loadVisitorScript, { once: true, passive: true });
+    });
+
+    function scheduleFallback() {
+        setTimeout(loadVisitorScript, 10000);
+    }
+    if (document.readyState === 'complete') {
+        scheduleFallback();
     } else {
-        setTimeout(loadVisitorScript, 300);
+        window.addEventListener('load', scheduleFallback, { once: true });
     }
 })();
 </script>
