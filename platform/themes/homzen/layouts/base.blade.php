@@ -165,17 +165,11 @@
     };
 @endphp
 @if ($isSerikHomepage)
-{{-- Path-only href so CSS stays same-origin (CSP 'self'). Async: critical vars already inlined above. --}}
-<link rel="preload" as="style" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp81">
-<link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp81" media="print" onload="this.media='all'">
-<noscript><link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp81"></noscript>
-@endif
-{{-- Site chrome last: shared navbar/footer + compact laptop scaling --}}
-@if ($isSerikHomepage)
-<link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc64" media="print" onload="this.media='all'">
-<noscript><link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc64"></noscript>
+{{-- BLOCKING on purpose: async-all-CSS caused unstyled first paint → CLS ~0.9 and PSI ~10. --}}
+<link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp82">
+<link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc65">
 @else
-<link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc64">
+<link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc65">
 @endif
 @if (! request()->boolean('iframe'))
         <script>

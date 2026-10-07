@@ -35,13 +35,12 @@ final class SerikHomepageAssets
         'fancybox',
         'tabler-icons',
         'leaflet',
-        // Heavy theme CSS: async on homepage (homepage-premium stays blocking for above-fold).
-        'bootstrap.min.css',
-        'bootstrap.rtl.min.css',
+        // Below-fold / decorative only. NEVER async bootstrap, homepage-premium, or site-chrome
+        // (that caused unstyled paint → CLS ~0.9 / mobile PSI ~10).
         'css/style.css',
         'swiper-bundle.min.css',
-        'site-chrome.css',
         // Do NOT list fonts.googleapis.com / fonts.gstatic.com — that breaks <link rel=preconnect>.
+        // Do NOT list site-chrome.css / homepage-premium / bootstrap — required for first paint.
     ];
 
     /**
@@ -173,6 +172,17 @@ final class SerikHomepageAssets
             return true;
         }
 
+        // Critical CSS must not be async (media=print) — recover broken PSI deploys.
+        if (preg_match('/<link[^>]+homepage-premium\.css[^>]+media=["\']print["\']/i', $html)) {
+            return true;
+        }
+        if (preg_match('/<link[^>]+site-chrome\.css[^>]+media=["\']print["\']/i', $html)) {
+            return true;
+        }
+        if (preg_match('/<link[^>]+bootstrap\.min\.css[^>]+media=["\']print["\']/i', $html)) {
+            return true;
+        }
+
         return false;
     }
 
@@ -210,6 +220,12 @@ final class SerikHomepageAssets
         foreach (self::ASYNC_PATTERNS as $pattern) {
             $html = self::makeStylesheetAsync($html, $pattern);
         }
+
+        // Heal stale cache that async'd critical CSS (PSI ~10 / CLS ~0.9).
+        $html = self::restoreBlockingStylesheet($html, 'homepage-premium.css');
+        $html = self::restoreBlockingStylesheet($html, 'site-chrome.css');
+        $html = self::restoreBlockingStylesheet($html, 'bootstrap.min.css');
+        $html = self::restoreBlockingStylesheet($html, 'bootstrap.rtl.min.css');
 
         // Drop duplicate stylesheet hrefs (e.g. tabler / site-chrome listed twice).
         $html = self::dedupeStylesheetLinks($html);
@@ -644,6 +660,41 @@ CSS;
         }
 
         return $faces . $html;
+    }
+
+    /**
+     * Convert a media=print async stylesheet back to a normal blocking stylesheet.
+     */
+    private static function restoreBlockingStylesheet(string $html, string $pattern): string
+    {
+        // Drop matching preloads added by makeStylesheetAsync.
+        $html = preg_replace(
+            '/<link\b[^>]*rel=["\']preload["\'][^>]*href=["\'][^"\']*' . preg_quote($pattern, '/') . '[^"\']*["\'][^>]*>\s*/i',
+            '',
+            $html
+        ) ?? $html;
+
+        $html = preg_replace_callback(
+            '/<link\b([^>]*href=["\'][^"\']*' . preg_quote($pattern, '/') . '[^"\']*["\'][^>]*)>/i',
+            static function (array $m): string {
+                $attrs = $m[1];
+                if (! preg_match('/\brel=["\']stylesheet["\']/i', $attrs) && ! preg_match('/\brel=["\']stylesheet["\']/i', $m[0])) {
+                    return $m[0];
+                }
+                $attrs = preg_replace('/\smedia=(["\']).*?\1/i', '', $attrs) ?? $attrs;
+                $attrs = preg_replace('/\sonload=(["\']).*?\1/i', '', $attrs) ?? $attrs;
+
+                return '<link' . $attrs . '>';
+            },
+            $html
+        ) ?? $html;
+
+        // Remove noscript duplicates for the same file (optional cleanup).
+        return preg_replace(
+            '/<noscript>\s*<link[^>]+' . preg_quote($pattern, '/') . '[^>]*>\s*<\/noscript>\s*/i',
+            '',
+            $html
+        ) ?? $html;
     }
 
     private static function makeStylesheetAsync(string $html, string $pattern): string
