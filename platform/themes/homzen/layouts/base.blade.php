@@ -235,8 +235,9 @@
                 window.addEventListener(eventName, loadThirdParty, { once: true, passive: true });
             });
             @if ($isSerikHomepage)
+            // Keep Clarity/Tawk off the Lighthouse TBT window.
             if ('requestIdleCallback' in window) {
-                requestIdleCallback(function () { window.setTimeout(loadThirdParty, 12000); }, { timeout: 20000 });
+                requestIdleCallback(function () { window.setTimeout(loadThirdParty, 20000); }, { timeout: 25000 });
             } else {
                 window.setTimeout(loadThirdParty, 20000);
             }

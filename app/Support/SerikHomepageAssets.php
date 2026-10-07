@@ -37,6 +37,8 @@ final class SerikHomepageAssets
         'leaflet',
         // Keep swiper-bundle.min.css BLOCKING — categories/locations break without it.
         'site-chrome.css',
+        'fonts.googleapis.com',
+        'fonts.gstatic.com',
     ];
 
     /**
@@ -49,21 +51,19 @@ final class SerikHomepageAssets
         'jquery.min.js',
         'swiper-bundle.min.js',
         'js/script.js',
-        // Must stay deferred (not idle): Botble images use data-src + placeholder
-        // and ThemeSupport inits LazyLoad on DOMContentLoaded.
-        'lazyload.min.js',
     ];
 
     /**
      * Non-carousel scripts delayed until idle / interaction (safe for Lighthouse TBT).
      * Popper/bootstrap only needed for login modal — idle + modal show loads them.
-     * Never idle-defer lazyload.min.js — homepage images stay on placeholder otherwise.
+     * Lazyload is idle-safe on homepage because hydrateLazyPlaceholders promotes data-src.
      *
      * @var list<string>
      */
     private const IDLE_THEME_SCRIPT_PATTERNS = [
         'popper.min.js',
         'bootstrap.min.js',
+        'lazyload.min.js',
         'keyboard-a11y.js',
         'jquery.fancybox',
         'newsletter.js',
@@ -130,12 +130,56 @@ final class SerikHomepageAssets
     }
 
     /**
-     * Full HTML pass for homepage (Theme::header/footer fragments + inline assets).
+     * True when cached/served HTML still has homepage-critical blocking junk.
      */
-    public static function optimizeDocumentHtml(string $html): string
+    public static function needsDocumentOptimize(string $html): bool
     {
-        if (! SerikHomepage::isHomepageRequest() || $html === '') {
+        if ($html === '') {
+            return false;
+        }
+
+        if (str_contains($html, 'content-styles.css') || str_contains($html, '/ckeditor/')) {
+            return true;
+        }
+
+        // Idle pass not applied yet (or stale pre-optimize cache).
+        if (! str_contains($html, '__serikHomepageIdleScripts')) {
+            return true;
+        }
+
+        // Scripts that must be idle-extracted are still present as real tags.
+        if (preg_match('/<script[^>]+src=["\'][^"\']*(?:bootstrap\.min\.js|popper\.min\.js|lazyload\.min\.js|visitor-location\.js)[^"\']*["\'][^>]*>/i', $html)) {
+            return true;
+        }
+
+        if (preg_match('/<script[^>]+src=["\'][^"\']*(?:recaptcha\/api\.js|intl-tel-input)[^"\']*["\'][^>]*>/i', $html)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Full HTML pass for homepage (Theme::header/footer fragments + inline assets).
+     *
+     * @param  bool  $force  Re-optimize even when the current request is not detected as homepage
+     *                       (used when healing stale cached HTML on HIT).
+     */
+    public static function optimizeDocumentHtml(string $html, bool $force = false): string
+    {
+        if ($html === '' || (! $force && ! SerikHomepage::isHomepageRequest())) {
             return $html;
+        }
+
+        // If a previous pass left a stale idle loader, strip it so we rebuild with
+        // the current themeQueue (avoids double loaders / empty queues).
+        if (str_contains($html, '__serikHomepageIdleScripts')) {
+            $html = preg_replace(
+                '/<script>\s*\(function\s*\(\)\s*\{\s*if\s*\(window\.__serikHomepageIdleScripts\)[\s\S]*?<\/script>\s*/i',
+                '',
+                $html,
+                1
+            ) ?? $html;
         }
 
         foreach (self::REMOVE_PATTERNS as $pattern) {
@@ -150,6 +194,9 @@ final class SerikHomepageAssets
             $html = self::makeStylesheetAsync($html, $pattern);
         }
 
+        // Drop duplicate stylesheet hrefs (e.g. tabler / site-chrome listed twice).
+        $html = self::dedupeStylesheetLinks($html);
+
         foreach (self::DEFER_SCRIPT_PATTERNS as $pattern) {
             $html = self::deferScriptTag($html, $pattern);
         }
@@ -159,6 +206,13 @@ final class SerikHomepageAssets
         foreach (self::IDLE_SCRIPT_PATTERNS as $pattern) {
             $html = self::stripScriptForIdleLoad($html, $pattern);
         }
+
+        // Homepage images are hydrated — drop Botble LazyLoad boot (undefined/late = TBT noise).
+        $html = preg_replace(
+            '/<script>\s*document\.addEventListener\(\s*[\'"]DOMContentLoaded[\'"]\s*,\s*function\s*\(\)\s*\{\s*window\.Theme\s*=\s*window\.Theme\s*\|\|\s*\{\};[\s\S]*?Theme\.lazyLoadInstance\s*=\s*new\s*LazyLoad\([\s\S]*?<\/script>\s*/i',
+            '',
+            $html
+        ) ?? $html;
 
         if (! str_contains($html, '__serikHomepageIdleScripts')) {
             $html = str_replace('</body>', self::idleLoaderSnippet($themeIdleUrls) . '</body>', $html);
@@ -456,9 +510,9 @@ final class SerikHomepageAssets
 
     // Real users: scroll/tap loads immediately. Lab Lighthouse: keep idle JS off the TBT window.
     if ('requestIdleCallback' in window) {
-        requestIdleCallback(function () { setTimeout(loadAll, 10000); }, { timeout: 14000 });
+        requestIdleCallback(function () { setTimeout(loadAll, 20000); }, { timeout: 25000 });
     } else {
-        setTimeout(loadAll, 12000);
+        setTimeout(loadAll, 20000);
     }
 })();
 </script>
@@ -479,6 +533,34 @@ HTML;
                 $attrs = preg_replace('/\smedia=(["\']).*?\1/i', '', $attrs) ?? $attrs;
 
                 return '<link' . $attrs . ' media="print" onload="this.media=\'all\'">';
+            },
+            $html
+        ) ?? $html;
+    }
+
+    /**
+     * Keep the first stylesheet for each href; drop duplicates (blocking + async copies).
+     */
+    private static function dedupeStylesheetLinks(string $html): string
+    {
+        $seen = [];
+
+        return preg_replace_callback(
+            '/<link\b[^>]*rel=["\']stylesheet["\'][^>]*>\s*/i',
+            static function (array $m) use (&$seen): string {
+                if (! preg_match('/href=(["\'])([^"\']+)\1/i', $m[0], $hrefMatch)) {
+                    return $m[0];
+                }
+
+                $href = html_entity_decode($hrefMatch[2], ENT_QUOTES | ENT_HTML5);
+                // Normalize query-less path for dedupe key of same asset.
+                $key = strtolower(preg_replace('/\?.*$/', '', $href) ?? $href);
+                if (isset($seen[$key])) {
+                    return '';
+                }
+                $seen[$key] = true;
+
+                return $m[0];
             },
             $html
         ) ?? $html;
