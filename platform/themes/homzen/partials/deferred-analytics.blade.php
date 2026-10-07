@@ -1,4 +1,4 @@
-{{-- Analytics stubs immediately; real tags load on interaction or ~3.5s (all pages). --}}
+{{-- Analytics stubs immediately; real tags load on interaction or ~12s after load. --}}
 <script>
 (function () {
     if (window.__serikAnalyticsLoaderBound) {
@@ -85,7 +85,14 @@
     ['scroll', 'pointerdown', 'keydown', 'touchstart'].forEach(function (eventName) {
         window.addEventListener(eventName, loadAnalytics, { once: true, passive: true });
     });
-    window.setTimeout(loadAnalytics, 3500);
+    function scheduleAnalyticsFallback() {
+        window.setTimeout(loadAnalytics, 12000);
+    }
+    if (document.readyState === 'complete') {
+        scheduleAnalyticsFallback();
+    } else {
+        window.addEventListener('load', scheduleAnalyticsFallback, { once: true });
+    }
 })();
 </script>
 

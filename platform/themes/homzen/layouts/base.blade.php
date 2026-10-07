@@ -244,8 +244,15 @@
             ['scroll', 'pointerdown', 'keydown', 'touchstart'].forEach(function (eventName) {
                 window.addEventListener(eventName, loadThirdParty, { once: true, passive: true });
             });
-            // Interaction OR ~3.5s — same policy site-wide (PSI TBT).
-            window.setTimeout(loadThirdParty, 3500);
+            // Interaction OR ~12s after load — short timers fire inside Lighthouse TBT window.
+            function scheduleThirdPartyFallback() {
+                window.setTimeout(loadThirdParty, 12000);
+            }
+            if (document.readyState === 'complete') {
+                scheduleThirdPartyFallback();
+            } else {
+                window.addEventListener('load', scheduleThirdPartyFallback, { once: true });
+            }
         })();
         </script>
         <style>
