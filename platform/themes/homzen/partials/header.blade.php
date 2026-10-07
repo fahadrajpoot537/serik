@@ -1826,7 +1826,14 @@ input.addEventListener('focus', function () {
         deactivateHeaderSearch();
     });
 
-    syncHeaderSearchActive();
+    // Defer first sync — sync getComputedStyle/class churn during parse caused forced reflow.
+    requestAnimationFrame(function () {
+        if (typeof window.requestIdleCallback === 'function') {
+            window.requestIdleCallback(syncHeaderSearchActive, { timeout: 1500 });
+        } else {
+            setTimeout(syncHeaderSearchActive, 400);
+        }
+    });
 })();
 
 if (dropdown) {
