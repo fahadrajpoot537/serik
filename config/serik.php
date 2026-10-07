@@ -256,9 +256,9 @@ return [
     */
     'cache' => [
         'property_detail_ttl' => (int) env('SERIK_PROPERTY_DETAIL_TTL', 1800),
-        'homepage_ttl' => (int) env('SERIK_HOMEPAGE_TTL', 7200),
-        'fragment_ttl' => (int) env('SERIK_FRAGMENT_TTL', 3600),
-        'featured_ttl' => (int) env('SERIK_FEATURED_TTL', 900),
+        'homepage_ttl' => (int) env('SERIK_HOMEPAGE_TTL', 10800),
+        'fragment_ttl' => (int) env('SERIK_FRAGMENT_TTL', 7200),
+        'featured_ttl' => (int) env('SERIK_FEATURED_TTL', 1200),
         'counts_ttl' => (int) env('SERIK_COUNTS_TTL', 3600),
         'place_search_ttl' => (int) env('SERIK_PLACE_SEARCH_TTL', 86400),
         'related_ttl' => (int) env('SERIK_RELATED_TTL', 900),

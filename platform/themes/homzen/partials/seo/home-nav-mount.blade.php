@@ -8,7 +8,8 @@
             <h2 class="section-title mt-0">{{ __('Find Your Perfect') }} <span class="serik-hp-find__accent">{{ __('Property') }}</span></h2>
             <p class="serik-hp-find__sub">{{ __('Quick links to explore active listings, sold properties, popular searches, and neighbourhoods across Ontario.') }}</p>
         </header>
-        <div id="serikHomeSeoNavMount" class="serik-home-seo-nav-mount" data-url="{{ $ajaxUrl }}" aria-hidden="true"></div>
+        {{-- data-hydrate-url: lazy city lists (SSR keeps header/find copy); mega-menu city links stay SSR for SEO. --}}
+        <div id="serikHomeSeoNavMount" class="serik-home-seo-nav-mount" data-url="{{ $ajaxUrl }}" data-hydrate-url="{{ $ajaxUrl }}" aria-hidden="true"></div>
     </div>
 </section>
 <style>
@@ -115,9 +116,9 @@
 <script>
 (function () {
   var mount = document.getElementById('serikHomeSeoNavMount');
-  if (!mount || !mount.dataset.url || mount.dataset.loaded === '1') return;
+  var url = mount && (mount.getAttribute('data-hydrate-url') || mount.dataset.url || '');
+  if (!mount || !url || mount.dataset.loaded === '1') return;
   mount.dataset.loaded = '1';
-  var url = mount.dataset.url;
   function cityFromVisitor() {
     try {
       var cookie = (document.cookie.match(/(?:^|;\s*)serik_visitor_city=([^;]+)/) || [])[1];

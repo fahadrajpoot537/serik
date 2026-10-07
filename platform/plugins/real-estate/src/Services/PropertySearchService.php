@@ -750,7 +750,7 @@ class PropertySearchService
      */
     public function getPublicCommunityIndex(): array
     {
-        return SerikCache::remember('serik_community_index_public_v1', 21600, function () {
+        return SerikCache::remember('serik_community_index_public_v2', 21600, function () {
             $out = [];
 
             foreach ($this->getCommunityIndex() as $row) {

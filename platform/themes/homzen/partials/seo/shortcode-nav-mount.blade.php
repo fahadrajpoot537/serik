@@ -1,12 +1,12 @@
 @php
     $mountId = 'serikSeoNavShortcode-' . substr(md5(($ajaxUrl ?? '') . uniqid('', true)), 0, 8);
 @endphp
-<div id="{{ $mountId }}" class="serik-seo-nav-shortcode-mount" data-url="{{ $ajaxUrl }}" aria-hidden="true"></div>
+<div id="{{ $mountId }}" class="serik-seo-nav-shortcode-mount" data-url="{{ $ajaxUrl }}" data-hydrate-url="{{ $ajaxUrl }}" aria-hidden="true"></div>
 <script>
 (function () {
   var mount = document.getElementById(@json($mountId));
-  if (!mount || !mount.dataset.url) return;
-  var url = mount.dataset.url;
+  var url = mount && (mount.getAttribute('data-hydrate-url') || mount.dataset.url || '');
+  if (!mount || !url) return;
   var load = function () {
     fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'text/html' } })
       .then(function (r) { return r.ok ? r.text() : ''; })
