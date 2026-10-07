@@ -111,18 +111,28 @@
     $isSerikHomepage = \App\Support\SerikHomepage::isHomepageRequest();
 @endphp
         </style>
+@php
+    // Pin Tabler webfont (never @latest). Full icon-subset CSS skipped — dynamic ti-* classes risk missing glyphs.
+    $serikTablerIconsCss = 'https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.34.1/dist/tabler-icons.min.css';
+    $serikPoppinsLatin400 = asset('storage/fonts/82ced711bf/spoppinsv24pxieyp8kv8jhgfvrjjfecnfhgpc.woff2');
+    $serikPoppinsLatin600 = asset('storage/fonts/82ced711bf/spoppinsv24pxibyp8kv8jhgfvrlej6z1xlfd2jqek.woff2');
+@endphp
 @if ($isSerikHomepage)
 <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" rel="stylesheet" media="print" onload="this.media='all'">
-<noscript><link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" rel="stylesheet"></noscript>
+<link rel="preload" as="font" type="font/woff2" href="{{ $serikPoppinsLatin400 }}" crossorigin>
+<link rel="preload" as="font" type="font/woff2" href="{{ $serikPoppinsLatin600 }}" crossorigin>
+<link href="{{ $serikTablerIconsCss }}" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="{{ $serikTablerIconsCss }}" rel="stylesheet"></noscript>
 @else
 <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
-<link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" rel="stylesheet" media="print" onload="this.media='all'">
-<noscript><link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" rel="stylesheet"></noscript>
+<link rel="preload" as="font" type="font/woff2" href="{{ $serikPoppinsLatin400 }}" crossorigin>
+<link rel="preload" as="font" type="font/woff2" href="{{ $serikPoppinsLatin600 }}" crossorigin>
+<link href="{{ $serikTablerIconsCss }}" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="{{ $serikTablerIconsCss }}" rel="stylesheet"></noscript>
 @endif
 
         {{-- Favicons are emitted by Theme::header() (Google-compliant ≥48×48 root icons) --}}
@@ -139,14 +149,16 @@
 @if ($isSerikHomepage)
 {{-- MUST load AFTER Theme::header() so redesign beats style.css --}}
 {{-- Path-only href so CSS stays same-origin (CSP 'self') on :8000, localhost, or XAMPP. --}}
-<link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp76">
+{{-- Critical chrome already inlined above; homepage-premium stays blocking (async caused FOUC). --}}
+<link rel="preload" as="style" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp77">
+<link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp77">
 @endif
 {{-- Site chrome last: shared navbar/footer + compact laptop scaling --}}
 @if ($isSerikHomepage)
-<link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc62" media="print" onload="this.media='all'">
-<noscript><link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc62"></noscript>
+<link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc63" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc63"></noscript>
 @else
-<link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc62">
+<link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc63">
 @endif
 @if (! request()->boolean('iframe'))
         <script>

@@ -262,6 +262,14 @@ final class SerikHomepageAssets
         // Touches HTML only — originals on disk / DB URLs are never modified.
         $html = SerikResponsiveImage::enhanceHomepageHtml($html);
 
+        // CMS testimonial paste often embeds font-family:Roboto (no Roboto file is loaded).
+        // Point those spans at Poppins so browsers do not request a stray Roboto face.
+        $html = preg_replace(
+            '/font-family\s*:\s*Roboto\b[^;}"\']*/i',
+            'font-family:var(--primary-font, Poppins, sans-serif)',
+            $html
+        ) ?? $html;
+
         // Do NOT use naive \bsrc= rewrite (matches data-src / this.src and wipes URLs).
         return $html;
     }
