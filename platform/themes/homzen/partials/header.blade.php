@@ -636,7 +636,6 @@
 
 <header
     id="header"
-    style="min-height: 64px;"
     @class(['main-header', 'serik-hp-nav', 'fixed-header' => theme_option('sticky_header_enabled', true), Theme::get('headerClass')])
 >
 <script>
@@ -644,24 +643,32 @@
     const topBar = document.querySelector('.top-header');
     const mainHeader = document.getElementById('header');
     let heightRaf = 0;
+    const readPx = function (name, fallback) {
+        const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        const n = parseFloat(raw);
+        return Number.isFinite(n) ? n : fallback;
+    };
     const setHeights = () => {
         if (heightRaf) return;
         heightRaf = requestAnimationFrame(function () {
             heightRaf = 0;
-            // Batch reads, then write CSS vars (avoids forced reflow).
+            // Batch reads, then write only if delta is meaningful (avoids CLS + reflow).
             const topH = window.innerWidth >= 992 && topBar ? topBar.offsetHeight : 0;
             const siteHeader = document.getElementById('serikSiteHeader') || document.querySelector('.serik-site-header');
-            let mainH = 60;
-            let barMarginTop = 0;
-            let barH = 64;
+            let mainH = window.innerWidth >= 992 ? 80 : 64;
             if (window.innerWidth >= 992 && siteHeader) {
                 const bar = mainHeader || siteHeader.querySelector('#header, .main-header');
-                barH = bar ? (bar.offsetHeight || 64) : 64;
+                const barH = bar ? (bar.offsetHeight || 80) : 80;
                 const barStyle = bar ? window.getComputedStyle(bar) : null;
-                barMarginTop = barStyle ? (parseFloat(barStyle.marginTop) || 0) : 0;
-                mainH = Math.ceil(barH + barMarginTop) || 72;
+                const barMarginTop = barStyle ? (parseFloat(barStyle.marginTop) || 0) : 0;
+                mainH = Math.ceil(barH + barMarginTop) || 80;
             } else if (mainHeader) {
-                mainH = mainHeader.offsetHeight || 60;
+                mainH = mainHeader.offsetHeight || 64;
+            }
+            const prevTop = readPx('--serik-top-header-height', window.innerWidth >= 992 ? 42 : 0);
+            const prevMain = readPx('--serik-main-header-height', window.innerWidth >= 992 ? 80 : 64);
+            if (Math.abs(prevTop - topH) < 4 && Math.abs(prevMain - mainH) < 4) {
+                return;
             }
             requestAnimationFrame(function () {
                 document.documentElement.style.setProperty('--serik-top-header-height', topH + 'px');
@@ -670,13 +677,23 @@
         });
     };
     document.documentElement.classList.add('serik-sticky-header-enabled');
-    if (mainHeader?.classList.contains('fixed-header')) {
+    if (mainHeader && mainHeader.classList.contains('fixed-header')) {
         document.body.classList.add('serik-sticky-header');
     }
-    // After first paint — not during sync parse.
-    requestAnimationFrame(function () { requestAnimationFrame(setHeights); });
+    // After load only — critical CSS already reserves final sticky offsets.
+    const schedule = function () {
+        if (typeof window.requestIdleCallback === 'function') {
+            window.requestIdleCallback(setHeights, { timeout: 2000 });
+        } else {
+            setTimeout(setHeights, 800);
+        }
+    };
+    if (document.readyState === 'complete') {
+        schedule();
+    } else {
+        window.addEventListener('load', schedule, { once: true });
+    }
     window.addEventListener('resize', setHeights);
-    window.addEventListener('load', setHeights);
 })();
 </script>
     <div class="header-lower">

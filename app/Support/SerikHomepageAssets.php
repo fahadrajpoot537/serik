@@ -35,14 +35,13 @@ final class SerikHomepageAssets
         'fancybox',
         'tabler-icons',
         'leaflet',
-        // Async below critical+premium. Do NOT async homepage-premium (desktop CLS).
+        // Async below critical+premium+chrome. Blocking chrome/premium required for CLS < 0.05.
         'bootstrap.min.css',
         'bootstrap.rtl.min.css',
-        'site-chrome.css',
         'css/style.css',
         'swiper-bundle.min.css',
         // Do NOT list fonts.googleapis.com / fonts.gstatic.com — that breaks <link rel=preconnect>.
-        // Do NOT list homepage-premium.css — blocking required for stable desktop layout.
+        // Do NOT list homepage-premium.css / site-chrome.css — late arrival shifts #header/#wrapper.
     ];
 
     /**
@@ -163,8 +162,8 @@ final class SerikHomepageAssets
             return true;
         }
 
-        // Premium must be blocking (not media=print) for desktop CLS.
-        if (preg_match('/<link[^>]+homepage-premium\.css[^>]+media=["\']print["\']/i', $html)) {
+        // Premium + site-chrome must be blocking (not media=print) for CLS < 0.05.
+        if (preg_match('/<link[^>]+(?:homepage-premium|site-chrome)\.css[^>]+media=["\']print["\']/i', $html)) {
             return true;
         }
 
@@ -231,8 +230,9 @@ final class SerikHomepageAssets
             $html = self::makeStylesheetAsync($html, $pattern);
         }
 
-        // Heal stale async premium → blocking.
+        // Heal stale async premium/chrome → blocking (CLS regression guard).
         $html = self::restoreBlockingStylesheet($html, 'homepage-premium.css');
+        $html = self::restoreBlockingStylesheet($html, 'site-chrome.css');
 
         // Drop duplicate stylesheet hrefs (e.g. tabler / site-chrome listed twice).
         $html = self::dedupeStylesheetLinks($html);
