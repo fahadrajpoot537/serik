@@ -1034,14 +1034,15 @@ if (isAboutUsPage() || isFeedbackePage() ) {
     
 }
 
-// After showing/hiding contact sections, (re)init CAPTCHA on the visible form(s).
-if (typeof window.initSerikRecaptcha === 'function') {
-    window.initSerikRecaptcha();
-    setTimeout(function () {
+// After showing/hiding contact sections, load CAPTCHA once then render visible widgets.
+if (typeof window.loadRecaptcha === 'function') {
+    window.loadRecaptcha().then(function () {
         if (typeof window.initSerikRecaptcha === 'function') {
             window.initSerikRecaptcha();
         }
-    }, 400);
+    }).catch(function () {});
+} else if (typeof window.initSerikRecaptcha === 'function') {
+    window.initSerikRecaptcha();
 }
 
 

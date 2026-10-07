@@ -738,9 +738,27 @@ $(() => {
         const $button = $form.find('button[type=submit]')
         const formEl = $form[0]
 
-        // Attach Google reCAPTCHA token (explicit render via initSerikRecaptcha).
-        if (typeof grecaptcha !== 'undefined' && window.newsletterRecaptchaWidgetId != null) {
+        const sendSubscribe = () => {
+            if (typeof window.initSerikRecaptcha === 'function') {
+                window.initSerikRecaptcha()
+            }
+
+            // Attach Google reCAPTCHA token (explicit render via initSerikRecaptcha).
+            if (typeof grecaptcha === 'undefined' || window.newsletterRecaptchaWidgetId == null) {
+                if (typeof Theme !== 'undefined' && Theme.showError) {
+                    Theme.showError('Please complete the reCAPTCHA verification.')
+                }
+                return
+            }
+
             const token = grecaptcha.getResponse(window.newsletterRecaptchaWidgetId) || ''
+            if (!token) {
+                if (typeof Theme !== 'undefined' && Theme.showError) {
+                    Theme.showError('Please complete the reCAPTCHA verification.')
+                }
+                return
+            }
+
             let input = formEl.querySelector('textarea[name="g-recaptcha-response"], input[name="g-recaptcha-response"]')
             if (!input) {
                 input = document.createElement('input')
@@ -749,38 +767,51 @@ $(() => {
                 formEl.appendChild(input)
             }
             input.value = token
+
+            $.ajax({
+                type: 'POST',
+                cache: false,
+                url: $form.prop('action'),
+                data: new FormData(formEl),
+                contentType: false,
+                processData: false,
+                beforeSend: () => $button.prop('disabled', true).addClass('btn-loading'),
+                success: ({error, message}) => {
+                    if (error) {
+                        Theme.showError(message)
+
+                        return
+                    }
+
+                    $form.find('input[name="email"]').val('')
+
+                    Theme.showSuccess(message)
+
+                    document.dispatchEvent(new CustomEvent('newsletter.subscribed'))
+                },
+                error: (error) => Theme.handleError(error),
+                complete: () => {
+                    if (typeof refreshRecaptcha !== 'undefined') {
+                        refreshRecaptcha()
+                    }
+
+                    $button.prop('disabled', false).removeClass('btn-loading')
+                },
+            })
         }
 
-        $.ajax({
-            type: 'POST',
-            cache: false,
-            url: $form.prop('action'),
-            data: new FormData(formEl),
-            contentType: false,
-            processData: false,
-            beforeSend: () => $button.prop('disabled', true).addClass('btn-loading'),
-            success: ({error, message}) => {
-                if (error) {
-                    Theme.showError(message)
-
-                    return
-                }
-
-                $form.find('input[name="email"]').val('')
-
-                Theme.showSuccess(message)
-
-                document.dispatchEvent(new CustomEvent('newsletter.subscribed'))
-            },
-            error: (error) => Theme.handleError(error),
-            complete: () => {
-                if (typeof refreshRecaptcha !== 'undefined') {
-                    refreshRecaptcha()
-                }
-
+        if (typeof grecaptcha === 'undefined' && typeof window.loadRecaptcha === 'function') {
+            $button.prop('disabled', true).addClass('btn-loading')
+            window.loadRecaptcha().then(sendSubscribe).catch(() => {
                 $button.prop('disabled', false).removeClass('btn-loading')
-            },
-        })
+                if (typeof Theme !== 'undefined' && Theme.showError) {
+                    Theme.showError('Please complete the reCAPTCHA verification.')
+                }
+            })
+            return
+        }
+
+        sendSubscribe()
     })
 
     const animateHeading = () => {

@@ -2,7 +2,7 @@
 @php
     use Theme\homzen\Supports\RecaptchaHelper;
 @endphp
-<script src="https://www.google.com/recaptcha/api.js?onload=initSerikRecaptcha&render=explicit" async defer></script>
+{{-- reCAPTCHA api.js is injected on demand via window.loadRecaptcha() (PSI TBT). --}}
 <style>
     #modalLogin.modal:not(.show) {
         display: none !important;
@@ -767,6 +767,10 @@
             modal.show();
         }
 
+        if (typeof window.loadRecaptcha === 'function') {
+            window.loadRecaptcha();
+        }
+
         requestAnimationFrame(() => {
             syncAuthBodyHeight();
         });
@@ -825,10 +829,6 @@
         });
 
         modalEl?.addEventListener('hidden.bs.modal', resetAuthModalState);
-
-        if (typeof grecaptcha !== 'undefined' && typeof grecaptcha.render === 'function') {
-            initSerikRecaptcha();
-        }
 
         // Capture-phase so top-bar Login/Register opens instantly (before other handlers).
         document.addEventListener('click', function (e) {
@@ -1161,15 +1161,109 @@
     let newsletterRecaptchaWidgetId = null;
     window.newsletterRecaptchaWidgetId = null;
 
+    const RECAPTCHA_API_SRC = 'https://www.google.com/recaptcha/api.js?onload=__serikRecaptchaOnload&render=explicit';
+    let recaptchaLoadPromise = null;
+
+    /**
+     * Inject reCAPTCHA api.js once. Resolves when grecaptcha.render is available.
+     * Kept as window.loadRecaptcha for contact forms / newsletter / idle hooks.
+     */
+    function loadRecaptcha() {
+        if (typeof grecaptcha !== 'undefined' && typeof grecaptcha.render === 'function') {
+            return Promise.resolve(grecaptcha);
+        }
+        if (recaptchaLoadPromise) {
+            return recaptchaLoadPromise;
+        }
+        if (!recaptchaSiteKey) {
+            return Promise.reject(new Error('reCAPTCHA site key missing'));
+        }
+
+        recaptchaLoadPromise = new Promise(function (resolve, reject) {
+            const prev = window.__serikRecaptchaOnload;
+            window.__serikRecaptchaOnload = function () {
+                try {
+                    if (typeof prev === 'function') {
+                        prev();
+                    }
+                } catch (e) {}
+                if (typeof window.initSerikRecaptcha === 'function') {
+                    window.initSerikRecaptcha();
+                }
+                resolve(window.grecaptcha);
+            };
+
+            if (document.querySelector('script[src*="recaptcha/api.js"]')) {
+                var tries = 0;
+                var t = setInterval(function () {
+                    tries++;
+                    if (typeof grecaptcha !== 'undefined' && typeof grecaptcha.render === 'function') {
+                        clearInterval(t);
+                        window.__serikRecaptchaOnload();
+                    } else if (tries > 80) {
+                        clearInterval(t);
+                        reject(new Error('reCAPTCHA load timeout'));
+                    }
+                }, 50);
+                return;
+            }
+
+            var s = document.createElement('script');
+            s.src = RECAPTCHA_API_SRC;
+            s.async = true;
+            s.defer = true;
+            s.onerror = function () {
+                recaptchaLoadPromise = null;
+                reject(new Error('reCAPTCHA script failed'));
+            };
+            document.head.appendChild(s);
+        });
+
+        return recaptchaLoadPromise;
+    }
+    window.loadRecaptcha = loadRecaptcha;
+
+    function bindRecaptchaOnDemandTriggers() {
+        if (window.__serikRecaptchaTriggersBound) {
+            return;
+        }
+        window.__serikRecaptchaTriggersBound = true;
+
+        var trigger = function (e) {
+            var t = e.target;
+            if (!t || !t.closest) {
+                return;
+            }
+            if (t.closest('form, #modalLogin, #modalRegister, .subscribe-form, .contact-form')) {
+                loadRecaptcha().catch(function () {});
+            }
+        };
+
+        document.addEventListener('focusin', trigger, true);
+        document.addEventListener('pointerenter', trigger, true);
+        document.addEventListener('click', trigger, true);
+
+        window.addEventListener('load', function () {
+            setTimeout(function () {
+                loadRecaptcha().catch(function () {});
+            }, 8000);
+        });
+    }
+    bindRecaptchaOnDemandTriggers();
+
     function initSerikRecaptcha() {
-        if (typeof grecaptcha === 'undefined' || !recaptchaSiteKey) {
+        if (typeof grecaptcha === 'undefined' || typeof grecaptcha.render !== 'function' || !recaptchaSiteKey) {
             return;
         }
 
         const loginEl = document.getElementById('loginRecaptcha');
-        if (loginEl && loginRecaptchaWidgetId === null) {
-            loginRecaptchaWidgetId = grecaptcha.render(loginEl, { sitekey: recaptchaSiteKey });
-            setTimeout(syncAuthBodyHeight, 100);
+        if (loginEl && loginRecaptchaWidgetId === null && !loginEl.childElementCount) {
+            try {
+                loginRecaptchaWidgetId = grecaptcha.render(loginEl, { sitekey: recaptchaSiteKey });
+                setTimeout(syncAuthBodyHeight, 100);
+            } catch (err) {
+                // Already rendered
+            }
         }
 
         // Prefer class-based widgets (unique ids). Fall back to legacy #contactRecaptcha.
@@ -1200,7 +1294,9 @@
                 const wid = grecaptcha.render(contactEl, { sitekey: recaptchaSiteKey });
                 contactEl.setAttribute('data-widget-ready', '1');
                 contactEl.setAttribute('data-widget-id', String(wid));
-                window.serikContactRecaptchaWidgets.push(wid);
+                if (window.serikContactRecaptchaWidgets.indexOf(wid) === -1) {
+                    window.serikContactRecaptchaWidgets.push(wid);
+                }
                 contactRecaptchaWidgetId = wid;
                 window.contactRecaptchaWidgetId = wid;
             } catch (err) {
@@ -1210,8 +1306,10 @@
 
         const newsletterEl = document.getElementById('newsletterRecaptcha');
         if (newsletterEl && newsletterRecaptchaWidgetId === null && !newsletterEl.childElementCount) {
-            newsletterRecaptchaWidgetId = grecaptcha.render(newsletterEl, { sitekey: recaptchaSiteKey });
-            window.newsletterRecaptchaWidgetId = newsletterRecaptchaWidgetId;
+            try {
+                newsletterRecaptchaWidgetId = grecaptcha.render(newsletterEl, { sitekey: recaptchaSiteKey });
+                window.newsletterRecaptchaWidgetId = newsletterRecaptchaWidgetId;
+            } catch (err) {}
         }
     }
     window.initSerikRecaptcha = initSerikRecaptcha;
@@ -1233,39 +1331,72 @@
     };
 
     // Inject token into whichever contact form is submitting (multi-form pages).
+    // If api.js is still loading, delay submit until ready (never submit without a token).
     document.addEventListener('submit', function (e) {
         const form = e.target;
         if (!(form instanceof HTMLFormElement) || !form.classList.contains('contact-form')) {
             return;
         }
-        if (typeof grecaptcha === 'undefined') {
+
+        const attachToken = function () {
+            if (typeof grecaptcha === 'undefined') {
+                return false;
+            }
+            if (typeof window.initSerikRecaptcha === 'function') {
+                window.initSerikRecaptcha();
+            }
+            const widgetEl = form.querySelector('.js-serik-contact-recaptcha, #contactRecaptcha');
+            let wid = widgetEl ? widgetEl.getAttribute('data-widget-id') : null;
+            wid = wid != null && wid !== '' ? Number(wid) : window.contactRecaptchaWidgetId;
+            if (wid == null || Number.isNaN(wid)) {
+                return false;
+            }
+            const token = grecaptcha.getResponse(wid) || '';
+            if (!token) {
+                return false;
+            }
+            let input = form.querySelector('textarea[name="g-recaptcha-response"], input[name="g-recaptcha-response"]');
+            if (!input) {
+                input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'g-recaptcha-response';
+                form.appendChild(input);
+            }
+            input.value = token;
+            return true;
+        };
+
+        if (typeof grecaptcha === 'undefined' || typeof grecaptcha.getResponse !== 'function') {
+            e.preventDefault();
+            e.stopPropagation();
+            loadRecaptcha().then(function () {
+                if (attachToken()) {
+                    if (typeof form.requestSubmit === 'function') {
+                        form.requestSubmit();
+                    } else {
+                        HTMLFormElement.prototype.submit.call(form);
+                    }
+                }
+            }).catch(function () {});
             return;
         }
-        const widgetEl = form.querySelector('.js-serik-contact-recaptcha, #contactRecaptcha');
-        let wid = widgetEl ? widgetEl.getAttribute('data-widget-id') : null;
-        wid = wid != null && wid !== '' ? Number(wid) : window.contactRecaptchaWidgetId;
-        if (wid == null || Number.isNaN(wid)) {
-            return;
-        }
-        const token = grecaptcha.getResponse(wid) || '';
-        let input = form.querySelector('textarea[name="g-recaptcha-response"], input[name="g-recaptcha-response"]');
-        if (!input) {
-            input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = 'g-recaptcha-response';
-            form.appendChild(input);
-        }
-        input.value = token;
+
+        attachToken();
     }, true);
 
     function ensureRegisterRecaptcha() {
-        if (typeof grecaptcha === 'undefined') {
+        if (typeof grecaptcha === 'undefined' || typeof grecaptcha.render !== 'function') {
+            loadRecaptcha().then(function () {
+                ensureRegisterRecaptcha();
+            }).catch(function () {});
             return;
         }
 
         const registerEl = document.getElementById('registerRecaptcha');
-        if (registerEl && registerRecaptchaWidgetId === null) {
-            registerRecaptchaWidgetId = grecaptcha.render(registerEl, { sitekey: recaptchaSiteKey });
+        if (registerEl && registerRecaptchaWidgetId === null && !registerEl.childElementCount) {
+            try {
+                registerRecaptchaWidgetId = grecaptcha.render(registerEl, { sitekey: recaptchaSiteKey });
+            } catch (err) {}
         }
     }
 
@@ -1302,69 +1433,89 @@
         const form = e.target;
         const btn = document.getElementById('btnLoginSubmit');
         const originalText = btn.innerHTML;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Signing in...';
-        btn.disabled = true;
-
         const errDiv = document.getElementById('loginPassErr');
         const captchaErr = document.getElementById('loginCaptchaErr');
-        errDiv.style.display = 'none';
-        captchaErr.style.display = 'none';
 
-        const captchaResponse = getRecaptchaResponse(loginRecaptchaWidgetId);
-        if (!captchaResponse) {
-            captchaErr.textContent = 'Please complete the reCAPTCHA verification.';
-            captchaErr.style.display = 'block';
-            btn.innerHTML = originalText;
-            btn.disabled = false;
-            return;
-        }
+        const runLogin = function () {
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Signing in...';
+            btn.disabled = true;
+            errDiv.style.display = 'none';
+            captchaErr.style.display = 'none';
 
-        const formData = new FormData(form);
-        formData.set('g-recaptcha-response', captchaResponse);
-
-        refreshAuthCsrfTokens().then(() => {
-            formData.set('_token', form.querySelector('input[name="_token"]')?.value || '');
-
-        fetch(form.action, {
-            method: 'POST',
-            body: formData,
-            credentials: 'same-origin',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'Accept': 'application/json',
+            if (typeof window.initSerikRecaptcha === 'function') {
+                window.initSerikRecaptcha();
             }
-        })
-            .then(async res => {
-                if (res.status === 419) {
-                    errDiv.textContent = 'Session expired. Refreshing page...';
-                    errDiv.style.display = 'block';
-                    setTimeout(() => location.reload(), 600);
-                    return;
-                }
 
-                const result = await res.json();
-                if (!res.ok || result.error) {
-                    let errText = result.message || 'Login failed. Please check your credentials.';
-                    if (result.errors) {
-                        errText = Object.values(result.errors)[0][0]; // get first validation error
+            const captchaResponse = getRecaptchaResponse(loginRecaptchaWidgetId);
+            if (!captchaResponse) {
+                captchaErr.textContent = 'Please complete the reCAPTCHA verification.';
+                captchaErr.style.display = 'block';
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                return;
+            }
+
+            const formData = new FormData(form);
+            formData.set('g-recaptcha-response', captchaResponse);
+
+            refreshAuthCsrfTokens().then(() => {
+                formData.set('_token', form.querySelector('input[name="_token"]')?.value || '');
+
+            fetch(form.action, {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                }
+            })
+                .then(async res => {
+                    if (res.status === 419) {
+                        errDiv.textContent = 'Session expired. Refreshing page...';
+                        errDiv.style.display = 'block';
+                        setTimeout(() => location.reload(), 600);
+                        return;
                     }
-                    errDiv.innerHTML = errText;
+
+                    const result = await res.json();
+                    if (!res.ok || result.error) {
+                        let errText = result.message || 'Login failed. Please check your credentials.';
+                        if (result.errors) {
+                            errText = Object.values(result.errors)[0][0]; // get first validation error
+                        }
+                        errDiv.innerHTML = errText;
+                        errDiv.style.display = 'block';
+                        resetAuthCaptcha(loginRecaptchaWidgetId);
+                        btn.innerHTML = originalText;
+                        btn.disabled = false;
+                    } else {
+                        location.reload(); // success, reload to view secure property
+                    }
+                })
+                .catch(err => {
+                    errDiv.textContent = 'An unexpected error occurred. Please try again.';
                     errDiv.style.display = 'block';
                     resetAuthCaptcha(loginRecaptchaWidgetId);
                     btn.innerHTML = originalText;
                     btn.disabled = false;
-                } else {
-                    location.reload(); // success, reload to view secure property
-                }
-            })
-            .catch(err => {
-                errDiv.textContent = 'An unexpected error occurred. Please try again.';
-                errDiv.style.display = 'block';
-                resetAuthCaptcha(loginRecaptchaWidgetId);
+                });
+            });
+        };
+
+        if (typeof grecaptcha === 'undefined' || typeof grecaptcha.getResponse !== 'function') {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Loading…';
+            loadRecaptcha().then(runLogin).catch(function () {
+                captchaErr.textContent = 'Please complete the reCAPTCHA verification.';
+                captchaErr.style.display = 'block';
                 btn.innerHTML = originalText;
                 btn.disabled = false;
             });
-        });
+            return;
+        }
+
+        runLogin();
     });
 
     // Handle AJAX Register Form Submission
@@ -1386,74 +1537,88 @@
             return;
         }
 
-        const captchaResponse = getRecaptchaResponse(registerRecaptchaWidgetId);
-        if (!captchaResponse) {
-            captchaErr.textContent = 'Please complete the reCAPTCHA verification.';
-            captchaErr.style.display = 'block';
-            return;
-        }
+        const runRegister = function () {
+            ensureRegisterRecaptcha();
 
-        if (emailExists) {
-            document.getElementById('regEmailErr').textContent = 'This email is already registered. Please sign in instead.';
-            document.getElementById('regEmailErr').style.display = 'block';
-            nextStep(1);
-            return;
-        }
-
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Creating...';
-        btn.disabled = true;
-
-        // Setup username from name field
-        const formData = new FormData(form);
-        formData.set('g-recaptcha-response', captchaResponse);
-        const fullName = formData.get('first_name');
-        if (fullName) {
-            const username = fullName.replace(/\s+/g, '').toLowerCase() + Math.floor(Math.random() * 900 + 100);
-            formData.append('username', username);
-        }
-
-        refreshAuthCsrfTokens().then(() => {
-            formData.set('_token', form.querySelector('input[name="_token"]')?.value || '');
-
-        fetch(form.action, {
-            method: 'POST',
-            body: formData,
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
+            const captchaResponse = getRecaptchaResponse(registerRecaptchaWidgetId);
+            if (!captchaResponse) {
+                captchaErr.textContent = 'Please complete the reCAPTCHA verification.';
+                captchaErr.style.display = 'block';
+                return;
             }
-        })
-            .then(async res => {
-                const result = await res.json();
-                if (!res.ok || result.error) {
-                    let errText = result.message || 'Error occurred';
-                    if (result.errors) {
-                        errText = Object.values(result.errors)[0][0]; // get first validation error
+
+            if (emailExists) {
+                document.getElementById('regEmailErr').textContent = 'This email is already registered. Please sign in instead.';
+                document.getElementById('regEmailErr').style.display = 'block';
+                nextStep(1);
+                return;
+            }
+
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Creating...';
+            btn.disabled = true;
+
+            // Setup username from name field
+            const formData = new FormData(form);
+            formData.set('g-recaptcha-response', captchaResponse);
+            const fullName = formData.get('first_name');
+            if (fullName) {
+                const username = fullName.replace(/\s+/g, '').toLowerCase() + Math.floor(Math.random() * 900 + 100);
+                formData.append('username', username);
+            }
+
+            refreshAuthCsrfTokens().then(() => {
+                formData.set('_token', form.querySelector('input[name="_token"]')?.value || '');
+
+            fetch(form.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+                .then(async res => {
+                    const result = await res.json();
+                    if (!res.ok || result.error) {
+                        let errText = result.message || 'Error occurred';
+                        if (result.errors) {
+                            errText = Object.values(result.errors)[0][0]; // get first validation error
+                        }
+                        const errDiv = document.getElementById('regPhoneErr');
+                        errDiv.textContent = errText;
+                        errDiv.style.display = 'block';
+                        resetAuthCaptcha(registerRecaptchaWidgetId);
+                        btn.innerHTML = originalText;
+                        btn.disabled = false;
+                    } else {
+                        const userEmail = document.getElementById('regEmail').value;
+                        document.querySelectorAll('.reg-step').forEach(el => el.classList.remove('active'));
+                        document.getElementById('regStep5').classList.add('active');
+
+                        const loginEmailInput = document.querySelector('#customLoginForm input[name="email"]');
+                        if (loginEmailInput) {
+                            loginEmailInput.value = userEmail;
+                        }
+
+                        btn.innerHTML = originalText;
+                        btn.disabled = false;
                     }
-                    const errDiv = document.getElementById('regPhoneErr');
-                    errDiv.textContent = errText;
-                    errDiv.style.display = 'block';
+                })
+                .catch(err => {
                     resetAuthCaptcha(registerRecaptchaWidgetId);
                     btn.innerHTML = originalText;
                     btn.disabled = false;
-                } else {
-                    const userEmail = document.getElementById('regEmail').value;
-                    document.querySelectorAll('.reg-step').forEach(el => el.classList.remove('active'));
-                    document.getElementById('regStep5').classList.add('active');
-
-                    const loginEmailInput = document.querySelector('#customLoginForm input[name="email"]');
-                    if (loginEmailInput) {
-                        loginEmailInput.value = userEmail;
-                    }
-
-                    btn.innerHTML = originalText;
-                    btn.disabled = false;
-                }
-            })
-            .catch(err => {
-                resetAuthCaptcha(registerRecaptchaWidgetId);
-                btn.innerHTML = originalText;
-                btn.disabled = false;
+                });
             });
-        });
+        };
+
+        if (typeof grecaptcha === 'undefined' || typeof grecaptcha.getResponse !== 'function') {
+            loadRecaptcha().then(runRegister).catch(function () {
+                captchaErr.textContent = 'Please complete the reCAPTCHA verification.';
+                captchaErr.style.display = 'block';
+            });
+            return;
+        }
+
+        runRegister();
     });
 </script>

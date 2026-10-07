@@ -390,8 +390,8 @@ final class SerikHomepageAssets
     window.__serikHomepageIdleScripts = true;
 
     var themeQueue = {$themeJson};
+    // reCAPTCHA is on-demand via window.loadRecaptcha() — never idle-inject api.js.
     var thirdPartyQueue = [
-        'https://www.google.com/recaptcha/api.js?onload=initSerikRecaptcha&render=explicit',
         'https://cdn.jsdelivr.net/npm/intl-tel-input@19.5.6/build/js/intlTelInput.min.js'
     ];
 
@@ -455,9 +455,7 @@ final class SerikHomepageAssets
                 if (typeof window.initRegPhoneInput === 'function') {
                     window.initRegPhoneInput();
                 }
-                if (typeof window.initSerikRecaptcha === 'function') {
-                    window.initSerikRecaptcha();
-                }
+                // reCAPTCHA: do not init here — window.loadRecaptcha() is on-demand only.
             });
         });
     }

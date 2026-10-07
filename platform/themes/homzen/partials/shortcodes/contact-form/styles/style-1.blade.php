@@ -101,7 +101,9 @@ document.addEventListener('submit', function (e) {
     input.value = token;
 }, true);
 
-if (typeof window.initSerikRecaptcha === 'function') {
+if (typeof window.loadRecaptcha === 'function') {
+    window.loadRecaptcha();
+} else if (typeof window.initSerikRecaptcha === 'function') {
     window.initSerikRecaptcha();
 }
 </script>
