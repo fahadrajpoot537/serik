@@ -24,6 +24,25 @@ final class SerikHomepageAssets
      * @var list<string>
      */
     private const ASYNC_PATTERNS = [
+        'intlTelInput',
+        'fancybox',
+        'tabler-icons',
+        'leaflet',
+        // Needed shortly after carousels boot; keep async (not idle).
+        'swiper-bundle.min.css',
+        // Do NOT list fonts.googleapis.com / fonts.gstatic.com — that breaks <link rel=preconnect>.
+        // Do NOT list homepage-premium.css / site-chrome.css — late arrival shifts #header/#wrapper.
+    ];
+
+    /**
+     * Heavy/unused-on-fold CSS — inject after load+idle (cuts ~500 KiB unused CSS in lab).
+     *
+     * @var list<string>
+     */
+    private const IDLE_CSS_PATTERNS = [
+        'bootstrap.min.css',
+        'bootstrap.rtl.min.css',
+        'css/style.css',
         'social-login',
         'front-auth',
         'auth-css',
@@ -31,17 +50,6 @@ final class SerikHomepageAssets
         'language-css',
         'announcement',
         'newsletter',
-        'intlTelInput',
-        'fancybox',
-        'tabler-icons',
-        'leaflet',
-        // Async below critical+premium+chrome. Blocking chrome/premium required for CLS < 0.05.
-        'bootstrap.min.css',
-        'bootstrap.rtl.min.css',
-        'css/style.css',
-        'swiper-bundle.min.css',
-        // Do NOT list fonts.googleapis.com / fonts.gstatic.com — that breaks <link rel=preconnect>.
-        // Do NOT list homepage-premium.css / site-chrome.css — late arrival shifts #header/#wrapper.
     ];
 
     /**
@@ -121,6 +129,7 @@ final class SerikHomepageAssets
             return $html;
         }
 
+        [$html, $idleCssUrls] = self::extractStylesheetsForIdleLoad($html, self::IDLE_CSS_PATTERNS);
         [$html, $carouselUrls] = self::extractScriptsForIdleLoad($html, self::CAROUSEL_SCRIPT_PATTERNS);
         [$html, $themeIdleUrls] = self::extractScriptsForIdleLoad($html, self::IDLE_THEME_SCRIPT_PATTERNS);
 
@@ -132,7 +141,7 @@ final class SerikHomepageAssets
             return $html;
         }
 
-        return $html . self::idleLoaderSnippet($themeIdleUrls, $carouselUrls);
+        return $html . self::idleLoaderSnippet($themeIdleUrls, $carouselUrls, $idleCssUrls);
     }
 
     /**
@@ -155,6 +164,11 @@ final class SerikHomepageAssets
 
         // Scripts that must be idle-extracted are still present as real tags.
         if (preg_match('/<script[^>]+src=["\'][^"\']*(?:bootstrap\.min\.js|popper\.min\.js|lazyload\.min\.js|visitor-location\.js|jquery\.min\.js|swiper-bundle\.min\.js|js\/script\.js)[^"\']*["\'][^>]*>/i', $html)) {
+            return true;
+        }
+
+        // Heavy CSS still present as early links (should be idle-injected).
+        if (preg_match('/<link[^>]+href=["\'][^"\']*(?:bootstrap\.min\.css|css\/style\.css)[^"\']*["\'][^>]*>/i', $html)) {
             return true;
         }
 
@@ -243,6 +257,7 @@ final class SerikHomepageAssets
         // Inject LCP image preload (shortcode @push often runs after @stack('header')).
         $html = self::injectHeroImagePreload($html);
 
+        [$html, $idleCssUrls] = self::extractStylesheetsForIdleLoad($html, self::IDLE_CSS_PATTERNS);
         [$html, $carouselUrls] = self::extractScriptsForIdleLoad($html, self::CAROUSEL_SCRIPT_PATTERNS);
         [$html, $themeIdleUrls] = self::extractScriptsForIdleLoad($html, self::IDLE_THEME_SCRIPT_PATTERNS);
 
@@ -258,7 +273,7 @@ final class SerikHomepageAssets
         ) ?? $html;
 
         if (! str_contains($html, '__serikHomepageIdleScripts')) {
-            $html = str_replace('</body>', self::idleLoaderSnippet($themeIdleUrls, $carouselUrls) . '</body>', $html);
+            $html = str_replace('</body>', self::idleLoaderSnippet($themeIdleUrls, $carouselUrls, $idleCssUrls) . '</body>', $html);
         }
 
         // Fancybox CSS/JS load on gallery click (services style-3) — drop head links on homepage.
@@ -483,13 +498,61 @@ final class SerikHomepageAssets
     }
 
     /**
+     * @param  list<string>  $patterns
+     * @return array{0: string, 1: list<string>}
+     */
+    private static function extractStylesheetsForIdleLoad(string $html, array $patterns): array
+    {
+        $urls = [];
+
+        foreach ($patterns as $pattern) {
+            $html = preg_replace_callback(
+                '/<link\b[^>]*href=["\']([^"\']*' . preg_quote($pattern, '/') . '[^"\']*)["\'][^>]*>\s*/i',
+                static function (array $m) use (&$urls): string {
+                    $full = $m[0];
+                    if (! preg_match('/\brel=["\']stylesheet["\']/i', $full)
+                        && ! preg_match('/\brel=["\']stylesheet["\']/i', $m[0])) {
+                        // Also match print/async stylesheet links without strict order.
+                        if (! str_contains(strtolower($full), 'stylesheet')) {
+                            return $full;
+                        }
+                    }
+                    $src = html_entity_decode($m[1], ENT_QUOTES | ENT_HTML5);
+                    if ($src !== '' && ! in_array($src, $urls, true)) {
+                        $urls[] = $src;
+                    }
+
+                    return '';
+                },
+                $html
+            ) ?? $html;
+
+            // Drop matching noscript + preload companions.
+            $html = preg_replace(
+                '/<noscript>\s*<link[^>]+' . preg_quote($pattern, '/') . '[^>]*>\s*<\/noscript>\s*/i',
+                '',
+                $html
+            ) ?? $html;
+            $html = preg_replace(
+                '/<link\b[^>]*rel=["\']preload["\'][^>]*href=["\'][^"\']*' . preg_quote($pattern, '/') . '[^"\']*["\'][^>]*>\s*/i',
+                '',
+                $html
+            ) ?? $html;
+        }
+
+        return [$html, $urls];
+    }
+
+    /**
      * @param  list<string>  $themeScriptUrls
      * @param  list<string>  $carouselScriptUrls
+     * @param  list<string>  $idleCssUrls
      */
-    private static function idleLoaderSnippet(array $themeScriptUrls = [], array $carouselScriptUrls = []): string
+    private static function idleLoaderSnippet(array $themeScriptUrls = [], array $carouselScriptUrls = [], array $idleCssUrls = []): string
     {
         $themeJson = json_encode(array_values($themeScriptUrls), JSON_UNESCAPED_SLASHES) ?: '[]';
         $carouselJson = json_encode(array_values($carouselScriptUrls), JSON_UNESCAPED_SLASHES) ?: '[]';
+        $cssJson = json_encode(array_values($idleCssUrls), JSON_UNESCAPED_SLASHES) ?: '[]';
 
         return <<<HTML
 <script>
@@ -501,6 +564,7 @@ final class SerikHomepageAssets
 
     var carouselQueue = {$carouselJson};
     var themeQueue = {$themeJson};
+    var cssQueue = {$cssJson};
     var thirdPartyQueue = [];
 
     function injectSequential(urls, done) {
@@ -536,6 +600,18 @@ final class SerikHomepageAssets
         document.body.appendChild(s);
     }
 
+    function injectStylesheets(urls) {
+        urls.forEach(function (href) {
+            if (!href || document.querySelector('link[rel="stylesheet"][href="' + href + '"]')) {
+                return;
+            }
+            var l = document.createElement('link');
+            l.rel = 'stylesheet';
+            l.href = href;
+            document.head.appendChild(l);
+        });
+    }
+
     function loadCarousels(done) {
         if (window.__serikCarouselsLoaded) {
             if (typeof done === 'function') {
@@ -553,6 +629,7 @@ final class SerikHomepageAssets
         }
         window.__serikHomepageIdleLoaded = true;
 
+        injectStylesheets(cssQueue);
         loadCarousels(function () {
             injectSequential(themeQueue, function () {
                 thirdPartyQueue.forEach(injectAsync);
