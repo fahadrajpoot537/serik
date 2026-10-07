@@ -38,7 +38,12 @@
  </style>  
  
    <!--div class="icon-bar">
-      <a href="https://api.whatsapp.com/send?phone=16475789400" class="whatsapp" target="_blank"><img src="{{ \App\Support\SerikMediaUrl::toPublic('whatsapp-icon-free-png.png') }}" width="50" alt="WhatsApp"/></a> 
+      <a href="https://api.whatsapp.com/send?phone=16475789400" class="whatsapp" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp">
+        <picture>
+          <source type="image/webp" srcset="{{ \App\Support\SerikMediaUrl::toPublic('whatsapp-icon-free-png.webp') }}">
+          <img src="{{ \App\Support\SerikMediaUrl::toPublic('whatsapp-icon-free-png.png') }}" width="50" height="50" alt="WhatsApp" loading="lazy" decoding="async"/>
+        </picture>
+      </a> 
      
     </div-->
     <footer class="footer footer-main" @style(["background-color: $footerBackgroundColor" => $footerBackgroundColor, "background-image: url('$footerBackgroundImage') !important" => $useFooterBackgroundImage])>

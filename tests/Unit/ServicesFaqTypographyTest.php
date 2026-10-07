@@ -54,7 +54,8 @@ class ServicesFaqTypographyTest extends TestCase
         $this->assertStringContainsString('aria-controls', $faqShortcode);
         $this->assertStringContainsString('width="640"', $contactFaq);
         $this->assertStringContainsString('height="283"', $contactFaq);
-        $this->assertStringContainsString('fetchpriority="high"', $contactFaq);
+        $this->assertStringContainsString('loading="lazy"', $contactFaq);
+        $this->assertStringNotContainsString('fetchpriority="high"', $contactFaq);
     }
 
     public function test_faq_accordion_aria_remains_on_grouped_and_list_layouts(): void

@@ -417,8 +417,7 @@ $faqs = collect([
                              width="640"
                              height="283"
                              decoding="async"
-                             loading="eager"
-                             fetchpriority="high"
+                             loading="lazy"
                              class="serik-faq-panel__image">
                     @endif
                     <div class="tf-faq serik-faq-list">

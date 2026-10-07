@@ -342,7 +342,7 @@ class AppServiceProvider extends ServiceProvider
             if (preg_match('/<img\b/i', $markup) && ! preg_match('/\bwidth=/i', $markup)) {
                 $markup = preg_replace(
                     '/<img\b/i',
-                    '<img width="160" height="44" decoding="async" loading="eager" fetchpriority="high"',
+                    '<img width="160" height="44" decoding="async" loading="eager"',
                     $markup,
                     1
                 ) ?? $markup;

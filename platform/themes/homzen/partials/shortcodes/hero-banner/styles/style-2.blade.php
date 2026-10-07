@@ -16,9 +16,11 @@
     $heroMediaUrl = $firstSlider
         ? SerikMediaUrl::cmsImageUrl($firstSlider, 'large')
         : ($shortcode->background_image ? SerikMediaUrl::cmsImageUrl($shortcode->background_image, 'large') : null);
+    $heroSrcset = '';
     if (is_string($heroMediaUrl) && $heroMediaUrl !== '') {
         // Homepage: preload the same resized WebP the <img> will use (never alter original file).
         if (\App\Support\SerikHomepage::isHomepageRequest()) {
+            $heroSrcset = \App\Support\SerikHomepageImage::srcset($heroMediaUrl, [574, 720, 960], 82);
             $heroMediaUrl = \App\Support\SerikHomepageImage::optimizedUrl($heroMediaUrl, 720, 82) ?: $heroMediaUrl;
         } else {
             $heroMediaUrl = CmsWebp::preferWebpUrl($heroMediaUrl) ?: $heroMediaUrl;
@@ -106,7 +108,17 @@
                                             'large',
                                             lazy: $heroSlideIndex > 1,
                                             attributes: $heroSlideIndex === 1
-                                                ? ['data-bb-lazy' => 'false', 'fetchpriority' => 'high', 'loading' => 'eager', 'decoding' => 'async', 'width' => 1200, 'height' => 900, 'class' => 'serik-split-hero__banner-img']
+                                                ? array_filter([
+                                                    'data-bb-lazy' => 'false',
+                                                    'fetchpriority' => 'high',
+                                                    'loading' => 'eager',
+                                                    'decoding' => 'async',
+                                                    'width' => 1200,
+                                                    'height' => 900,
+                                                    'class' => 'serik-split-hero__banner-img',
+                                                    'srcset' => $heroSrcset !== '' ? $heroSrcset : null,
+                                                    'sizes' => $heroSrcset !== '' ? '(max-width: 768px) 92vw, (max-width: 1200px) 55vw, 720px' : null,
+                                                ])
                                                 : ['data-bb-lazy' => 'true', 'loading' => 'lazy', 'decoding' => 'async', 'width' => 1200, 'height' => 900, 'class' => 'serik-split-hero__banner-img']
                                         ) }}
                                     </div>

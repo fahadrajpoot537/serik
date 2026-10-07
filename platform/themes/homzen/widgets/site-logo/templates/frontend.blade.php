@@ -13,7 +13,6 @@
             height="44"
             decoding="async"
             loading="eager"
-            fetchpriority="high"
             data-bb-lazy="false"
             style="max-height: 44px !important"
             alt="{{ theme_option('site_title', 'Serik Realty') }}"

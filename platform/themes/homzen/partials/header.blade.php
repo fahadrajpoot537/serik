@@ -678,8 +678,9 @@
                             <a href="{{ BaseHelper::getHomepageUrl() }}">
                                 {{-- Desktop navbar is blue site-wide; white wordmark from 992px up. --}}
                                 <picture>
-                                    <source media="(min-width: 992px)" srcset="{{ Theme::asset()->url('images/serik-logo-nav.png') }}">
-                                    {{ Theme::getLogoImage(maxHeight: 52) }}
+                                    <source media="(min-width: 992px)" type="image/webp" srcset="{{ Theme::asset()->url('images/serik-logo-nav.webp') }}">
+                                    <source media="(min-width: 992px)" type="image/png" srcset="{{ Theme::asset()->url('images/serik-logo-nav.png') }}">
+                                    {{ Theme::getLogoImage(['width' => 160, 'height' => 44], maxHeight: 52) }}
                                 </picture>
                             </a>
                         </div>

@@ -73,7 +73,10 @@ final class TrebImageDerivative
                 $image->scaleDown(width: $width);
             }
 
-            return (string) $image->encode(new WebpEncoder(quality: 82));
+            // Card thumbnails (?w=320) stay lighter; larger widths keep sharper quality.
+            $quality = $width <= 320 ? 65 : 82;
+
+            return (string) $image->encode(new WebpEncoder(quality: $quality));
         } catch (\Throwable) {
             return null;
         }

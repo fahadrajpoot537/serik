@@ -59,9 +59,9 @@ final class SerikResponsiveImage
             ? [960, 720]
             : (self::DISPLAY_SIZES[$sizeKey] ?? self::DISPLAY_SIZES['medium-rectangle']);
 
-        $widths = $isHero ? [480, 720, 960] : [240, 400, 560];
+        $widths = $isHero ? [574, 720, 960] : [240, 400, 560];
         $defaultWidth = $isHero ? 720 : 400;
-        $quality = $isHero ? 82 : 76;
+        $quality = $isHero ? 82 : 68;
 
         $defaultSrc = SerikHomepageImage::optimizedUrl($url, $defaultWidth, $quality);
         if (! is_string($defaultSrc) || $defaultSrc === '') {
@@ -141,8 +141,8 @@ final class SerikResponsiveImage
                     || str_contains($attrs, "fetchpriority='high'");
 
                 $defaultWidth = $isHero ? 720 : 400;
-                $widths = $isHero ? [480, 720, 960] : [240, 400, 560];
-                $quality = $isHero ? 82 : 76;
+                $widths = $isHero ? [574, 720, 960] : [240, 400, 560];
+                $quality = $isHero ? 82 : 68;
 
                 $optimized = SerikHomepageImage::optimizedUrl($src, $defaultWidth, $quality);
                 if (! is_string($optimized) || $optimized === '' || $optimized === $src) {
@@ -182,6 +182,10 @@ final class SerikResponsiveImage
 
                 if (! $isHero && ! preg_match('/\bloading=/i', $attrs)) {
                     $attrs .= ' loading="lazy"';
+                }
+
+                if (! preg_match('/\bwidth=/i', $attrs)) {
+                    $attrs .= $isHero ? ' width="960" height="720"' : ' width="400" height="300"';
                 }
 
                 return '<img' . $attrs . '>';
