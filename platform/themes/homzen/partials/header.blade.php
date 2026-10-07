@@ -695,7 +695,6 @@
                                         width="160"
                                         height="44"
                                         decoding="async"
-                                        fetchpriority="high"
                                         alt="{{ Theme::getSiteTitle() }}"
                                         style="max-height: 44px !important"
                                     >

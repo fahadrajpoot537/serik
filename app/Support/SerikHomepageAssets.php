@@ -35,12 +35,14 @@ final class SerikHomepageAssets
         'fancybox',
         'tabler-icons',
         'leaflet',
-        // Below-fold / decorative only. NEVER async bootstrap, homepage-premium, or site-chrome
-        // (that caused unstyled paint → CLS ~0.9 / mobile PSI ~10).
+        // Full skins async when __serikCriticalCss is inlined (header+hero reserved).
+        'bootstrap.min.css',
+        'bootstrap.rtl.min.css',
+        'homepage-premium.css',
+        'site-chrome.css',
         'css/style.css',
         'swiper-bundle.min.css',
         // Do NOT list fonts.googleapis.com / fonts.gstatic.com — that breaks <link rel=preconnect>.
-        // Do NOT list site-chrome.css / homepage-premium / bootstrap — required for first paint.
     ];
 
     /**
@@ -172,14 +174,14 @@ final class SerikHomepageAssets
             return true;
         }
 
-        // Critical CSS must not be async (media=print) — recover broken PSI deploys.
-        if (preg_match('/<link[^>]+homepage-premium\.css[^>]+media=["\']print["\']/i', $html)) {
+        // Stale HTML missing inlined critical CSS (unsafe to async full skins).
+        if (! str_contains($html, '__serikCriticalCss')) {
             return true;
         }
-        if (preg_match('/<link[^>]+site-chrome\.css[^>]+media=["\']print["\']/i', $html)) {
-            return true;
-        }
-        if (preg_match('/<link[^>]+bootstrap\.min\.css[^>]+media=["\']print["\']/i', $html)) {
+
+        // Hero LCP preload missing (Blade @push often fires after @stack).
+        if (str_contains($html, 'serik-split-hero__banner-img')
+            && ! preg_match('/<link[^>]+rel=["\']preload["\'][^>]+as=["\']image["\']/i', $html)) {
             return true;
         }
 
@@ -221,17 +223,14 @@ final class SerikHomepageAssets
             $html = self::makeStylesheetAsync($html, $pattern);
         }
 
-        // Heal stale cache that async'd critical CSS (PSI ~10 / CLS ~0.9).
-        $html = self::restoreBlockingStylesheet($html, 'homepage-premium.css');
-        $html = self::restoreBlockingStylesheet($html, 'site-chrome.css');
-        $html = self::restoreBlockingStylesheet($html, 'bootstrap.min.css');
-        $html = self::restoreBlockingStylesheet($html, 'bootstrap.rtl.min.css');
-
         // Drop duplicate stylesheet hrefs (e.g. tabler / site-chrome listed twice).
         $html = self::dedupeStylesheetLinks($html);
 
         // Local Poppins only — remove Google Fonts critical-path chain.
         $html = self::replaceGoogleFontsWithLocalPoppins($html);
+
+        // Inject LCP image preload (shortcode @push often runs after @stack('header')).
+        $html = self::injectHeroImagePreload($html);
 
         foreach (self::DEFER_SCRIPT_PATTERNS as $pattern) {
             $html = self::deferScriptTag($html, $pattern);
@@ -663,38 +662,38 @@ CSS;
     }
 
     /**
-     * Convert a media=print async stylesheet back to a normal blocking stylesheet.
+     * Ensure the LCP hero image is preloaded early in <head>.
      */
-    private static function restoreBlockingStylesheet(string $html, string $pattern): string
+    private static function injectHeroImagePreload(string $html): string
     {
-        // Drop matching preloads added by makeStylesheetAsync.
-        $html = preg_replace(
-            '/<link\b[^>]*rel=["\']preload["\'][^>]*href=["\'][^"\']*' . preg_quote($pattern, '/') . '[^"\']*["\'][^>]*>\s*/i',
-            '',
-            $html
-        ) ?? $html;
+        if (preg_match('/<link[^>]+rel=["\']preload["\'][^>]+as=["\']image["\']/i', $html)) {
+            return $html;
+        }
 
-        $html = preg_replace_callback(
-            '/<link\b([^>]*href=["\'][^"\']*' . preg_quote($pattern, '/') . '[^"\']*["\'][^>]*)>/i',
-            static function (array $m): string {
-                $attrs = $m[1];
-                if (! preg_match('/\brel=["\']stylesheet["\']/i', $attrs) && ! preg_match('/\brel=["\']stylesheet["\']/i', $m[0])) {
-                    return $m[0];
-                }
-                $attrs = preg_replace('/\smedia=(["\']).*?\1/i', '', $attrs) ?? $attrs;
-                $attrs = preg_replace('/\sonload=(["\']).*?\1/i', '', $attrs) ?? $attrs;
+        if (! preg_match(
+            '/<img\b[^>]*class="[^"]*serik-split-hero__banner-img[^"]*"[^>]*\bsrc=(["\'])([^"\']+)\1[^>]*>/i',
+            $html,
+            $m
+        ) && ! preg_match(
+            '/<img\b[^>]*\bsrc=(["\'])([^"\']+)\1[^>]*class="[^"]*serik-split-hero__banner-img[^"]*"[^>]*>/i',
+            $html,
+            $m
+        )) {
+            return $html;
+        }
 
-                return '<link' . $attrs . '>';
-            },
-            $html
-        ) ?? $html;
+        $src = html_entity_decode($m[2], ENT_QUOTES | ENT_HTML5);
+        if ($src === '' || str_starts_with($src, 'data:')) {
+            return $html;
+        }
 
-        // Remove noscript duplicates for the same file (optional cleanup).
-        return preg_replace(
-            '/<noscript>\s*<link[^>]+' . preg_quote($pattern, '/') . '[^>]*>\s*<\/noscript>\s*/i',
-            '',
-            $html
-        ) ?? $html;
+        $preload = '<link rel="preload" as="image" href="' . e($src) . '" fetchpriority="high">';
+
+        if (str_contains($html, '<head>')) {
+            return preg_replace('/<head>/i', '<head>' . $preload, $html, 1) ?? $html;
+        }
+
+        return $preload . $html;
     }
 
     private static function makeStylesheetAsync(string $html, string $pattern): string
@@ -717,12 +716,9 @@ CSS;
                 }
 
                 $attrs = preg_replace('/\smedia=(["\']).*?\1/i', '', $attrs) ?? $attrs;
-                $preload = $href !== ''
-                    ? '<link rel="preload" as="style" href="' . e($href) . '">'
-                    : '';
 
-                return $preload
-                    . '<link' . $attrs . ' media="print" onload="this.media=\'all\'">'
+                // No preload for async CSS — preloads compete with LCP image bandwidth.
+                return '<link' . $attrs . ' media="print" onload="this.media=\'all\'">'
                     . ($href !== '' ? '<noscript><link rel="stylesheet" href="' . e($href) . '"></noscript>' : '');
             },
             $html

@@ -117,31 +117,36 @@
     $serikPoppinsLatin400 = asset('storage/fonts/82ced711bf/spoppinsv24pxieyp8kv8jhgfvrjjfecnfhgpc.woff2');
     $serikPoppinsLatin600 = asset('storage/fonts/82ced711bf/spoppinsv24pxibyp8kv8jhgfvrlej6z1xlfd2jqek.woff2');
 @endphp
+@php
+    $serikThemeCss = static function (string $file): string {
+        $url = asset('themes/' . \Botble\Theme\Facades\Theme::getPublicThemeName() . '/css/' . $file);
+        $path = parse_url($url, PHP_URL_PATH);
+
+        return (is_string($path) && $path !== '') ? $path : $url;
+    };
+    $serikCriticalCss = '';
+    if ($isSerikHomepage) {
+        $serikCriticalPath = public_path('themes/' . \Botble\Theme\Facades\Theme::getPublicThemeName() . '/css/homepage-critical.css');
+        if (is_file($serikCriticalPath)) {
+            $serikCriticalCss = (string) file_get_contents($serikCriticalPath);
+        }
+    }
+@endphp
 @if ($isSerikHomepage)
-{{-- Homepage uses self-hosted Poppins (no Google Fonts critical chain). --}}
+{{-- Homepage: self-hosted Poppins + inlined critical CSS (keeps CLS≈0 while full CSS stays async). --}}
 <link rel="preload" as="font" type="font/woff2" href="{{ $serikPoppinsLatin400 }}" crossorigin>
 <link rel="preload" as="font" type="font/woff2" href="{{ $serikPoppinsLatin600 }}" crossorigin>
+@if ($serikCriticalCss !== '')
+<style id="__serikCriticalCss">{!! $serikCriticalCss !!}</style>
+@endif
 <link href="{{ $serikTablerIconsCss }}" rel="stylesheet" media="print" onload="this.media='all'">
 <noscript><link href="{{ $serikTablerIconsCss }}" rel="stylesheet"></noscript>
-<style>
-    /* Stable sticky offset before setHeights runs (prevents header CLS). */
-    :root {
-        --serik-top-header-height: 42px;
-        --serik-main-header-height: 64px;
-    }
-    html { scrollbar-gutter: stable; }
-    /* Newsletter/auth modal must not shift layout via scrollbar padding. */
-    body.modal-open,
-    body.newsletter-popup-open {
-        padding-right: 0 !important;
-    }
-    .top-header.serik-hp-topbar {
-        min-height: 42px;
-    }
-    .top-header .top-header-right {
-        min-height: 32px;
-    }
-</style>
+{{-- Full skins async — critical CSS above already reserves header/hero layout. --}}
+<link rel="preload" as="style" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp83">
+<link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp83" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp83"></noscript>
+<link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc66" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc66"></noscript>
 @else
 <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -151,26 +156,12 @@
 <link rel="preload" as="font" type="font/woff2" href="{{ $serikPoppinsLatin600 }}" crossorigin>
 <link href="{{ $serikTablerIconsCss }}" rel="stylesheet" media="print" onload="this.media='all'">
 <noscript><link href="{{ $serikTablerIconsCss }}" rel="stylesheet"></noscript>
+<link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc66">
 @endif
 
         {{-- Favicons are emitted by Theme::header() (Google-compliant ≥48×48 root icons) --}}
         @stack('header')
         {!! Theme::header() !!}
-@php
-    $serikThemeCss = static function (string $file): string {
-        $url = asset('themes/' . \Botble\Theme\Facades\Theme::getPublicThemeName() . '/css/' . $file);
-        $path = parse_url($url, PHP_URL_PATH);
-
-        return (is_string($path) && $path !== '') ? $path : $url;
-    };
-@endphp
-@if ($isSerikHomepage)
-{{-- BLOCKING on purpose: async-all-CSS caused unstyled first paint → CLS ~0.9 and PSI ~10. --}}
-<link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp82">
-<link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc65">
-@else
-<link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc65">
-@endif
 @if (! request()->boolean('iframe'))
         <script>
         (function () {
