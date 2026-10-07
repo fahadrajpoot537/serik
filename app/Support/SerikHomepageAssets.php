@@ -168,6 +168,11 @@ final class SerikHomepageAssets
             return true;
         }
 
+        // Stale HTML still serving the 160KB WhatsApp logo PNG.
+        if (preg_match('/<img[^>]+src=["\'][^"\']*whatsapp-image-2025[^"\']*\.(?:png|jpe?g)/i', $html)) {
+            return true;
+        }
+
         return false;
     }
 
@@ -277,6 +282,9 @@ final class SerikHomepageAssets
         // Touches HTML only — originals on disk / DB URLs are never modified.
         $html = SerikResponsiveImage::enhanceHomepageHtml($html);
 
+        // Force site logo PNG/JPEG → tiny WebP (heals stale cache / missed blade paths).
+        $html = self::rewriteSiteLogoImages($html);
+
         // CMS testimonial paste often embeds font-family:Roboto (no Roboto file is loaded).
         // Point those spans at Poppins so browsers do not request a stray Roboto face.
         $html = preg_replace(
@@ -287,6 +295,60 @@ final class SerikHomepageAssets
 
         // Do NOT use naive \bsrc= rewrite (matches data-src / this.src and wipes URLs).
         return $html;
+    }
+
+    /**
+     * Replace bulky WhatsApp/site-logo raster URLs with the theme mobile WebP.
+     */
+    private static function rewriteSiteLogoImages(string $html): string
+    {
+        $logoWebp = asset('themes/' . \Botble\Theme\Facades\Theme::getPublicThemeName() . '/images/serik-logo-mobile.webp');
+
+        return preg_replace_callback(
+            '/<img\b([^>]*?)>/i',
+            static function (array $m) use ($logoWebp): string {
+                $attrs = $m[1];
+                if (! preg_match('/(?:^|\s)src=(["\'])([^"\']+)\1/i', $attrs, $srcMatch)) {
+                    return '<img' . $attrs . '>';
+                }
+
+                $src = html_entity_decode($srcMatch[2], ENT_QUOTES | ENT_HTML5);
+                if ($src === '' || ! preg_match('/whatsapp-image-2025[^"\']*\.(?:png|jpe?g)(?:\?|$)/i', $src)) {
+                    return '<img' . $attrs . '>';
+                }
+
+                // Skip non-logo uses (rare) that are clearly large content images.
+                $looksLikeNavLogo = preg_match('/\bwidth=["\']160["\']/i', $attrs)
+                    || str_contains($attrs, 'max-height: 44px')
+                    || str_contains($attrs, 'max-height:44px')
+                    || preg_match('/\bheight=["\']4[0-9]["\']/i', $attrs);
+
+                if (! $looksLikeNavLogo) {
+                    // Still rewrite — every whatsapp-image-2025-* logo asset is the brand mark.
+                    // Content photos use different filenames.
+                }
+
+                $attrs = preg_replace(
+                    '/(?:^|\s)src=(["\'])[^"\']*\1/i',
+                    ' src="' . e($logoWebp) . '"',
+                    $attrs,
+                    1
+                ) ?? $attrs;
+
+                if (! preg_match('/\bwidth=/i', $attrs)) {
+                    $attrs .= ' width="160"';
+                }
+                if (! preg_match('/\bheight=/i', $attrs)) {
+                    $attrs .= ' height="44"';
+                }
+                if (! preg_match('/\bdecoding=/i', $attrs)) {
+                    $attrs .= ' decoding="async"';
+                }
+
+                return '<img' . $attrs . '>';
+            },
+            $html
+        ) ?? $html;
     }
 
     /**

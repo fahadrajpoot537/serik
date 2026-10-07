@@ -170,7 +170,7 @@
         <!-- ✅ Tabler Flag Icon -->
         <div class="nz_thankyou_icon_921">
            <a href="{{ BaseHelper::getHomepageUrl() }}">
-                                {!! Theme::getLogoImage(['data-bb-lazy' => 'false'], maxHeight: 44) !!}
+                                <img src="{{ Theme::asset()->url('images/serik-logo-mobile.webp') }}" width="160" height="44" decoding="async" loading="lazy" alt="{{ Theme::getSiteTitle() }}" style="max-height: 44px !important">
                             </a>
         </div>
 
@@ -239,7 +239,7 @@
         <!-- ✅ Tabler Flag Icon -->
         <div class="nz_thankyou_icon_921">
            <a href="{{ BaseHelper::getHomepageUrl() }}">
-                                {!! Theme::getLogoImage(['data-bb-lazy' => 'false'], maxHeight: 44) !!}
+                                <img src="{{ Theme::asset()->url('images/serik-logo-mobile.webp') }}" width="160" height="44" decoding="async" loading="lazy" alt="{{ Theme::getSiteTitle() }}" style="max-height: 44px !important">
                             </a>
         </div>
 

@@ -339,6 +339,14 @@ class AppServiceProvider extends ServiceProvider
         add_filter('theme_logo_image', static function ($html) use ($rewriteLegacyMediaUrls) {
             $markup = $rewriteLegacyMediaUrls($html instanceof HtmlString ? $html->toHtml() : (string) $html);
 
+            // Never emit the full-size WhatsApp PNG as the site logo.
+            $mobileLogo = asset('themes/' . \Botble\Theme\Facades\Theme::getPublicThemeName() . '/images/serik-logo-mobile.webp');
+            $markup = preg_replace(
+                '/(<img\b[^>]*\ssrc=["\'])[^"\']*whatsapp-image-2025[^"\']*\.(?:png|jpe?g)(?:\?[^"\']*)?(["\'])/i',
+                '$1' . $mobileLogo . '$2',
+                $markup
+            ) ?? $markup;
+
             if (preg_match('/<img\b/i', $markup) && ! preg_match('/\bwidth=/i', $markup)) {
                 $markup = preg_replace(
                     '/<img\b/i',

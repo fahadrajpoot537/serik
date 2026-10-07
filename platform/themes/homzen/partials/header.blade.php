@@ -686,30 +686,19 @@
                     <div class="logo-box d-flex align-items-center gap-3">
                         <div class="logo">
                             <a href="{{ BaseHelper::getHomepageUrl() }}">
-                                {{-- Desktop: white wordmark. Mobile/fallback: compressed WebP of site logo (not 160KB PNG). --}}
-                                @php
-                                    $serikNavLogoRaw = Theme::getLogo('logo');
-                                    $serikNavLogoUrl = $serikNavLogoRaw ? RvMedia::getImageUrl($serikNavLogoRaw) : null;
-                                    if (is_string($serikNavLogoUrl) && $serikNavLogoUrl !== '') {
-                                        $serikNavLogoUrl = \App\Support\SerikHomepageImage::optimizedUrl($serikNavLogoUrl, 320, 82, true) ?: $serikNavLogoUrl;
-                                    }
-                                @endphp
+                                {{-- Desktop: white wordmark. Mobile/fallback: 7KB WebP (never the 160KB WhatsApp PNG). --}}
                                 <picture>
                                     <source media="(min-width: 992px)" type="image/webp" srcset="{{ Theme::asset()->url('images/serik-logo-nav.webp') }}">
                                     <source media="(min-width: 992px)" type="image/png" srcset="{{ Theme::asset()->url('images/serik-logo-nav.png') }}">
-                                    @if ($serikNavLogoUrl)
-                                        <img
-                                            src="{{ $serikNavLogoUrl }}"
-                                            width="160"
-                                            height="44"
-                                            decoding="async"
-                                            fetchpriority="high"
-                                            alt="{{ Theme::getSiteTitle() }}"
-                                            style="max-height: 44px !important"
-                                        >
-                                    @else
-                                        {{ Theme::getLogoImage(['width' => 160, 'height' => 44], maxHeight: 52) }}
-                                    @endif
+                                    <img
+                                        src="{{ Theme::asset()->url('images/serik-logo-mobile.webp') }}"
+                                        width="160"
+                                        height="44"
+                                        decoding="async"
+                                        fetchpriority="high"
+                                        alt="{{ Theme::getSiteTitle() }}"
+                                        style="max-height: 44px !important"
+                                    >
                                 </picture>
                             </a>
                         </div>
@@ -860,26 +849,15 @@
         <nav class="menu-box">
             <div class="nav-logo">
                 <a href="{{ BaseHelper::getHomepageUrl() }}">
-                    @php
-                        $serikDrawerLogoRaw = Theme::getLogo('logo');
-                        $serikDrawerLogoUrl = $serikDrawerLogoRaw ? RvMedia::getImageUrl($serikDrawerLogoRaw) : null;
-                        if (is_string($serikDrawerLogoUrl) && $serikDrawerLogoUrl !== '') {
-                            $serikDrawerLogoUrl = \App\Support\SerikHomepageImage::optimizedUrl($serikDrawerLogoUrl, 320, 82, true) ?: $serikDrawerLogoUrl;
-                        }
-                    @endphp
-                    @if ($serikDrawerLogoUrl)
-                        <img
-                            src="{{ $serikDrawerLogoUrl }}"
-                            width="160"
-                            height="44"
-                            decoding="async"
-                            loading="lazy"
-                            alt="{{ Theme::getSiteTitle() }}"
-                            style="max-height: 44px !important"
-                        >
-                    @else
-                        {{ Theme::getLogoImage(maxHeight: 44) }}
-                    @endif
+                    <img
+                        src="{{ Theme::asset()->url('images/serik-logo-mobile.webp') }}"
+                        width="160"
+                        height="44"
+                        decoding="async"
+                        loading="lazy"
+                        alt="{{ Theme::getSiteTitle() }}"
+                        style="max-height: 44px !important"
+                    >
                 </a>
             </div>
             <div class="bottom-canvas">

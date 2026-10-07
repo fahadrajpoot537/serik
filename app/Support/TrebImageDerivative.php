@@ -18,8 +18,8 @@ final class TrebImageDerivative
 
     private const DISK = 'public';
 
-    // v3: harder WebP + 480w rung so mobile DPR does not jump straight to heavy 640.
-    private const CACHE_DIR = 'properties/treb-cache-v3';
+    // v4: tighter 320w quality for remaining PSI "Improve image delivery" on cards.
+    private const CACHE_DIR = 'properties/treb-cache-v4';
 
     public static function normalizeWidth(?int $width): ?int
     {
@@ -76,10 +76,10 @@ final class TrebImageDerivative
 
             // Card thumbs are ~280–300px CSS; keep files small for PSI image delivery.
             $quality = match (true) {
-                $width <= 320 => 46,
-                $width <= 480 => 52,
-                $width <= 640 => 56,
-                default => 68,
+                $width <= 320 => 38,
+                $width <= 480 => 46,
+                $width <= 640 => 52,
+                default => 64,
             };
 
             return (string) $image->encode(new WebpEncoder(quality: $quality));
