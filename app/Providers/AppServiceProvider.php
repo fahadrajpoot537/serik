@@ -379,24 +379,45 @@ class AppServiceProvider extends ServiceProvider
 (function () {
     if (window.__serikAuthNavSync) return;
     window.__serikAuthNavSync = true;
+    var sessionStatusPromise = null;
     function serikAuthNavNeedsSync() {
         return !!document.querySelector('.js-auth-open-login, .js-auth-open-register');
+    }
+    function fetchSessionStatus() {
+        if (sessionStatusPromise) return sessionStatusPromise;
+        sessionStatusPromise = fetch('/api/v1/auth/session-status', {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        }).then(function (r) { return r.ok ? r.json() : null; })
+          .finally(function () {
+              setTimeout(function () { sessionStatusPromise = null; }, 2000);
+          });
+        return sessionStatusPromise;
     }
     function serikAuthNavSync(fromBfcache) {
         if (!serikAuthNavNeedsSync()) return;
         var key = 'serik_auth_nav_reloaded:' + location.pathname;
         if (!fromBfcache && sessionStorage.getItem(key) === '1') return;
-        fetch('/api/v1/auth/session-status', {
-            credentials: 'same-origin',
-            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
-        }).then(function (r) { return r.ok ? r.json() : null; }).then(function (data) {
-            if (!data || !data.logged_in) {
-                sessionStorage.removeItem(key);
-                return;
-            }
-            sessionStorage.setItem(key, '1');
-            window.location.reload();
-        }).catch(function () {});
+        // Non-blocking: defer until idle so it never competes with first paint.
+        var run = function () {
+            fetchSessionStatus().then(function (data) {
+                if (!data || !data.logged_in) {
+                    sessionStorage.removeItem(key);
+                    return;
+                }
+                sessionStorage.setItem(key, '1');
+                window.location.reload();
+            }).catch(function () {});
+        };
+        if (fromBfcache) {
+            run();
+            return;
+        }
+        if ('requestIdleCallback' in window) {
+            requestIdleCallback(function () { setTimeout(run, 1500); }, { timeout: 4000 });
+        } else {
+            setTimeout(run, 2500);
+        }
     }
     serikAuthNavSync(false);
     window.addEventListener('pageshow', function (e) {

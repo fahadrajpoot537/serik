@@ -3874,11 +3874,20 @@ class PropertyController extends BaseController
 
     public function communityIndex()
     {
-        $index = app(\Botble\RealEstate\Services\PropertySearchService::class)->getPublicCommunityIndex();
+        try {
+            @set_time_limit(45);
+            $index = app(\Botble\RealEstate\Services\PropertySearchService::class)->getPublicCommunityIndex();
+            if (! is_array($index)) {
+                $index = [];
+            }
+        } catch (\Throwable $e) {
+            report($e);
+            $index = [];
+        }
 
         return response()
             ->json($index)
-            ->header('Cache-Control', 'public, max-age=3600');
+            ->header('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     }
 
     public function geocodeCommunity(Request $request)

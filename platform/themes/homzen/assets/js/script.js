@@ -1,6 +1,13 @@
 'use strict'
 
-$(() => {
+;(function serikWaitForJquery() {
+    // Defer/idle reordering can run this file before jquery.min.js — wait, do not throw.
+    if (typeof window.jQuery === 'undefined') {
+        setTimeout(serikWaitForJquery, 40)
+        return
+    }
+
+    window.jQuery(function () {
     window.Theme = window.Theme || {}
 
     window.Theme.isRtl = () => {
@@ -1975,9 +1982,15 @@ $(() => {
         return headers
     }
 
-    const refreshWishlistCsrf = () => {
+    let wishlistCsrfPromise = null
+    let wishlistCsrfOkAt = 0
+    const refreshWishlistCsrf = (force) => {
+        const now = Date.now()
+        if (!force && wishlistCsrfPromise && (now - wishlistCsrfOkAt) < 2500) {
+            return wishlistCsrfPromise
+        }
         const url = serikWishlistConfig().csrfUrl || '/auth/csrf-token'
-        return fetch(url, {
+        wishlistCsrfPromise = fetch(url, {
             credentials: 'same-origin',
             headers: {
                 Accept: 'application/json',
@@ -1991,11 +2004,20 @@ $(() => {
                     if (meta) {
                         meta.setAttribute('content', data.token)
                     }
+                    wishlistCsrfOkAt = Date.now()
                     return true
                 }
                 return false
             })
             .catch(() => false)
+            .finally(() => {
+                setTimeout(() => {
+                    if (Date.now() - wishlistCsrfOkAt > 2500) {
+                        wishlistCsrfPromise = null
+                    }
+                }, 2600)
+            })
+        return wishlistCsrfPromise
     }
 
     const promptWishlistLogin = () => {
@@ -2087,7 +2109,8 @@ $(() => {
 
     const syncAuthenticatedWishlist = () => {
         const cfg = serikWishlistConfig()
-        if (!cfg.stateUrl) {
+        // Guests: skip /ajax/wishlist/state (401 noise). Count from project cookies only.
+        if (!cfg.stateUrl || !cfg.authenticated) {
             return Promise.resolve(false)
         }
 
@@ -2098,7 +2121,13 @@ $(() => {
                 'X-Requested-With': 'XMLHttpRequest',
             },
         })
-            .then((res) => (res.ok ? res.json() : null))
+            .then((res) => {
+                if (res.status === 401) {
+                    markWishlistAuthenticated(false)
+                    return null
+                }
+                return res.ok ? res.json() : null
+            })
             .then((data) => {
                 if (!data || data.authenticated === false) {
                     markWishlistAuthenticated(false)
@@ -3018,3 +3047,4 @@ $(() => {
 
     initHeroBannerSlider();
 })
+})()

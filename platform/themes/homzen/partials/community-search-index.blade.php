@@ -84,18 +84,30 @@
         }
 
         communityIndexLoading = true;
+        var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        var timer = setTimeout(function () {
+            if (controller) {
+                controller.abort();
+            }
+        }, 8000);
+
         fetch('/api/v1/community-index', {
             credentials: 'same-origin',
             headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            signal: controller ? controller.signal : undefined,
         })
             .then((res) => (res.ok ? res.json() : []))
             .then((rows) => {
                 communityIndexRows = Array.isArray(rows) ? rows : [];
             })
             .catch(() => {
-                communityIndexRows = [];
+                // Timeout / network — suggestions API remains the search fallback.
+                if (!Array.isArray(communityIndexRows)) {
+                    communityIndexRows = [];
+                }
             })
             .finally(() => {
+                clearTimeout(timer);
                 communityIndexLoading = false;
             });
     }
@@ -121,12 +133,18 @@
         geocodeInBackground: geocodeCommunityInBackground,
     };
 
-    // Defer index prefetch so it does not compete with first-paint assets.
+    // Prefetch only after interaction or long idle — never on critical path.
     // Search still works immediately via /api/v1/community-suggestions fallback.
+    function scheduleCommunityIndex() {
+        ensureCommunityIndexLoaded();
+    }
+    ['scroll', 'pointerdown', 'keydown', 'touchstart'].forEach(function (evt) {
+        window.addEventListener(evt, scheduleCommunityIndex, { once: true, passive: true });
+    });
     if (typeof requestIdleCallback === 'function') {
-        requestIdleCallback(function () { ensureCommunityIndexLoaded(); }, { timeout: 4000 });
+        requestIdleCallback(function () { setTimeout(scheduleCommunityIndex, 8000); }, { timeout: 12000 });
     } else {
-        setTimeout(ensureCommunityIndexLoaded, 2000);
+        setTimeout(scheduleCommunityIndex, 10000);
     }
 })(window);
 </script>
