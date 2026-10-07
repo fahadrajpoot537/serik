@@ -35,27 +35,33 @@ final class SerikHomepageAssets
         'fancybox',
         'tabler-icons',
         'leaflet',
-        // Full skins async when __serikCriticalCss is inlined (header+hero reserved).
+        // Async below critical+premium. Do NOT async homepage-premium (desktop CLS).
         'bootstrap.min.css',
         'bootstrap.rtl.min.css',
-        'homepage-premium.css',
         'site-chrome.css',
         'css/style.css',
         'swiper-bundle.min.css',
         // Do NOT list fonts.googleapis.com / fonts.gstatic.com — that breaks <link rel=preconnect>.
+        // Do NOT list homepage-premium.css — blocking required for stable desktop layout.
     ];
 
     /**
-     * Footer scripts that receive defer on homepage (order preserved).
-     * Swiper + script.js must stay here (not idle) or carousels render broken.
+     * Carousel stack — loaded after window load / idle (cuts TBT; hero has CSS fallback).
      *
      * @var list<string>
      */
-    private const DEFER_SCRIPT_PATTERNS = [
+    private const CAROUSEL_SCRIPT_PATTERNS = [
         'jquery.min.js',
         'swiper-bundle.min.js',
         'js/script.js',
     ];
+
+    /**
+     * Footer scripts that receive defer on homepage (order preserved).
+     *
+     * @var list<string>
+     */
+    private const DEFER_SCRIPT_PATTERNS = [];
 
     /**
      * Non-carousel scripts delayed until idle / interaction (safe for Lighthouse TBT).
@@ -116,10 +122,7 @@ final class SerikHomepageAssets
             return $html;
         }
 
-        foreach (self::DEFER_SCRIPT_PATTERNS as $pattern) {
-            $html = self::deferScriptTag($html, $pattern);
-        }
-
+        [$html, $carouselUrls] = self::extractScriptsForIdleLoad($html, self::CAROUSEL_SCRIPT_PATTERNS);
         [$html, $themeIdleUrls] = self::extractScriptsForIdleLoad($html, self::IDLE_THEME_SCRIPT_PATTERNS);
 
         foreach (self::IDLE_SCRIPT_PATTERNS as $pattern) {
@@ -130,7 +133,7 @@ final class SerikHomepageAssets
             return $html;
         }
 
-        return $html . self::idleLoaderSnippet($themeIdleUrls);
+        return $html . self::idleLoaderSnippet($themeIdleUrls, $carouselUrls);
     }
 
     /**
@@ -152,11 +155,16 @@ final class SerikHomepageAssets
         }
 
         // Scripts that must be idle-extracted are still present as real tags.
-        if (preg_match('/<script[^>]+src=["\'][^"\']*(?:bootstrap\.min\.js|popper\.min\.js|lazyload\.min\.js|visitor-location\.js)[^"\']*["\'][^>]*>/i', $html)) {
+        if (preg_match('/<script[^>]+src=["\'][^"\']*(?:bootstrap\.min\.js|popper\.min\.js|lazyload\.min\.js|visitor-location\.js|jquery\.min\.js|swiper-bundle\.min\.js|js\/script\.js)[^"\']*["\'][^>]*>/i', $html)) {
             return true;
         }
 
         if (preg_match('/<script[^>]+src=["\'][^"\']*(?:recaptcha\/api\.js|intl-tel-input)[^"\']*["\'][^>]*>/i', $html)) {
+            return true;
+        }
+
+        // Premium must be blocking (not media=print) for desktop CLS.
+        if (preg_match('/<link[^>]+homepage-premium\.css[^>]+media=["\']print["\']/i', $html)) {
             return true;
         }
 
@@ -223,6 +231,9 @@ final class SerikHomepageAssets
             $html = self::makeStylesheetAsync($html, $pattern);
         }
 
+        // Heal stale async premium → blocking.
+        $html = self::restoreBlockingStylesheet($html, 'homepage-premium.css');
+
         // Drop duplicate stylesheet hrefs (e.g. tabler / site-chrome listed twice).
         $html = self::dedupeStylesheetLinks($html);
 
@@ -232,10 +243,7 @@ final class SerikHomepageAssets
         // Inject LCP image preload (shortcode @push often runs after @stack('header')).
         $html = self::injectHeroImagePreload($html);
 
-        foreach (self::DEFER_SCRIPT_PATTERNS as $pattern) {
-            $html = self::deferScriptTag($html, $pattern);
-        }
-
+        [$html, $carouselUrls] = self::extractScriptsForIdleLoad($html, self::CAROUSEL_SCRIPT_PATTERNS);
         [$html, $themeIdleUrls] = self::extractScriptsForIdleLoad($html, self::IDLE_THEME_SCRIPT_PATTERNS);
 
         foreach (self::IDLE_SCRIPT_PATTERNS as $pattern) {
@@ -250,7 +258,7 @@ final class SerikHomepageAssets
         ) ?? $html;
 
         if (! str_contains($html, '__serikHomepageIdleScripts')) {
-            $html = str_replace('</body>', self::idleLoaderSnippet($themeIdleUrls) . '</body>', $html);
+            $html = str_replace('</body>', self::idleLoaderSnippet($themeIdleUrls, $carouselUrls) . '</body>', $html);
         }
 
         // Fancybox CSS/JS load on gallery click (services style-3) — drop head links on homepage.
@@ -476,10 +484,12 @@ final class SerikHomepageAssets
 
     /**
      * @param  list<string>  $themeScriptUrls
+     * @param  list<string>  $carouselScriptUrls
      */
-    private static function idleLoaderSnippet(array $themeScriptUrls = []): string
+    private static function idleLoaderSnippet(array $themeScriptUrls = [], array $carouselScriptUrls = []): string
     {
         $themeJson = json_encode(array_values($themeScriptUrls), JSON_UNESCAPED_SLASHES) ?: '[]';
+        $carouselJson = json_encode(array_values($carouselScriptUrls), JSON_UNESCAPED_SLASHES) ?: '[]';
 
         return <<<HTML
 <script>
@@ -489,8 +499,8 @@ final class SerikHomepageAssets
     }
     window.__serikHomepageIdleScripts = true;
 
+    var carouselQueue = {$carouselJson};
     var themeQueue = {$themeJson};
-    // reCAPTCHA + intl-tel-input load on demand (never idle-inject).
     var thirdPartyQueue = [];
 
     function injectSequential(urls, done) {
@@ -526,19 +536,15 @@ final class SerikHomepageAssets
         document.body.appendChild(s);
     }
 
-    function whenJqueryReady(cb) {
-        if (window.jQuery) {
-            cb();
+    function loadCarousels(done) {
+        if (window.__serikCarouselsLoaded) {
+            if (typeof done === 'function') {
+                done();
+            }
             return;
         }
-        var tries = 0;
-        var t = setInterval(function () {
-            tries++;
-            if (window.jQuery || tries > 80) {
-                clearInterval(t);
-                cb();
-            }
-        }, 50);
+        window.__serikCarouselsLoaded = true;
+        injectSequential(carouselQueue, done);
     }
 
     function loadAll() {
@@ -547,13 +553,12 @@ final class SerikHomepageAssets
         }
         window.__serikHomepageIdleLoaded = true;
 
-        whenJqueryReady(function () {
+        loadCarousels(function () {
             injectSequential(themeQueue, function () {
                 thirdPartyQueue.forEach(injectAsync);
                 if (typeof window.initRegPhoneInput === 'function') {
                     window.initRegPhoneInput();
                 }
-                // reCAPTCHA: do not init here — window.loadRecaptcha() is on-demand only.
             });
         });
     }
@@ -577,7 +582,6 @@ final class SerikHomepageAssets
         }, 50);
     }
 
-    // Bootstrap is idle-loaded — first login click must wait for it, then open.
     document.addEventListener('click', function (e) {
         var trigger = e.target && e.target.closest
             ? e.target.closest('[data-bs-target="#modalLogin"], a[href="#modalLogin"]')
@@ -604,7 +608,20 @@ final class SerikHomepageAssets
         window.addEventListener(eventName, loadAll, { once: true, passive: true });
     });
 
-    // Real users: scroll/tap loads immediately. Lab Lighthouse: keep idle JS off the TBT window.
+    // Carousels after load+idle (outside Lighthouse TBT window). Theme JS much later.
+    function scheduleCarousels() {
+        if (typeof window.requestIdleCallback === 'function') {
+            window.requestIdleCallback(function () { loadCarousels(); }, { timeout: 2000 });
+        } else {
+            setTimeout(function () { loadCarousels(); }, 1500);
+        }
+    }
+    if (document.readyState === 'complete') {
+        scheduleCarousels();
+    } else {
+        window.addEventListener('load', scheduleCarousels, { once: true });
+    }
+
     if ('requestIdleCallback' in window) {
         requestIdleCallback(function () { setTimeout(loadAll, 20000); }, { timeout: 25000 });
     } else {
@@ -613,6 +630,39 @@ final class SerikHomepageAssets
 })();
 </script>
 HTML;
+    }
+
+    /**
+     * Convert a media=print async stylesheet back to a normal blocking stylesheet.
+     */
+    private static function restoreBlockingStylesheet(string $html, string $pattern): string
+    {
+        $html = preg_replace(
+            '/<link\b[^>]*rel=["\']preload["\'][^>]*href=["\'][^"\']*' . preg_quote($pattern, '/') . '[^"\']*["\'][^>]*>\s*/i',
+            '',
+            $html
+        ) ?? $html;
+
+        $html = preg_replace_callback(
+            '/<link\b([^>]*href=["\'][^"\']*' . preg_quote($pattern, '/') . '[^"\']*["\'][^>]*)>/i',
+            static function (array $m): string {
+                $attrs = $m[1];
+                if (! preg_match('/\brel=["\']stylesheet["\']/i', $attrs) && ! preg_match('/\brel=["\']stylesheet["\']/i', $m[0])) {
+                    return $m[0];
+                }
+                $attrs = preg_replace('/\smedia=(["\']).*?\1/i', '', $attrs) ?? $attrs;
+                $attrs = preg_replace('/\sonload=(["\']).*?\1/i', '', $attrs) ?? $attrs;
+
+                return '<link' . $attrs . '>';
+            },
+            $html
+        ) ?? $html;
+
+        return preg_replace(
+            '/<noscript>\s*<link[^>]+' . preg_quote($pattern, '/') . '[^>]*>\s*<\/noscript>\s*/i',
+            '',
+            $html
+        ) ?? $html;
     }
 
     /**

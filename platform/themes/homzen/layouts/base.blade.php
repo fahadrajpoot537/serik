@@ -141,12 +141,10 @@
 @endif
 <link href="{{ $serikTablerIconsCss }}" rel="stylesheet" media="print" onload="this.media='all'">
 <noscript><link href="{{ $serikTablerIconsCss }}" rel="stylesheet"></noscript>
-{{-- Full skins async — critical CSS above already reserves header/hero layout. --}}
-<link rel="preload" as="style" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp83">
-<link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp83" media="print" onload="this.media='all'">
-<noscript><link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp83"></noscript>
-<link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc66" media="print" onload="this.media='all'">
-<noscript><link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc66"></noscript>
+{{-- Premium BLOCKING: matches final homepage layout (stops desktop CLS ~0.5). Bootstrap/chrome stay async. --}}
+<link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp84">
+<link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc67" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc67"></noscript>
 @else
 <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
