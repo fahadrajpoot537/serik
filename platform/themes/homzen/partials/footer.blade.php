@@ -78,7 +78,6 @@
 
 
 
-<script src="https://cdn.jsdelivr.net/npm/intl-tel-input@19.5.6/build/js/intlTelInput.min.js"></script>
 <script>
 
 
@@ -218,18 +217,28 @@ document.addEventListener("DOMContentLoaded", function () {
 
 
 document.addEventListener("DOMContentLoaded", function () {
-    setTimeout(function () {
-        const phoneInput = document.getElementById('register-phone');
-        if (!phoneInput || typeof window.intlTelInput !== 'function') {
+    const phoneInput = document.getElementById('register-phone');
+    if (!phoneInput) {
+        return;
+    }
+
+    function mountRegisterPhone() {
+        if (phoneInput.dataset.intlReady === '1' || typeof window.intlTelInput !== 'function') {
             return;
         }
-
+        phoneInput.dataset.intlReady = '1';
         window.intlTelInput(phoneInput, {
             initialCountry: "ca",
             separateDialCode: true,
             utilsScript: "https://cdn.jsdelivr.net/npm/intl-tel-input@19.5.6/build/js/utils.js"
         });
-    }, 300);
+    }
+
+    phoneInput.addEventListener('focus', function () {
+        if (typeof window.ensureIntlTelInputScript === 'function') {
+            window.ensureIntlTelInputScript(mountRegisterPhone);
+        }
+    }, { once: true });
 });
 
 

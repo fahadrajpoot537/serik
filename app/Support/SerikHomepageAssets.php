@@ -390,10 +390,8 @@ final class SerikHomepageAssets
     window.__serikHomepageIdleScripts = true;
 
     var themeQueue = {$themeJson};
-    // reCAPTCHA is on-demand via window.loadRecaptcha() — never idle-inject api.js.
-    var thirdPartyQueue = [
-        'https://cdn.jsdelivr.net/npm/intl-tel-input@19.5.6/build/js/intlTelInput.min.js'
-    ];
+    // reCAPTCHA + intl-tel-input load on demand (never idle-inject).
+    var thirdPartyQueue = [];
 
     function injectSequential(urls, done) {
         var i = 0;

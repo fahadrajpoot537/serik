@@ -1,8 +1,7 @@
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/intl-tel-input@19.5.6/build/css/intlTelInput.css" media="print" onload="this.media='all'" />
 @php
     use Theme\homzen\Supports\RecaptchaHelper;
 @endphp
-{{-- reCAPTCHA api.js is injected on demand via window.loadRecaptcha() (PSI TBT). --}}
+{{-- intl-tel-input CSS/JS + reCAPTCHA api.js load on demand (PSI TBT). --}}
 <style>
     #modalLogin.modal:not(.show) {
         display: none !important;
@@ -608,25 +607,51 @@
 </div>
 
 <script>
+    var INTL_TEL_CSS = 'https://cdn.jsdelivr.net/npm/intl-tel-input@19.5.6/build/css/intlTelInput.css';
+    var INTL_TEL_JS = 'https://cdn.jsdelivr.net/npm/intl-tel-input@19.5.6/build/js/intlTelInput.min.js';
+    var INTL_TEL_UTILS = 'https://cdn.jsdelivr.net/npm/intl-tel-input@19.5.6/build/js/utils.js';
+
+    function ensureIntlTelInputCss() {
+        if (document.querySelector('link[href="' + INTL_TEL_CSS + '"]')) {
+            return;
+        }
+        var link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = INTL_TEL_CSS;
+        document.head.appendChild(link);
+    }
+
     function ensureIntlTelInputScript(done) {
+        ensureIntlTelInputCss();
         if (typeof window.intlTelInput === 'function') {
             done();
             return;
         }
 
-        const src = 'https://cdn.jsdelivr.net/npm/intl-tel-input@19.5.6/build/js/intlTelInput.min.js';
-        const existing = document.querySelector('script[src="' + src + '"]');
+        const existing = document.querySelector('script[src="' + INTL_TEL_JS + '"]');
         if (existing) {
             existing.addEventListener('load', done, { once: true });
+            // Already loaded before this listener — poll briefly.
+            var tries = 0;
+            var t = setInterval(function () {
+                tries++;
+                if (typeof window.intlTelInput === 'function') {
+                    clearInterval(t);
+                    done();
+                } else if (tries > 40) {
+                    clearInterval(t);
+                }
+            }, 50);
             return;
         }
 
         const script = document.createElement('script');
-        script.src = src;
+        script.src = INTL_TEL_JS;
         script.async = true;
         script.onload = done;
         document.body.appendChild(script);
     }
+    window.ensureIntlTelInputScript = ensureIntlTelInputScript;
 
     function initRegPhoneInput() {
         const phoneInput = document.querySelector('#regPhone');
@@ -643,12 +668,22 @@
             }
             phoneInput.dataset.intlReady = '1';
             window.intlTelInput(phoneInput, {
-                utilsScript: 'https://cdn.jsdelivr.net/npm/intl-tel-input@19.5.6/build/js/utils.js',
+                utilsScript: INTL_TEL_UTILS,
                 initialCountry: 'ca',
             });
         });
     }
     window.initRegPhoneInput = initRegPhoneInput;
+
+    document.addEventListener('focusin', function (e) {
+        if (e.target && (e.target.id === 'regPhone' || e.target.id === 'register-phone' || e.target.name === 'phone')) {
+            if (e.target.id === 'regPhone') {
+                initRegPhoneInput();
+            } else if (typeof window.ensureIntlTelInputScript === 'function') {
+                window.ensureIntlTelInputScript(function () {});
+            }
+        }
+    }, true);
 
     // Unified auth modal helpers
     let authModalInstance = null;
