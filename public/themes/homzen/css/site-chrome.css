@@ -110,3 +110,10 @@ padding-left:10px!important;
 padding-right:10px!important;
 }
 }
+/* Topbar: no left column; tools span full width */
+.top-header .top-header-left,.serik-hp-topbar__left{display:none!important}
+.top-header .top-header-inner,.serik-hp-topbar__inner{display:flex!important;align-items:center;width:100%!important;max-width:100%!important;box-sizing:border-box}
+.top-header .top-header-right,.serik-hp-topbar__right{display:flex!important;align-items:center;width:100%!important;flex:1 1 auto!important;min-width:0;gap:1rem}
+.top-header .serik-hp-topbar__tools{display:flex!important;align-items:center;justify-content:space-evenly!important;flex:1 1 auto!important;width:100%!important;min-width:0;gap:.75rem;flex-wrap:nowrap}
+.top-header .serik-hp-topbar__tools a,.top-header .serik-hp-topbar__link{display:inline-flex!important;white-space:nowrap}
+.top-header .serik-hp-topbar__account,.top-header .serik-hp-topbar__auth{flex-shrink:0;margin-left:auto}
