@@ -27,7 +27,23 @@
         {!! Theme::content() !!}
     @else
         <div class="container">
-            {!! Theme::content() !!}
+            @php
+                $pageContent = Theme::content();
+                if (request()->is('contact-us') && is_string($pageContent) && $pageContent !== '') {
+                    $logosHtml = Theme::partial('contact-logo-carousel');
+                    $mapMarker = 'google-map-iframe';
+                    $mapPos = strpos($pageContent, $mapMarker);
+                    if ($mapPos !== false && is_string($logosHtml) && $logosHtml !== '') {
+                        $before = substr($pageContent, 0, $mapPos);
+                        $sectionPos = strrpos($before, '<section');
+                        $insertAt = $sectionPos !== false ? $sectionPos : $mapPos;
+                        $pageContent = substr($pageContent, 0, $insertAt)
+                            . $logosHtml
+                            . substr($pageContent, $insertAt);
+                    }
+                }
+            @endphp
+            {!! $pageContent !!}
         </div>
     @endif
 

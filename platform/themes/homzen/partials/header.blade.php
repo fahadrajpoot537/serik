@@ -2195,12 +2195,15 @@ function loadImages() {
                     .then(data => {
                         const imgUrl = data.media || (Array.isArray(data.images) ? data.images[0] : '');
                         if (imgUrl) {
-                            img.src = imgUrl;
-                            img.style.opacity = '0';
                             img.onload = () => {
                                 img.style.transition = 'opacity 0.3s ease';
                                 img.style.opacity = '1';
                             };
+                            img.style.opacity = '1';
+                            img.src = imgUrl;
+                            if (img.complete && img.naturalWidth > 0) {
+                                img.style.opacity = '1';
+                            }
                         } else if (!img.src.includes('placeholder.png')) {
                             img.onerror = null;
                             img.src = '{{ \App\Support\SerikMediaUrl::placeholder() }}';

@@ -58,7 +58,8 @@
     }
     function run() {
         revealHomepageSections();
-        [100, 400, 1000, 2000].forEach(function (ms) {
+        // Idle WOW/jQuery can init after 2s+ and re-hide .wow — keep forcing.
+        [100, 400, 1000, 2000, 4000, 8000, 15000].forEach(function (ms) {
             setTimeout(revealHomepageSections, ms);
         });
     }

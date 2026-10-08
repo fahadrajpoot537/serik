@@ -119,36 +119,40 @@
                             @php $heroSlideIndex = 0; @endphp
                             @foreach (range(1, 4) as $i)
                                 @continue(! $shortcode->{"slider_image_$i"})
-                                @php $heroSlideIndex++; @endphp
+                                @php
+                                    $heroSlideIndex++;
+                                    $slidePath = $shortcode->{"slider_image_$i"};
+                                    $slideSrcset = '';
+                                    $slideSrc = null;
+                                    if (\App\Support\SerikHomepage::isHomepageRequest()) {
+                                        $rawSlideUrl = SerikMediaUrl::cmsImageUrl($slidePath, 'large');
+                                        if (is_string($rawSlideUrl) && $rawSlideUrl !== '') {
+                                            $slideSrcset = \App\Support\SerikHomepageImage::srcset($rawSlideUrl, [360, 480, 574], 68);
+                                            $slideSrc = \App\Support\SerikHomepageImage::optimizedUrl($rawSlideUrl, 480, 68) ?: $rawSlideUrl;
+                                        }
+                                    }
+                                    // Never reuse slide-1 srcset on later slides (browser would show one image for all).
+                                    $slideAttrs = array_filter([
+                                        'data-bb-lazy' => 'false',
+                                        'fetchpriority' => $heroSlideIndex === 1 ? 'high' : null,
+                                        'loading' => $heroSlideIndex === 1 ? 'eager' : 'lazy',
+                                        'decoding' => 'async',
+                                        'width' => 1200,
+                                        'height' => 900,
+                                        'class' => 'serik-split-hero__banner-img',
+                                        'src' => $slideSrc,
+                                        'srcset' => $slideSrcset !== '' ? $slideSrcset : null,
+                                        'sizes' => $slideSrcset !== '' ? '(max-width: 768px) 88vw, 480px' : null,
+                                    ]);
+                                @endphp
                                 <div class="swiper-slide">
                                     <div class="slider-home2 serik-split-hero__slide">
                                         {{ RvMedia::image(
-                                            $shortcode->{"slider_image_$i"},
-                                            ImageAlt::resolve($shortcode->title, $shortcode->{"slider_image_$i"}, $heroAltContext),
+                                            $slidePath,
+                                            ImageAlt::resolve($shortcode->title, $slidePath, $heroAltContext),
                                             'large',
-                                            lazy: $heroSlideIndex > 1,
-                                            attributes: $heroSlideIndex === 1
-                                                ? array_filter([
-                                                    'data-bb-lazy' => 'false',
-                                                    'fetchpriority' => 'high',
-                                                    'loading' => 'eager',
-                                                    'decoding' => 'async',
-                                                    'width' => 1200,
-                                                    'height' => 900,
-                                                    'class' => 'serik-split-hero__banner-img',
-                                                    'srcset' => $heroSrcset !== '' ? $heroSrcset : null,
-                                                    'sizes' => $heroSrcset !== '' ? '(max-width: 768px) 88vw, 480px' : null,
-                                                ])
-                                                : array_filter([
-                                                    'data-bb-lazy' => 'true',
-                                                    'loading' => 'lazy',
-                                                    'decoding' => 'async',
-                                                    'width' => 1200,
-                                                    'height' => 900,
-                                                    'class' => 'serik-split-hero__banner-img',
-                                                    'srcset' => $heroSrcset !== '' ? $heroSrcset : null,
-                                                    'sizes' => $heroSrcset !== '' ? '(max-width: 768px) 88vw, 480px' : null,
-                                                ])
+                                            lazy: false,
+                                            attributes: $slideAttrs
                                         ) }}
                                     </div>
                                 </div>

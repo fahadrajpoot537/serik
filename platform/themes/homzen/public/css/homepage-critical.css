@@ -74,3 +74,75 @@ background:var(--serik-reference-blue,#0b4c9f)!important;
 }
 .serik-nav-bar{min-height:64px!important;height:64px}
 }
+/* Force homepage images visible (absolute media + critical height:auto conflict) */
+#page-home img:not([width="1"]):not(.serik-split-hero__banner-img){opacity:1!important;visibility:visible!important}
+#page-home .serik-portal-card__media,
+#page-home .serik-prop-card__media,
+#page-home .serik-portal-card .serik-prop-card__media{
+position:relative!important;display:block!important;width:100%!important;
+aspect-ratio:var(--p-card-ratio,2 / 1)!important;min-height:140px!important;
+overflow:hidden!important;background:#e8eef5
+}
+#page-home .serik-portal-card__media img,
+#page-home .serik-prop-card__media img,
+#page-home .serik-portal-card .serik-prop-card__media img{
+position:absolute!important;inset:0!important;width:100%!important;height:100%!important;
+max-height:none!important;object-fit:cover!important;opacity:1!important;visibility:visible!important;display:block!important
+}
+#page-home .serik-hp-cat-card img,
+#page-home .serik-hp-loc-card__media img,
+#page-home .box-service img,
+#page-home .property-image{
+opacity:1!important;visibility:visible!important;max-height:none
+}
+
+/* WOW must not hide homepage sections (idle WOW.init re-hides after JS reveal) */
+#page-home .wow,
+#page-home .wow.fadeIn,
+#page-home .wow.fadeInUp,
+#page-home .wow.fadeInUpSmall,
+#page-home .wow.fadeInLeftSmall,
+#page-home .wow.fadeInRightSmall,
+#page-home .serik-hp-props__grid,
+#page-home .serik-hp-locations__swiper,
+#page-home .tf-sw-services{
+visibility:visible!important;opacity:1!important;transform:none!important;animation:none!important
+}
+/* Bulletproof: property imgs keep intrinsic box even if absolute fill fails */
+#page-home .serik-portal-card__media img.property-image,
+#page-home .serik-prop-card__media img.property-image{
+position:relative!important;inset:auto!important;top:auto!important;left:auto!important;right:auto!important;bottom:auto!important;
+width:100%!important;height:auto!important;min-height:140px!important;aspect-ratio:2 / 1!important;
+object-fit:cover!important;opacity:1!important;visibility:visible!important;display:block!important;max-height:none!important
+}
+#page-home .serik-portal-card__media,
+#page-home .serik-prop-card__media{height:auto!important;min-height:0!important}
+/* Nuclear: keep homepage card images in normal flow so they always paint */
+#page-home .serik-portal-card__media,
+#page-home .serik-prop-card__media,
+#page-home .serik-portal-card .serik-prop-card__media{
+position:relative!important;display:block!important;width:100%!important;
+aspect-ratio:auto!important;height:auto!important;min-height:0!important;
+overflow:hidden!important;background:#e8eef5!important
+}
+#page-home .serik-portal-card__media img,
+#page-home .serik-prop-card__media img,
+#page-home .serik-portal-card .serik-prop-card__media img,
+#page-home img.property-image{
+position:static!important;inset:auto!important;top:auto!important;left:auto!important;right:auto!important;bottom:auto!important;
+width:100%!important;max-width:100%!important;height:auto!important;min-height:140px!important;
+aspect-ratio:2 / 1!important;object-fit:cover!important;object-position:center!important;
+opacity:1!important;visibility:visible!important;display:block!important;max-height:none!important;transform:none!important
+}
+
+#page-home .serik-hp-loc-card__media,
+#page-home .serik-hp-loc-card__media img{
+opacity:1!important;visibility:visible!important
+}
+#page-home .serik-hp-loc-card__media img{
+position:static!important;width:100%!important;height:auto!important;aspect-ratio:16 / 10!important;object-fit:cover!important;display:block!important
+}
+/* Hero swiper fade must control slide opacity — exclude from force-visible rules */
+#page-home .serik-split-hero__swiper.swiper-initialized .swiper-slide:not(.swiper-slide-active){opacity:0!important;pointer-events:none!important}
+#page-home .serik-split-hero__swiper.swiper-initialized .swiper-slide.swiper-slide-active{opacity:1!important;pointer-events:auto!important}
+#page-home .serik-split-hero__swiper .serik-split-hero__banner-img{height:100%!important;width:100%!important;object-fit:contain!important;max-height:none}

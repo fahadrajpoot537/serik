@@ -13,6 +13,9 @@
 (function () {
     'use strict';
 
+    // Prevent newsletter.js from scheduling a second open (was causing popup flash/reopen).
+    window.__serikNewsletterPopupInline = true;
+
     var popupId = 'newsletter-popup';
     var cookieName = 'newsletter_popup';
 

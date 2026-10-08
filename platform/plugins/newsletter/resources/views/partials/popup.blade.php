@@ -59,23 +59,51 @@
     .newsletter-popup .newsletter-popup-bg {
         background-color: #f7f7f7;
         padding: 0;
+        flex: 0 0 auto;
+        min-height: 160px;
+        overflow: hidden;
     }
 
     .newsletter-popup .newsletter-popup-bg img {
         width: 100%;
         height: 100%;
+        min-height: inherit;
         object-fit: cover;
         display: block;
+        opacity: 1 !important;
+        visibility: visible !important;
     }
 
     .newsletter-popup .newsletter-popup-bg--mobile {
-        height: 140px;
+        height: 160px;
+        min-height: 160px;
+    }
+
+    @media (min-width: 768px) {
+        .newsletter-popup .modal-content.d-flex {
+            align-items: stretch;
+        }
+
+        .newsletter-popup .newsletter-popup-bg {
+            flex: 0 0 46%;
+            max-width: 46%;
+            width: 46%;
+            min-height: 320px;
+            align-self: stretch;
+        }
+
+        .newsletter-popup .newsletter-popup-bg img {
+            min-height: 320px;
+        }
     }
 
     @media (min-width: 768px) and (max-width: 991.98px) {
         .newsletter-popup .newsletter-popup-bg {
             width: 100%;
+            max-width: 100%;
+            flex: 0 0 100%;
             height: 12rem;
+            min-height: 12rem;
         }
     }
 

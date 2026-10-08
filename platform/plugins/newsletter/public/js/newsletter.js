@@ -62,6 +62,11 @@
             return
         }
 
+        // Inline blade script already owns open/close on pages that include it.
+        if (window.__serikNewsletterPopupInline) {
+            return
+        }
+
         const delaySeconds = parseInt(popup.getAttribute('data-delay'), 10)
         const newsletterDelayTime = Number.isFinite(delaySeconds) ? delaySeconds * 1000 : 5000
         let popupScheduled = false
@@ -71,7 +76,10 @@
         const hideNewsletterModal = () => {
             userDismissed = true
             popupShown = false
-            dontShowAgain(30 * 24 * 60 * 60 * 1000)
+            const checkbox = popup.querySelector('input[name="dont_show_again"]')
+            if (checkbox?.checked) {
+                dontShowAgain(30 * 24 * 60 * 60 * 1000)
+            }
 
             if (window.bootstrap?.Modal) {
                 const instance = window.bootstrap.Modal.getInstance(popup)

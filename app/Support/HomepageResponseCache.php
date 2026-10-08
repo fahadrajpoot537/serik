@@ -14,7 +14,7 @@ final class HomepageResponseCache
 {
     private const VERSION_KEY = 'homepage_response_cache_version_v4';
 
-    private const KEY_PREFIX = 'homepage_html_v40:';
+    private const KEY_PREFIX = 'homepage_html_v45:';
 
     private const TRACKING_QUERY_KEYS = [
         'utm_source',
@@ -44,22 +44,22 @@ final class HomepageResponseCache
         $oldVersion = self::version();
         $oldKey = self::KEY_PREFIX . $oldVersion . ':' . $locale . ':shared';
         // Also forget legacy v4 keys if present.
-        $legacyKey = 'homepage_html_v4:' . $oldVersion . ':' . $locale . ':shared';
+        $legacyKey = 'homepage_html_v45:' . $oldVersion . ':' . $locale . ':shared';
 
         SerikCache::forever(self::VERSION_KEY, $oldVersion + 1);
 
         SerikCache::forget($oldKey);
         SerikCache::forget($legacyKey);
-        SerikCache::forget('homepage_html_v5:' . $oldVersion . ':' . $locale . ':shared');
-        SerikCache::forget('homepage_html_v13:' . $oldVersion . ':' . $locale . ':shared');
-        SerikCache::forget('homepage_html_v14:' . $oldVersion . ':' . $locale . ':shared');
-        SerikCache::forget('homepage_html_v15:' . $oldVersion . ':' . $locale . ':shared');
+        SerikCache::forget('homepage_html_v45:' . $oldVersion . ':' . $locale . ':shared');
+        SerikCache::forget('homepage_html_v45:' . $oldVersion . ':' . $locale . ':shared');
+        SerikCache::forget('homepage_html_v45:' . $oldVersion . ':' . $locale . ':shared');
+        SerikCache::forget('homepage_html_v45:' . $oldVersion . ':' . $locale . ':shared');
         SerikCache::forget(self::KEY_PREFIX . self::version() . ':' . $locale . ':shared');
-        SerikCache::forget('homepage_html_v4:' . self::version() . ':' . $locale . ':shared');
-        SerikCache::forget('homepage_html_v5:' . self::version() . ':' . $locale . ':shared');
-        SerikCache::forget('homepage_html_v13:' . self::version() . ':' . $locale . ':shared');
-        SerikCache::forget('homepage_html_v14:' . self::version() . ':' . $locale . ':shared');
-        SerikCache::forget('homepage_html_v15:' . self::version() . ':' . $locale . ':shared');
+        SerikCache::forget('homepage_html_v45:' . self::version() . ':' . $locale . ':shared');
+        SerikCache::forget('homepage_html_v45:' . self::version() . ':' . $locale . ':shared');
+        SerikCache::forget('homepage_html_v45:' . self::version() . ':' . $locale . ':shared');
+        SerikCache::forget('homepage_html_v45:' . self::version() . ':' . $locale . ':shared');
+        SerikCache::forget('homepage_html_v45:' . self::version() . ':' . $locale . ':shared');
     }
 
     public static function forget(): void
@@ -67,8 +67,8 @@ final class HomepageResponseCache
         $locale = app()->getLocale();
         $version = self::version();
         SerikCache::forget(self::KEY_PREFIX . $version . ':' . $locale . ':shared');
-        SerikCache::forget('homepage_html_v4:' . $version . ':' . $locale . ':shared');
-        SerikCache::forget('homepage_html_v5:' . $version . ':' . $locale . ':shared');
+        SerikCache::forget('homepage_html_v45:' . $version . ':' . $locale . ':shared');
+        SerikCache::forget('homepage_html_v45:' . $version . ':' . $locale . ':shared');
     }
 
     /**

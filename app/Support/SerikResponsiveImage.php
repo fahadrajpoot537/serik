@@ -111,7 +111,10 @@ final class SerikResponsiveImage
         return preg_replace_callback(
             '/<img\b([^>]*?)>/i',
             static function (array $m): string {
-                $attrs = $m[1];
+                // XHTML self-closing slash must not sit before appended srcset
+                // (was producing alt="..."/ srcset="..." which some browsers break).
+                $attrs = rtrim($m[1]);
+                $attrs = preg_replace('/\s*\/\s*$/', '', $attrs) ?? $attrs;
 
                 // Only the src attribute — never data-src / this.src .
                 if (! preg_match('/(?:^|\s)src=(["\'])([^"\']+)\1/i', $attrs, $srcMatch)) {

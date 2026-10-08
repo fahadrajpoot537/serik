@@ -404,7 +404,8 @@ final class SerikHomepageAssets
         return preg_replace_callback(
             '/<img\b([^>]*)>/i',
             static function (array $m): string {
-                $attrs = $m[1];
+                $attrs = rtrim($m[1]);
+                $attrs = preg_replace('/\s*\/\s*$/', '', $attrs) ?? $attrs;
                 if (! preg_match('/\bdata-src=(["\'])([^"\']+)\1/i', $attrs, $dataSrcMatch)) {
                     return '<img' . $attrs . '>';
                 }

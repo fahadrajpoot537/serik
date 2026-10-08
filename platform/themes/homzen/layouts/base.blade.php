@@ -142,7 +142,7 @@
 <link href="{{ $serikTablerIconsCss }}" rel="stylesheet" media="print" onload="this.media='all'">
 <noscript><link href="{{ $serikTablerIconsCss }}" rel="stylesheet"></noscript>
 {{-- Premium + site-chrome BLOCKING (CLS). Bootstrap/style stay blocking via Theme::header + restoreBlocking (FOUC). --}}
-<link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp88">
+<link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp93">
 <link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc81">
 @else
 <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
