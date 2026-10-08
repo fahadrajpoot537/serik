@@ -661,11 +661,26 @@
             box-sizing: border-box;
         }
         #header.main-header .serik-portal-nav__cta,
-        #header.main-header .serik-portal-nav__map,
         #header.main-header .serik-nav-wishlist {
             display: inline-flex !important;
             align-items: center !important;
             align-self: center !important;
+        }
+        /* tel is a mobile/call twin — never show beside copy (was duplicating the number) */
+        #header.main-header .serik-portal-nav__map--tel {
+            display: none !important;
+        }
+    }
+    @media (min-width: 1280px) {
+        #header.main-header .serik-portal-nav__map--copy {
+            display: inline-flex !important;
+            align-items: center !important;
+            align-self: center !important;
+        }
+    }
+    @media (max-width: 1279.98px) {
+        #header.main-header .serik-portal-nav__map--copy {
+            display: none !important;
         }
     }
     @media (max-width: 767.98px) {

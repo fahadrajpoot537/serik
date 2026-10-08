@@ -130,3 +130,12 @@ height:40px!important;
 width:40px!important;
 }
 }
+/* phone duplicate guard: only one number in the blue pill */
+#header.main-header .serik-portal-nav__map--tel{display:none!important}
+@media (min-width:1280px){
+#header.main-header .serik-portal-nav__map--copy{display:inline-flex!important}
+}
+@media (max-width:1279.98px){
+#header.main-header .serik-portal-nav__map--copy,
+#header.main-header .serik-portal-nav__map--tel{display:none!important}
+}
