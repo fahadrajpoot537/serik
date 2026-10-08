@@ -138,6 +138,11 @@ final class SerikResponsiveImage
                     return '<img' . $attrs . '>';
                 }
 
+                // Keep footer white wordmark as-is (do not rewrite to header color logo cache).
+                if (str_contains($attrs, 'serik-footer-logo') || str_contains($src, 'white-logo')) {
+                    return '<img' . $attrs . '>';
+                }
+
                 $isLogo = (bool) preg_match('/whatsapp-image-2025|\/logo|serik-logo/i', $src)
                     || (str_contains($attrs, 'max-height: 44px') && (bool) preg_match('/\bwidth=["\']160["\']/', $attrs));
 

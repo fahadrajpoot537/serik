@@ -1,18 +1,14 @@
 @php
-    // Dark footer — white wordmark so "Serik Realty" reads on #161e2d.
-    $logoLight = theme_option('logo_light');
-    if ($logoLight) {
-        $logoSrc = RvMedia::getImageUrl($logoLight);
-    } elseif (is_file(public_path('storage/white-logo.png'))) {
-        $logoSrc = asset('storage/white-logo.png');
-    } else {
-        $logoSrc = theme_option('logo')
-            ? RvMedia::getImageUrl(theme_option('logo'))
-            : Theme::asset()->url('images/logo.png');
-    }
+    // Dark footer always uses the white wordmark (ignore theme logo / logo_light —
+    // those are the blue color mark used in the header).
+    $logoSrc = is_file(public_path('storage/white-logo.png'))
+        ? asset('storage/white-logo.png')
+        : (theme_option('logo_light')
+            ? RvMedia::getImageUrl(theme_option('logo_light'))
+            : asset('storage/white-logo.png'));
 @endphp
 
-<div class="footer-logo">
+<div class="footer-logo serik-footer-logo">
     <a href="{{ BaseHelper::getHomepageUrl() }}">
         <img
             src="{{ $logoSrc }}"
@@ -21,6 +17,7 @@
             decoding="async"
             loading="eager"
             data-bb-lazy="false"
+            class="serik-footer-logo__img"
             style="max-height: 44px !important"
             alt="{{ theme_option('site_title', 'Serik Realty') }}"
         >

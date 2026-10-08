@@ -329,6 +329,9 @@ final class SerikHomepageAssets
         // Force site logo PNG/JPEG → tiny WebP (heals stale cache / missed blade paths).
         $html = self::rewriteSiteLogoImages($html);
 
+        // Dark footer must keep the white wordmark (never the blue header logo).
+        $html = self::rewriteFooterLogoImages($html);
+
         // CMS testimonial paste often embeds font-family:Roboto (no Roboto file is loaded).
         // Point those spans at Poppins so browsers do not request a stray Roboto face.
         $html = preg_replace(
@@ -352,6 +355,10 @@ final class SerikHomepageAssets
             '/<img\b([^>]*?)>/i',
             static function (array $m) use ($logoWebp): string {
                 $attrs = $m[1];
+                // Footer logo is handled separately (white mark on dark footer).
+                if (str_contains($attrs, 'serik-footer-logo')) {
+                    return '<img' . $attrs . '>';
+                }
                 if (! preg_match('/(?:^|\s)src=(["\'])([^"\']+)\1/i', $attrs, $srcMatch)) {
                     return '<img' . $attrs . '>';
                 }
@@ -390,6 +397,27 @@ final class SerikHomepageAssets
                 }
 
                 return '<img' . $attrs . '>';
+            },
+            $html
+        ) ?? $html;
+    }
+
+    /**
+     * Force footer brand mark to white-logo.png (heals stale HTML + wrong theme options).
+     */
+    private static function rewriteFooterLogoImages(string $html): string
+    {
+        $whiteLogo = asset('storage/white-logo.png');
+
+        return preg_replace_callback(
+            '/(<div[^>]*class="[^"]*footer-logo[^"]*"[^>]*>\s*<a[^>]*>\s*<img\b)([^>]*)(>)/i',
+            static function (array $m) use ($whiteLogo): string {
+                $attrs = $m[2];
+                $attrs = preg_replace('/(?:^|\s)src=(["\'])[^"\']*\1/i', ' src="' . e($whiteLogo) . '"', $attrs, 1) ?? $attrs;
+                $attrs = preg_replace('/\s+srcset=(["\'])[^"\']*\1/i', '', $attrs) ?? $attrs;
+                $attrs = preg_replace('/\s+sizes=(["\'])[^"\']*\1/i', '', $attrs) ?? $attrs;
+
+                return $m[1] . $attrs . $m[3];
             },
             $html
         ) ?? $html;
