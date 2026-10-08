@@ -18,11 +18,28 @@
     background:transparent;
 }
 .serik-contact-logos__viewport{
+    --scl-fade:rgba(232,154,157,.92); /* Contact Us pink, slightly darker */
     position:relative;
     width:100%;
     overflow:hidden;
-    -webkit-mask-image:linear-gradient(90deg, transparent 0%, #000 8%, #000 92%, transparent 100%);
-    mask-image:linear-gradient(90deg, transparent 0%, #000 8%, #000 92%, transparent 100%);
+}
+.serik-contact-logos__viewport::before,
+.serik-contact-logos__viewport::after{
+    content:"";
+    position:absolute;
+    top:0;
+    bottom:0;
+    width:clamp(48px,12%,110px);
+    z-index:2;
+    pointer-events:none;
+}
+.serik-contact-logos__viewport::before{
+    left:0;
+    background:linear-gradient(90deg, var(--scl-fade) 0%, rgba(232,154,157,0) 100%);
+}
+.serik-contact-logos__viewport::after{
+    right:0;
+    background:linear-gradient(270deg, var(--scl-fade) 0%, rgba(232,154,157,0) 100%);
 }
 .serik-contact-logos__track{
     display:flex;

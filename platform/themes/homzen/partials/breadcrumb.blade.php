@@ -142,11 +142,28 @@ body#page-faqs #sectionhead {
     background:transparent;
 }
 .serik-contact-carousel__viewport{
+    --scc-fade:rgba(232,154,157,.92); /* Contact Us pink, slightly darker */
     position:relative;
     width:100%;
     overflow:hidden;
-    -webkit-mask-image:linear-gradient(90deg, transparent 0%, #000 8%, #000 92%, transparent 100%);
-    mask-image:linear-gradient(90deg, transparent 0%, #000 8%, #000 92%, transparent 100%);
+}
+.serik-contact-carousel__viewport::before,
+.serik-contact-carousel__viewport::after{
+    content:"";
+    position:absolute;
+    top:0;
+    bottom:0;
+    width:clamp(48px,12%,110px);
+    z-index:2;
+    pointer-events:none;
+}
+.serik-contact-carousel__viewport::before{
+    left:0;
+    background:linear-gradient(90deg, var(--scc-fade) 0%, rgba(232,154,157,0) 100%);
+}
+.serik-contact-carousel__viewport::after{
+    right:0;
+    background:linear-gradient(270deg, var(--scc-fade) 0%, rgba(232,154,157,0) 100%);
 }
 .serik-contact-carousel__track{
     display:flex;

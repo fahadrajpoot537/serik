@@ -13,8 +13,12 @@
             <div class="col-lg-8">
         @endif
                 <div class="contact-content">
-                    @if($shortcode->title)
-                        <h5>{!! BaseHelper::clean($shortcode->title) !!}</h5>
+                    @if($shortcode->title || request()->is('contact-us'))
+                        <h5>{!! BaseHelper::clean(
+                            request()->is('contact-us')
+                                ? 'Claim upto 1.5% Cash Back'
+                                : $shortcode->title
+                        ) !!}</h5>
                     @endif
                     @if($shortcode->description)
                         <p class="body-2 text-variant-1">{!! BaseHelper::clean($shortcode->description) !!}</p>
