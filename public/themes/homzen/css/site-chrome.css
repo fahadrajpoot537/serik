@@ -115,7 +115,6 @@ padding-bottom:0!important;
 }
 #header.main-header .serik-portal-nav__cta,
 #header.main-header .serik-hp-nav__cta,
-#header.main-header .serik-portal-nav__map,
 #header.main-header .serik-nav-wishlist{
 display:inline-flex!important;
 align-items:center!important;
@@ -124,6 +123,7 @@ margin-top:0!important;
 margin-bottom:0!important;
 align-self:center!important;
 }
+#header.main-header .serik-portal-nav__map--tel{display:none!important;}
 #header.main-header .serik-nav-wishlist,
 #header.main-header .serik-header-search-toggle{
 height:40px!important;
