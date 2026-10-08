@@ -554,172 +554,229 @@
         }
     }
 
-    /* Navbar responsive polish (UI only — keep sticky/mobile menu behavior) */
-    .main-header .inner-container,
-    .main-header .serik-nav-bar {
-        min-width: 0;
+    /* Navbar responsive polish — last-wins block for logo/search containment */
+    #header.main-header,
+    #header.main-header .header-lower,
+    #header.main-header .inner-container,
+    #header.main-header .serik-nav-bar {
+        box-sizing: border-box !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+    }
+    #header.main-header .inner-container,
+    #header.main-header .serik-nav-bar {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        flex-wrap: nowrap !important;
         width: 100% !important;
         gap: 0.5rem;
-        flex-wrap: nowrap;
+        overflow: hidden !important;
+    }
+    #header.main-header .logo-box {
         display: flex !important;
-        justify-content: flex-start !important;
         align-items: center !important;
+        min-width: 0 !important;
+        overflow: hidden !important;
     }
-    .main-header .logo-box {
-        min-width: 0;
-        flex: 1 1 auto;
-        max-width: none;
-        overflow: hidden;
+    #header.main-header .logo {
+        flex: 0 1 auto !important;
+        min-width: 0 !important;
     }
-    .main-header .logo {
-        flex: 0 0 auto;
-        max-width: min(160px, 46vw);
-    }
-    @media (min-width: 992px) {
-        .main-header .mobile-search-panel {
-            display: block !important;
-            position: static !important;
-            flex: 1 1 auto;
-            min-width: 0;
-            max-width: min(520px, 36vw);
-            height: auto !important;
-            padding: 0 !important;
-            background: transparent !important;
-            overflow: visible;
-        }
-        .main-header .mobile-search-panel .mobile-search-header {
-            display: none !important;
-        }
-        .main-header .smart-search {
-            width: 100%;
-            max-width: 100%;
-            min-width: 0;
-        }
-        .main-header .smart-search .search-box {
-            height: 44px;
-            max-width: 100%;
-            box-sizing: border-box;
-        }
-        .main-header .inner-container,
-        .main-header .serik-nav-bar {
-            overflow: hidden;
-            max-width: 100%;
-        }
-    }
-    .main-header .logo img {
+    #header.main-header .logo img {
         max-width: 100% !important;
         height: auto !important;
-        object-fit: contain;
+        object-fit: contain !important;
     }
-    .main-header .serik-nav-right {
+    #header.main-header .serik-nav-right {
         display: flex !important;
-        align-items: center;
-        justify-content: flex-end;
-        gap: 0.5rem;
+        align-items: center !important;
+        justify-content: flex-end !important;
         margin-left: auto !important;
-        flex: 0 0 auto;
-    }
-    .main-header .header-account {
-        flex: 0 0 auto;
-        min-width: 0;
-        margin-left: 0 !important;
-        margin-right: 0 !important;
-    }
-    .main-header .serik-portal-nav__actions {
-        display: flex !important;
-        align-items: center;
-        justify-content: flex-end;
+        flex: 0 0 auto !important;
         gap: 0.5rem;
-        flex-wrap: nowrap;
-        margin-left: 0;
+        min-width: 0 !important;
     }
-    .main-header .serik-portal-nav__map,
-    .main-header .serik-portal-nav__cta {
+    #header.main-header .header-account,
+    #header.main-header .serik-portal-nav__actions {
+        display: flex !important;
+        align-items: center !important;
+        gap: 0.5rem;
+        min-width: 0 !important;
+        flex-wrap: nowrap !important;
+    }
+    #header.main-header .main-menu .navigation > li > a {
         white-space: nowrap;
-        flex-shrink: 0;
     }
-    .main-header .main-menu .navigation > li > a {
-        white-space: nowrap;
+    #header.main-header .mobile-nav-toggler {
+        flex-shrink: 0 !important;
     }
-    .main-header .mobile-nav-toggler {
-        flex-shrink: 0;
-    }
-    @media (max-width: 1199.98px) {
-        .main-header .serik-portal-nav__map {
-            display: none;
-        }
-    }
+
+    /* Desktop / large tablet: inline search, capped so bar never overflows */
     @media (min-width: 992px) {
-        .main-header .smart-search {
-            min-width: 0;
-            max-width: none;
+        #header.main-header {
+            padding-left: clamp(12px, 2vw, 40px) !important;
+            padding-right: clamp(12px, 2vw, 40px) !important;
+            overflow: hidden !important;
+        }
+        #header.main-header .logo-box {
+            flex: 1 1 auto !important;
+            max-width: min(560px, 42vw) !important;
+            gap: 0.75rem !important;
+        }
+        #header.main-header .logo {
+            max-width: 150px !important;
+            flex: 0 0 auto !important;
+        }
+        #header.main-header .logo img {
+            max-height: 40px !important;
+        }
+        #header #mobileSearchPanel.mobile-search-panel {
+            display: block !important;
+            position: static !important;
+            inset: auto !important;
+            flex: 1 1 auto !important;
+            width: auto !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+            height: auto !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            background: transparent !important;
+            overflow: hidden !important;
+            z-index: auto !important;
+        }
+        #header #mobileSearchPanel .mobile-search-header {
+            display: none !important;
+        }
+        #header #mobileSearchPanel .smart-search {
+            display: block !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+        }
+        #header #mobileSearchPanel .search-box {
+            height: 40px !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            box-sizing: border-box !important;
+        }
+        #header.main-header .nav-outer,
+        #header.main-header .main-menu {
+            flex: 0 1 auto !important;
+            min-width: 0 !important;
+            overflow: hidden !important;
+        }
+        #header.main-header .serik-header-search-toggle {
+            display: none !important;
         }
     }
+    @media (min-width: 992px) and (max-width: 1199.98px) {
+        #header.main-header .logo-box {
+            max-width: min(420px, 34vw) !important;
+        }
+        #header.main-header .logo {
+            max-width: 120px !important;
+        }
+        #header.main-header .serik-portal-nav__map {
+            display: none !important;
+        }
+    }
+    @media (min-width: 992px) and (max-width: 1099.98px) {
+        #header.main-header .logo-box {
+            max-width: min(320px, 30vw) !important;
+        }
+        #header.main-header .serik-portal-nav__cta,
+        #header.main-header .serik-hp-nav__cta {
+            display: none !important;
+        }
+    }
+
+    /* Small screens: search is overlay-only; logo + icon buttons only in the bar */
     @media (max-width: 991.98px) {
         #header.main-header,
-        .main-header.serik-hp-nav {
+        #header.main-header.serik-hp-nav {
             padding-left: 12px !important;
             padding-right: 12px !important;
             max-width: 100vw !important;
             overflow: hidden !important;
         }
-        .main-header .inner-container,
-        .main-header .serik-nav-bar {
-            max-width: 100% !important;
-            min-width: 0 !important;
-            overflow: hidden !important;
-            flex-wrap: nowrap !important;
-        }
-        .main-header .logo-box {
+        #header.main-header .logo-box {
             flex: 1 1 auto !important;
-            min-width: 0 !important;
-            overflow: hidden !important;
+            max-width: calc(100% - 132px) !important;
+            gap: 0 !important;
         }
-        .main-header .logo {
-            max-width: min(140px, 42vw) !important;
+        #header.main-header .logo {
+            max-width: min(120px, 36vw) !important;
         }
-        .main-header .logo img {
-            max-height: 36px !important;
+        #header.main-header .logo img {
+            max-height: 34px !important;
+            max-width: 100% !important;
         }
-        .main-header .serik-nav-right {
-            flex: 0 0 auto !important;
-            max-width: 58% !important;
-            gap: 0.35rem !important;
-            overflow: hidden !important;
+        #header #mobileSearchPanel.mobile-search-panel {
+            display: none !important;
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100vh !important;
+            height: 100dvh !important;
+            padding: 20px !important;
+            background: #fff !important;
+            z-index: 10050 !important;
+            overflow-y: auto !important;
+            max-width: none !important;
+            flex: none !important;
         }
-        .main-header .serik-portal-nav__cta,
-        .main-header .serik-hp-nav__cta,
-        .main-header .serik-portal-nav__map {
+        #header #mobileSearchPanel.mobile-search-panel.active {
+            display: block !important;
+        }
+        #header #mobileSearchPanel.mobile-search-panel.active .smart-search {
+            display: block !important;
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+        #header.main-header .nav-outer,
+        #header.main-header .main-menu {
             display: none !important;
         }
-        .main-header .serik-header-search-toggle,
-        .main-header .mobile-nav-toggler,
-        .main-header .serik-nav-wishlist {
+        #header.main-header .serik-nav-right {
+            flex: 0 0 auto !important;
+            max-width: none !important;
+            gap: 0.25rem !important;
+            overflow: visible !important;
+        }
+        #header.main-header .serik-portal-nav__cta,
+        #header.main-header .serik-hp-nav__cta,
+        #header.main-header .serik-portal-nav__map {
+            display: none !important;
+        }
+        #header.main-header .serik-header-search-toggle {
+            display: inline-flex !important;
+        }
+        #header.main-header .serik-header-search-toggle,
+        #header.main-header .mobile-nav-toggler,
+        #header.main-header .serik-nav-wishlist {
             width: 40px !important;
             height: 40px !important;
             min-width: 40px !important;
+            flex: 0 0 auto !important;
             flex-shrink: 0 !important;
         }
     }
-    @media (max-width: 767.98px) {
-        .main-header .logo {
-            max-width: min(128px, 40vw);
+    @media (max-width: 575.98px) {
+        #header.main-header .logo {
+            max-width: min(100px, 32vw) !important;
         }
-        .smart-search {
-            min-width: 0;
-            max-width: 100%;
+        #header.main-header .logo img {
+            max-height: 30px !important;
         }
-    }
-    @media (max-width: 399.98px) {
-        .main-header .logo {
-            max-width: min(112px, 38vw) !important;
+        #header.main-header .logo-box {
+            max-width: calc(100% - 120px) !important;
         }
-        .main-header .serik-nav-right {
-            gap: 0.2rem !important;
-        }
-        .main-header .serik-header-search-toggle,
-        .main-header .mobile-nav-toggler,
-        .main-header .serik-nav-wishlist {
+        #header.main-header .serik-header-search-toggle,
+        #header.main-header .mobile-nav-toggler,
+        #header.main-header .serik-nav-wishlist {
             width: 36px !important;
             height: 36px !important;
             min-width: 36px !important;
