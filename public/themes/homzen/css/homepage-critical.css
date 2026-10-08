@@ -6,7 +6,7 @@ body{margin:0;font-family:Poppins,Poppins-Fallback,sans-serif;color:#161e2d;back
 @font-face{font-family:Poppins-Fallback;src:local('Arial');size-adjust:104.5%;ascent-override:95%;descent-override:25%;line-gap-override:0%}
 img{max-width:100%;height:auto;border:0}
 a{color:inherit;text-decoration:none}
-:root{--serik-top-header-height:42px;--serik-main-header-height:80px;--p-nav-h:80px;--primary-color:#db1d23;--p-ink:#161e2d;--p-muted:#5b6573;--p-line:rgba(22,30,45,.1);--serik-reference-blue:#0b4c9f}
+:root{--serik-top-header-height:42px;--serik-main-header-height:64px;--p-nav-h:64px;--primary-color:#db1d23;--p-ink:#161e2d;--p-muted:#5b6573;--p-line:rgba(22,30,45,.1);--serik-reference-blue:#0b4c9f}
 .d-flex{display:flex!important}
 .align-items-center{align-items:center!important}
 .justify-content-between{justify-content:space-between!important}
@@ -29,7 +29,7 @@ a{color:inherit;text-decoration:none}
 @media (min-width:992px){
 .top-header,.serik-hp-topbar{display:block!important;min-height:42px;position:fixed;top:0;left:0;right:0;z-index:10001;width:100%;border-bottom:1px solid var(--p-line)}
 .serik-site-header{position:fixed;top:var(--serik-top-header-height,42px);left:0;right:0;z-index:10000;width:100%}
-body.serik-sticky-header{padding-top:calc(var(--serik-top-header-height,42px) + var(--serik-main-header-height,80px))!important}
+body.serik-sticky-header{padding-top:calc(var(--serik-top-header-height,42px) + var(--serik-main-header-height,64px))!important}
 }
 @media (max-width:991.98px){
 :root{--serik-main-header-height:64px;--p-nav-h:64px}
@@ -61,3 +61,16 @@ body.serik-sticky-header{padding-top:var(--serik-main-header-height,64px)!import
 }
 body.modal-open,body.newsletter-popup-open{padding-right:0!important}
 @media (max-width:1199.98px){.main-header .serik-portal-nav__map{display:none}}
+/* critical pill first-paint — match live blue bar */
+@media (min-width:992px){
+:root{--p-nav-h:64px;--serik-main-header-height:64px}
+#header.main-header,#header.serik-hp-nav{
+width:min(1600px,calc(100% - 32px))!important;
+max-width:min(1600px,calc(100% - 32px))!important;
+margin:8px auto 0!important;
+min-height:64px!important;height:64px!important;
+padding:0 22px!important;border:0!important;border-radius:999px!important;
+background:var(--serik-reference-blue,#0b4c9f)!important;
+}
+.serik-nav-bar{min-height:64px!important;height:64px}
+}
