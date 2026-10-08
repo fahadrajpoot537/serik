@@ -15,12 +15,10 @@ padding-left:0!important;
 padding-right:0!important;
 box-sizing:border-box;
 }
-.mobile-search-panel{display:none!important}
-.mobile-search-panel.active{display:block!important}
 @media (min-width:992px){
 .main-header .nav-outer,.main-header .main-menu,.main-header .navbar-collapse,#navbarSupportedContent{display:flex!important;align-items:center}
 .main-header .main-menu .navigation{display:flex!important;align-items:center;flex-wrap:nowrap;gap:0;margin:0;padding:0;list-style:none}
-.main-header .logo-box{flex:0 1 auto!important;max-width:min(220px,28vw)}
+.main-header .logo-box{flex:1 1 auto!important;min-width:0!important;max-width:none!important}
 .main-header .serik-nav-right{flex:0 0 auto!important;margin-left:auto!important}
 }
 /* Small-screen nav: keep logo + icons inside the bar (no overflow) */
@@ -117,3 +115,79 @@ padding-right:10px!important;
 .top-header .serik-hp-topbar__tools{display:flex!important;align-items:center;justify-content:space-evenly!important;flex:1 1 auto!important;width:100%!important;min-width:0;gap:.75rem;flex-wrap:nowrap}
 .top-header .serik-hp-topbar__tools a,.top-header .serik-hp-topbar__link{display:inline-flex!important;white-space:nowrap}
 .top-header .serik-hp-topbar__account,.top-header .serik-hp-topbar__auth{flex-shrink:0;margin-left:auto}
+/* Desktop nav: logo+inline search stay inside bar */
+@media (min-width:992px){
+#header.main-header,.main-header.serik-hp-nav{
+overflow:hidden!important;
+max-width:100vw!important;
+box-sizing:border-box!important;
+}
+.main-header .inner-container,
+.main-header .serik-nav-bar{
+min-width:0!important;
+max-width:100%!important;
+overflow:hidden!important;
+flex-wrap:nowrap!important;
+align-items:center!important;
+}
+.main-header .logo-box{
+flex:1 1 auto!important;
+min-width:0!important;
+max-width:none!important;
+overflow:hidden!important;
+align-items:center!important;
+}
+.main-header .logo{
+flex:0 0 auto!important;
+max-width:160px!important;
+}
+.main-header .logo img{
+max-height:44px!important;
+max-width:100%!important;
+width:auto!important;
+height:auto!important;
+object-fit:contain!important;
+}
+.main-header .mobile-search-panel{
+display:block!important;
+position:static!important;
+flex:1 1 auto!important;
+min-width:0!important;
+max-width:min(520px,36vw)!important;
+height:auto!important;
+padding:0!important;
+background:transparent!important;
+overflow:visible!important;
+}
+.main-header .mobile-search-panel .mobile-search-header{display:none!important}
+.main-header .smart-search{
+width:100%!important;
+max-width:100%!important;
+min-width:0!important;
+}
+.main-header .smart-search .search-box{
+max-width:100%!important;
+min-width:0!important;
+height:44px!important;
+box-sizing:border-box!important;
+}
+.main-header .nav-outer,
+.main-header .main-menu{
+flex:0 1 auto!important;
+min-width:0!important;
+overflow:hidden!important;
+}
+.main-header .serik-nav-right{
+flex:0 0 auto!important;
+min-width:0!important;
+}
+}
+@media (max-width:991.98px){
+.main-header .mobile-search-panel{
+display:none!important;
+position:fixed!important;
+}
+.main-header .mobile-search-panel.active{
+display:block!important;
+}
+}

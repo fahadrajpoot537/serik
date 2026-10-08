@@ -568,9 +568,43 @@
     .main-header .logo-box {
         min-width: 0;
         flex: 1 1 auto;
+        max-width: none;
+        overflow: hidden;
     }
     .main-header .logo {
-        max-width: min(200px, 46vw);
+        flex: 0 0 auto;
+        max-width: min(160px, 46vw);
+    }
+    @media (min-width: 992px) {
+        .main-header .mobile-search-panel {
+            display: block !important;
+            position: static !important;
+            flex: 1 1 auto;
+            min-width: 0;
+            max-width: min(520px, 36vw);
+            height: auto !important;
+            padding: 0 !important;
+            background: transparent !important;
+            overflow: visible;
+        }
+        .main-header .mobile-search-panel .mobile-search-header {
+            display: none !important;
+        }
+        .main-header .smart-search {
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+        }
+        .main-header .smart-search .search-box {
+            height: 44px;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+        .main-header .inner-container,
+        .main-header .serik-nav-bar {
+            overflow: hidden;
+            max-width: 100%;
+        }
     }
     .main-header .logo img {
         max-width: 100% !important;
