@@ -61,3 +61,12 @@ body.serik-sticky-header{padding-top:var(--serik-main-header-height,64px)!import
 }
 body.modal-open,body.newsletter-popup-open{padding-right:0!important}
 @media (max-width:1199.98px){.main-header .serik-portal-nav__map{display:none}}
+/* Match site-chrome medium nav heights (avoid 80px lock fighting 56/52px chrome) */
+@media (min-width:992px) and (max-width:1399.98px){
+:root{--p-nav-h:56px;--serik-main-header-height:56px}
+#header.main-header,#header.serik-hp-nav,.serik-nav-bar{min-height:56px!important;height:56px}
+}
+@media (min-width:992px) and (max-width:1099.98px){
+:root{--p-nav-h:52px;--serik-main-header-height:52px}
+#header.main-header,#header.serik-hp-nav,.serik-nav-bar{min-height:52px!important;height:52px}
+}
