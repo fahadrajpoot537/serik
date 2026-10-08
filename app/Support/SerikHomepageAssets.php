@@ -35,14 +35,12 @@ final class SerikHomepageAssets
     ];
 
     /**
-     * Heavy/unused-on-fold CSS — inject after load+idle (cuts ~500 KiB unused CSS in lab).
+     * Below-fold / rarely-used CSS — inject after load+idle.
+     * Do NOT idle bootstrap / css/style.css — that causes FOUC (broken paint → slow fix).
      *
      * @var list<string>
      */
     private const IDLE_CSS_PATTERNS = [
-        'bootstrap.min.css',
-        'bootstrap.rtl.min.css',
-        'css/style.css',
         'social-login',
         'front-auth',
         'auth-css',
@@ -167,8 +165,14 @@ final class SerikHomepageAssets
             return true;
         }
 
-        // Heavy CSS still present as early links (should be idle-injected).
-        if (preg_match('/<link[^>]+href=["\'][^"\']*(?:bootstrap\.min\.css|css\/style\.css)[^"\']*["\'][^>]*>/i', $html)) {
+        // Layout CSS must be blocking — async/idle bootstrap|style = FOUC.
+        if (preg_match('/<link[^>]+href=["\'][^"\']*(?:bootstrap\.min\.css|css\/style\.css)[^"\']*["\'][^>]*media=["\']print["\']/i', $html)) {
+            return true;
+        }
+        if (preg_match('/var cssQueue = \[[^\]]*(?:bootstrap\.min\.css|css\/style\.css)/i', $html)) {
+            return true;
+        }
+        if (! preg_match('/bootstrap\.min\.css/i', $html) || ! preg_match('/css\/style\.css/i', $html)) {
             return true;
         }
 
@@ -244,9 +248,11 @@ final class SerikHomepageAssets
             $html = self::makeStylesheetAsync($html, $pattern);
         }
 
-        // Heal stale async premium/chrome → blocking (CLS regression guard).
+        // Heal stale async layout CSS → blocking (CLS + FOUC guards).
         $html = self::restoreBlockingStylesheet($html, 'homepage-premium.css');
         $html = self::restoreBlockingStylesheet($html, 'site-chrome.css');
+        $html = self::restoreBlockingStylesheet($html, 'bootstrap.min.css');
+        $html = self::restoreBlockingStylesheet($html, 'css/style.css');
 
         // Drop duplicate stylesheet hrefs (e.g. tabler / site-chrome listed twice).
         $html = self::dedupeStylesheetLinks($html);
