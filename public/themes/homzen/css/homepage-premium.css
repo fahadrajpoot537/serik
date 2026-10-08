@@ -12,3 +12,18 @@
 
 #page-home h3.main-heading-cat,#page-home .serik-service-card h3.title,#page-home h3.agent-card-name{font-size:inherit;font-weight:inherit;line-height:inherit;margin:0}
 .mobile-bottom-nav button.nav-item{appearance:none;border:0;background:transparent;font:inherit;color:inherit;padding:0;cursor:pointer}
+/* FOUC: services grid before Swiper boots (matches slidesPerView breakpoints) */
+#page-home .tf-sw-services{overflow:hidden}
+#page-home .tf-sw-services:not(.swiper-initialized) .swiper-wrapper{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;transform:none!important;width:100%!important}
+#page-home .tf-sw-services:not(.swiper-initialized) .swiper-slide{width:auto!important;max-width:none!important;margin:0!important;height:auto}
+#page-home .tf-sw-services:not(.swiper-initialized) .swiper-slide:nth-child(n+4){display:none!important}
+#page-home .tf-sw-services .box-service.hover-btn-view,#page-home .tf-sw-services .serik-service-card{flex:1 1 auto!important;width:100%!important;max-width:100%!important;min-height:0!important;position:relative}
+#page-home .tf-sw-services .serik-service-card__link{position:absolute;inset:0;z-index:1;border-radius:inherit}
+@media (max-width:991.98px){
+#page-home .tf-sw-services:not(.swiper-initialized) .swiper-wrapper{grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}
+#page-home .tf-sw-services:not(.swiper-initialized) .swiper-slide:nth-child(n+3){display:none!important}
+#page-home .tf-sw-services:not(.swiper-initialized) .swiper-slide:nth-child(-n+2){display:block!important}
+}
+@media (max-width:575.98px){
+#page-home .tf-sw-services:not(.swiper-initialized) .swiper-wrapper{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+}

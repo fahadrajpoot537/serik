@@ -28,8 +28,7 @@ final class SerikHomepageAssets
         'fancybox',
         'tabler-icons',
         'leaflet',
-        // Needed shortly after carousels boot; keep async (not idle).
-        'swiper-bundle.min.css',
+        // Do NOT async swiper-bundle — slides go full-width until CSS arrives (services FOUC).
         // Do NOT list fonts.googleapis.com / fonts.gstatic.com — that breaks <link rel=preconnect>.
         // Do NOT list homepage-premium.css / site-chrome.css — late arrival shifts #header/#wrapper.
     ];
@@ -165,8 +164,8 @@ final class SerikHomepageAssets
             return true;
         }
 
-        // Layout CSS must be blocking — async/idle bootstrap|style = FOUC.
-        if (preg_match('/<link[^>]+href=["\'][^"\']*(?:bootstrap\.min\.css|css\/style\.css)[^"\']*["\'][^>]*media=["\']print["\']/i', $html)) {
+        // Layout CSS must be blocking — async/idle bootstrap|style|swiper = FOUC.
+        if (preg_match('/<link[^>]+href=["\'][^"\']*(?:bootstrap\.min\.css|css\/style\.css|swiper-bundle\.min\.css)[^"\']*["\'][^>]*media=["\']print["\']/i', $html)) {
             return true;
         }
         if (preg_match('/var cssQueue = \[[^\]]*(?:bootstrap\.min\.css|css\/style\.css)/i', $html)) {
@@ -253,6 +252,7 @@ final class SerikHomepageAssets
         $html = self::restoreBlockingStylesheet($html, 'site-chrome.css');
         $html = self::restoreBlockingStylesheet($html, 'bootstrap.min.css');
         $html = self::restoreBlockingStylesheet($html, 'css/style.css');
+        $html = self::restoreBlockingStylesheet($html, 'swiper-bundle.min.css');
 
         // Drop duplicate stylesheet hrefs (e.g. tabler / site-chrome listed twice).
         $html = self::dedupeStylesheetLinks($html);

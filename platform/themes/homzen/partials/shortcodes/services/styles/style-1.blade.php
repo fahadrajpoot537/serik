@@ -5,15 +5,26 @@
     gap: 10px; /* spacing between boxes */
 }
 
-/* Equal width for 6 boxes */
-.box-service.hover-btn-view {
-    flex: 0 0 calc((100% / 6) - 10px); /* 6 boxes per row */
+/* Equal width only in non-swiper wrap layouts (swiper slides set their own width). */
+.wrap-service .box-service.hover-btn-view {
+    flex: 0 0 calc((100% / 6) - 10px);
     display: flex;
-    flex-direction: column; /* stack icon + content vertically */
-    justify-content: flex-start; /* start from top */
-    align-items: stretch; /* make content stretch full width */
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
     box-sizing: border-box;
-    min-height: 350px; /* optional consistent height */
+    min-height: 350px;
+}
+.tf-sw-services .box-service.hover-btn-view {
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
+    box-sizing: border-box;
+    min-height: 0;
 }
 
 /* Keep icon box fixed size */
@@ -116,14 +127,14 @@
     opacity: 1;
 }
 
-/* Responsive adjustments */
+/* Responsive adjustments (wrap layout only) */
 @media (max-width: 992px) {
-    .box-service.hover-btn-view {
+    .wrap-service .box-service.hover-btn-view {
         flex: 0 0 calc(33.333% - 13.33px);
     }
 }
 @media (max-width: 576px) {
-    .box-service.hover-btn-view {
+    .wrap-service .box-service.hover-btn-view {
         flex: 0 0 calc(50% - 10px);
     }
 }
