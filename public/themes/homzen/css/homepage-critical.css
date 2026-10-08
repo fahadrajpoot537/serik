@@ -18,7 +18,7 @@ a{color:inherit;text-decoration:none}
 #wrapper{min-height:100vh}
 .top-header,.serik-hp-topbar{display:none;min-height:0;background:#fff;overflow:hidden}
 .top-header .top-header-right{min-height:32px}
-#header.main-header,#header.serik-hp-nav{min-height:var(--p-nav-h,80px)!important;height:var(--p-nav-h,80px);background:var(--main-header-background-color,#fff);display:block}
+#header.main-header,#header.serik-hp-nav{min-height:var(--p-nav-h,80px)!important;height:var(--p-nav-h,80px);background:var(--serik-reference-blue,#0b4c9f);display:block}
 .main-header .logo img,.logo img{max-height:44px!important;width:auto;height:auto;display:block;object-fit:contain}
 .serik-nav-bar{min-height:var(--p-nav-h,80px);height:var(--p-nav-h,80px);display:flex!important;align-items:center!important;width:100%!important;gap:.5rem;flex-wrap:nowrap}
 .main-header .logo-box{min-width:0;flex:1 1 auto;display:flex!important;align-items:center}
@@ -61,12 +61,3 @@ body.serik-sticky-header{padding-top:var(--serik-main-header-height,64px)!import
 }
 body.modal-open,body.newsletter-popup-open{padding-right:0!important}
 @media (max-width:1199.98px){.main-header .serik-portal-nav__map{display:none}}
-/* Match site-chrome medium nav heights (avoid 80px lock fighting 56/52px chrome) */
-@media (min-width:992px) and (max-width:1399.98px){
-:root{--p-nav-h:56px;--serik-main-header-height:56px}
-#header.main-header,#header.serik-hp-nav,.serik-nav-bar{min-height:56px!important;height:56px}
-}
-@media (min-width:992px) and (max-width:1099.98px){
-:root{--p-nav-h:52px;--serik-main-header-height:52px}
-#header.main-header,#header.serik-hp-nav,.serik-nav-bar{min-height:52px!important;height:52px}
-}
