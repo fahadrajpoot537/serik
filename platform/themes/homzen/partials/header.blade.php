@@ -554,30 +554,36 @@
         }
     }
 
-    /* Navbar responsive polish (UI only — keep sticky/mobile menu behavior) */
-    .main-header .inner-container,
-    .main-header .serik-nav-bar {
+    /* Navbar: keep logo + search inside the bar */
+    #header.main-header .inner-container,
+    #header.main-header .serik-nav-bar {
         min-width: 0;
         width: 100% !important;
+        max-width: 100% !important;
         gap: 0.5rem;
         flex-wrap: nowrap;
         display: flex !important;
         justify-content: flex-start !important;
         align-items: center !important;
+        overflow: hidden !important;
     }
-    .main-header .logo-box {
-        min-width: 0;
-        flex: 1 1 auto;
+    #header.main-header .logo-box {
+        min-width: 0 !important;
+        flex: 1 1 auto !important;
+        max-width: min(42%, 480px) !important;
+        overflow: hidden !important;
     }
-    .main-header .logo {
-        max-width: min(200px, 46vw);
+    #header.main-header .logo {
+        flex: 0 0 auto !important;
+        max-width: 140px !important;
     }
-    .main-header .logo img {
+    #header.main-header .logo img {
         max-width: 100% !important;
+        max-height: 40px !important;
         height: auto !important;
         object-fit: contain;
     }
-    .main-header .serik-nav-right {
+    #header.main-header .serik-nav-right {
         display: flex !important;
         align-items: center;
         justify-content: flex-end;
@@ -585,13 +591,13 @@
         margin-left: auto !important;
         flex: 0 0 auto;
     }
-    .main-header .header-account {
+    #header.main-header .header-account {
         flex: 0 0 auto;
         min-width: 0;
         margin-left: 0 !important;
         margin-right: 0 !important;
     }
-    .main-header .serik-portal-nav__actions {
+    #header.main-header .serik-portal-nav__actions {
         display: flex !important;
         align-items: center;
         justify-content: flex-end;
@@ -599,35 +605,68 @@
         flex-wrap: nowrap;
         margin-left: 0;
     }
-    .main-header .serik-portal-nav__map,
-    .main-header .serik-portal-nav__cta {
+    #header.main-header .serik-portal-nav__map,
+    #header.main-header .serik-portal-nav__cta {
         white-space: nowrap;
         flex-shrink: 0;
     }
-    .main-header .main-menu .navigation > li > a {
+    #header.main-header .main-menu .navigation > li > a {
         white-space: nowrap;
     }
-    .main-header .mobile-nav-toggler {
+    #header.main-header .mobile-nav-toggler {
         flex-shrink: 0;
     }
     @media (max-width: 1199.98px) {
-        .main-header .serik-portal-nav__map {
+        #header.main-header .serik-portal-nav__map {
             display: none;
         }
     }
     @media (min-width: 992px) {
-        .main-header .smart-search {
-            min-width: 0;
-            max-width: none;
+        #header #mobileSearchPanel.mobile-search-panel {
+            flex: 1 1 auto !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+            overflow: hidden !important;
+        }
+        #header.main-header .smart-search {
+            min-width: 0 !important;
+            max-width: 100% !important;
+            width: 100% !important;
+        }
+        #header.main-header .smart-search .search-box {
+            min-width: 0 !important;
+            max-width: 100% !important;
+            height: 40px !important;
+            box-sizing: border-box !important;
+        }
+    }
+    @media (min-width: 992px) and (max-width: 1279.98px) {
+        #header.main-header .logo-box {
+            max-width: min(36%, 360px) !important;
+        }
+        #header.main-header .logo {
+            max-width: 118px !important;
+        }
+    }
+    @media (min-width: 992px) and (max-width: 1099.98px) {
+        #header.main-header .logo-box {
+            max-width: min(32%, 280px) !important;
+        }
+        #header.main-header .logo {
+            max-width: 100px !important;
+        }
+    }
+    @media (max-width: 991.98px) {
+        #header.main-header .logo-box {
+            max-width: calc(100% - 140px) !important;
+        }
+        #header.main-header .logo {
+            max-width: min(120px, 36vw) !important;
         }
     }
     @media (max-width: 767.98px) {
-        .main-header .logo {
-            max-width: min(160px, 52vw);
-        }
-        .smart-search {
-            min-width: 0;
-            max-width: 100%;
+        #header.main-header .logo {
+            max-width: min(110px, 34vw) !important;
         }
     }
 

@@ -2714,3 +2714,119 @@ body[id^="post-"] .ck-content.single-detail [style*="font-family"] * {
 .top-header .top-header-inner,.serik-hp-topbar__inner,.top-header .top-header-right,.serik-hp-topbar__right{display:flex!important;align-items:center;width:100%!important;min-width:0}
 .top-header .serik-hp-topbar__tools{display:flex!important;align-items:center;justify-content:space-evenly!important;flex:1 1 auto!important;width:100%!important;gap:.75rem;flex-wrap:nowrap}
 .top-header .serik-hp-topbar__account,.top-header .serik-hp-topbar__auth{flex-shrink:0;margin-left:auto}
+/* === Nav contain: logo + search stay inside the bar === */
+#header.main-header,
+#header.main-header.serik-hp-nav {
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+  max-width: 100vw !important;
+}
+#header.main-header .header-lower,
+#header.main-header .inner-container,
+#header.main-header .serik-nav-bar {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  flex-wrap: nowrap !important;
+  box-sizing: border-box !important;
+}
+#header.main-header .logo-box {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  max-width: min(42%, 480px) !important;
+  overflow: hidden !important;
+  align-items: center !important;
+}
+#header.main-header .logo {
+  flex: 0 0 auto !important;
+  max-width: 140px !important;
+  min-width: 0 !important;
+}
+#header.main-header .logo img {
+  max-width: 100% !important;
+  max-height: 40px !important;
+  width: auto !important;
+  height: auto !important;
+  object-fit: contain !important;
+}
+@media (min-width: 992px) {
+  #header #mobileSearchPanel.mobile-search-panel {
+    display: block !important;
+    position: static !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    width: auto !important;
+    height: auto !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    background: transparent !important;
+  }
+  #header #mobileSearchPanel .mobile-search-header {
+    display: none !important;
+  }
+  #header.main-header .smart-search,
+  #header #mobileSearchPanel .smart-search {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+  #header.main-header .smart-search .search-box,
+  #header #mobileSearchPanel .search-box {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    height: 40px !important;
+    box-sizing: border-box !important;
+  }
+  #header.main-header .nav-outer,
+  #header.main-header .main-menu {
+    flex: 0 1 auto !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+  }
+  #header.main-header .serik-nav-right {
+    flex: 0 0 auto !important;
+  }
+}
+@media (min-width: 992px) and (max-width: 1279.98px) {
+  #header.main-header .logo-box {
+    max-width: min(36%, 360px) !important;
+  }
+  #header.main-header .logo {
+    max-width: 118px !important;
+  }
+  #header.main-header .logo img {
+    max-height: 34px !important;
+  }
+}
+@media (min-width: 992px) and (max-width: 1099.98px) {
+  #header.main-header .logo-box {
+    max-width: min(32%, 280px) !important;
+  }
+  #header.main-header .logo {
+    max-width: 100px !important;
+  }
+  #header.main-header .logo img {
+    max-height: 30px !important;
+  }
+}
+@media (max-width: 991.98px) {
+  #header.main-header .logo-box {
+    max-width: calc(100% - 140px) !important;
+  }
+  #header.main-header .logo {
+    max-width: min(120px, 36vw) !important;
+  }
+  #header.main-header .logo img {
+    max-height: 34px !important;
+  }
+  #header #mobileSearchPanel.mobile-search-panel {
+    display: none !important;
+    position: fixed !important;
+  }
+  #header #mobileSearchPanel.mobile-search-panel.active {
+    display: block !important;
+  }
+}
