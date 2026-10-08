@@ -142,8 +142,8 @@
 <link href="{{ $serikTablerIconsCss }}" rel="stylesheet" media="print" onload="this.media='all'">
 <noscript><link href="{{ $serikTablerIconsCss }}" rel="stylesheet"></noscript>
 {{-- Premium + site-chrome BLOCKING (CLS). Bootstrap/style stay blocking via Theme::header + restoreBlocking (FOUC). --}}
-<link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp93">
-<link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc81">
+<link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp94">
+<link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc83">
 @else
 <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -153,7 +153,7 @@
 <link rel="preload" as="font" type="font/woff2" href="{{ $serikPoppinsLatin600 }}" crossorigin>
 <link href="{{ $serikTablerIconsCss }}" rel="stylesheet" media="print" onload="this.media='all'">
 <noscript><link href="{{ $serikTablerIconsCss }}" rel="stylesheet"></noscript>
-<link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc81">
+<link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc83">
 @endif
 
         {{-- Favicons are emitted by Theme::header() (Google-compliant ≥48×48 root icons) --}}

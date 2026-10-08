@@ -1,8 +1,15 @@
 @php
-    // Site-wide light footer — always use the color logo.
-    $logoSrc = theme_option('logo')
-        ? RvMedia::getImageUrl(theme_option('logo'))
-        : asset('storage/white-logo.png');
+    // Dark footer — white wordmark so "Serik Realty" reads on #161e2d.
+    $logoLight = theme_option('logo_light');
+    if ($logoLight) {
+        $logoSrc = RvMedia::getImageUrl($logoLight);
+    } elseif (is_file(public_path('storage/white-logo.png'))) {
+        $logoSrc = asset('storage/white-logo.png');
+    } else {
+        $logoSrc = theme_option('logo')
+            ? RvMedia::getImageUrl(theme_option('logo'))
+            : Theme::asset()->url('images/logo.png');
+    }
 @endphp
 
 <div class="footer-logo">

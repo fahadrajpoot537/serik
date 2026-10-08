@@ -2,8 +2,8 @@
     $topFooterSidebar = dynamic_sidebar('top_footer_sidebar');
     $innerFooterSidebar = dynamic_sidebar('inner_footer_sidebar');
     $bottomFooterSidebar = dynamic_sidebar('bottom_footer_sidebar');
-    // Light Serik footer is site-wide — never apply the dark texture image.
-    $footerBackgroundColor = '#bdbdbd';
+    // Original dark footer (pre light-gray chrome) — keep solid dark, no texture image.
+    $footerBackgroundColor = '#161e2d';
     $footerBackgroundImage = null;
     $useFooterBackgroundImage = false;
 @endphp
@@ -33,6 +33,45 @@
         padding-left:10px;
         padding-right:10px;
     }
+}
+
+/* Dark footer + white text (site-wide) */
+.footer.footer-main{
+    background-color:#161e2d !important;
+    background-image:none !important;
+    color:#fff !important;
+}
+.footer.footer-main p,
+.footer.footer-main a,
+.footer.footer-main span,
+.footer.footer-main li,
+.footer.footer-main .widget-title,
+.footer.footer-main .title-widget,
+.footer.footer-main .caption-1,
+.footer.footer-main .icon,
+.footer.footer-main i,
+.footer.footer-main .copyright,
+.footer.footer-main .text-muted,
+.footer.footer-main .text-white{
+    color:#fff !important;
+}
+.footer.footer-main a:hover{
+    color:#fff !important;
+    opacity:0.85;
+}
+.footer.footer-main .top-footer,
+.footer.footer-main .bottom-footer{
+    border-color:hsla(0,0%,100%,.12) !important;
+}
+.footer.footer-main .serik-footer-newsletter__title,
+.footer.footer-main .serik-footer-newsletter__subtitle,
+.footer.footer-main .serik-footer-newsletter,
+.footer.footer-main .serik-footer-newsletter p,
+.footer.footer-main .serik-footer-newsletter .fw-7{
+    color:#fff !important;
+}
+.footer.footer-main .serik-footer-newsletter__subtitle{
+    color:rgba(255,255,255,.85) !important;
 }
 
  </style>  
