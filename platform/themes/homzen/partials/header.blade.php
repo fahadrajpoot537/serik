@@ -618,14 +618,54 @@
         }
     }
     @media (min-width: 992px) {
-        .main-header .smart-search {
+        #header.main-header,
+        #header.main-header.serik-hp-nav {
+            display: flex !important;
+            align-items: center !important;
+        }
+        #header.main-header .header-lower,
+        #header.main-header .header-lower > .row,
+        #header.main-header .header-lower > .row > [class*="col-"],
+        #header.main-header .inner-container,
+        #header.main-header .serik-nav-bar {
+            display: flex !important;
+            align-items: center !important;
+            height: 100% !important;
+            min-height: 0 !important;
+            margin: 0 !important;
+        }
+        #header.main-header .logo-box,
+        #header.main-header .nav-outer,
+        #header.main-header .main-menu,
+        #header.main-header .serik-nav-right,
+        #header.main-header .smart-search,
+        #header.main-header .mobile-search-panel {
+            display: flex !important;
+            align-items: center !important;
+        }
+        #header.main-header .logo img {
+            max-height: 36px !important;
+            margin: 0 !important;
+        }
+        #header.main-header .smart-search {
             min-width: 0 !important;
             max-width: 100%;
         }
-        .main-header .smart-search .search-box {
+        #header.main-header .smart-search .search-box {
+            display: flex !important;
+            align-items: center !important;
             min-width: 0;
             max-width: 100%;
+            height: 40px !important;
+            margin: 0 !important;
             box-sizing: border-box;
+        }
+        #header.main-header .serik-portal-nav__cta,
+        #header.main-header .serik-portal-nav__map,
+        #header.main-header .serik-nav-wishlist {
+            display: inline-flex !important;
+            align-items: center !important;
+            align-self: center !important;
         }
     }
     @media (max-width: 767.98px) {

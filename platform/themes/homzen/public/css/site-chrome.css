@@ -31,3 +31,102 @@
 #header.main-header .logo{max-width:110px!important}
 #header.main-header .logo img{max-height:30px!important}
 }
+/* Vertical center: logo, search, menu, CTAs inside blue pill */
+@media (min-width:992px){
+#header.main-header,
+#header.main-header.serik-hp-nav,
+#header.main-header.fixed-header{
+display:flex!important;
+align-items:center!important;
+justify-content:center!important;
+box-sizing:border-box!important;
+}
+#header.main-header .header-lower,
+#header.main-header .header-lower>.row,
+#header.main-header .header-lower>.row>[class*="col-"],
+#header.main-header .inner-container,
+#header.main-header .serik-nav-bar{
+display:flex!important;
+align-items:center!important;
+justify-content:flex-start!important;
+height:100%!important;
+min-height:0!important;
+max-height:100%!important;
+margin:0!important;
+width:100%!important;
+box-sizing:border-box!important;
+}
+#header.main-header .logo-box,
+#header.main-header .nav-outer,
+#header.main-header .main-menu,
+#header.main-header .navbar-collapse,
+#header.main-header .serik-nav-right,
+#header.main-header .header-account,
+#header.main-header .serik-portal-nav__actions,
+#header.main-header .mobile-search-panel,
+#header.main-header .smart-search{
+display:flex!important;
+align-items:center!important;
+min-height:0!important;
+height:auto!important;
+margin-top:0!important;
+margin-bottom:0!important;
+}
+#header.main-header .main-menu .navigation{
+display:flex!important;
+align-items:center!important;
+height:auto!important;
+margin:0!important;
+}
+#header.main-header .main-menu .navigation>li>a{
+display:inline-flex!important;
+align-items:center!important;
+line-height:1!important;
+}
+#header.main-header .logo{
+display:flex!important;
+align-items:center!important;
+line-height:0!important;
+}
+#header.main-header .logo img{
+max-height:36px!important;
+width:auto!important;
+height:auto!important;
+display:block!important;
+margin:0!important;
+}
+#header.main-header .smart-search .search-box{
+display:flex!important;
+align-items:center!important;
+height:40px!important;
+min-height:40px!important;
+max-height:40px!important;
+margin:0!important;
+padding-top:0!important;
+padding-bottom:0!important;
+box-sizing:border-box!important;
+}
+#header.main-header .smart-search .search-box input{
+height:100%!important;
+line-height:1!important;
+margin:0!important;
+padding-top:0!important;
+padding-bottom:0!important;
+}
+#header.main-header .serik-portal-nav__cta,
+#header.main-header .serik-hp-nav__cta,
+#header.main-header .serik-portal-nav__map,
+#header.main-header .serik-nav-wishlist{
+display:inline-flex!important;
+align-items:center!important;
+justify-content:center!important;
+margin-top:0!important;
+margin-bottom:0!important;
+align-self:center!important;
+}
+#header.main-header .serik-nav-wishlist,
+#header.main-header .serik-header-search-toggle{
+height:40px!important;
+width:40px!important;
+}
+}
