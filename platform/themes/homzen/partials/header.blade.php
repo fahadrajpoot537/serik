@@ -621,13 +621,74 @@
             max-width: none;
         }
     }
+    @media (max-width: 991.98px) {
+        #header.main-header,
+        .main-header.serik-hp-nav {
+            padding-left: 12px !important;
+            padding-right: 12px !important;
+            max-width: 100vw !important;
+            overflow: hidden !important;
+        }
+        .main-header .inner-container,
+        .main-header .serik-nav-bar {
+            max-width: 100% !important;
+            min-width: 0 !important;
+            overflow: hidden !important;
+            flex-wrap: nowrap !important;
+        }
+        .main-header .logo-box {
+            flex: 1 1 auto !important;
+            min-width: 0 !important;
+            overflow: hidden !important;
+        }
+        .main-header .logo {
+            max-width: min(140px, 42vw) !important;
+        }
+        .main-header .logo img {
+            max-height: 36px !important;
+        }
+        .main-header .serik-nav-right {
+            flex: 0 0 auto !important;
+            max-width: 58% !important;
+            gap: 0.35rem !important;
+            overflow: hidden !important;
+        }
+        .main-header .serik-portal-nav__cta,
+        .main-header .serik-hp-nav__cta,
+        .main-header .serik-portal-nav__map {
+            display: none !important;
+        }
+        .main-header .serik-header-search-toggle,
+        .main-header .mobile-nav-toggler,
+        .main-header .serik-nav-wishlist {
+            width: 40px !important;
+            height: 40px !important;
+            min-width: 40px !important;
+            flex-shrink: 0 !important;
+        }
+    }
     @media (max-width: 767.98px) {
         .main-header .logo {
-            max-width: min(160px, 52vw);
+            max-width: min(128px, 40vw);
         }
         .smart-search {
             min-width: 0;
             max-width: 100%;
+        }
+    }
+    @media (max-width: 399.98px) {
+        .main-header .logo {
+            max-width: min(112px, 38vw) !important;
+        }
+        .main-header .serik-nav-right {
+            gap: 0.2rem !important;
+        }
+        .main-header .serik-header-search-toggle,
+        .main-header .mobile-nav-toggler,
+        .main-header .serik-nav-wishlist {
+            width: 36px !important;
+            height: 36px !important;
+            min-width: 36px !important;
         }
     }
 
