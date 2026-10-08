@@ -10,17 +10,26 @@
 .top-header .top-header-inner,.serik-hp-topbar__inner,.top-header .top-header-right,.serik-hp-topbar__right{display:flex!important;align-items:center;width:100%!important;min-width:0}
 .top-header .serik-hp-topbar__tools{display:flex!important;align-items:center;justify-content:space-evenly!important;flex:1 1 auto!important;width:100%!important;gap:.75rem;flex-wrap:nowrap}
 .top-header .serik-hp-topbar__account,.top-header .serik-hp-topbar__auth{flex-shrink:0;margin-left:auto}
-/* Soft contain: keep logo/search inside the blue pill without breaking live layout */
+/* Soft contain: shrink logo/search in the blue pill, but NEVER clip the search dropdown */
 @media (min-width:992px){
 #header.main-header .serik-nav-bar,
-#header.main-header .inner-container{min-width:0!important;overflow:hidden!important}
-#header.main-header .logo-box{min-width:0!important;overflow:hidden!important}
-#header.main-header .logo{flex:0 0 auto!important;max-width:150px!important}
+#header.main-header .inner-container{min-width:0!important;overflow:visible!important}
+#header.main-header .logo-box{min-width:0!important;overflow:visible!important}
+#header.main-header .logo{flex:0 0 auto!important;max-width:150px!important;overflow:hidden!important}
 #header.main-header .logo img{max-height:40px!important;max-width:100%!important;object-fit:contain!important}
 #header #mobileSearchPanel.mobile-search-panel,
-#header.main-header .mobile-search-panel{min-width:0!important;overflow:hidden!important}
-#header.main-header .smart-search{min-width:0!important;max-width:100%!important}
+#header.main-header .mobile-search-panel{min-width:0!important;overflow:visible!important}
+#header.main-header .smart-search{min-width:0!important;max-width:100%!important;overflow:visible!important;position:relative!important}
 #header.main-header .smart-search .search-box{min-width:0!important;max-width:100%!important;box-sizing:border-box!important}
+#header.main-header .smart-search .search-dropdown,
+#header.main-header #searchDropdown{overflow-x:hidden!important;overflow-y:auto!important}
+#header.main-header.serik-header-search-active,
+#header.main-header.serik-header-search-active .header-lower,
+#header.main-header.serik-header-search-active .inner-container,
+#header.main-header.serik-header-search-active .serik-nav-bar,
+#header.main-header.serik-header-search-active .logo-box,
+#header.main-header.serik-header-search-active .mobile-search-panel,
+#header.main-header.serik-header-search-active .smart-search{overflow:visible!important}
 }
 @media (min-width:992px) and (max-width:1279.98px){
 #header.main-header .smart-search{min-width:0!important}

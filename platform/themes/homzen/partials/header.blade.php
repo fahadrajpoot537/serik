@@ -568,7 +568,8 @@
     .main-header .logo-box {
         min-width: 0;
         flex: 1 1 auto;
-        overflow: hidden;
+        /* Must stay visible — search dropdown is a child and gets clipped otherwise */
+        overflow: visible;
     }
     .main-header .logo {
         flex: 0 0 auto;
