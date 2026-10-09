@@ -82,10 +82,6 @@
                         {!! BaseHelper::clean($post->content) !!}
                     </div>
 
-                    @php
-                        $relatedPosts = get_related_posts($post->id, 5);
-                    @endphp
-
                     <section class="serik-blog-detail__author-card" id="author" aria-label="{{ __('About the Author') }}">
                         <div class="serik-blog-detail__author-card-main">
                             <div class="serik-blog-detail__author-avatar">
@@ -128,21 +124,6 @@
                             </div>
                         @endif
                     </section>
-
-                    @if($relatedPosts->isNotEmpty())
-                        <div class="post-navigation" id="relposts">
-                            @foreach($relatedPosts as $related)
-                                <div @class(['previous-post' => $loop->first, 'next-post' => ! $loop->first])>
-                                    <div class="subtitle">{{ $loop->first ? __('Previous') : __('Next') }}</div>
-                                    <div class="h7 fw-7 text-black text-capitalize">
-                                        <a href="{{ $related->url }}">{!! BaseHelper::clean($related->name) !!}</a>
-                                    </div>
-                                </div>
-                            @endforeach
-                        </div>
-                    @else
-                        <div id="relposts"></div>
-                    @endif
 
                     {!! apply_filters(BASE_FILTER_PUBLIC_COMMENT_AREA, null, $post) !!}
                 </article>
@@ -249,19 +230,14 @@ document.addEventListener("DOMContentLoaded", function () {
         toc.appendChild(li);
     });
 
-    [
-        { id: "author", text: "About the Author" },
-        { id: "relposts", text: "Related Posts" }
-    ].forEach((item) => {
-        if (!document.getElementById(item.id)) {
-            return;
-        }
+    const author = document.getElementById("author");
+    if (author) {
         const li = document.createElement("li");
         const a = document.createElement("a");
-        a.href = "#" + item.id;
-        a.textContent = item.text;
+        a.href = "#author";
+        a.textContent = "About the Author";
         li.appendChild(a);
         toc.appendChild(li);
-    });
+    }
 });
 </script>
