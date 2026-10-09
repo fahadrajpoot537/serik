@@ -122,7 +122,7 @@
     .blog-list-page .flat-blog-item .blog-card-img-placeholder {
         width: 100%;
         height: 100%;
-        object-fit: contain;
+        object-fit: cover;
         object-position: center center;
         display: block;
     }
@@ -141,6 +141,16 @@
     .blog-list-page .flat-blog-item .post-author {
         font-size: 12px;
         margin-bottom: 6px;
+    }
+
+    .blog-list-page .flat-blog-item .post-author a {
+        color: #0255a1;
+        font-weight: 600;
+        text-decoration: none;
+    }
+
+    .blog-list-page .flat-blog-item .post-author a:hover {
+        text-decoration: underline;
     }
 
     .blog-list-page .flat-blog-item .title {

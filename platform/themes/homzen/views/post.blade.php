@@ -76,12 +76,6 @@
                         @if($post->firstCategory)
                             <a href="{{ $post->firstCategory->url }}" class="blog-tag primary serik-blog-detail__cat">{{ $post->firstCategory->name }}</a>
                         @endif
-                        <div class="serik-blog-detail__meta">
-                            @if ($authorName)
-                                <span class="serik-blog-detail__meta-item">{{ $authorName }}</span>
-                            @endif
-                            <span class="serik-blog-detail__meta-item">{{ Theme::formatDate($post->created_at) }}</span>
-                        </div>
                     </header>
 
                     <div class="ck-content single-detail serik-blog-detail__body">
