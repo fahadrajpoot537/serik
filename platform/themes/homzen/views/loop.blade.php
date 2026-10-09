@@ -118,20 +118,45 @@
         background: #f1f5f9;
     }
 
-    /* Date lives in content/sidebar elsewhere — badge on card image clutters the local clean look */
-    .blog-list-page .flat-blog-item .date-post {
-        display: none !important;
-    }
-
     .blog-list-page .flat-blog-item .img-style img,
     .blog-list-page .flat-blog-item .blog-card-img-placeholder {
         width: 100%;
         height: 100%;
-        /* Keep full blog graphics visible (title cards / illustrations) — cover crops them */
         object-fit: contain;
         object-position: center center;
         display: block;
         background: #f1f5f9;
+    }
+
+    .blog-list-page .flat-blog-item .date-post {
+        display: inline-block !important;
+    }
+
+    .blog-list-page .flat-blog-item .post-author {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 0.35rem 0.65rem;
+        font-size: 12px;
+        margin-bottom: 6px;
+        color: #64748b;
+    }
+
+    .blog-list-page .flat-blog-item .post-author .text-black,
+    .blog-list-page .flat-blog-item .post-author .fw-7 {
+        color: #0f172a !important;
+        font-weight: 700;
+    }
+
+    .blog-list-page .flat-blog-item .post-author a {
+        color: #64748b;
+        font-weight: 500;
+        text-decoration: none;
+    }
+
+    .blog-list-page .flat-blog-item .post-author a:hover {
+        color: #0255a1;
+        text-decoration: underline;
     }
 
     .blog-list-page .flat-blog-item .blog-card-img-placeholder {
@@ -143,21 +168,6 @@
         display: flex;
         flex-direction: column;
         padding: 14px 16px 18px;
-    }
-
-    .blog-list-page .flat-blog-item .post-author {
-        font-size: 12px;
-        margin-bottom: 6px;
-    }
-
-    .blog-list-page .flat-blog-item .post-author a {
-        color: #0255a1;
-        font-weight: 600;
-        text-decoration: none;
-    }
-
-    .blog-list-page .flat-blog-item .post-author a:hover {
-        text-decoration: underline;
     }
 
     .blog-list-page .flat-blog-item .title {
@@ -193,6 +203,9 @@
         font-weight: 600;
         color: #0255a1;
         text-decoration: none;
+        padding-bottom: 0.35rem;
+        border-bottom: 1px solid #e8edf2;
+        width: 100%;
     }
 
     .blog-list-page .blog-posts-empty {

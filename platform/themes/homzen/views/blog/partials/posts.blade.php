@@ -43,13 +43,17 @@
                         <span class="date-post">{{ Theme::formatDate($post->created_at) }}</span>
                     </a>
                     <div class="content-box">
-                        @if($category = $post->firstCategory)
-                            <div class="post-author">
+                        <div class="post-author">
+                            @if (theme_option('blog_show_author_name', 'yes') == 'yes' && class_exists($post->author_type) && ($author = $post->author ?? null) && trim($author->name))
+                                <span class="fw-6">{{ $post->author->name }}</span>
+                            @endif
+
+                            @if($category = $post->firstCategory)
                                 <span>
                                     <a href="{{ $category->url }}">{{ $category->name }}</a>
                                 </span>
-                            </div>
-                        @endif
+                            @endif
+                        </div>
                         <h6 class="title">
                             <a href="{{ $post->url }}" class="w-100">{!! BaseHelper::clean($post->name) !!}</a>
                         </h6>
