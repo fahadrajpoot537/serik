@@ -118,13 +118,20 @@
         background: #f1f5f9;
     }
 
+    /* Date lives in content/sidebar elsewhere — badge on card image clutters the local clean look */
+    .blog-list-page .flat-blog-item .date-post {
+        display: none !important;
+    }
+
     .blog-list-page .flat-blog-item .img-style img,
     .blog-list-page .flat-blog-item .blog-card-img-placeholder {
         width: 100%;
         height: 100%;
-        object-fit: cover;
+        /* Keep full blog graphics visible (title cards / illustrations) — cover crops them */
+        object-fit: contain;
         object-position: center center;
         display: block;
+        background: #f1f5f9;
     }
 
     .blog-list-page .flat-blog-item .blog-card-img-placeholder {

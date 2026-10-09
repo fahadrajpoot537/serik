@@ -13,7 +13,7 @@ final class SerikGuestPageCache
 {
     public const TTL = 900;
 
-    public const VERSION = 'v2';
+    public const VERSION = 'v3';
 
     /**
      * Exact path prefixes (no trailing slash) eligible for guest HTML cache.

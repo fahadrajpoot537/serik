@@ -7,7 +7,6 @@
                 @else
                     <span class="blog-card-img-placeholder" aria-hidden="true"></span>
                 @endif
-                <span class="date-post">{{ Theme::formatDate($post->created_at) }}</span>
             </a>
             <div class="content-box">
                 @if($category = $post->firstCategory)
