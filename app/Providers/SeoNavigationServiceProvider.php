@@ -83,15 +83,15 @@ class SeoNavigationServiceProvider extends ServiceProvider
             $cacheKey = 'serik_open_house_ids_v4:' . md5(mb_strtolower($city !== '' ? $city : '_all'));
 
             try {
-                $ids = \Illuminate\Support\Facades\Cache::remember($cacheKey, 3600, function () use ($city) {
-                    $activeStatuses = [
-                        'New',
-                        'Active',
-                        'Ext',
-                        'Extension',
-                        'Price Change',
-                        'Active Under Contract',
-                    ];
+            $ids = \Illuminate\Support\Facades\Cache::remember($cacheKey, 3600, function () use ($city) {
+                $activeStatuses = [
+                    'New',
+                    'Active',
+                    'Ext',
+                    'Extension',
+                    'Price Change',
+                    'Active Under Contract',
+                ];
 
                     $search = app(PropertySearchService::class);
 
@@ -144,13 +144,13 @@ class SeoNavigationServiceProvider extends ServiceProvider
                     }
 
                     return \Botble\RealEstate\Models\Property::query()
-                        ->select('re_properties.id')
+                    ->select('re_properties.id')
                         ->whereIn('re_properties.id', $candidateIds)
-                        ->where(function ($q): void {
-                            $q->where('description', 'like', '%open house%')
-                                ->orWhere('content', 'like', '%open house%');
-                        })
-                        ->orderByDesc('re_properties.id')
+                    ->where(function ($q): void {
+                        $q->where('description', 'like', '%open house%')
+                            ->orWhere('content', 'like', '%open house%');
+                    })
+                    ->orderByDesc('re_properties.id')
                         ->limit(4000)
                         ->pluck('id')
                         ->map(static fn ($id) => (int) $id)

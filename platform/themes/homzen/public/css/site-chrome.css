@@ -4,7 +4,13 @@
 :root{--p-muted:#4a5568}
 .footer .copyright,.footer-bottom,.bottom-footer,.serik-site-footer .copyright,footer .text-muted{color:rgba(255,255,255,.85)!important}
 .flag-tag.status-sold,.homeya-box .top .flag-tag.status-sold{background-color:#b9161c!important;color:#fff!important}
-.flag-tag.status-leased,.homeya-box .top .flag-tag.status-leased{background-color:#0b4c9f!important;color:#fff!important}
+.flag-tag.status-leased,.flag-tag.status-for-lease,.homeya-box .top .flag-tag.status-leased,.homeya-box .top .flag-tag.status-for-lease{background-color:#1a7f4b!important;color:#fff!important}
+.flag-tag.status-for-sale,.flag-tag.status-active,.homeya-box .top .flag-tag.status-for-sale,.homeya-box .top .flag-tag.status-active{background-color:#0b4c9f!important;color:#fff!important}
+.serik-prop-card__badge,.serik-portal-card__badge{background:#0b4c9f;color:#fff}
+.serik-prop-card__badge--for-sale,.serik-portal-card__badge--for-sale{background:#0b4c9f!important}
+.serik-prop-card__badge--for-lease,.serik-prop-card__badge--leased,.serik-portal-card__badge--for-lease,.serik-portal-card__badge--leased{background:#1a7f4b!important}
+.serik-prop-card__badge--sold,.serik-prop-card__badge.sold,.serik-portal-card__badge--sold{background:#b9161c!important}
+.serik-prop-card__badge.delisted,.serik-prop-card__badge--expired,.serik-prop-card__badge--suspended,.serik-prop-card__badge--cancelled,.serik-prop-card__badge--terminated,.serik-prop-card__badge--withdrawn,.serik-prop-card__badge--unavailable,.serik-portal-card__badge--expired,.serik-portal-card__badge--suspended,.serik-portal-card__badge--cancelled,.serik-portal-card__badge--terminated,.serik-portal-card__badge--withdrawn,.serik-portal-card__badge--unavailable{background:#475569!important}
 /* Topbar: no left column; tools span full width */
 .top-header .top-header-left,.serik-hp-topbar__left{display:none!important}
 .top-header .top-header-inner,.serik-hp-topbar__inner,.top-header .top-header-right,.serik-hp-topbar__right{display:flex!important;align-items:center;width:100%!important;min-width:0}

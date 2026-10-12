@@ -17,7 +17,7 @@
     $isContactUs = request()->is('contact-us');
     $useHeroStyle = $isAboutUs || $backgroundImage;
     $contactCarouselSlides = $isContactUs
-        ? collect([1, 2, 3, 4])
+        ? collect([1, 2, 3, 4, 5, 6, 7])
             ->map(static fn (int $n): string => asset(sprintf('%02d.webp', $n)))
             ->all()
         : [];
@@ -140,6 +140,15 @@ body#page-faqs #sectionhead {
     width:100%;
     padding:1.25rem 0 1.75rem;
     background:transparent;
+}
+.serik-contact-carousel__heading{
+    margin:0 0 0.85rem;
+    text-align:center;
+    font-size:clamp(1.05rem, 2.2vw, 1.35rem);
+    font-weight:700;
+    line-height:1.35;
+    letter-spacing:0.01em;
+    color:var(--serik-reference-navy, #0b2340);
 }
 .serik-contact-carousel__viewport{
     --scc-fade:rgba(232,154,157,.92); /* Contact Us pink, slightly darker */
@@ -294,6 +303,7 @@ body#page-faqs #sectionhead {
 @if ($isContactUs && $contactCarouselSlides)
     <section class="serik-contact-carousel" aria-label="{{ __('Contact gallery') }}">
         <div class="container">
+            <p class="serik-contact-carousel__heading">{{ __('Happy customers with up to 1.5% cashback') }}</p>
             <div class="serik-contact-carousel__viewport">
                 <div class="serik-contact-carousel__track">
                     {{-- Two identical groups → translateX(-50%) loops with zero gap --}}

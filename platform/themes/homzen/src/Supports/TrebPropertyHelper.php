@@ -1369,8 +1369,11 @@ class TrebPropertyHelper
     public static function soldStatusBadgeHtml(?string $mlsStatus): string
     {
         $label = self::soldStatusLabel($mlsStatus);
+        $variant = ($mlsStatus === 'Leased' || strcasecmp((string) $label, 'Leased') === 0)
+            ? 'status-leased'
+            : 'status-sold';
 
-        return '<span class="flag-tag primary status-sold">' . e($label) . '</span>';
+        return '<span class="flag-tag primary ' . $variant . '">' . e($label) . '</span>';
     }
 
     public static function eventLabel(?string $mlsStatus, ?string $transactionType = null): string
@@ -3107,16 +3110,16 @@ class TrebPropertyHelper
                 $changes = $localChanges;
 
                 $record = self::fetchPropertyRecord($listingKey) ?: self::fetchPropertyRecordRaw($listingKey);
-                if ($record) {
-                    $record = self::enrichRecordAddress($record);
-                    $candidates = self::fetchUnitPropertyRecords($record);
-                    if ($candidates === []) {
-                        $candidates = [$record];
-                    }
+                    if ($record) {
+                        $record = self::enrichRecordAddress($record);
+                        $candidates = self::fetchUnitPropertyRecords($record);
+                        if ($candidates === []) {
+                            $candidates = [$record];
+                        }
                     $changes = array_merge($changes, self::extractPriceChangesFromRecords($candidates));
-                }
+                    }
 
-                $history = self::fetchListingHistory($listingKey, $local);
+                    $history = self::fetchListingHistory($listingKey, $local);
                 $changes = array_merge($changes, self::extractPriceChangesFromHistory($history));
                 $changes = self::dedupePriceChangeRows($changes);
 

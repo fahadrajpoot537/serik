@@ -322,8 +322,11 @@ class Property extends BaseModel
                     str_contains((string) $this->MlsStatus, 'Sold') => __('Sold'),
                     default => __('Sold'),
                 };
+                $soldClass = $this->MlsStatus === 'Leased'
+                    ? 'flag-tag primary status-leased'
+                    : 'flag-tag primary status-sold';
 
-                return Html::tag('span', $label, ['class' => 'flag-tag primary status-sold'])->toHtml();
+                return Html::tag('span', $label, ['class' => $soldClass])->toHtml();
             }
 
             $mls = \App\Support\MlsStatus::forProperty($this);
@@ -335,10 +338,16 @@ class Property extends BaseModel
                 )->toHtml();
             }
 
-            if ($this->MlsStatus === 'New' && $this->TransactionType) {
-                $activeLabel = $this->TransactionType === 'For Lease' ? __('For Lease') : __('For Sale');
+            if ($mls['is_active'] || ($this->MlsStatus === 'New' && $this->TransactionType)) {
+                $activeLabel = ($mls['display_label'] ?? '') !== ''
+                    ? $mls['display_label']
+                    : ($this->TransactionType === 'For Lease' ? __('For Lease') : __('For Sale'));
+                $activeClass = ($mls['badge_variant'] ?? '') === 'for-lease'
+                    || $this->TransactionType === 'For Lease'
+                    ? 'flag-tag success status-for-lease'
+                    : 'flag-tag success status-for-sale';
 
-                return Html::tag('span', $activeLabel, ['class' => 'flag-tag success status-active'])->toHtml();
+                return Html::tag('span', $activeLabel, ['class' => $activeClass])->toHtml();
             }
 
             try {

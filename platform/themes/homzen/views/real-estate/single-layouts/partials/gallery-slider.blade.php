@@ -83,18 +83,34 @@
     position: absolute;
     bottom: 15px;
     left: 15px;
-    background: color-mix(in srgb, var(--primary-color) 15%, white);
-    color: var(--primary-color);
+    background: #0b4c9f;
+    color: #fff;
     padding: 6px 14px;
     border-radius: 20px;
     font-size: 14px;
     font-weight: 600;
     pointer-events: none;
 }
+.badge-sale.badge-sale--for-sale { background: #0b4c9f; color: #fff; }
+.badge-sale.badge-sale--sold,
+.badge-sale.status-sold-wrap { background: #b9161c; color: #fff; }
+.badge-sale.badge-sale--delisted { background: #475569; color: #fff; }
+/* Lease variants last so they win over sold-history wrap */
+.badge-sale.badge-sale--for-lease,
+.badge-sale.badge-sale--leased { background: #1a7f4b; color: #fff; }
 
-.badge-sale.status-sold-wrap .flag-tag.status-sold {
+.badge-sale .flag-tag.status-sold,
+.badge-sale .flag-tag.status-leased,
+.badge-sale .flag-tag.status-for-sale,
+.badge-sale .flag-tag.status-for-lease {
     position: static;
     display: inline-block;
+    background: transparent !important;
+    color: inherit !important;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    font: inherit;
 }
 
 .see-all-btn {
@@ -212,12 +228,16 @@
         <div class="gallery-main">
             <a href="{{ $images[0] }}" data-gallery-index="0" class="js-property-gallery-open" style="height:100%">
                 <img src="{{ $images[0] }}" alt="{{ $galleryAlt }}" loading="eager" fetchpriority="high" decoding="async" onerror="this.src='{{ RvMedia::getDefaultImage() }}'">
-                <span class="badge-sale @if($property->isSoldHistory()) status-sold-wrap @endif" aria-label="{{ __('MLS status') }}: {{ $status['display_label'] ?? $statusLabel }}">
-                    @if($property->isSoldHistory())
-                        {!! TrebPropertyHelper::soldStatusBadgeHtml($property->MlsStatus) !!}
-                    @else
-                        {{ $statusLabel }}
-                    @endif
+                @php
+                    $badgeVariant = $status['badge_variant'] ?? 'for-sale';
+                @endphp
+                <span @class([
+                    'badge-sale',
+                    'badge-sale--' . $badgeVariant,
+                    'status-sold-wrap' => $badgeVariant === 'sold',
+                    'badge-sale--delisted' => ! empty($status['is_delisted']) && ! in_array($badgeVariant, ['for-sale', 'for-lease', 'sold', 'leased'], true),
+                ]) aria-label="{{ __('MLS status') }}: {{ $status['display_label'] ?? $statusLabel }}">
+                    {{ $statusLabel }}
                 </span>
             </a>
         </div>

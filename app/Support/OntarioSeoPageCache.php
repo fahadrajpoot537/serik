@@ -9,7 +9,7 @@ final class OntarioSeoPageCache
 {
     public const TTL = 1800;
 
-    public const VERSION = 'v22';
+    public const VERSION = 'v23';
 
     /**
      * @return array<int, string>

@@ -32,40 +32,54 @@
     overflow-y: visible;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
-    margin-bottom: 0;
+    margin-bottom: 12px;
+    padding: 2px 0 4px;
 }
 .hs-tabs-scroll::-webkit-scrollbar { display: none; }
 .hs-tabs {
     display: flex;
-    gap: 0;
-    border-bottom: 1px solid #e2e8f0;
+    gap: 8px;
+    border-bottom: none;
     margin-bottom: 0;
     flex-wrap: nowrap;
-    width: max-content;
+    width: 100%;
     min-width: 100%;
 }
-.hs-tabs button {
-    flex: 0 0 auto;
-    border: none;
-    background: transparent;
-    padding: 8px 12px;
-    font-weight: 600;
+.hs-tabs button,
+.hs-tabs .hs-tab-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    border: 1px solid #d0d7e2;
+    background: #fff;
+    padding: 11px 14px;
+    font-weight: 700;
     font-size: 14px;
-    color: #64748b;
-    border-bottom: 2px solid transparent;
-    margin-bottom: -1px;
+    color: #334155;
+    border-radius: 10px;
+    margin-bottom: 0;
     cursor: pointer;
     white-space: nowrap;
-    line-height: 1.2;
+    line-height: 1.25;
+    text-align: center;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .hs-tabs button .hs-tab-text {
-    display: inline-block;
+    display: block;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.hs-tabs button:hover {
+    border-color: #0255a1;
+    color: #0255a1;
+    background: #f0f7fc;
 }
 .hs-tabs button.active {
-    color: rgb(2, 85, 161);
-    border-bottom-color: rgb(2, 85, 161);
-    background: rgba(2, 85, 161, 0.05);
+    color: #fff;
+    border-color: #0255a1;
+    background: #0255a1;
+    box-shadow: 0 4px 12px rgba(2, 85, 161, 0.22);
 }
 .hs-tab-panel { display: none; padding: 10px 0 4px; }
 .hs-tab-panel.active { display: block; }
@@ -165,9 +179,18 @@
         padding: 6px 0 10px;
     }
     .hs-stats-row .stat { font-size: 13px; }
-    .hs-tabs button {
-        padding: 8px 10px;
+    .hs-tabs {
+        gap: 6px;
+        width: max-content;
+        min-width: 100%;
+    }
+    .hs-tabs button,
+    .hs-tabs .hs-tab-btn {
+        flex: 0 0 auto;
+        min-width: 118px;
+        padding: 10px 16px;
         font-size: 13px;
+        border-radius: 9px;
     }
     .hs-tab-panel { padding: 8px 0 2px; }
     .hs-key-facts, .hs-details-grid {

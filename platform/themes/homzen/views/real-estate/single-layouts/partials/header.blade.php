@@ -83,7 +83,7 @@
             <h4 style="font-size:20px; text-align: right;" id="priceBox">
                 
                 @if($model->isSoldHistory())
-                    <span class="flag-tag primary status-sold d-inline-block mb-2">{{ $model->MlsStatus === 'Leased' ? __('Leased') : __('Sold') }}</span><br>
+                    <span class="flag-tag primary {{ $model->MlsStatus === 'Leased' ? 'status-leased' : 'status-sold' }} d-inline-block mb-2">{{ $model->MlsStatus === 'Leased' ? __('Leased') : __('Sold') }}</span><br>
                     Listed : 
                     <span style="text-decoration: line-through; color: gray;">
                         {{ $model->price_html ?? $model->formatted_price }}

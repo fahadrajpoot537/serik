@@ -34,12 +34,23 @@
 
             .flag-tag.status-sold,
             .homeya-box .top .flag-tag.status-sold {
-                background-color: var(--primary-color) !important;
+                background-color: #b9161c !important;
                 color: #fff !important;
             }
 
-            .flag-tag.status-active {
-                background-color: #198754 !important;
+            .flag-tag.status-leased,
+            .flag-tag.status-for-lease,
+            .homeya-box .top .flag-tag.status-leased,
+            .homeya-box .top .flag-tag.status-for-lease {
+                background-color: #1a7f4b !important;
+                color: #fff !important;
+            }
+
+            .flag-tag.status-for-sale,
+            .flag-tag.status-active,
+            .homeya-box .top .flag-tag.status-for-sale,
+            .homeya-box .top .flag-tag.status-active {
+                background-color: #0b4c9f !important;
                 color: #fff !important;
             }
             
@@ -142,8 +153,8 @@
 <link href="{{ $serikTablerIconsCss }}" rel="stylesheet" media="print" onload="this.media='all'">
 <noscript><link href="{{ $serikTablerIconsCss }}" rel="stylesheet"></noscript>
 {{-- Premium + site-chrome BLOCKING (CLS). Bootstrap/style stay blocking via Theme::header + restoreBlocking (FOUC). --}}
-<link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp94">
-<link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc87">
+<link rel="stylesheet" href="{{ $serikThemeCss('homepage-premium.css') }}?v={{ get_cms_version() }}-hp96">
+<link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc88">
 @else
 <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -153,7 +164,7 @@
 <link rel="preload" as="font" type="font/woff2" href="{{ $serikPoppinsLatin600 }}" crossorigin>
 <link href="{{ $serikTablerIconsCss }}" rel="stylesheet" media="print" onload="this.media='all'">
 <noscript><link href="{{ $serikTablerIconsCss }}" rel="stylesheet"></noscript>
-<link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc87">
+<link rel="stylesheet" href="{{ $serikThemeCss('site-chrome.css') }}?v={{ get_cms_version() }}-sc88">
 @endif
 
         {{-- Favicons are emitted by Theme::header() (Google-compliant ≥48×48 root icons) --}}

@@ -29,9 +29,10 @@
             ])
             <span @class([
                 'serik-prop-card__badge',
+                'serik-prop-card__badge--' . $badgeVariant,
                 'serik-portal-card__badge',
                 'serik-portal-card__badge--' . $badgeVariant,
-                'sold' => $badgeVariant === 'sold' || $badgeVariant === 'leased',
+                'sold' => $badgeVariant === 'sold',
                 'delisted' => ! empty($card['is_delisted']),
             ]) aria-label="{{ __('MLS status') }}: {{ $card['status_label'] ?? $statusLabel }}">{{ $statusLabel }}</span>
             @if ($card['listed_active'])

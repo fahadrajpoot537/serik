@@ -49,11 +49,31 @@
     }
     .serik-prop-card__badge {
         position: absolute; left: 10px; bottom: 10px;
-        background: #1a7f4b; color: #fff; font-size: 12px; font-weight: 600;
+        background: #0b4c9f; color: #fff; font-size: 12px; font-weight: 600;
         padding: 4px 10px; border-radius: 4px; line-height: 1.2;
     }
-    .serik-prop-card__badge.sold { background: #c0392b; }
-    .serik-prop-card__badge.delisted {
+    .serik-prop-card__badge--for-sale,
+    .serik-portal-card__badge--for-sale { background: #0b4c9f; }
+    .serik-prop-card__badge--for-lease,
+    .serik-prop-card__badge--leased,
+    .serik-portal-card__badge--for-lease,
+    .serik-portal-card__badge--leased { background: #1a7f4b; }
+    .serik-prop-card__badge--sold,
+    .serik-prop-card__badge.sold,
+    .serik-portal-card__badge--sold { background: #b9161c; }
+    .serik-prop-card__badge.delisted,
+    .serik-prop-card__badge--expired,
+    .serik-prop-card__badge--suspended,
+    .serik-prop-card__badge--cancelled,
+    .serik-prop-card__badge--terminated,
+    .serik-prop-card__badge--withdrawn,
+    .serik-prop-card__badge--unavailable,
+    .serik-portal-card__badge--expired,
+    .serik-portal-card__badge--suspended,
+    .serik-portal-card__badge--cancelled,
+    .serik-portal-card__badge--terminated,
+    .serik-portal-card__badge--withdrawn,
+    .serik-portal-card__badge--unavailable {
         background: #475569;
         max-width: calc(100% - 110px);
         white-space: nowrap;
@@ -153,7 +173,8 @@
             ])
             <span @class([
                 'serik-prop-card__badge',
-                'sold' => $isSold,
+                'serik-prop-card__badge--' . $badgeVariant,
+                'sold' => $badgeVariant === 'sold',
                 'delisted' => ! empty($card['is_delisted']),
             ]) aria-label="{{ __('MLS status') }}: {{ $card['status_label'] ?? $statusLabel }}">{{ $statusLabel }}</span>
             @if ($card['listed_active'])
