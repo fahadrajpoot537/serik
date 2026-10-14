@@ -154,3 +154,51 @@ width:40px!important;
 #header.main-header .serik-portal-nav__map--copy,
 #header.main-header .serik-portal-nav__map--tel{display:none!important}
 }
+/* Blog list + detail: align with navbar logo (left) and phone (right) */
+.clearfix>.container:has(.blog-list-page),
+.serik-blog-detail>.container,
+section.serik-blog-related>.container{
+width:min(1600px,calc(100% - 32px))!important;
+max-width:min(1600px,calc(100% - 32px))!important;
+margin-left:auto!important;
+margin-right:auto!important;
+padding-left:22px!important;
+padding-right:22px!important;
+box-sizing:border-box!important
+}
+@media (max-width:991.98px){
+.clearfix>.container:has(.blog-list-page),
+.serik-blog-detail>.container,
+section.serik-blog-related>.container{
+width:100%!important;
+max-width:100%!important;
+padding-left:16px!important;
+padding-right:16px!important
+}
+}
+/* Recent posts sidebar: normal weight titles */
+.blog-list-page .sidebar-blog .recent-post-item .content .title,
+.blog-list-page .sidebar-blog .recent-post-item .content .title a{
+font-weight:500!important;
+color:#334155!important
+}
+/* Related posts cards below article */
+.serik-blog-related{padding:48px 0 64px;background:#f8fafc;border-top:1px solid #e8edf2}
+.serik-blog-related__title{font-size:1.5rem;font-weight:700;color:var(--serik-reference-navy,#0b2340);margin:0 0 1.5rem;text-align:center}
+.serik-blog-related__grid{display:grid!important;gap:1.5rem;grid-template-columns:minmax(0,1fr);width:100%}
+@media (min-width:768px){.serik-blog-related__grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
+.serik-blog-related__card{display:flex!important;flex-direction:column;min-width:0;height:100%;background:#fff;border:1px solid #e8edf2;border-radius:12px;overflow:hidden;transition:box-shadow .2s ease,transform .2s ease}
+.serik-blog-related__card:hover{box-shadow:0 8px 24px rgba(15,23,42,.08);transform:translateY(-2px)}
+.serik-blog-related__media{display:block;aspect-ratio:400/260;overflow:hidden;background:#f1f5f9}
+.serik-blog-related__media img{width:100%;height:100%;object-fit:cover}
+.serik-blog-related__body{padding:14px 16px 18px;display:flex;flex-direction:column;flex:1;gap:8px}
+.serik-blog-related__meta{font-size:12px;color:#64748b}
+.serik-blog-related__card-title{font-size:1rem;font-weight:600;line-height:1.35;margin:0}
+.serik-blog-related__card-title a{color:#0b2340;text-decoration:none}
+.serik-blog-related__card-title a:hover{color:#0b4c9f}
+.serik-blog-related__excerpt{font-size:13px;line-height:1.45;color:#64748b;margin:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.serik-blog-related__read{margin-top:auto;font-size:13px;font-weight:600;color:#0b4c9f;text-decoration:none}
+.serik-blog-detail__author-name{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.serik-blog-detail__author-linkedin{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;background:#0a66c2;color:#fff!important;text-decoration:none;flex-shrink:0}
+.serik-blog-detail__author-linkedin:hover{background:#084d92;color:#fff!important}
+.serik-blog-detail__author-linkedin i,.serik-blog-detail__author-linkedin svg{width:16px;height:16px}

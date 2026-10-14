@@ -16,6 +16,29 @@
 @endphp
 
 <style>
+    /*
+     * Match blue navbar content edges (logo ←→ phone number).
+     * Header uses: width min(1600px, 100% - 32px) + padding 0 22px.
+     */
+    .clearfix > .container:has(.blog-list-page) {
+        width: min(1600px, calc(100% - 32px)) !important;
+        max-width: min(1600px, calc(100% - 32px)) !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+        padding-left: 22px !important;
+        padding-right: 22px !important;
+        box-sizing: border-box !important;
+    }
+
+    @media (max-width: 991.98px) {
+        .clearfix > .container:has(.blog-list-page) {
+            width: 100% !important;
+            max-width: 100% !important;
+            padding-left: 16px !important;
+            padding-right: 16px !important;
+        }
+    }
+
     .blog-list-page {
         overflow-x: clip;
     }
@@ -220,6 +243,12 @@
 
     .blog-list-page .sidebar-blog {
         min-width: 0;
+    }
+
+    .blog-list-page .sidebar-blog .recent-post-item .content .title,
+    .blog-list-page .sidebar-blog .recent-post-item .content .title a {
+        font-weight: 500 !important;
+        color: #334155 !important;
     }
 
     @media (min-width: 576px) {
