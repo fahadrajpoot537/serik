@@ -19,8 +19,9 @@
     /*
      * Match blue navbar content edges (logo ←→ phone number).
      * Header uses: width min(1600px, 100% - 32px) + padding 0 22px.
+     * Blog list had no .container — content was full-bleed.
      */
-    .clearfix > .container:has(.blog-list-page) {
+    .blog-list-page > .container {
         width: min(1600px, calc(100% - 32px)) !important;
         max-width: min(1600px, calc(100% - 32px)) !important;
         margin-left: auto !important;
@@ -31,7 +32,7 @@
     }
 
     @media (max-width: 991.98px) {
-        .clearfix > .container:has(.blog-list-page) {
+        .blog-list-page > .container {
             width: 100% !important;
             max-width: 100% !important;
             padding-left: 16px !important;
@@ -46,6 +47,8 @@
     .blog-list-page .blog-list-layout {
         --bs-gutter-x: 1.5rem;
         --bs-gutter-y: 1.5rem;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
     }
 
     .blog-list-page .flat-blog-list {
@@ -425,55 +428,57 @@
 </style>
 
 <section class="flat-section blog-list-page">
-    {!! apply_filters('ads_render', null, 'blog_list_before') !!}
+    <div class="container">
+        {!! apply_filters('ads_render', null, 'blog_list_before') !!}
 
-    <div class="row g-4 align-items-start blog-list-layout">
-        <div class="col-12 col-md-8 col-lg-8 col-xl-9">
-            <div class="flat-blog-list">
-                @php
-                    $blogListHeading = $activeCategory->name
-                        ?? __('Real Estate Insights & Market Updates');
-                    $blogListLede = $activeCategory
-                        ? null
-                        : __('Expert guidance, local market trends, and practical tips for Ontario homebuyers and sellers.');
-                @endphp
-                <header class="serik-blog-list-intro">
-                    <h1 class="serik-blog-list-h1">{{ $blogListHeading }}</h1>
-                    @if ($blogListLede)
-                        <p class="serik-blog-list-lede">{{ $blogListLede }}</p>
-                    @endif
-                </header>
+        <div class="row g-4 align-items-start blog-list-layout">
+            <div class="col-12 col-md-8 col-lg-8 col-xl-9">
+                <div class="flat-blog-list">
+                    @php
+                        $blogListHeading = $activeCategory->name
+                            ?? __('Real Estate Insights & Market Updates');
+                        $blogListLede = $activeCategory
+                            ? null
+                            : __('Expert guidance, local market trends, and practical tips for Ontario homebuyers and sellers.');
+                    @endphp
+                    <header class="serik-blog-list-intro">
+                        <h1 class="serik-blog-list-h1">{{ $blogListHeading }}</h1>
+                        @if ($blogListLede)
+                            <p class="serik-blog-list-lede">{{ $blogListLede }}</p>
+                        @endif
+                    </header>
 
-                @if ($blogCategories->isNotEmpty())
-                    <nav class="blog-category-tabs" aria-label="{{ __('Blog categories') }}">
-                        <a href="{{ $blogPageUrl }}"
-                           data-category-id=""
-                           @class(['blog-category-tab', 'active' => ! $activeCategory])>
-                            {{ __('All') }}
-                        </a>
-                        @foreach ($blogCategories as $blogCategory)
-                            <a href="{{ $blogCategory->url }}"
-                               data-category-id="{{ $blogCategory->id }}"
-                               @class(['blog-category-tab', 'active' => $activeCategory && $activeCategory->id === $blogCategory->id])>
-                                {{ $blogCategory->name }}
+                    @if ($blogCategories->isNotEmpty())
+                        <nav class="blog-category-tabs" aria-label="{{ __('Blog categories') }}">
+                            <a href="{{ $blogPageUrl }}"
+                               data-category-id=""
+                               @class(['blog-category-tab', 'active' => ! $activeCategory])>
+                                {{ __('All') }}
                             </a>
-                        @endforeach
-                    </nav>
-                @endif
+                            @foreach ($blogCategories as $blogCategory)
+                                <a href="{{ $blogCategory->url }}"
+                                   data-category-id="{{ $blogCategory->id }}"
+                                   @class(['blog-category-tab', 'active' => $activeCategory && $activeCategory->id === $blogCategory->id])>
+                                    {{ $blogCategory->name }}
+                                </a>
+                            @endforeach
+                        </nav>
+                    @endif
 
-                <div id="blog-posts-container" class="blog-posts-container">
-                    @include(Theme::getThemeNamespace('views.blog.partials.posts-grid'), ['posts' => $posts])
+                    <div id="blog-posts-container" class="blog-posts-container">
+                        @include(Theme::getThemeNamespace('views.blog.partials.posts-grid'), ['posts' => $posts])
+                    </div>
                 </div>
             </div>
+            <div class="col-12 col-md-4 col-lg-4 col-xl-3">
+                <aside class="sidebar-blog">
+                    {!! dynamic_sidebar('blog_sidebar') !!}
+                </aside>
+            </div>
         </div>
-        <div class="col-12 col-md-4 col-lg-4 col-xl-3">
-            <aside class="sidebar-blog">
-                {!! dynamic_sidebar('blog_sidebar') !!}
-            </aside>
-        </div>
-    </div>
 
-    {!! apply_filters('ads_render', null, 'blog_list_after') !!}
+        {!! apply_filters('ads_render', null, 'blog_list_after') !!}
+    </div>
 </section>
 
 <script>

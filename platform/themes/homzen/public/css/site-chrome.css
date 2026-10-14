@@ -155,7 +155,7 @@ width:40px!important;
 #header.main-header .serik-portal-nav__map--tel{display:none!important}
 }
 /* Blog list + detail: align with navbar logo (left) and phone (right) */
-.clearfix>.container:has(.blog-list-page),
+.blog-list-page>.container,
 .serik-blog-detail>.container,
 section.serik-blog-related>.container{
 width:min(1600px,calc(100% - 32px))!important;
@@ -166,8 +166,12 @@ padding-left:22px!important;
 padding-right:22px!important;
 box-sizing:border-box!important
 }
+.blog-list-page .blog-list-layout{
+margin-left:0!important;
+margin-right:0!important
+}
 @media (max-width:991.98px){
-.clearfix>.container:has(.blog-list-page),
+.blog-list-page>.container,
 .serik-blog-detail>.container,
 section.serik-blog-related>.container{
 width:100%!important;
