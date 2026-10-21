@@ -39,8 +39,10 @@ class ForgotPasswordController extends BaseController
     {
         abort_unless(RealEstateHelper::isLoginEnabled(), 404);
 
+        $lookupEmail = strtolower(trim((string) $request->input('email')));
+
         $account = Account::query()
-            ->where('email', $request->input('email'))
+            ->whereRaw('LOWER(email) = ?', [$lookupEmail])
             ->first(['id', 'email', 'first_name', 'last_name', 'password', 'confirmed_at', 'created_at', 'password_expire']);
 
         if ($account && AccountRegistrationExpiry::deleteIfExpired($account)) {
