@@ -735,11 +735,16 @@
                     <div class="logo-box d-flex align-items-center gap-3">
                         <div class="logo">
                             <a href="{{ BaseHelper::getHomepageUrl() }}">
-                                {{-- Desktop navbar is blue site-wide; white wordmark from 992px up. --}}
-                                <picture>
-                                    <source media="(min-width: 992px)" srcset="{{ Theme::asset()->url('images/serik-logo-nav.png') }}">
-                                    {{ Theme::getLogoImage(maxHeight: 52) }}
-                                </picture>
+                                <img
+                                    src="{{ asset('newlogo.png') }}"
+                                    width="160"
+                                    height="52"
+                                    decoding="async"
+                                    loading="eager"
+                                    data-bb-lazy="false"
+                                    style="max-height: 52px !important; width: auto;"
+                                    alt="{{ Theme::getSiteTitle() }}"
+                                >
                             </a>
                         </div>
                         
@@ -889,7 +894,16 @@
         <nav class="menu-box">
             <div class="nav-logo">
                 <a href="{{ BaseHelper::getHomepageUrl() }}">
-                    {{ Theme::getLogoImage(maxHeight: 44) }}
+                    <img
+                        src="{{ asset('newlogo.png') }}"
+                        width="160"
+                        height="44"
+                        decoding="async"
+                        loading="eager"
+                        data-bb-lazy="false"
+                        style="max-height: 44px !important; width: auto;"
+                        alt="{{ Theme::getSiteTitle() }}"
+                    >
                 </a>
             </div>
             <div class="bottom-canvas">
