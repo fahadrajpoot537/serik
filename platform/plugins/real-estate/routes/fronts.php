@@ -64,6 +64,11 @@ if (defined('THEME_MODULE_SCREEN_NAME')) {
             ]);
 
             Route::name('public.account.')->group(function (): void {
+                // Forgot PIN must work even if a stale account session exists (guest middleware would 302).
+                Route::post('password/email', [ForgotPasswordController::class, 'sendResetLinkEmail'])
+                    ->middleware('throttle:5,1')
+                    ->name('password.email');
+
                 Route::middleware('account.guest')->group(function (): void {
                     Route::get(RealEstateHelper::getPageSlug('login'), [LoginController::class, 'showLoginForm'])->name('login');
                     Route::post('login', [LoginController::class, 'login'])->middleware('throttle:10,1')->name('login.post');
@@ -71,7 +76,6 @@ if (defined('THEME_MODULE_SCREEN_NAME')) {
                     Route::post('register', [RegisterController::class, 'register'])->name('register.post');
                     Route::get('verify', [RegisterController::class, 'getVerify'])->name('verify');
                     Route::get(RealEstateHelper::getPageSlug('reset_password'), [ForgotPasswordController::class, 'showLinkRequestForm'])->name('password.request');
-                    Route::post('password/email', [ForgotPasswordController::class, 'sendResetLinkEmail'])->middleware('throttle:5,1')->name('password.email');
                     Route::get('password/reset/{token}', [ResetPasswordController::class, 'showResetForm'])->name('password.reset');
                     Route::post('password/reset', [ResetPasswordController::class, 'reset'])->name('password.update');
                 });

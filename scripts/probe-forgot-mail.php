@@ -24,9 +24,20 @@ try {
 $from = config('mail.from.address') ?: setting('email_from_address');
 $key = config('services.resend.key') ?: setting('email_resend_key') ?: env('RESEND_API_KEY');
 
+echo 'base_path=' . base_path() . PHP_EOL;
 echo 'mailer=' . config('mail.default') . PHP_EOL;
 echo 'from=' . $from . PHP_EOL;
 echo 'resend_key=' . ($key ? ('yes len=' . strlen((string) $key)) : 'NO') . PHP_EOL;
+
+$acct = \Botble\RealEstate\Models\Account::query()
+    ->whereRaw('LOWER(email) = ?', [strtolower($to)])
+    ->first(['id', 'email', 'created_at', 'password_expire']);
+if ($acct) {
+    $expired = \Botble\RealEstate\Supports\AccountRegistrationExpiry::isExpired($acct);
+    echo "account_id={$acct->id} expired=" . ($expired ? 'YES' : 'NO') . PHP_EOL;
+} else {
+    echo "account_id=NONE (forgot-password UI will NOT email this address)\n";
+}
 
 $pin = (string) random_int(100000, 999999);
 echo "test_pin={$pin} (not saved to DB)\n";

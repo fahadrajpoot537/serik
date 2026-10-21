@@ -1051,9 +1051,19 @@
 
                     document.getElementById('forgotView').style.display = 'none';
                     document.getElementById('forgotSuccessView').style.display = 'block';
-                    document.getElementById('forgotSuccessMessage').textContent = result.message;
-                    document.getElementById('authTitle').textContent = 'Check Your Email';
-                    document.getElementById('authSubtitle').textContent = 'Your new 6-digit PIN has been sent';
+                    const mailStatus = result.mail_status || '';
+                    let successMsg = result.message || '';
+                    if (mailStatus === 'sent') {
+                        successMsg = 'PIN emailed just now. Check inbox and spam — use the 6-digit PIN as your password.';
+                    } else if (mailStatus === 'no_account') {
+                        successMsg = 'No account found for this email on the live site. Register first, then try Forgot Password again.';
+                    }
+                    document.getElementById('forgotSuccessMessage').textContent = successMsg;
+                    document.getElementById('authTitle').textContent = mailStatus === 'sent' ? 'Check Your Email' : 'Please Check';
+                    document.getElementById('authSubtitle').textContent = mailStatus === 'sent'
+                        ? 'Your new 6-digit PIN has been sent'
+                        : (mailStatus === 'no_account' ? 'This email is not registered' : 'Request received');
+                    try { console.info('[serik-forgot]', result.pin_mail_rev, mailStatus, result.elapsed_ms); } catch (e) {}
                     btn.innerHTML = originalText;
                     btn.disabled = false;
                     requestAnimationFrame(() => syncAuthBodyHeight());

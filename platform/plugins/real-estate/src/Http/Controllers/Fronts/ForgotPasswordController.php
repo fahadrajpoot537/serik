@@ -15,6 +15,8 @@ use Throwable;
 
 class ForgotPasswordController extends BaseController
 {
+    public const PIN_MAIL_REV = 'sync-curl-v5';
+
     public function __construct()
     {
         parent::__construct();
@@ -40,13 +42,32 @@ class ForgotPasswordController extends BaseController
         abort_unless(RealEstateHelper::isLoginEnabled(), 404);
 
         $lookupEmail = strtolower(trim((string) $request->input('email')));
+        $started = microtime(true);
+        $mailStatus = 'no_account';
 
         $account = Account::query()
             ->whereRaw('LOWER(email) = ?', [$lookupEmail])
             ->first(['id', 'email', 'first_name', 'last_name', 'password', 'confirmed_at', 'created_at', 'password_expire']);
 
-        if ($account && AccountRegistrationExpiry::deleteIfExpired($account)) {
-            $account = null;
+        if ($account && AccountRegistrationExpiry::isExpired($account)) {
+            Log::info('[forgot-password] account expired — ask to re-register', [
+                'email' => $lookupEmail,
+                'account_id' => $account->id,
+            ]);
+
+            // Do not silently delete + fake "PIN sent". Tell the user clearly.
+            $expiredMessage = AccountRegistrationExpiry::expiredMessage();
+
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'error' => true,
+                    'message' => $expiredMessage,
+                    'mail_status' => 'expired',
+                    'pin_mail_rev' => self::PIN_MAIL_REV,
+                ], 422);
+            }
+
+            return back()->withErrors(['email' => $expiredMessage]);
         }
 
         if ($account) {
@@ -54,8 +75,6 @@ class ForgotPasswordController extends BaseController
             $email = (string) $account->email;
             $name = (string) $account->name;
 
-            // Sync Resend only — never queue / afterResponse (caused 10–20 min delays).
-            $started = microtime(true);
             try {
                 $sent = \App\Support\AccountPinMailer::send($email, $name, $pin, 'forgot-password');
             } catch (Throwable $e) {
@@ -65,10 +84,15 @@ class ForgotPasswordController extends BaseController
                 ]);
                 $sent = false;
             }
+
+            $elapsedMs = (int) round((microtime(true) - $started) * 1000);
+
             Log::info('[forgot-password] mail attempt finished', [
                 'email' => $email,
                 'sent' => (bool) $sent,
-                'elapsed_ms' => (int) round((microtime(true) - $started) * 1000),
+                'elapsed_ms' => $elapsedMs,
+                'base_path' => base_path(),
+                'pin_mail_rev' => self::PIN_MAIL_REV,
             ]);
 
             if (! $sent) {
@@ -78,6 +102,9 @@ class ForgotPasswordController extends BaseController
                     return response()->json([
                         'error' => true,
                         'message' => $failMessage,
+                        'mail_status' => 'failed',
+                        'pin_mail_rev' => self::PIN_MAIL_REV,
+                        'elapsed_ms' => $elapsedMs,
                     ], 502);
                 }
 
@@ -86,23 +113,34 @@ class ForgotPasswordController extends BaseController
 
             $account->password = $pin;
             $account->save();
+            $mailStatus = 'sent';
 
             Log::info('[forgot-password] PIN emailed and password updated', [
                 'email' => $email,
                 'account_id' => $account->id,
+                'pin_mail_rev' => self::PIN_MAIL_REV,
             ]);
         } else {
             Log::info('[forgot-password] no matching account (generic success returned)', [
-                'email' => (string) $request->input('email'),
+                'email' => $lookupEmail,
+                'base_path' => base_path(),
+                'pin_mail_rev' => self::PIN_MAIL_REV,
             ]);
         }
 
-        $message = 'If this email is registered, we have sent a new 6-digit PIN. Use it as your password to sign in.';
+        $elapsedMs = (int) round((microtime(true) - $started) * 1000);
+
+        $message = $mailStatus === 'sent'
+            ? 'We have sent a new 6-digit PIN to your email. Use it as your password to sign in.'
+            : 'If this email is registered, we have sent a new 6-digit PIN. Use it as your password to sign in.';
 
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json([
                 'error' => false,
                 'message' => $message,
+                'mail_status' => $mailStatus,
+                'pin_mail_rev' => self::PIN_MAIL_REV,
+                'elapsed_ms' => $elapsedMs,
             ]);
         }
 
