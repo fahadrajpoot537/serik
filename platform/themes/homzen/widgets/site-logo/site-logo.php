@@ -12,6 +12,8 @@ class SiteLogoWidget extends AbstractWidget
         parent::__construct([
             'name' => __('Site logo'),
             'description' => __('Widget display site logo'),
+            // Always fresh — logo file changes must show immediately.
+            'enable_caching' => 'no',
         ]);
     }
 

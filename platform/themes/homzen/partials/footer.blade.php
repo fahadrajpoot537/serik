@@ -108,6 +108,27 @@
     color:rgba(255,255,255,.9) !important;
 }
 
+/* Footer brand logo — white wordmark + red icon (newlogo.png) */
+.footer.footer-main .serik-footer-logo,
+.footer.footer-main .footer-logo{
+    display:block !important;
+    visibility:visible !important;
+    opacity:1 !important;
+    line-height:0;
+}
+.footer.footer-main .serik-footer-logo img,
+.footer.footer-main .footer-logo img,
+.footer.footer-main .serik-footer-logo__img{
+    display:block !important;
+    visibility:visible !important;
+    opacity:1 !important;
+    max-height:48px !important;
+    width:auto !important;
+    height:auto !important;
+    object-fit:contain !important;
+    filter:none !important;
+}
+
  </style>  
  
    <!--div class="icon-bar">
@@ -124,7 +145,22 @@
             <div class="top-footer">
                 <div class="container">
                     <div class="content-footer-top">
-                        {!! $topFooterSidebar !!}
+                        {{-- Force newlogo (bypass widget HTML cache that still embeds old storage logos). --}}
+                        <div class="footer-logo serik-footer-logo">
+                            <a href="{{ BaseHelper::getHomepageUrl() }}">
+                                <img
+                                    src="{{ asset('newlogo.png') }}?v=3"
+                                    width="200"
+                                    height="48"
+                                    decoding="async"
+                                    loading="eager"
+                                    data-bb-lazy="false"
+                                    class="serik-footer-logo__img"
+                                    alt="{{ theme_option('site_title', 'Serik Realty') }}"
+                                >
+                            </a>
+                        </div>
+                        {!! preg_replace('/<div class="footer-logo\b[\s\S]*?<\/div>/i', '', $topFooterSidebar, 1) !!}
                     </div>
                 </div>
             </div>

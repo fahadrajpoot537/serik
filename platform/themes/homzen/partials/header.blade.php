@@ -736,7 +736,7 @@
                         <div class="logo">
                             <a href="{{ BaseHelper::getHomepageUrl() }}">
                                 <img
-                                    src="{{ asset('newlogo.png') }}?v=2"
+                                    src="{{ asset('newlogo.png') }}?v=3"
                                     width="160"
                                     height="52"
                                     decoding="async"
@@ -895,7 +895,7 @@
             <div class="nav-logo">
                 <a href="{{ BaseHelper::getHomepageUrl() }}">
                     <img
-                        src="{{ asset('newlogo.png') }}?v=2"
+                        src="{{ asset('newlogo.png') }}?v=3"
                         width="160"
                         height="44"
                         decoding="async"
