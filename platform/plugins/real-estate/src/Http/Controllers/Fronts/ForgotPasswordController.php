@@ -15,11 +15,30 @@ use Throwable;
 
 class ForgotPasswordController extends BaseController
 {
-    public const PIN_MAIL_REV = 'sync-curl-v6';
+    public const PIN_MAIL_REV = 'sync-curl-v7';
 
     public function __construct()
     {
         parent::__construct();
+    }
+
+    private static function pinMailLog(string $message): void
+    {
+        try {
+            Log::info('[forgot-password] ' . $message);
+        } catch (Throwable $e) {
+            // ignore
+        }
+
+        try {
+            @file_put_contents(
+                storage_path('logs/pin-mail.log'),
+                '[' . date('Y-m-d H:i:s') . '] [forgot-password] ' . $message . PHP_EOL,
+                FILE_APPEND | LOCK_EX
+            );
+        } catch (Throwable $e) {
+            // ignore
+        }
     }
 
     public function showLinkRequestForm()
@@ -45,23 +64,23 @@ class ForgotPasswordController extends BaseController
         $started = microtime(true);
         $mailStatus = 'no_account';
 
-        // First line in logs — proves web hit this controller (not stuck in CSRF/JS).
-        Log::info('[forgot-password] hit', [
-            'email' => $lookupEmail,
-            'pin_mail_rev' => self::PIN_MAIL_REV,
-            'base_path' => base_path(),
-        ]);
-        @file_put_contents(
-            storage_path('logs/pin-mail.log'),
-            '[' . date('Y-m-d H:i:s') . '] [forgot-password] hit ' . $lookupEmail . PHP_EOL,
-            FILE_APPEND | LOCK_EX
-        );
+        self::pinMailLog('hit ' . $lookupEmail);
 
+        // Prefer exact match (indexed); fallback case-insensitive.
         $account = Account::query()
-            ->whereRaw('LOWER(email) = ?', [$lookupEmail])
+            ->where('email', $lookupEmail)
             ->first(['id', 'email', 'first_name', 'last_name', 'password', 'confirmed_at', 'created_at', 'password_expire']);
 
+        if (! $account) {
+            $account = Account::query()
+                ->whereRaw('LOWER(email) = ?', [$lookupEmail])
+                ->first(['id', 'email', 'first_name', 'last_name', 'password', 'confirmed_at', 'created_at', 'password_expire']);
+        }
+
+        self::pinMailLog('account ' . ($account ? ('id=' . $account->id) : 'NONE'));
+
         if ($account && AccountRegistrationExpiry::isExpired($account)) {
+            self::pinMailLog('expired id=' . $account->id);
             $expiredMessage = AccountRegistrationExpiry::expiredMessage();
 
             if ($request->ajax() || $request->wantsJson()) {
@@ -79,7 +98,12 @@ class ForgotPasswordController extends BaseController
         if ($account) {
             $pin = (string) random_int(100000, 999999);
             $email = (string) $account->email;
-            $name = (string) $account->name;
+            $name = trim((string) ($account->first_name ?? '') . ' ' . (string) ($account->last_name ?? ''));
+            if ($name === '') {
+                $name = 'there';
+            }
+
+            self::pinMailLog('sending to ' . $email);
 
             try {
                 $sent = \App\Support\AccountPinMailer::send($email, $name, $pin, 'forgot-password');
@@ -88,10 +112,12 @@ class ForgotPasswordController extends BaseController
                     'email' => $email,
                     'error' => $e->getMessage(),
                 ]);
+                self::pinMailLog('exception ' . $e->getMessage());
                 $sent = false;
             }
 
             $elapsedMs = (int) round((microtime(true) - $started) * 1000);
+            self::pinMailLog('send_result ' . ($sent ? 'OK' : 'FAIL') . ' ms=' . $elapsedMs);
 
             Log::info('[forgot-password] mail attempt finished', [
                 'email' => $email,
@@ -126,6 +152,7 @@ class ForgotPasswordController extends BaseController
                 'pin_mail_rev' => self::PIN_MAIL_REV,
             ]);
         } else {
+            self::pinMailLog('no_account ' . $lookupEmail);
             Log::info('[forgot-password] no matching account', [
                 'email' => $lookupEmail,
                 'pin_mail_rev' => self::PIN_MAIL_REV,
