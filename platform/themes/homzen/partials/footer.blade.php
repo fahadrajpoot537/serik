@@ -74,6 +74,40 @@
     color:rgba(255,255,255,.85) !important;
 }
 
+/* Bottom copyright strip — brokerage left */
+.footer.footer-main .bottom-footer{
+    background-color: var(--serik-reference-blue, #0b4c9f) !important;
+    border-top: 0 !important;
+    padding: 12px 0 !important;
+}
+.footer.footer-main .content-footer-bottom{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:10px 16px;
+}
+.footer.footer-main .footer-bottom-left{
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    min-width:0;
+}
+.footer.footer-main .footer-brokerage{
+    color:#fff !important;
+    font-size:14px;
+    font-weight:600;
+    line-height:1.4;
+}
+.footer.footer-main .footer-bottom-left .copyright{
+    color:rgba(255,255,255,.85) !important;
+    font-size:13px;
+    line-height:1.4;
+}
+.footer.footer-main .bottom-footer .menu-bottom a{
+    color:rgba(255,255,255,.9) !important;
+}
+
  </style>  
  
    <!--div class="icon-bar">

@@ -994,63 +994,76 @@
         btn.disabled = true;
         errDiv.style.display = 'none';
 
-        refreshAuthCsrfTokens().then(() => {
-        fetch(form.action, {
-            method: 'POST',
-            body: new FormData(form),
-            credentials: 'same-origin',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'Accept': 'application/json'
-            }
-        })
-            .then(async res => {
-                if (res.status === 419) {
-                    errDiv.textContent = 'Session expired. Refreshing page...';
-                    errDiv.style.display = 'block';
-                    btn.innerHTML = originalText;
-                    btn.disabled = false;
-                    setTimeout(() => location.reload(), 600);
-                    return;
-                }
-
-                let result;
-                try {
-                    result = await res.json();
-                } catch (parseErr) {
-                    errDiv.textContent = 'Server error (' + res.status + '). Please refresh the page and try again.';
-                    errDiv.style.display = 'block';
-                    btn.innerHTML = originalText;
-                    btn.disabled = false;
-                    return;
-                }
-
-                if (!res.ok || result.error) {
-                    let errText = result.message || 'Unable to send PIN. Please try again.';
-                    if (result.errors) {
-                        errText = Object.values(result.errors)[0][0];
-                    }
-                    errDiv.textContent = errText;
-                    errDiv.style.display = 'block';
-                    btn.innerHTML = originalText;
-                    btn.disabled = false;
-                    return;
-                }
-
-                document.getElementById('forgotView').style.display = 'none';
-                document.getElementById('forgotSuccessView').style.display = 'block';
-                document.getElementById('forgotSuccessMessage').textContent = result.message;
-                document.getElementById('authTitle').textContent = 'Check Your Email';
-                document.getElementById('authSubtitle').textContent = 'Your new 6-digit PIN has been sent';
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-            })
-            .catch(() => {
-                errDiv.textContent = 'An unexpected error occurred. Please try again.';
+        refreshAuthCsrfTokens(true).then((ok) => {
+            if (!ok) {
+                errDiv.textContent = 'Session expired. Refreshing page...';
                 errDiv.style.display = 'block';
                 btn.innerHTML = originalText;
                 btn.disabled = false;
-            });
+                setTimeout(() => location.reload(), 600);
+                return;
+            }
+
+            const formData = new FormData(form);
+            formData.set('_token', form.querySelector('input[name="_token"]')?.value || '');
+
+            fetch(form.action, {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json'
+                }
+            })
+                .then(async res => {
+                    if (res.status === 419) {
+                        errDiv.textContent = 'Session expired. Refreshing page...';
+                        errDiv.style.display = 'block';
+                        btn.innerHTML = originalText;
+                        btn.disabled = false;
+                        setTimeout(() => location.reload(), 600);
+                        return;
+                    }
+
+                    let result;
+                    try {
+                        result = await res.json();
+                    } catch (parseErr) {
+                        errDiv.textContent = 'Server error (' + res.status + '). Please refresh the page and try again.';
+                        errDiv.style.display = 'block';
+                        btn.innerHTML = originalText;
+                        btn.disabled = false;
+                        return;
+                    }
+
+                    if (!res.ok || result.error) {
+                        let errText = result.message || 'Unable to send PIN. Please try again.';
+                        if (result.errors) {
+                            errText = Object.values(result.errors)[0][0];
+                        }
+                        errDiv.textContent = errText;
+                        errDiv.style.display = 'block';
+                        btn.innerHTML = originalText;
+                        btn.disabled = false;
+                        return;
+                    }
+
+                    document.getElementById('forgotView').style.display = 'none';
+                    document.getElementById('forgotSuccessView').style.display = 'block';
+                    document.getElementById('forgotSuccessMessage').textContent = result.message;
+                    document.getElementById('authTitle').textContent = 'Check Your Email';
+                    document.getElementById('authSubtitle').textContent = 'Your new 6-digit PIN has been sent';
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    requestAnimationFrame(() => syncAuthBodyHeight());
+                })
+                .catch(() => {
+                    errDiv.textContent = 'An unexpected error occurred. Please try again.';
+                    errDiv.style.display = 'block';
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                });
         });
     });
 

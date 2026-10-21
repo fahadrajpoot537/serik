@@ -10,6 +10,8 @@ use Botble\RealEstate\Models\Account;
 use Botble\RealEstate\Supports\AccountRegistrationExpiry;
 use Botble\SeoHelper\Facades\SeoHelper;
 use Botble\Theme\Facades\Theme;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class ForgotPasswordController extends BaseController
 {
@@ -47,24 +49,44 @@ class ForgotPasswordController extends BaseController
 
         if ($account) {
             $pin = (string) random_int(100000, 999999);
+            $email = (string) $account->email;
+            $name = (string) $account->name;
+
+            // Send first — never overwrite the password if mail fails.
+            try {
+                $sent = \App\Support\AccountPinMailer::send($email, $name, $pin, 'forgot-password');
+            } catch (Throwable $e) {
+                Log::error('[forgot-password] PIN email failed', [
+                    'email' => $email,
+                    'error' => $e->getMessage(),
+                ]);
+                $sent = false;
+            }
+
+            if (! $sent) {
+                $failMessage = 'We could not send the PIN email right now. Please try again in a minute.';
+
+                if ($request->ajax() || $request->wantsJson()) {
+                    return response()->json([
+                        'error' => true,
+                        'message' => $failMessage,
+                    ], 502);
+                }
+
+                return back()->withErrors(['email' => $failMessage]);
+            }
 
             $account->password = $pin;
             $account->save();
 
-            $email = $account->email;
-            $name = (string) $account->name;
-
-            // Return JSON immediately; send Resend mail after the HTTP response (no queue worker).
-            dispatch(function () use ($email, $name, $pin): void {
-                try {
-                    \App\Support\AccountPinMailer::send($email, $name, $pin, 'forgot-password');
-                } catch (\Throwable $e) {
-                    \Log::error('[forgot-password] PIN email failed (after response)', [
-                        'email' => $email,
-                        'error' => $e->getMessage(),
-                    ]);
-                }
-            })->afterResponse();
+            Log::info('[forgot-password] PIN emailed and password updated', [
+                'email' => $email,
+                'account_id' => $account->id,
+            ]);
+        } else {
+            Log::info('[forgot-password] no matching account (generic success returned)', [
+                'email' => (string) $request->input('email'),
+            ]);
         }
 
         $message = 'If this email is registered, we have sent a new 6-digit PIN. Use it as your password to sign in.';
