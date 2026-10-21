@@ -994,87 +994,98 @@
         btn.disabled = true;
         errDiv.style.display = 'none';
 
-        refreshAuthCsrfTokens(true).then((ok) => {
-            if (!ok) {
-                errDiv.textContent = 'Session expired. Refreshing page...';
-                errDiv.style.display = 'block';
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-                setTimeout(() => location.reload(), 600);
-                return;
-            }
+        const forgotAbort = new AbortController();
+        const forgotTimer = setTimeout(() => forgotAbort.abort(), 20000);
 
+        // Don't block forever on CSRF — try refresh (max 4s) then POST anyway.
+        const csrfRace = Promise.race([
+            refreshAuthCsrfTokens(true).catch(() => false),
+            new Promise((resolve) => setTimeout(() => resolve(false), 4000)),
+        ]);
+
+        csrfRace.then(() => {
             const formData = new FormData(form);
-            formData.set('_token', form.querySelector('input[name="_token"]')?.value || '');
+            formData.set('_token', form.querySelector('input[name="_token"]')?.value
+                || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+                || '');
 
-            fetch(form.action, {
+            return fetch(form.action, {
                 method: 'POST',
                 body: formData,
                 credentials: 'same-origin',
+                signal: forgotAbort.signal,
                 headers: {
                     'X-Requested-With': 'XMLHttpRequest',
                     'Accept': 'application/json'
                 }
-            })
-                .then(async res => {
-                    if (res.status === 419) {
-                        errDiv.textContent = 'Session expired. Refreshing page...';
-                        errDiv.style.display = 'block';
-                        btn.innerHTML = originalText;
-                        btn.disabled = false;
-                        setTimeout(() => location.reload(), 600);
-                        return;
-                    }
-
-                    let result;
-                    try {
-                        result = await res.json();
-                    } catch (parseErr) {
-                        errDiv.textContent = 'Server error (' + res.status + '). Please refresh the page and try again.';
-                        errDiv.style.display = 'block';
-                        btn.innerHTML = originalText;
-                        btn.disabled = false;
-                        return;
-                    }
-
-                    if (!res.ok || result.error) {
-                        let errText = result.message || 'Unable to send PIN. Please try again.';
-                        if (result.errors) {
-                            errText = Object.values(result.errors)[0][0];
-                        }
-                        errDiv.textContent = errText;
-                        errDiv.style.display = 'block';
-                        btn.innerHTML = originalText;
-                        btn.disabled = false;
-                        return;
-                    }
-
-                    document.getElementById('forgotView').style.display = 'none';
-                    document.getElementById('forgotSuccessView').style.display = 'block';
-                    const mailStatus = result.mail_status || '';
-                    let successMsg = result.message || '';
-                    if (mailStatus === 'sent') {
-                        successMsg = 'PIN emailed just now. Check inbox and spam — use the 6-digit PIN as your password.';
-                    } else if (mailStatus === 'no_account') {
-                        successMsg = 'No account found for this email on the live site. Register first, then try Forgot Password again.';
-                    }
-                    document.getElementById('forgotSuccessMessage').textContent = successMsg;
-                    document.getElementById('authTitle').textContent = mailStatus === 'sent' ? 'Check Your Email' : 'Please Check';
-                    document.getElementById('authSubtitle').textContent = mailStatus === 'sent'
-                        ? 'Your new 6-digit PIN has been sent'
-                        : (mailStatus === 'no_account' ? 'This email is not registered' : 'Request received');
-                    try { console.info('[serik-forgot]', result.pin_mail_rev, mailStatus, result.elapsed_ms); } catch (e) {}
-                    btn.innerHTML = originalText;
-                    btn.disabled = false;
-                    requestAnimationFrame(() => syncAuthBodyHeight());
-                })
-                .catch(() => {
-                    errDiv.textContent = 'An unexpected error occurred. Please try again.';
+            });
+        })
+            .then(async res => {
+                clearTimeout(forgotTimer);
+                if (!res) {
+                    throw new Error('no_response');
+                }
+                if (res.status === 419) {
+                    errDiv.textContent = 'Session expired. Refreshing page...';
                     errDiv.style.display = 'block';
                     btn.innerHTML = originalText;
                     btn.disabled = false;
-                });
-        });
+                    setTimeout(() => location.reload(), 600);
+                    return;
+                }
+
+                let result;
+                try {
+                    result = await res.json();
+                } catch (parseErr) {
+                    errDiv.textContent = 'Server error (' + res.status + '). Please refresh the page and try again.';
+                    errDiv.style.display = 'block';
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    return;
+                }
+
+                if (!res.ok || result.error) {
+                    let errText = result.message || 'Unable to send PIN. Please try again.';
+                    if (result.errors) {
+                        errText = Object.values(result.errors)[0][0];
+                    }
+                    errDiv.textContent = errText;
+                    errDiv.style.display = 'block';
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    return;
+                }
+
+                document.getElementById('forgotView').style.display = 'none';
+                document.getElementById('forgotSuccessView').style.display = 'block';
+                const mailStatus = result.mail_status || '';
+                let successMsg = result.message || '';
+                if (mailStatus === 'sent') {
+                    successMsg = 'PIN emailed just now. Check inbox and spam — use the 6-digit PIN as your password.';
+                } else if (mailStatus === 'no_account') {
+                    successMsg = 'No account found for this email on the live site. Register first, then try Forgot Password again.';
+                }
+                document.getElementById('forgotSuccessMessage').textContent = successMsg;
+                document.getElementById('authTitle').textContent = mailStatus === 'sent' ? 'Check Your Email' : 'Please Check';
+                document.getElementById('authSubtitle').textContent = mailStatus === 'sent'
+                    ? 'Your new 6-digit PIN has been sent'
+                    : (mailStatus === 'no_account' ? 'This email is not registered' : 'Request received');
+                try { console.info('[serik-forgot]', result.pin_mail_rev, mailStatus, result.elapsed_ms); } catch (e) {}
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                requestAnimationFrame(() => syncAuthBodyHeight());
+            })
+            .catch((err) => {
+                clearTimeout(forgotTimer);
+                const timedOut = err && err.name === 'AbortError';
+                errDiv.textContent = timedOut
+                    ? 'Request timed out. Please try again — if it keeps hanging, contact support.'
+                    : 'An unexpected error occurred. Please try again.';
+                errDiv.style.display = 'block';
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            });
     });
 
     let emailExists = false;

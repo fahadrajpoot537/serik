@@ -15,7 +15,7 @@ use Throwable;
 
 class ForgotPasswordController extends BaseController
 {
-    public const PIN_MAIL_REV = 'sync-curl-v5';
+    public const PIN_MAIL_REV = 'sync-curl-v6';
 
     public function __construct()
     {
@@ -45,17 +45,23 @@ class ForgotPasswordController extends BaseController
         $started = microtime(true);
         $mailStatus = 'no_account';
 
+        // First line in logs — proves web hit this controller (not stuck in CSRF/JS).
+        Log::info('[forgot-password] hit', [
+            'email' => $lookupEmail,
+            'pin_mail_rev' => self::PIN_MAIL_REV,
+            'base_path' => base_path(),
+        ]);
+        @file_put_contents(
+            storage_path('logs/pin-mail.log'),
+            '[' . date('Y-m-d H:i:s') . '] [forgot-password] hit ' . $lookupEmail . PHP_EOL,
+            FILE_APPEND | LOCK_EX
+        );
+
         $account = Account::query()
             ->whereRaw('LOWER(email) = ?', [$lookupEmail])
             ->first(['id', 'email', 'first_name', 'last_name', 'password', 'confirmed_at', 'created_at', 'password_expire']);
 
         if ($account && AccountRegistrationExpiry::isExpired($account)) {
-            Log::info('[forgot-password] account expired — ask to re-register', [
-                'email' => $lookupEmail,
-                'account_id' => $account->id,
-            ]);
-
-            // Do not silently delete + fake "PIN sent". Tell the user clearly.
             $expiredMessage = AccountRegistrationExpiry::expiredMessage();
 
             if ($request->ajax() || $request->wantsJson()) {
@@ -78,7 +84,7 @@ class ForgotPasswordController extends BaseController
             try {
                 $sent = \App\Support\AccountPinMailer::send($email, $name, $pin, 'forgot-password');
             } catch (Throwable $e) {
-                Log::error('[forgot-password] PIN email failed', [
+                Log::error('[forgot-password] PIN email exception', [
                     'email' => $email,
                     'error' => $e->getMessage(),
                 ]);
@@ -91,7 +97,6 @@ class ForgotPasswordController extends BaseController
                 'email' => $email,
                 'sent' => (bool) $sent,
                 'elapsed_ms' => $elapsedMs,
-                'base_path' => base_path(),
                 'pin_mail_rev' => self::PIN_MAIL_REV,
             ]);
 
@@ -121,9 +126,8 @@ class ForgotPasswordController extends BaseController
                 'pin_mail_rev' => self::PIN_MAIL_REV,
             ]);
         } else {
-            Log::info('[forgot-password] no matching account (generic success returned)', [
+            Log::info('[forgot-password] no matching account', [
                 'email' => $lookupEmail,
-                'base_path' => base_path(),
                 'pin_mail_rev' => self::PIN_MAIL_REV,
             ]);
         }
