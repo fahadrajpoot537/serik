@@ -3,18 +3,18 @@
 namespace App\Support;
 
 use Illuminate\Mail\MailManager;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
- * PIN mailer — prefers Resend HTTP API (reliable on production),
- * then falls back to Laravel mail / Botble templates.
+ * PIN emails are always sent synchronously via Resend HTTP.
+ * Never queue — forgot/register PIN must arrive within seconds.
  */
 final class AccountPinMailer
 {
     public static function send(string $email, string $accountName, string $pin, string $context = 'auth'): bool
     {
+        $started = microtime(true);
         $email = strtolower(trim($email));
         $isForgot = $context === 'forgot-password';
         $name = trim($accountName) !== '' ? trim($accountName) : 'there';
@@ -33,89 +33,55 @@ final class AccountPinMailer
         $resendKey = (string) (
             config('services.resend.key')
             ?: setting('email_resend_key')
-            ?: env('RESEND_API_KEY', '')
+            ?: ''
         );
+
+        if ($resendKey === '' && function_exists('env')) {
+            // Avoid env() after config:cache when possible — already tried config/settings.
+            $resendKey = (string) (config('services.resend.key') ?: '');
+        }
 
         $html = self::htmlBody($name, $email, $pin);
 
-        Log::info('[AccountPinMailer] sending', [
+        Log::info('[AccountPinMailer] sending sync', [
             'email' => $email,
             'context' => $context,
-            'mailer' => config('mail.default'),
             'from' => $fromAddress,
             'has_resend_key' => $resendKey !== '',
         ]);
 
-        // 1) Direct Resend HTTP — most reliable on live (bypasses Laravel mailer quirks).
-        if ($resendKey !== '') {
-            try {
-                if (self::sendViaResendApi($resendKey, $fromName, $fromAddress, $email, $subject, $html)) {
-                    Log::info('[AccountPinMailer] resend api ok', [
-                        'email' => $email,
-                        'context' => $context,
-                    ]);
-
-                    return true;
-                }
-            } catch (Throwable $e) {
-                Log::error('[AccountPinMailer] resend api exception', [
-                    'email' => $email,
-                    'context' => $context,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-        } else {
-            Log::warning('[AccountPinMailer] no Resend API key configured', [
+        if ($resendKey === '') {
+            Log::error('[AccountPinMailer] missing Resend API key', [
                 'email' => $email,
                 'context' => $context,
             ]);
+
+            return false;
         }
 
-        // 2) Laravel Mail::html fallback
-        try {
-            \Illuminate\Support\Facades\Mail::html($html, function ($message) use ($email, $subject): void {
-                $message->to($email)->subject($subject);
-            });
-            Log::info('[AccountPinMailer] laravel mail ok', [
+        $result = self::sendViaResendCurl($resendKey, $fromName, $fromAddress, $email, $subject, $html);
+        $elapsedMs = (int) round((microtime(true) - $started) * 1000);
+
+        if ($result['ok']) {
+            Log::info('[AccountPinMailer] resend ok (sync)', [
                 'email' => $email,
                 'context' => $context,
+                'resend_id' => $result['id'],
+                'elapsed_ms' => $elapsedMs,
             ]);
 
             return true;
-        } catch (Throwable $e) {
-            Log::error('[AccountPinMailer] laravel mail failed', [
-                'email' => $email,
-                'context' => $context,
-                'error' => $e->getMessage(),
-            ]);
         }
 
-        // 3) Botble template last resort
-        try {
-            $sent = \Botble\Base\Facades\EmailHandler::setModule(REAL_ESTATE_MODULE_SCREEN_NAME)
-                ->setVariableValues([
-                    'account_name' => $name,
-                    'account_email' => $email,
-                    'account_password' => $pin,
-                ])
-                ->sendUsingTemplate('account-registered', $email, [], false, 'plugins', $subject);
+        Log::error('[AccountPinMailer] resend failed (sync)', [
+            'email' => $email,
+            'context' => $context,
+            'status' => $result['status'],
+            'body' => $result['body'],
+            'elapsed_ms' => $elapsedMs,
+        ]);
 
-            Log::info('[AccountPinMailer] template result', [
-                'email' => $email,
-                'context' => $context,
-                'sent' => (bool) $sent,
-            ]);
-
-            return (bool) $sent;
-        } catch (Throwable $e) {
-            Log::error('[AccountPinMailer] all send paths failed', [
-                'email' => $email,
-                'context' => $context,
-                'error' => $e->getMessage(),
-            ]);
-
-            throw $e;
-        }
+        return false;
     }
 
     private static function htmlBody(string $name, string $email, string $pin): string
@@ -128,40 +94,61 @@ final class AccountPinMailer
             . '<p>Use this PIN to sign in. If you did not request this, you can ignore this email.</p>';
     }
 
-    private static function sendViaResendApi(
+    /**
+     * @return array{ok: bool, id: ?string, status: int, body: string}
+     */
+    private static function sendViaResendCurl(
         string $apiKey,
         string $fromName,
         string $fromAddress,
         string $to,
         string $subject,
         string $html
-    ): bool {
-        $response = Http::withToken($apiKey)
-            ->acceptJson()
-            ->timeout(25)
-            ->post('https://api.resend.com/emails', [
-                'from' => $fromName . ' <' . $fromAddress . '>',
-                'to' => [$to],
-                'subject' => $subject,
-                'html' => $html,
-            ]);
+    ): array {
+        $payload = json_encode([
+            'from' => $fromName . ' <' . $fromAddress . '>',
+            'to' => [$to],
+            'subject' => $subject,
+            'html' => $html,
+        ], JSON_UNESCAPED_UNICODE);
 
-        if ($response->successful()) {
-            Log::info('[AccountPinMailer] resend response', [
-                'id' => $response->json('id'),
-                'to' => $to,
-            ]);
-
-            return true;
-        }
-
-        Log::error('[AccountPinMailer] resend api rejected', [
-            'status' => $response->status(),
-            'body' => $response->body(),
-            'to' => $to,
-            'from' => $fromAddress,
+        $ch = curl_init('https://api.resend.com/emails');
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_HTTPHEADER => [
+                'Authorization: Bearer ' . $apiKey,
+                'Content-Type: application/json',
+                'Accept: application/json',
+            ],
+            CURLOPT_POSTFIELDS => $payload,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 20,
+            CURLOPT_CONNECTTIMEOUT => 8,
         ]);
 
-        return false;
+        $body = curl_exec($ch);
+        $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err = curl_error($ch);
+        curl_close($ch);
+
+        if ($body === false) {
+            return [
+                'ok' => false,
+                'id' => null,
+                'status' => 0,
+                'body' => 'curl_error: ' . $err,
+            ];
+        }
+
+        $json = json_decode((string) $body, true);
+        $id = is_array($json) ? ($json['id'] ?? null) : null;
+        $ok = $status >= 200 && $status < 300 && is_string($id) && $id !== '';
+
+        return [
+            'ok' => $ok,
+            'id' => is_string($id) ? $id : null,
+            'status' => $status,
+            'body' => (string) $body,
+        ];
     }
 }

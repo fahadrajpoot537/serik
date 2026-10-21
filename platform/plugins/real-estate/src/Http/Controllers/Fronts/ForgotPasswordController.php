@@ -54,7 +54,8 @@ class ForgotPasswordController extends BaseController
             $email = (string) $account->email;
             $name = (string) $account->name;
 
-            // Send first — never overwrite the password if mail fails.
+            // Sync Resend only — never queue / afterResponse (caused 10–20 min delays).
+            $started = microtime(true);
             try {
                 $sent = \App\Support\AccountPinMailer::send($email, $name, $pin, 'forgot-password');
             } catch (Throwable $e) {
@@ -64,6 +65,11 @@ class ForgotPasswordController extends BaseController
                 ]);
                 $sent = false;
             }
+            Log::info('[forgot-password] mail attempt finished', [
+                'email' => $email,
+                'sent' => (bool) $sent,
+                'elapsed_ms' => (int) round((microtime(true) - $started) * 1000),
+            ]);
 
             if (! $sent) {
                 $failMessage = 'We could not send the PIN email right now. Please try again in a minute.';

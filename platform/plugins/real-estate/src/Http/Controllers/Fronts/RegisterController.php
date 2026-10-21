@@ -128,12 +128,20 @@ class RegisterController extends BaseController
 
         event(new Registered($account));
 
-        \App\Jobs\SendAccountPinEmailJob::dispatch(
-            $account->email,
-            (string) $account->name,
-            $unhashedPin,
-            'register'
-        );
+        // Sync send — never queue PIN mail (queue workers can delay 10–20+ minutes).
+        try {
+            \App\Support\AccountPinMailer::send(
+                (string) $account->email,
+                (string) $account->name,
+                $unhashedPin,
+                'register'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('[register] PIN email failed', [
+                'email' => $account->email,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         // Verification email disabled – only PIN email is sent
         // if (setting('verify_account_email', false)) {
