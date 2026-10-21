@@ -1,9 +1,9 @@
 @php
     $logoSrc = is_file(public_path('newlogo.png'))
-        ? asset('newlogo.png')
+        ? asset('newlogo.png') . '?v=2'
         : (theme_option('logo_light')
             ? RvMedia::getImageUrl(theme_option('logo_light'))
-            : asset('newlogo.png'));
+            : asset('newlogo.png') . '?v=2');
 @endphp
 
 <div class="footer-logo serik-footer-logo">
