@@ -49,11 +49,17 @@ class EnsureSadaqatInExpertsSeeder extends Seeder
             $account->blocked_reason = null;
             $changed = true;
         }
+        // Card designation under the photo/name (Meet Our Experts + homepage).
+        $wantedTitle = 'President and Brokerage';
+        if (trim((string) ($account->professional_title ?? '')) !== $wantedTitle) {
+            $account->professional_title = $wantedTitle;
+            $changed = true;
+        }
         if ($changed) {
             $account->save();
-            $this->command?->info("Made account #{$account->id} ({$account->name}) public / unblocked.");
+            $this->command?->info("Updated account #{$account->id} ({$account->name}) → public, title \"{$wantedTitle}\".");
         } else {
-            $this->command?->info("Account #{$account->id} ({$account->name}) already public.");
+            $this->command?->info("Account #{$account->id} ({$account->name}) already public with title.");
         }
 
         $sadaqatId = (int) $account->id;
@@ -82,9 +88,9 @@ class EnsureSadaqatInExpertsSeeder extends Seeder
                 $this->command?->warn("Page #{$page->id}: using fallback account_ids (shortcode was damaged).");
             }
 
-            if (! in_array($sadaqatId, $ids, true)) {
-                $ids[] = $sadaqatId;
-            }
+            // Always include Sadaqat and keep him first in the carousel.
+            $ids = array_values(array_filter($ids, static fn (int $id) => $id !== $sadaqatId));
+            array_unshift($ids, $sadaqatId);
 
             $isAbout = stripos((string) $page->name, 'about') !== false;
             $subtitle = $isAbout ? 'Our Team' : 'Our Teams';
