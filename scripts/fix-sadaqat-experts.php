@@ -31,7 +31,7 @@ if (! $account) {
     exit(1);
 }
 
-$wantedTitle = 'President and Brokerage';
+$wantedTitle = 'President and Broker';
 $account->is_public_profile = true;
 $account->blocked_at = null;
 $account->blocked_reason = null;

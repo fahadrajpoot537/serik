@@ -50,7 +50,7 @@ class EnsureSadaqatInExpertsSeeder extends Seeder
             $changed = true;
         }
         // Card designation under the photo/name (Meet Our Experts + homepage).
-        $wantedTitle = 'President and Brokerage';
+        $wantedTitle = 'President and Broker';
         if (trim((string) ($account->professional_title ?? '')) !== $wantedTitle) {
             $account->professional_title = $wantedTitle;
             $changed = true;
