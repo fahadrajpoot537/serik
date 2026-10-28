@@ -99,6 +99,8 @@ class GoHighLevelShowingObjectMapper
         $set('commission', $this->resolveCommission($mls, $record));
         $set('sold_price', $this->money($record['ClosePrice'] ?? null));
 
+        $omitted = [];
+        $properties = $this->finalizeOutboundProperties($properties, $defs, $omitted);
         ksort($properties);
 
         return [
@@ -110,8 +112,57 @@ class GoHighLevelShowingObjectMapper
                 'unparsed_address' => (string) ($record['UnparsedAddress'] ?? ''),
                 'standard_status' => (string) ($record['StandardStatus'] ?? $record['MlsStatus'] ?? ''),
                 'property_keys' => self::PROPERTY_KEYS,
+                'omitted_properties' => $omitted,
             ],
         ];
+    }
+
+    /**
+     * Drop unknown / configured-omitted / unvalidated PHONE properties before GHL write.
+     * Preserves all remaining valid custom-object fields.
+     *
+     * @param  array<string, mixed>  $properties
+     * @param  array<string, array<string, mixed>>  $defs
+     * @param  list<string>  $omitted
+     * @return array<string, mixed>
+     */
+    public function finalizeOutboundProperties(array $properties, array $defs, array &$omitted = []): array
+    {
+        $omitConfig = array_map(
+            static fn ($k) => strtolower((string) $k),
+            (array) config('gohighlevel.mls_sync.omit_showings_properties', [])
+        );
+        $omitConfig = array_values(array_filter($omitConfig, static fn ($k) => $k !== ''));
+
+        $out = [];
+        foreach ($properties as $key => $value) {
+            $short = strtolower((string) $key);
+            if (in_array($short, $omitConfig, true)) {
+                $omitted[] = $short . ':config_omit';
+                continue;
+            }
+
+            // When schema is available, only send keys that exist on the Showings object.
+            if ($defs !== [] && ! isset($defs[$short]) && ! isset($defs[$key])) {
+                $omitted[] = $short . ':unknown_schema_field';
+                continue;
+            }
+
+            $def = $defs[$short] ?? $defs[$key] ?? [];
+            $dataType = strtoupper((string) ($def['dataType'] ?? ''));
+            if ($dataType === 'PHONE') {
+                $normalized = is_string($value) ? $this->propertySource->normalizePhone($value) : null;
+                if ($normalized === null) {
+                    $omitted[] = $short . ':invalid_phone';
+                    continue;
+                }
+                $value = $normalized;
+            }
+
+            $out[$key] = $value;
+        }
+
+        return $out;
     }
 
     /**

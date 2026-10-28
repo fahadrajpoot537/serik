@@ -30,6 +30,30 @@
         } catch (\Throwable) {
         }
     }
+
+    $soldPriceRaw = $model->ClosePrice ?? null;
+    if (($soldPriceRaw === null || $soldPriceRaw === '' || (float) $soldPriceRaw <= 0)
+        && ! empty($factRecord['ClosePrice'])
+        && (float) $factRecord['ClosePrice'] > 0
+    ) {
+        $soldPriceRaw = $factRecord['ClosePrice'];
+    }
+    $soldPriceValue = (is_numeric($soldPriceRaw) && (float) $soldPriceRaw > 0)
+        ? (float) $soldPriceRaw
+        : null;
+
+    $soldOnRaw = $model->purchase_contract_date
+        ?? $model->close_date
+        ?? ($factRecord['PurchaseContractDate'] ?? null)
+        ?? ($factRecord['CloseDate'] ?? null);
+    $soldOnLabel = '';
+    if ($soldOnRaw) {
+        try {
+            $soldOnLabel = \Carbon\Carbon::parse((string) $soldOnRaw)->toDateString();
+        } catch (\Throwable) {
+            $soldOnLabel = is_string($soldOnRaw) ? substr($soldOnRaw, 0, 10) : '';
+        }
+    }
 @endphp
 
 
@@ -90,15 +114,27 @@
                     </span>
                     <br>
 
-                    @if(!empty($model->ClosePrice))
-                        Sold : 
-                        <span style="margin-left:8px; color:var(--primary-color, #db1d23);">
-                            ${{ number_format((float) $model->ClosePrice) }}
+                    @php
+                        $canViewSoldPrice = auth('account')->check() || auth()->check();
+                    @endphp
+                    @if($canViewSoldPrice && $soldPriceValue !== null)
+                        Sold :
+                        <span id="soldPrice" style="margin-left:8px; color:var(--primary-color, #db1d23);">
+                            ${{ number_format($soldPriceValue) }}
                         </span>
+                        <br>
+                    @elseif($canViewSoldPrice)
+                        Sold :
+                        <span id="soldPrice" style="margin-left:8px; color:var(--primary-color, #db1d23);"></span>
+                        <br>
                     @endif
-                    <br>
 
-                    Sold On : <span id="soldDate"></span>
+                    @if($canViewSoldPrice)
+                        Sold On : <span id="soldDate">{{ $soldOnLabel }}</span>
+                    @else
+                        {{-- Guests: board rules require login for sold price/date; keep labels for layout after auth. --}}
+                        Sold On : <span id="soldDate"></span>
+                    @endif
 
                 @elseif(! empty($mlsDisplay['is_delisted']))
                     <span class="flag-tag primary status-sold d-inline-block mb-2" aria-label="{{ __('MLS status') }}: {{ $mlsDisplay['display_label'] }}">{{ \App\Support\MlsStatus::detailLine($mlsDisplay) }}</span>
@@ -202,10 +238,17 @@ document.addEventListener("DOMContentLoaded", function () {
                 if (listingEl && item.ListingContractDate) {
                     listingEl.innerText = relativeListedLabel(item.ListingContractDate, 'Listed');
                 }
-                const soldDate = item.PurchaseContractDate;
+                const soldDate = item.PurchaseContractDate || item.CloseDate || '';
                 if (soldDate) {
                     const soldEl = document.getElementById('soldDate');
                     if (soldEl) soldEl.innerText = String(soldDate).split('T')[0];
+                }
+                const closePrice = parseFloat(item.ClosePrice);
+                if (!isNaN(closePrice) && closePrice > 0) {
+                    const priceEl = document.getElementById('soldPrice');
+                    if (priceEl) {
+                        priceEl.innerText = '$' + Math.round(closePrice).toLocaleString('en-US');
+                    }
                 }
             })
             .catch(function () {});

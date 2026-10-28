@@ -82,6 +82,30 @@ return [
 
         // Optional association definition id (contact ↔ showings). When empty, resolved at runtime.
         'showings_contact_association_id' => env('GOHIGHLEVEL_SHOWINGS_CONTACT_ASSOCIATION_ID', ''),
+
+        /*
+         * Optional Showings short keys never sent to GHL (comma-separated env).
+         * Use when a dashboard field rejects writes (unique PHONE, wrong type, etc.)
+         * but other property fields must keep syncing. Default empty — schema +
+         * PHONE validation gate listing_brokerage_phone instead.
+         */
+        'omit_showings_properties' => array_values(array_filter(array_map(
+            static fn (string $k): string => strtolower(trim($k)),
+            explode(',', (string) env('GOHIGHLEVEL_OMIT_SHOWINGS_PROPERTIES', ''))
+        ))),
+
+        /*
+         * Optional keys that may be stripped once and retried when GHL returns
+         * HTTP 400 "couldn't validate the mapped field: {key}". Core MLS fields
+         * are never stripped this way.
+         */
+        'optional_showings_properties' => array_values(array_filter(array_map(
+            static fn (string $k): string => strtolower(trim($k)),
+            explode(',', (string) env(
+                'GOHIGHLEVEL_OPTIONAL_SHOWINGS_PROPERTIES',
+                'listing_brokerage_phone,listing_brokerage,commission'
+            ))
+        ))),
     ],
 
     /*

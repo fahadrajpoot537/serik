@@ -64,6 +64,10 @@ final class GoHighLevelCircuitBreaker
 
         $threshold = max(2, (int) config('gohighlevel.mls_sync.circuit_failure_threshold', 5));
         $coolDown = max(10, (int) config('gohighlevel.mls_sync.circuit_cooldown_seconds', 60));
+        // Array/file cache stores return false from increment() when the key is missing.
+        if (! Cache::has(self::FAILURES_KEY)) {
+            Cache::put(self::FAILURES_KEY, 0, $coolDown * 3);
+        }
         $failures = (int) Cache::increment(self::FAILURES_KEY);
         Cache::put(self::FAILURES_KEY, $failures, $coolDown * 3);
 

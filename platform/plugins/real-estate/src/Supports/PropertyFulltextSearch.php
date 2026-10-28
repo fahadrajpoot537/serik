@@ -140,9 +140,39 @@ class PropertyFulltextSearch
     }
 
     /**
+     * Typeahead address search: BOOLEAN MODE with trailing * so "Bro" hits "Broadway".
+     */
+    public static function applyRequiredTokensFulltextPrefix(Builder $query, string ...$terms): Builder
+    {
+        $expression = self::requiredTokenExpressionPrefix(...$terms);
+
+        if ($expression === '' || ! self::fulltextAvailable()) {
+            return $query->whereRaw('0 = 1');
+        }
+
+        return $query->whereRaw(
+            'MATCH(`name`, `location`) AGAINST(? IN BOOLEAN MODE)',
+            [$expression]
+        );
+    }
+
+    /**
      * Build a `+token +token` BOOLEAN MODE expression, dropping tokens MySQL ignores.
      */
     public static function requiredTokenExpression(string ...$terms): string
+    {
+        return self::buildRequiredTokenExpression(false, ...$terms);
+    }
+
+    /**
+     * Build a `+token* +token*` BOOLEAN MODE expression for typeahead prefixes.
+     */
+    public static function requiredTokenExpressionPrefix(string ...$terms): string
+    {
+        return self::buildRequiredTokenExpression(true, ...$terms);
+    }
+
+    private static function buildRequiredTokenExpression(bool $prefix, string ...$terms): string
     {
         $minTokenSize = self::minTokenSize();
         $required = [];
@@ -156,7 +186,8 @@ class PropertyFulltextSearch
                     continue;
                 }
 
-                $required[strtolower($token)] = '+' . $token;
+                $key = strtolower($token);
+                $required[$key] = '+' . $token . ($prefix ? '*' : '');
             }
         }
 

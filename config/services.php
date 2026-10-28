@@ -67,6 +67,13 @@ return [
         'basemap_key' => env('CARTO_BASEMAP_KEY'),
     ],
 
+    // Groq — optional narrative for home evaluation (never used for the numeric estimate).
+    'groq' => [
+        'api_key' => env('GROQ_API_KEY'),
+        'model' => env('GROQ_MODEL', 'llama-3.3-70b-versatile'),
+        'endpoint' => env('GROQ_API_ENDPOINT', 'https://api.groq.com/openai/v1/chat/completions'),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | GoHighLevel (LeadConnector)

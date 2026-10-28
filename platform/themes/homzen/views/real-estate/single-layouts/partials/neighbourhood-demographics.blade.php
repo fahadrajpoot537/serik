@@ -150,19 +150,72 @@
     } catch (\Throwable $e) {
         $censusBootstrap = null;
     }
+    $censusHasBootstrap = is_array($censusBootstrap) && ! empty($censusBootstrap['metrics']);
+    $censusPropertyId = (int) $model->getKey();
+    // Do NOT warm census in afterResponse here. Laravel's afterResponse uses
+    // dispatchSync during terminate(), which blocks php artisan serve (and can
+    // stall the browser tab) for 30–110s on a cold StatCan build. The client
+    // already eager-fetches /api/v1/property-census/{id}.
 @endphp
+@if (! $censusHasBootstrap)
+<link rel="prefetch" href="{{ url('/api/v1/property-census/' . $censusPropertyId) }}" as="fetch" crossorigin="use-credentials">
+@endif
+<link rel="preload" href="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" as="script">
 <section
-    class="single-property-element hs-census-section is-loading"
+    class="single-property-element hs-census-section{{ $censusHasBootstrap ? '' : ' is-loading' }}"
     id="neighbourhoodDemographics"
-    data-property-census-id="{{ (int) $model->getKey() }}"
-    aria-busy="true"
+    data-property-census-id="{{ $censusPropertyId }}"
+    data-census-bootstrapped="{{ $censusHasBootstrap ? '1' : '0' }}"
+    aria-busy="{{ $censusHasBootstrap ? 'false' : 'true' }}"
 >
     <div class="hs-census-head">
         <h3>{{ __('Neighbourhood Demographics') }}</h3>
         <p>{{ __('2021 Census data for the property\'s local Census area') }}</p>
     </div>
     <div class="hs-census-body">
-        <div class="hs-census-status">{{ __('Loading neighbourhood demographics…') }}</div>
+        @if ($censusHasBootstrap)
+            <div class="hs-census-grid">
+                @foreach (($censusBootstrap['metrics'] ?? []) as $metric)
+                    <div class="hs-census-card">
+                        <div class="hs-census-label">{{ $metric['label'] ?? '' }}</div>
+                        <div class="hs-census-value">{{ $metric['display'] ?? '' }}</div>
+                    </div>
+                @endforeach
+            </div>
+            @if (! empty($censusBootstrap['charts']))
+                <div class="hs-census-charts">
+                    <div class="hs-census-tabs" role="tablist">
+                        @foreach ($censusBootstrap['charts'] as $i => $chart)
+                            <button
+                                type="button"
+                                class="hs-census-tab{{ $i === 0 ? ' is-active' : '' }}"
+                                data-chart-index="{{ (int) $i }}"
+                            >{{ $chart['label'] ?? '' }}</button>
+                        @endforeach
+                    </div>
+                    <div class="hs-census-legend" id="hsCensusLegend"></div>
+                    <div class="hs-census-chart-wrap">
+                        <canvas id="hsCensusPie" aria-label="{{ __('Neighbourhood demographics chart') }}"></canvas>
+                    </div>
+                </div>
+            @endif
+            <div class="hs-census-source">
+                {{ __('Source:') }} {{ $censusBootstrap['source'] ?? 'Statistics Canada — 2021 Census' }}
+                @if (! empty($censusBootstrap['geography_level']) && ($censusBootstrap['geography_level'] ?? '') !== 'da')
+                    <br>
+                    {{ __('Geography:') }}
+                    @if (($censusBootstrap['geography_level'] ?? '') === 'ada')
+                        {{ __('Aggregate dissemination area') }}
+                    @elseif (($censusBootstrap['geography_level'] ?? '') === 'csd')
+                        {{ __('Census subdivision') }}
+                    @else
+                        {{ $censusBootstrap['geography_level'] }}
+                    @endif
+                @endif
+            </div>
+        @else
+            <div class="hs-census-status">{{ __('Loading neighbourhood demographics…') }}</div>
+        @endif
     </div>
 </section>
 @if ($censusBootstrap)
@@ -179,6 +232,7 @@
 
     var chartInstance = null;
     var chartsData = [];
+    var metricsAlreadyPainted = root.getAttribute('data-census-bootstrapped') === '1';
 
     function esc(s) {
         return String(s == null ? '' : s)
@@ -200,11 +254,11 @@
         var tries = 0;
         var t = setInterval(function () {
             tries++;
-            if (window.Chart || tries > 40) {
+            if (window.Chart || tries > 50) {
                 clearInterval(t);
                 cb();
             }
-        }, 100);
+        }, 40);
     }
 
     function renderChart(index) {
@@ -330,6 +384,10 @@
     function bindTabs() {
         var tabs = root.querySelectorAll('.hs-census-tab');
         tabs.forEach(function (btn) {
+            if (btn.getAttribute('data-bound') === '1') {
+                return;
+            }
+            btn.setAttribute('data-bound', '1');
             btn.addEventListener('click', function () {
                 tabs.forEach(function (b) { b.classList.remove('is-active'); });
                 btn.classList.add('is-active');
@@ -338,10 +396,48 @@
         });
     }
 
+    function mountCharts(data) {
+        chartsData = Array.isArray(data.charts) ? data.charts : [];
+        if (!chartsData.length) {
+            return;
+        }
+        if (!root.querySelector('#hsCensusPie')) {
+            var tabs = chartsData.map(function (c, i) {
+                return '<button type="button" class="hs-census-tab' + (i === 0 ? ' is-active' : '') +
+                    '" data-chart-index="' + i + '">' + esc(c.label) + '</button>';
+            }).join('');
+            var chartsHtml =
+                '<div class="hs-census-charts">' +
+                    '<div class="hs-census-tabs" role="tablist">' + tabs + '</div>' +
+                    '<div class="hs-census-legend" id="hsCensusLegend"></div>' +
+                    '<div class="hs-census-chart-wrap"><canvas id="hsCensusPie" aria-label="Neighbourhood demographics chart"></canvas></div>' +
+                '</div>';
+            var body = root.querySelector('.hs-census-body');
+            var source = body ? body.querySelector('.hs-census-source') : null;
+            if (source) {
+                source.insertAdjacentHTML('beforebegin', chartsHtml);
+            } else if (body) {
+                body.insertAdjacentHTML('beforeend', chartsHtml);
+            }
+        }
+        bindTabs();
+        whenChartReady(function () { renderChart(0); });
+    }
+
     function renderOk(data) {
         var metrics = Array.isArray(data.metrics) ? data.metrics : [];
         if (!metrics.length) {
             renderError(data.message || 'Census data temporarily unavailable.');
+            return;
+        }
+
+        root.classList.remove('is-loading');
+        root.setAttribute('aria-busy', 'false');
+
+        // SSR already painted metric cards — only hydrate charts (avoids flicker + wait).
+        if (metricsAlreadyPainted && root.querySelector('.hs-census-grid')) {
+            chartsData = Array.isArray(data.charts) ? data.charts : [];
+            mountCharts(data);
             return;
         }
 
@@ -356,21 +452,6 @@
             );
         }).join('');
 
-        var chartsHtml = '';
-        if (chartsData.length) {
-            var tabs = chartsData.map(function (c, i) {
-                return '<button type="button" class="hs-census-tab' + (i === 0 ? ' is-active' : '') +
-                    '" data-chart-index="' + i + '">' + esc(c.label) + '</button>';
-            }).join('');
-
-            chartsHtml =
-                '<div class="hs-census-charts">' +
-                    '<div class="hs-census-tabs" role="tablist">' + tabs + '</div>' +
-                    '<div class="hs-census-legend" id="hsCensusLegend"></div>' +
-                    '<div class="hs-census-chart-wrap"><canvas id="hsCensusPie" aria-label="Neighbourhood demographics chart"></canvas></div>' +
-                '</div>';
-        }
-
         var sourceBits = [];
         sourceBits.push('Source: ' + esc(data.source || 'Statistics Canada — 2021 Census'));
         if (data.geography_level && data.geography_level !== 'da') {
@@ -380,17 +461,12 @@
             sourceBits.push('Geography: ' + esc(levelLabel));
         }
 
-        root.classList.remove('is-loading');
-        root.setAttribute('aria-busy', 'false');
+        // Paint metric cards first — charts attach after Chart.js is ready.
         root.querySelector('.hs-census-body').innerHTML =
             '<div class="hs-census-grid">' + cards + '</div>' +
-            chartsHtml +
             '<div class="hs-census-source">' + sourceBits.join('<br>') + '</div>';
-
-        if (chartsData.length) {
-            bindTabs();
-            whenChartReady(function () { renderChart(0); });
-        }
+        metricsAlreadyPainted = true;
+        mountCharts(data);
     }
 
     // Absolute URL — map property popup loads this page inside an iframe (?iframe=1).
@@ -487,8 +563,7 @@
             });
     }
 
-    // Prefer server-embedded cache (map iframe skips a long API round-trip when
-    // the full property page already warmed census:property:{id}:v12).
+    // Prefer server-embedded cache (instant cards via SSR; charts hydrate here).
     var bootEl = document.getElementById('hsCensusBootstrap');
     var bootData = null;
     if (bootEl) {
@@ -499,24 +574,12 @@
         return;
     }
 
-    // Map popup iframe: IntersectionObserver often never fires (odd overflow roots),
-    // so kick off census promptly instead of waiting for scroll.
+    // Cold path: start fetch immediately so data is ready by the time the user
+    // scrolls to Neighbourhood Demographics (was delayed up to 12s by IO).
     if (isIframeEmbed) {
-        window.setTimeout(function () { loadCensus(false); }, 300);
-    } else if ('IntersectionObserver' in window) {
-        var io = new IntersectionObserver(function (entries) {
-            if (entries.some(function (e) { return e.isIntersecting; })) {
-                io.disconnect();
-                loadCensus(false);
-            }
-        }, { rootMargin: '200px 0px' });
-        io.observe(root);
-        // Safety: if IO never intersects (rare layout), still load.
-        window.setTimeout(function () { loadCensus(false); }, 12000);
-    } else if ('requestIdleCallback' in window) {
-        requestIdleCallback(function () { setTimeout(function () { loadCensus(false); }, 1000); }, { timeout: 5000 });
+        window.setTimeout(function () { loadCensus(false); }, 50);
     } else {
-        setTimeout(function () { loadCensus(false); }, 3000);
+        loadCensus(false);
     }
 })();
 </script>

@@ -50,11 +50,11 @@ opacity:1!important;visibility:visible!important;max-height:none
 }
 
 /* WOW must not hide homepage sections (idle WOW.init re-hides after JS reveal) */
-#page-home .wow,
-#page-home .wow.fadeIn,
-#page-home .wow.fadeInUp,
-#page-home .wow.fadeInUpSmall,
-#page-home .wow.fadeInLeftSmall,
+  #page-home .wow,
+  #page-home .wow.fadeIn,
+  #page-home .wow.fadeInUp,
+  #page-home .wow.fadeInUpSmall,
+  #page-home .wow.fadeInLeftSmall,
 #page-home .wow.fadeInRightSmall,
 #page-home .serik-hp-props__grid,
 #page-home .serik-hp-locations__swiper,

@@ -427,6 +427,9 @@ class TrebPropertyHelper
             'ListingKey' => $listingKey,
             'UnparsedAddress' => $local['name'] ?? null,
             'ListPrice' => $local['price'] ?? null,
+            'ClosePrice' => $local['ClosePrice'] ?? null,
+            'CloseDate' => $local['close_date'] ?? $local['CloseDate'] ?? null,
+            'PurchaseContractDate' => $local['purchase_contract_date'] ?? $local['PurchaseContractDate'] ?? null,
             'LivingAreaRange' => $local['square'] ?? null,
             'MlsStatus' => $local['MlsStatus'] ?? null,
             'TransactionType' => $local['TransactionType'] ?? null,
@@ -2668,6 +2671,11 @@ class TrebPropertyHelper
             'property_id' => $property->id,
             'name' => $property->name,
             'price' => $property->price,
+            'ClosePrice' => $property->ClosePrice ?? null,
+            'close_date' => $property->close_date ?? null,
+            'CloseDate' => $property->close_date ?? null,
+            'purchase_contract_date' => $property->purchase_contract_date ?? null,
+            'PurchaseContractDate' => $property->purchase_contract_date ?? null,
             'square' => $property->square,
             'MlsStatus' => $property->MlsStatus,
             'TransactionType' => $property->TransactionType,
@@ -2758,7 +2766,9 @@ class TrebPropertyHelper
             }
         }
 
-        // Never block detail/modal SSR on live AMP — warm snapshot after the response.
+        // Never block property-page SSR on live AMP (php artisan serve waits on
+        // terminate/afterResponse). Thin records + sold rows missing ClosePrice
+        // warm in the background via queue when available.
         if (self::isThinDetailFactRecord($record) && self::shouldHydrateThinDetailRecord()) {
             self::scheduleThinDetailHydrate($listingKey);
         }
@@ -2795,7 +2805,15 @@ class TrebPropertyHelper
 
             try {
                 app()->instance('serik.live_treb_fallback', true);
-                self::fetchAmpPropertyForResync($listingKey);
+                $item = self::fetchAmpPropertyForResync($listingKey);
+                // Persist ClosePrice / sold dates onto re_properties so SSR header
+                // can show sold price on the next request (and after cache clears).
+                if (is_array($item) && $item !== []) {
+                    try {
+                        self::importAmpHistoryListing($item, false);
+                    } catch (\Throwable) {
+                    }
+                }
             } catch (\Throwable) {
             } finally {
                 try {
@@ -2806,9 +2824,14 @@ class TrebPropertyHelper
         };
 
         try {
-            dispatch($runner)->afterResponse();
+            // afterResponse() uses dispatchSync in terminate() and blocks
+            // php artisan serve until AMP finishes. Prefer the real queue.
+            if (config('queue.default') === 'sync') {
+                return;
+            }
+            dispatch($runner)->onQueue(\App\Support\SerikQueue::low());
         } catch (\Throwable) {
-            app()->terminating($runner);
+            // Never fall back to sync terminating AMP on the web request.
         }
     }
 
@@ -2817,6 +2840,16 @@ class TrebPropertyHelper
      */
     public static function isThinDetailFactRecord(array $record): bool
     {
+        $status = (string) ($record['MlsStatus'] ?? $record['StandardStatus'] ?? '');
+        // Sold/leased without ClosePrice must rehydrate — otherwise the detail
+        // header permanently shows list price only (no sold price / sold-on date).
+        if (self::isSoldHistoryMlsStatus($status)) {
+            $close = $record['ClosePrice'] ?? null;
+            if ($close === null || $close === '' || (float) $close <= 0) {
+                return true;
+            }
+        }
+
         $signals = [
             'TaxAnnualAmount',
             'ArchitecturalStyle',
@@ -3132,7 +3165,7 @@ class TrebPropertyHelper
                 } catch (\Throwable) {
                 }
             }
-        })->onQueue(\App\Support\SerikQueue::low())->afterResponse();
+        })->onQueue(\App\Support\SerikQueue::low());
     }
 
     /**
@@ -3473,7 +3506,7 @@ class TrebPropertyHelper
                 } catch (\Throwable) {
                 }
             }
-        })->onQueue(\App\Support\SerikQueue::low())->afterResponse();
+        })->onQueue(\App\Support\SerikQueue::low());
     }
 
     /**

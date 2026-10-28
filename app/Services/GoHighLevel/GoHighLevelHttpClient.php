@@ -151,21 +151,33 @@ class GoHighLevelHttpClient
                         'path' => $path,
                         'body' => $this->safeBody($response->body()),
                     ]);
-                    throw new RuntimeException(
-                        'GoHighLevel API token unauthorized or expired.' . $scopeHint
+                    throw new GoHighLevelPermanentException(
+                        'GoHighLevel API token unauthorized or expired.' . $scopeHint,
+                        401
                     );
                 }
 
                 if (! $response->successful()) {
-                    $isObjectsScope = str_contains($path, '/objects') || str_contains($path, '/associations');
-                    // 4xx on Custom Objects/associations are config/payload errors — do not trip
-                    // the circuit used by contact/lead traffic.
-                    if (! $isObjectsScope && $response->status() >= 400 && $response->status() < 500) {
-                        GoHighLevelCircuitBreaker::recordFailure();
+                    $status = $response->status();
+                    $safe = $this->safeBody($response->body());
+                    $message = 'GoHighLevel API error HTTP ' . $status . ': ' . $safe;
+
+                    // Permanent client errors must not retry or open the circuit.
+                    // (Transient 408/429/5xx are handled above via shouldRetryStatus.)
+                    if ($status >= 400 && $status < 500) {
+                        Log::channel('ghl_sync')->warning('GoHighLevel permanent HTTP client error', [
+                            'correlation_id' => $correlationId,
+                            'method' => $method,
+                            'path' => $path,
+                            'status' => $status,
+                            'body' => $safe,
+                        ]);
+
+                        throw GoHighLevelPermanentException::fromApiMessage($message, $status);
                     }
-                    throw new RuntimeException(
-                        'GoHighLevel API error HTTP ' . $response->status() . ': ' . $this->safeBody($response->body())
-                    );
+
+                    GoHighLevelCircuitBreaker::recordFailure();
+                    throw new RuntimeException($message);
                 }
 
                 GoHighLevelCircuitBreaker::recordSuccess();
@@ -194,6 +206,9 @@ class GoHighLevelHttpClient
                     continue;
                 }
                 GoHighLevelCircuitBreaker::recordFailure();
+                throw $e;
+            } catch (GoHighLevelPermanentException $e) {
+                // Do not retry validation/config failures and do not trip the circuit.
                 throw $e;
             } catch (Throwable $e) {
                 if ($e instanceof RuntimeException && (

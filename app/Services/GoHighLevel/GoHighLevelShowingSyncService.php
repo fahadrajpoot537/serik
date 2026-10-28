@@ -86,7 +86,9 @@ class GoHighLevelShowingSyncService
 
         $attempted = count($properties);
         if ($attempted === 0) {
-            throw new \RuntimeException('No Showings properties mapped for MLS ' . $task->mls_number);
+            throw new GoHighLevelPermanentException(
+                'No Showings properties mapped for MLS ' . $task->mls_number
+            );
         }
 
         $recordId = $previousRecordId !== ''
@@ -94,17 +96,14 @@ class GoHighLevelShowingSyncService
             : (string) ($this->objects->findRecordIdByMls($task->mls_number, $this->realContactId($task, $previousRecordId)) ?? '');
 
         $httpStatus = 200;
+        $record = [];
         try {
-            if ($recordId !== '') {
-                $record = $this->objects->updateRecord($recordId, $properties);
-                $httpStatus = $this->http->lastStatus() ?? 200;
-            } elseif ($explicitShowingId !== '') {
-                throw new \RuntimeException('Showings record id was supplied but could not be updated: ' . $explicitShowingId);
-            } else {
-                $record = $this->objects->createRecord($properties);
-                $httpStatus = $this->http->lastStatus() ?? 201;
-                $recordId = (string) ($record['id'] ?? data_get($record, 'record.id') ?? '');
-            }
+            [$record, $recordId, $httpStatus, $properties] = $this->writeRecordWithOptionalFieldFallback(
+                $recordId,
+                $explicitShowingId,
+                $properties,
+                $mapped['field_defs'] ?? []
+            );
         } catch (\Throwable $e) {
             if (preg_match('/HTTP\s+(\d{3})/', $e->getMessage(), $m)) {
                 $httpStatus = (int) $m[1];
@@ -116,11 +115,18 @@ class GoHighLevelShowingSyncService
             throw $e;
         }
 
+        $attempted = count($properties);
+        // Hash what was actually accepted after optional-field strip, so the next
+        // run skips unchanged payloads instead of re-fighting the same 400.
+        $hash = hash('sha256', json_encode($properties, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '');
+
         if ($recordId === '') {
             $recordId = (string) ($record['id'] ?? '');
         }
         if ($recordId === '') {
-            throw new \RuntimeException('Showings record create/update did not return a record id.');
+            throw new GoHighLevelPermanentException(
+                'Showings record create/update did not return a record id.'
+            );
         }
 
         try {
@@ -237,6 +243,76 @@ class GoHighLevelShowingSyncService
         ]);
 
         return $task;
+    }
+
+    /**
+     * Create/update Showings properties. If GHL rejects an optional mapped field
+     * (HTTP 400 "couldn't validate the mapped field: X"), strip only that key once
+     * and retry so core MLS fields still sync.
+     *
+     * @param  array<string, mixed>  $properties
+     * @param  array<string, array<string, mixed>>  $fieldDefs
+     * @return array{0: array<string, mixed>, 1: string, 2: int, 3: array<string, mixed>}
+     */
+    protected function writeRecordWithOptionalFieldFallback(
+        string $recordId,
+        string $explicitShowingId,
+        array $properties,
+        array $fieldDefs,
+    ): array {
+        $optional = array_map(
+            static fn ($k) => strtolower((string) $k),
+            (array) config('gohighlevel.mls_sync.optional_showings_properties', ['listing_brokerage_phone'])
+        );
+        $optional = array_values(array_filter($optional, static fn ($k) => $k !== ''));
+        $attemptedStrip = [];
+
+        while (true) {
+            try {
+                if ($recordId !== '') {
+                    $record = $this->objects->updateRecord($recordId, $properties);
+                    $httpStatus = $this->http->lastStatus() ?? 200;
+                } elseif ($explicitShowingId !== '') {
+                    throw new GoHighLevelPermanentException(
+                        'Showings record id was supplied but could not be updated: ' . $explicitShowingId
+                    );
+                } else {
+                    $record = $this->objects->createRecord($properties);
+                    $httpStatus = $this->http->lastStatus() ?? 201;
+                    $recordId = (string) ($record['id'] ?? data_get($record, 'record.id') ?? '');
+                }
+
+                return [$record, $recordId, $httpStatus, $properties];
+            } catch (GoHighLevelPermanentException $e) {
+                $field = $e->invalidField;
+                if (
+                    $e->httpStatus === 400
+                    && $field !== null
+                    && in_array($field, $optional, true)
+                    && array_key_exists($field, $properties)
+                    && ! in_array($field, $attemptedStrip, true)
+                ) {
+                    unset($properties[$field]);
+                    $attemptedStrip[] = $field;
+                    Log::channel('ghl_sync')->warning('GoHighLevel omitted optional invalid Showings field; retrying write', [
+                        'field' => $field,
+                        'remaining_fields' => array_keys($properties),
+                    ]);
+                    if ($properties === []) {
+                        throw $e;
+                    }
+                    // Re-run finalize in case config/schema also wants related keys dropped.
+                    $omitted = [];
+                    $properties = $this->objectMapper->finalizeOutboundProperties($properties, $fieldDefs, $omitted);
+                    if ($properties === []) {
+                        throw $e;
+                    }
+                    continue;
+                }
+
+                throw $e;
+            }
+        }
     }
 
     /**

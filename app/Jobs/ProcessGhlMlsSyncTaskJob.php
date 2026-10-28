@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\GhlMlsSyncTask;
 use App\Services\GoHighLevel\GoHighLevelMetrics;
+use App\Services\GoHighLevel\GoHighLevelPermanentException;
 use App\Services\GoHighLevel\GoHighLevelShowingSyncService;
 use App\Support\SerikQueue;
 use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
@@ -84,6 +85,22 @@ class ProcessGhlMlsSyncTaskJob implements ShouldQueue, ShouldBeUniqueUntilProces
 
             $sync->processTask($task);
             GoHighLevelMetrics::observeLatency('job_latency', (microtime(true) - $t0) * 1000);
+        } catch (GoHighLevelPermanentException $e) {
+            $task->refresh();
+            $sync->markFailed($task, $e);
+            GoHighLevelMetrics::incrDay('sync_failed');
+
+            Log::channel('ghl_sync')->error('GoHighLevel MLS sync permanent failure (no retry)', [
+                'correlation_id' => $correlationId,
+                'task_id' => $this->taskId,
+                'attempt' => $this->attempts(),
+                'invalid_field' => $e->invalidField,
+                'http_status' => $e->httpStatus,
+                'message' => $e->getMessage(),
+            ]);
+
+            // Fail the job immediately — do not burn tries on known-invalid payloads.
+            $this->fail($e);
         } catch (Throwable $e) {
             // Keep task retryable until final failed() — do not permanently mark FAILED mid-retry.
             $task->refresh();

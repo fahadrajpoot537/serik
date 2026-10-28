@@ -68,9 +68,22 @@
 
 
 
-#thirdMain{
-    zoom:0.8;
-   
+/* Keep evaluation content at 1:1 with header/logo — zoom breaks edge alignment */
+#thirdMain {
+    zoom: 1;
+}
+#thirdMain.serik-eval-layout > .container {
+    max-width: 1140px;
+}
+#thirdMain.serik-eval-layout .section-box {
+    padding: 8px 0 28px;
+    background: transparent;
+    border-radius: 0;
+}
+#thirdMain.serik-eval-layout #estimate-result.estimate-result {
+    width: 100%;
+    max-width: none;
+    box-sizing: border-box;
 }
 
 .section-box{
@@ -132,19 +145,25 @@
 
 .prop-address-wrap {
     position: relative;
+    z-index: 30;
 }
 #address-suggestions {
     position: absolute;
+    top: calc(100% - 0.35rem);
     left: 0;
     right: 0;
     width: auto;
     z-index: 9999;
-    max-height: 250px;
+    max-height: 360px;
     overflow-y: auto;
     background: #fff;
     border: 1px solid #ddd;
     border-radius: 6px;
     box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+    display: none;
+}
+#address-suggestions:not(:empty) {
+    display: block;
 }
 #address-suggestions .suggestion-item {
     cursor: pointer;
@@ -156,33 +175,416 @@
 .estimate-result {
     display: none;
     margin-top: 20px;
-    padding: 20px;
-    border-radius: 10px;
-    background: #f3f7fc;
-    border: 1px solid #c5d8ef;
+    padding: 22px 20px 18px;
+    border-radius: 12px;
+    background: #fff;
+    border: 1px solid #d7e3f0;
+    box-shadow: 0 8px 24px rgba(2, 85, 161, 0.06);
 }
 .estimate-result.is-visible {
     display: block;
 }
-.estimate-result .estimate-price {
-    font-size: 32px;
-    font-weight: 700;
-    color: #0255a1;
-    margin: 8px 0;
-}
-.estimate-result .estimate-range {
-    font-size: 16px;
-    color: #333;
-    margin-bottom: 8px;
+.estimate-result.is-error {
+    background: #fff6f6;
+    border-color: #f0c7c7;
 }
 .estimate-result .estimate-note {
     font-size: 13px;
     color: #666;
     margin: 0;
 }
-.estimate-result.is-error {
-    background: #fff6f6;
-    border-color: #f0c7c7;
+.estimate-result .estimate-pick-list {
+    list-style: none;
+    margin: 0.75rem 0 0;
+    padding: 0;
+    display: grid;
+    gap: 0.4rem;
+}
+.estimate-result .estimate-pick-btn {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: 1px solid #c5d8ef;
+    background: #fff;
+    color: #0b4c9f;
+    border-radius: 8px;
+    padding: 0.55rem 0.75rem;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.estimate-result .estimate-pick-btn:hover,
+.estimate-result .estimate-pick-btn:focus-visible {
+    background: #eef5fc;
+    border-color: #0b4c9f;
+    outline: none;
+}
+.estimate-scale {
+    margin: 0.5rem 0 1.25rem;
+    width: 100%;
+}
+.estimate-scale__rail {
+    height: 2px;
+    background: #cfd8e3;
+    border-radius: 2px;
+    margin: 0 0.35rem 0.85rem;
+}
+.estimate-scale__marks {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0.5rem;
+    width: 100%;
+    align-items: start;
+}
+.estimate-scale__mark {
+    position: relative;
+    text-align: center;
+    min-width: 0;
+    padding-top: 0.15rem;
+}
+.estimate-scale__mark.is-low {
+    text-align: left;
+}
+.estimate-scale__mark.is-high {
+    text-align: right;
+}
+.estimate-scale__mark::before {
+    content: "";
+    display: block;
+    width: 10px;
+    height: 10px;
+    margin: 0 auto 0.45rem;
+    border-radius: 50%;
+    background: #94a3b8;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px #cbd5e1;
+}
+.estimate-scale__mark.is-low::before {
+    margin-left: 0;
+    margin-right: auto;
+}
+.estimate-scale__mark.is-high::before {
+    margin-left: auto;
+    margin-right: 0;
+}
+.estimate-scale__mark.is-mid {
+    color: #0d9488;
+    font-weight: 700;
+}
+.estimate-scale__mark.is-mid::before {
+    background: #0d9488;
+    box-shadow: 0 0 0 1px #0d9488;
+}
+.estimate-scale__label {
+    display: block;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #64748b;
+    margin-bottom: 0.15rem;
+    line-height: 1.2;
+}
+.estimate-scale__value {
+    display: block;
+    font-size: clamp(13px, 1.45vw, 16px);
+    font-weight: 700;
+    color: #0f172a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.estimate-scale__mark.is-mid .estimate-scale__value {
+    color: #0d9488;
+    font-size: clamp(15px, 1.7vw, 19px);
+}
+.estimate-dom {
+    margin: 0.25rem 0 1rem;
+}
+.estimate-dom__title {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.55rem;
+    font-size: 14px;
+    color: #334155;
+    margin-bottom: 0.85rem;
+    line-height: 1.35;
+}
+.estimate-dom__title > span:first-child {
+    display: block;
+    max-width: 100%;
+    margin-top: 5% !important;
+}
+.estimate-dom__controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.55rem 0.75rem;
+    width: 100%;
+}
+.estimate-dom__input {
+    width: 9.5rem;
+    max-width: 100%;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 0.4rem 0.6rem;
+    font-weight: 700;
+    color: #0f172a;
+    background: #fff;
+    font-size: 14px;
+}
+.estimate-dom__track-wrap {
+    position: relative;
+    padding: 1.1rem 0 0.15rem;
+}
+.estimate-dom__pin {
+    position: absolute;
+    top: 0;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-top: 12px solid #0d9488;
+    transition: left 0.25s ease;
+}
+.estimate-dom__track {
+    height: 10px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #ef4444 0%, #f59e0b 45%, #3b82f6 100%);
+}
+.estimate-dom__labels {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 0.45rem;
+    font-size: 12px;
+    color: #64748b;
+}
+.estimate-dom__labels span:first-child { color: #dc2626; font-weight: 600; }
+.estimate-dom__labels span:last-child { color: #2563eb; font-weight: 600; }
+.estimate-beta {
+    margin: 0.85rem 0 1rem;
+    padding: 0.75rem 0.9rem;
+    border-radius: 8px;
+    background: #e8f4ff;
+    color: #1e3a5f;
+    font-size: 12.5px;
+    line-height: 1.45;
+}
+.estimate-history {
+    margin-top: 0.35rem;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 0.9rem;
+}
+.estimate-history h4 {
+    margin: 0 0 0.35rem;
+    font-size: 15px;
+    color: #0f172a;
+}
+.estimate-history__sub {
+    margin: 0 0 0.75rem;
+    font-size: 12.5px;
+    color: #64748b;
+}
+.estimate-history__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+}
+.estimate-history__table th,
+.estimate-history__table td {
+    padding: 0.5rem 0.4rem;
+    border-bottom: 1px solid #e2e8f0;
+    text-align: left;
+    vertical-align: top;
+}
+.estimate-history__table th {
+    color: #64748b;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.estimate-history__table .eh-price {
+    color: #0d9488;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.estimate-history__table .eh-event {
+    font-weight: 600;
+    color: #0f172a;
+}
+.estimate-history__empty {
+    font-size: 13px;
+    color: #64748b;
+    margin: 0;
+}
+#estimate-forsale-section.estimate-forsale {
+    display: none;
+    width: 100%;
+    max-width: none;
+    margin: 0 0 2rem;
+    padding: 0.5rem 16px 1rem;
+    box-sizing: border-box;
+}
+#thirdMain.serik-eval-layout > #estimate-forsale-section.estimate-forsale {
+    width: 100%;
+    max-width: none;
+}
+#estimate-forsale-section.estimate-forsale.is-visible {
+    display: block;
+}
+@media (min-width: 576px) {
+    #estimate-forsale-section.estimate-forsale {
+        padding-left: 24px;
+        padding-right: 24px;
+    }
+}
+@media (min-width: 1200px) {
+    #estimate-forsale-section.estimate-forsale {
+        padding-left: 32px;
+        padding-right: 32px;
+    }
+}
+.estimate-forsale__title {
+    margin: 0;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+.estimate-forsale__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.85rem;
+    padding: 0 2px;
+}
+.estimate-forsale__nav {
+    display: flex;
+    gap: 0.4rem;
+}
+.estimate-forsale__nav-btn {
+    width: 36px;
+    height: 36px;
+    border: 1px solid #c9d7e8;
+    border-radius: 999px;
+    background: #fff;
+    color: #0255a1;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.estimate-forsale__nav-btn:hover {
+    border-color: #0255a1;
+    background: #f3f7fc;
+}
+.estimate-forsale__nav-btn.swiper-button-disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+.estimate-forsale__swiper {
+    width: 100%;
+    overflow: hidden;
+    padding-bottom: 0.25rem;
+}
+.estimate-forsale__swiper .swiper-slide {
+    height: auto;
+}
+.estimate-forsale__card {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: #fff;
+    border: 1px solid #d7e3f0;
+    border-radius: 10px;
+    overflow: hidden;
+    text-decoration: none;
+    color: inherit;
+    transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.estimate-forsale__card:hover {
+    border-color: #0255a1;
+    box-shadow: 0 8px 20px rgba(2, 85, 161, 0.12);
+    color: inherit;
+    text-decoration: none;
+}
+.estimate-forsale__media {
+    position: relative;
+    aspect-ratio: 16 / 10;
+    background: #e8eef5;
+    overflow: hidden;
+}
+.estimate-forsale__media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+.estimate-forsale__badge {
+    position: absolute;
+    left: 8px;
+    top: 8px;
+    padding: 0.15rem 0.45rem;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    background: #0255a1;
+    color: #fff;
+}
+.estimate-forsale__body {
+    padding: 0.65rem 0.75rem 0.8rem;
+}
+.estimate-forsale__price {
+    margin: 0 0 0.25rem;
+    font-size: 15px;
+    font-weight: 700;
+    color: #0b4c9f;
+}
+.estimate-forsale__addr {
+    margin: 0 0 0.35rem;
+    font-size: 12.5px;
+    line-height: 1.35;
+    color: #1e293b;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.estimate-forsale__meta {
+    margin: 0;
+    font-size: 11.5px;
+    color: #64748b;
+}
+.estimate-meta {
+    font-size: 12.5px;
+    color: #475569;
+    margin: 0.55rem 0 0;
+}
+.estimate-basis {
+    display: inline-block;
+    margin: 0 0 0.85rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    background: #dbeafe;
+    color: #0b4c9f;
+}
+.estimate-basis.is-asking {
+    background: #ffedd5;
+    color: #9a3412;
+}
+@media (max-width: 767.98px) {
+    .estimate-scale__marks { gap: 0.25rem; }
+    .estimate-scale__value { font-size: 12px; }
+    .estimate-scale__mark.is-mid .estimate-scale__value { font-size: 14px; }
+    .estimate-history__table { display: block; overflow-x: auto; }
 }
 
 
@@ -493,10 +895,10 @@ $faqs = collect([
 
 
 
-<section id="thirdMain">
 @php
     $isFreeHomeEvaluationPage = request()->is('free-home-evaluation') || request()->is('evaluation');
 @endphp
+<section id="thirdMain" @class(['serik-eval-layout' => $isFreeHomeEvaluationPage])>
 @if ($isFreeHomeEvaluationPage)
 <style>
 .serik-sell-offer-wrap {
@@ -641,7 +1043,7 @@ $faqs = collect([
 @endif
         <div class="container py-5">
   {!! Theme::partial('shortcode-heading', ['shortcode' => $shortcode]) !!}
-            <div class="row">
+            <div class="row g-4 align-items-start">
             
                 <!-- LEFT FORM -->
                 <div class="col-lg-8">
@@ -661,36 +1063,36 @@ $faqs = collect([
                         <div class="col-md-3">
                             <label>Bedroom</label>
                             <div class="counter">
-                            <button>-</button>
-                            <input type="text" id="bedrooms" value="4">
-                            <button>+</button>
+                            <button type="button">-</button>
+                            <input type="text" id="bedrooms" value="" placeholder="—" inputmode="numeric">
+                            <button type="button">+</button>
                             </div>
                         </div>
                         
                         <div class="col-md-3">
                             <label>Partial Bedroom</label>
                             <div class="counter">
-                            <button>-</button>
-                            <input type="text" id="bedrooms-below" value="0">
-                            <button>+</button>
+                            <button type="button">-</button>
+                            <input type="text" id="bedrooms-below" value="" placeholder="—" inputmode="numeric">
+                            <button type="button">+</button>
                             </div>
                         </div>
                         
                         <div class="col-md-3">
                             <label>Bathroom</label>
                             <div class="counter">
-                            <button>-</button>
-                            <input type="text" id="bathrooms" value="4">
-                            <button>+</button>
+                            <button type="button">-</button>
+                            <input type="text" id="bathrooms" value="" placeholder="—" inputmode="numeric">
+                            <button type="button">+</button>
                             </div>
                         </div>
                         
                         <div class="col-md-3">
                             <label>Garage</label>
                             <div class="counter">
-                            <button>-</button>
-                            <input type="text" id="garage" value="2">
-                            <button>+</button>
+                            <button type="button">-</button>
+                            <input type="text" id="garage" value="" placeholder="—" inputmode="numeric">
+                            <button type="button">+</button>
                             </div>
                         </div>
                         
@@ -717,12 +1119,16 @@ $faqs = collect([
                         <div class="col-md-4">
                             <label>Property Type</label>
                             <select class="form-select" id="property-type">
+                                <option value="">Select type</option>
                                 <option value="Detached">Detached</option>
                                 <option value="Semi-Detached">Semi Detached</option>
                                 <option value="Att/Row/Townhouse">Freehold Townhouse</option>
                                 <option value="Condo Townhouse">Condo Townhouse</option>
                                 <option value="Condo Apartment">Condo Apartment</option>
                                 <option value="Duplex">Duplex</option>
+                                <option value="Land">Land</option>
+                                <option value="Farm">Farm</option>
+                                <option value="Vacant Land">Vacant Land</option>
                             </select>
                         </div>
                     
@@ -766,13 +1172,20 @@ $faqs = collect([
   </div>
                 
                 </div>
-                
-                
-                
-                
-                
             </div>
-            
+
+            <div id="estimate-forsale-section" class="estimate-forsale container-fluid" aria-live="polite" hidden>
+                <div class="estimate-forsale__head">
+                    <h3 class="estimate-forsale__title">Similar homes for sale nearby</h3>
+                    <div class="estimate-forsale__nav">
+                        <button type="button" class="estimate-forsale__nav-btn estimate-forsale-prev" aria-label="Previous homes">‹</button>
+                        <button type="button" class="estimate-forsale__nav-btn estimate-forsale-next" aria-label="Next homes">›</button>
+                    </div>
+                </div>
+                <div class="swiper estimate-forsale__swiper" id="estimate-forsale-swiper">
+                    <div class="swiper-wrapper" id="estimate-forsale-track"></div>
+                </div>
+            </div>
             
             <!-- ================= HERO ================= -->
 <section class="srk-hero py-5 text-center">
@@ -1005,32 +1418,37 @@ function isAboutUsPage() {
 }
 
 function isEstimatePage() {
-    return window.location.pathname === '/free-home-evaluation' || window.location.pathname === '/evaluation';
+    const path = (window.location.pathname || '').replace(/\/+$/, '') || '/';
+    return path === '/free-home-evaluation' || path === '/evaluation';
 }
 
 function isFeedbackePage() {
     return window.location.pathname === '/feedback';
 }
 
+function serikHideEl(id) {
+    const el = document.getElementById(id);
+    if (el) {
+        el.style.display = 'none';
+    }
+}
 
 if (isAboutUsPage() || isFeedbackePage() ) {
-    document.getElementById("formMain").style.display = "none";
-    document.getElementById("thirdMain").style.display = "none";
-    document.getElementById("contactMain").style.display = "none";
-} else if(isHomePage()) {
-    document.getElementById("secondMain").style.display = "none";
-    document.getElementById("formMain").style.display = "none";
-     document.getElementById("thirdMain").style.display = "none";
-}else if(isEstimatePage()) {
-   // alert("hello");
-    document.getElementById("secondMain").style.display = "none";
-    document.getElementById("formMain").style.display = "none";
-    document.getElementById("contactMain").style.display = "none";
-}else{
-    document.getElementById("secondMain").style.display = "none";
-    document.getElementById("thirdMain").style.display = "none";
-     document.getElementById("contactMain").style.display = "none";
-    
+    serikHideEl('formMain');
+    serikHideEl('thirdMain');
+    serikHideEl('contactMain');
+} else if (isHomePage()) {
+    serikHideEl('secondMain');
+    serikHideEl('formMain');
+    serikHideEl('thirdMain');
+} else if (isEstimatePage()) {
+    serikHideEl('secondMain');
+    serikHideEl('formMain');
+    serikHideEl('contactMain');
+} else {
+    serikHideEl('secondMain');
+    serikHideEl('thirdMain');
+    serikHideEl('contactMain');
 }
 
 // After showing/hiding contact sections, load CAPTCHA once then render visible widgets.
@@ -1049,6 +1467,9 @@ document.querySelectorAll('.counter').forEach(function(counter) {
     const input = counter.querySelector('input');
     const btnMinus = counter.querySelector('button:first-child');
     const btnPlus = counter.querySelector('button:last-child');
+    if (!input || !btnMinus || !btnPlus) {
+        return;
+    }
 
     btnMinus.addEventListener('click', function(e) {
         e.preventDefault();
@@ -1065,12 +1486,7 @@ document.querySelectorAll('.counter').forEach(function(counter) {
     });
 });
 
-
-
-
-
-
-document.addEventListener("DOMContentLoaded", function () {
+function serikInitHomeEvalAddressSuggest() {
 
     /**
      * Format MLS living-area ranges for display only.
@@ -1103,9 +1519,81 @@ document.addEventListener("DOMContentLoaded", function () {
     const resultBox = document.getElementById("estimate-result");
     const estimateBtn = document.getElementById("get-estimate-btn");
     const sqftInput = document.getElementById("sqft");
+    const forSaleSection = document.getElementById("estimate-forsale-section");
+    const forSaleTrack = document.getElementById("estimate-forsale-track");
+    let forSaleSwiper = null;
 
     if (!input || !suggestionBox) {
         return;
+    }
+
+    function clearForSaleCarousel() {
+        if (forSaleSwiper) {
+            try { forSaleSwiper.destroy(true, true); } catch (e) {}
+            forSaleSwiper = null;
+        }
+        if (forSaleTrack) {
+            forSaleTrack.innerHTML = '';
+        }
+        if (forSaleSection) {
+            forSaleSection.classList.remove('is-visible');
+            forSaleSection.hidden = true;
+        }
+    }
+
+    function renderForSaleCarousel(listings) {
+        clearForSaleCarousel();
+        const forSale = Array.isArray(listings) ? listings : [];
+        if (!forSaleSection || !forSaleTrack || !forSale.length) {
+            return;
+        }
+
+        forSaleTrack.innerHTML = forSale.slice(0, 12).map((p) => {
+            const href = escapeHtml(p.url || '#');
+            const img = escapeHtml(p.image || '');
+            const addr = escapeHtml(p.address || '');
+            const price = p.price != null ? money(p.price) : '—';
+            const beds = p.beds != null ? escapeHtml(p.beds) : '—';
+            const baths = p.baths != null ? escapeHtml(p.baths) : '—';
+            const sqft = p.sqft != null ? escapeHtml(p.sqft) + ' sqft' : '';
+            const dist = p.distance_km != null ? escapeHtml(p.distance_km) + ' km' : '';
+            const meta = [beds + ' bed', baths + ' bath', sqft, dist].filter(Boolean).join(' · ');
+            const status = escapeHtml(p.status || 'For Sale');
+            return `<div class="swiper-slide">
+                <a class="estimate-forsale__card js-property-modal-link" href="${href}">
+                    <div class="estimate-forsale__media">
+                        ${img ? `<img src="${img}" alt="" loading="lazy" width="400" height="250">` : ''}
+                        <span class="estimate-forsale__badge">${status}</span>
+                    </div>
+                    <div class="estimate-forsale__body">
+                        <p class="estimate-forsale__price">${price}</p>
+                        <p class="estimate-forsale__addr">${addr}</p>
+                        <p class="estimate-forsale__meta">${meta}</p>
+                    </div>
+                </a>
+            </div>`;
+        }).join('');
+
+        forSaleSection.hidden = false;
+        forSaleSection.classList.add('is-visible');
+
+        if (typeof Swiper === 'function') {
+            forSaleSwiper = new Swiper('#estimate-forsale-swiper', {
+                slidesPerView: 1.15,
+                spaceBetween: 14,
+                watchOverflow: true,
+                navigation: {
+                    nextEl: '#estimate-forsale-section .estimate-forsale-next',
+                    prevEl: '#estimate-forsale-section .estimate-forsale-prev',
+                },
+                breakpoints: {
+                    576: { slidesPerView: 2.2, spaceBetween: 16 },
+                    768: { slidesPerView: 3, spaceBetween: 18 },
+                    1200: { slidesPerView: 3, spaceBetween: 20 },
+                    1400: { slidesPerView: 4, spaceBetween: 20 },
+                },
+            });
+        }
     }
 
     if (sqftInput && sqftInput.value) {
@@ -1121,6 +1609,9 @@ document.addEventListener("DOMContentLoaded", function () {
     let results = [];
     let selectedListing = null;
     let suggestAbort = null;
+    let suggestSeq = 0;
+    let ambiguousSuggestions = [];
+    let enrichAbort = null;
 
     function money(value) {
         return new Intl.NumberFormat('en-CA', {
@@ -1137,14 +1628,110 @@ document.addEventListener("DOMContentLoaded", function () {
         }
         const want = String(value || '').trim().toLowerCase();
         if (!want) {
+            propertyType.value = '';
             return;
         }
         for (const option of propertyType.options) {
             const opt = option.value.trim().toLowerCase();
+            if (!opt) continue;
             if (opt === want || opt.replace(/\s+/g, '') === want.replace(/\s+/g, '') || want.indexOf(opt) === 0 || opt.indexOf(want) === 0) {
                 propertyType.value = option.value;
                 return;
             }
+        }
+        // Unknown MLS subtype — keep blank rather than a wrong default.
+        propertyType.value = '';
+    }
+
+    function setFieldValue(id, value, { allowZero = true } = {}) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (value === null || value === undefined || value === '') {
+            el.value = '';
+            return;
+        }
+        if (!allowZero && (value === 0 || value === '0')) {
+            el.value = '';
+            return;
+        }
+        el.value = String(value);
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[ch]));
+    }
+
+    let lastDomBaseline = 45;
+    let lastDomEstimate = 0;
+
+    function renderListingHistory(history, address) {
+        const rows = Array.isArray(history) ? history : [];
+        if (!rows.length) {
+            return `<div class="estimate-history"><h4>Listing History</h4><p class="estimate-history__empty">No prior MLS events found for this address yet.</p></div>`;
+        }
+        const sub = address
+            ? `<p class="estimate-history__sub">Buy/sell/lease history for <strong>${escapeHtml(address)}</strong> only (this unit)</p>`
+            : '';
+        const body = rows.map((h) => {
+            const start = h.date_start || h.date || '—';
+            const end = h.date_end || '—';
+            const event = h.event || h.status || 'Update';
+            const listingId = h.listing_id || h.mls || '—';
+            const priceLabel = h.price != null ? money(h.price) : '—';
+            return `<tr>
+                <td>${escapeHtml(start)}</td>
+                <td>${escapeHtml(end)}</td>
+                <td class="eh-price">${priceLabel}</td>
+                <td class="eh-event">${escapeHtml(event)}</td>
+                <td>${escapeHtml(listingId)}</td>
+            </tr>`;
+        }).join('');
+        return `<div class="estimate-history">
+            <h4>Listing History</h4>
+            ${sub}
+            <table class="estimate-history__table">
+                <thead><tr><th>Date Start</th><th>Date End</th><th>Price</th><th>Event</th><th>Listing ID</th></tr></thead>
+                <tbody>${body}</tbody>
+            </table>
+        </div>`;
+    }
+
+    function predictDomDays(listPrice) {
+        const base = Number(lastDomBaseline) || 45;
+        const mid = Number(lastDomEstimate) || 0;
+        if (!mid || !listPrice || listPrice <= 0) {
+            return base;
+        }
+        const ratio = listPrice / mid;
+        const days = Math.round(base * Math.pow(ratio, 2.4));
+        return Math.max(5, Math.min(180, days));
+    }
+
+    function domPinPercent(days) {
+        // Map days onto Fast(7) → 20 → 60 → Very Slow(120)
+        const marks = [7, 20, 60, 120];
+        const d = Math.max(marks[0], Math.min(marks[3], Number(days) || marks[1]));
+        if (d <= marks[1]) {
+            return ((d - marks[0]) / (marks[1] - marks[0])) * 33.3;
+        }
+        if (d <= marks[2]) {
+            return 33.3 + ((d - marks[1]) / (marks[2] - marks[1])) * 33.3;
+        }
+        return 66.6 + ((d - marks[2]) / (marks[3] - marks[2])) * 33.4;
+    }
+
+    function updateDomGauge(listPrice) {
+        const pin = resultBox && resultBox.querySelector('.estimate-dom__pin');
+        const daysLabel = resultBox && resultBox.querySelector('[data-dom-days]');
+        if (!pin) {
+            return;
+        }
+        const days = predictDomDays(listPrice);
+        pin.style.left = `${domPinPercent(days).toFixed(2)}%`;
+        if (daysLabel) {
+            daysLabel.textContent = `${days} days`;
         }
     }
 
@@ -1154,46 +1741,236 @@ document.addEventListener("DOMContentLoaded", function () {
         }
         resultBox.classList.add('is-visible');
         if (!payload || !payload.ok) {
+            clearForSaleCarousel();
             resultBox.classList.add('is-error');
-            resultBox.innerHTML = `<p class="estimate-note">${payload && payload.message ? payload.message : 'No estimate available yet.'}</p>`;
+            ambiguousSuggestions = Array.isArray(payload && payload.suggestions) ? payload.suggestions : [];
+            const suggestionHtml = ambiguousSuggestions.length
+                ? `<ul class="estimate-pick-list">${ambiguousSuggestions.map((s, idx) => {
+                    const addr = String(s.address || '');
+                    return `<li><button type="button" class="estimate-pick-btn" data-pick-index="${idx}">${escapeHtml(addr)}</button></li>`;
+                }).join('')}</ul>`
+                : '';
+            const history = Array.isArray(payload && payload.listing_history) ? payload.listing_history : [];
+            const historyHtml = renderListingHistory(history, payload && payload.address);
+            resultBox.innerHTML = `<p class="estimate-note">${escapeHtml((payload && payload.message) || 'No estimate available yet.')}</p>${suggestionHtml}${historyHtml}`;
             return;
         }
+        ambiguousSuggestions = [];
         resultBox.classList.remove('is-error');
-        const cityLine = payload.city ? ` in ${payload.city}` : '';
-        const compsLine = payload.comps
-            ? `Based on ${payload.comps} comparable sale${payload.comps === 1 ? '' : 's'}${cityLine}.`
-            : 'Based on this property’s current market data.';
+        const isAsking = payload.basis === 'asking_price_indication';
+        const history = Array.isArray(payload.listing_history) ? payload.listing_history : [];
+        const basisLabel = isAsking ? 'Active asking prices (not sold)' : 'Verified sold comparables';
+        const mid = Number(payload.estimate) || 0;
+        const low = Number(payload.low) || mid;
+        const high = Number(payload.high) || mid;
+        const dom = payload.days_on_market || {};
+        lastDomEstimate = mid;
+        lastDomBaseline = Number(dom.baseline_days || dom.predicted_days || 45);
+        const predicted = Number(dom.predicted_days || lastDomBaseline);
+        const pinLeft = domPinPercent(predicted).toFixed(2);
+
+        const historyHtml = renderListingHistory(history, payload.address || (payload.subject && payload.subject.address));
+
         resultBox.innerHTML = `
-            <div>Estimated home value</div>
-            <div class="estimate-price">${money(payload.estimate)}</div>
-            <div class="estimate-range">${money(payload.low)} – ${money(payload.high)}</div>
-            <p class="estimate-note">${compsLine}</p>
+            <span class="estimate-basis ${isAsking ? 'is-asking' : ''}">${escapeHtml(basisLabel)}</span>
+            <div class="estimate-scale" aria-label="Estimated value range">
+                <div class="estimate-scale__rail" aria-hidden="true"></div>
+                <div class="estimate-scale__marks">
+                    <div class="estimate-scale__mark is-low">
+                        <span class="estimate-scale__label">Low</span>
+                        <span class="estimate-scale__value">${money(low)}</span>
+                    </div>
+                    <div class="estimate-scale__mark is-mid">
+                        <span class="estimate-scale__label">Mid</span>
+                        <span class="estimate-scale__value">${money(mid)}</span>
+                    </div>
+                    <div class="estimate-scale__mark is-high">
+                        <span class="estimate-scale__label">High</span>
+                        <span class="estimate-scale__value">${money(high)}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="estimate-dom">
+                <div class="estimate-dom__title">
+                    <span>Predicted Days on Market if Listed at</span>
+                    <div class="estimate-dom__controls">
+                        <input type="text" class="estimate-dom__input" id="estimate-dom-price" value="${escapeHtml(money(mid))}" inputmode="numeric" aria-label="List price for days on market">
+                        <strong data-dom-days>${predicted} days</strong>
+                    </div>
+                </div>
+                <div class="estimate-dom__track-wrap">
+                    <div class="estimate-dom__pin" style="left:${pinLeft}%;" aria-hidden="true"></div>
+                    <div class="estimate-dom__track"></div>
+                    <div class="estimate-dom__labels">
+                        <span>Fast</span>
+                        <span>20 days</span>
+                        <span>60 days</span>
+                        <span>Very Slow</span>
+                    </div>
+                </div>
+            </div>
+            <div class="estimate-beta">${escapeHtml(payload.disclaimer || 'This automated estimate is a starting point only — not a certified appraisal.')}</div>
+            ${historyHtml}
         `;
+
+        const domInput = resultBox.querySelector('#estimate-dom-price');
+        if (domInput) {
+            domInput.addEventListener('input', function () {
+                const raw = Number(String(this.value || '').replace(/[^0-9.]/g, '')) || 0;
+                updateDomGauge(raw);
+            });
+            domInput.addEventListener('blur', function () {
+                const raw = Number(String(this.value || '').replace(/[^0-9.]/g, '')) || mid;
+                this.value = money(Math.round(raw));
+                updateDomGauge(raw);
+            });
+        }
+
+        renderForSaleCarousel(payload.for_sale);
         resultBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 
+    let lastSuggestKeyword = '';
+
+    function normalizeAddr(value) {
+        return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    }
+
+    function applySuggestionToForm(data, { keepAddress = true } = {}) {
+        if (!data) {
+            return;
+        }
+        selectedListing = data;
+        if (keepAddress) {
+            setFieldValue('prop-address', data.UnparsedAddress || '');
+        }
+        setFieldValue('bedrooms', data.BedroomsAboveGrade, { allowZero: true });
+        setFieldValue('bedrooms-below', data.BedroomsBelowGrade, { allowZero: true });
+        setFieldValue('bathrooms', data.BathroomsTotalInteger, { allowZero: true });
+        setFieldValue('garage', data.ParkingTotal, { allowZero: true });
+        const sqftRaw = data.LivingAreaRange;
+        setFieldValue('sqft', sqftRaw ? formatSquareFootageDisplay(sqftRaw) : '');
+        setFieldValue('tax', data.TaxAnnualAmount, { allowZero: false });
+        matchPropertyType(data.PropertySubType);
+        setFieldValue('lot-width', data.LotWidth, { allowZero: false });
+        setFieldValue('lot-depth', data.LotDepth, { allowZero: false });
+    }
+
+    function enrichSelectedListing(data) {
+        const listingKey = String((data && data.ListingKey) || '').trim();
+        if (!listingKey) {
+            return;
+        }
+        if (enrichAbort) {
+            enrichAbort.abort();
+        }
+        enrichAbort = new AbortController();
+        const selectedKey = listingKey;
+        fetch(`/api/v1/propertiesName?keyword=${encodeURIComponent(listingKey)}`, { signal: enrichAbort.signal })
+            .then((res) => res.json())
+            .then((list) => {
+                if (!selectedListing || String(selectedListing.ListingKey || '') !== selectedKey) {
+                    return;
+                }
+                const rich = Array.isArray(list) && list[0] ? list[0] : null;
+                if (!rich) {
+                    return;
+                }
+                applySuggestionToForm({
+                    ...data,
+                    ...rich,
+                    // Prefer non-empty facts; never wipe local beds/sqft with AMP nulls.
+                    BedroomsAboveGrade: (rich.BedroomsAboveGrade != null && rich.BedroomsAboveGrade !== '')
+                        ? rich.BedroomsAboveGrade : data.BedroomsAboveGrade,
+                    BedroomsBelowGrade: rich.BedroomsBelowGrade ?? data.BedroomsBelowGrade,
+                    BathroomsTotalInteger: (rich.BathroomsTotalInteger != null && rich.BathroomsTotalInteger !== '')
+                        ? rich.BathroomsTotalInteger : data.BathroomsTotalInteger,
+                    ParkingTotal: (rich.ParkingTotal != null && rich.ParkingTotal !== '')
+                        ? rich.ParkingTotal : data.ParkingTotal,
+                    LivingAreaRange: rich.LivingAreaRange || data.LivingAreaRange,
+                    PropertySubType: rich.PropertySubType || data.PropertySubType,
+                    TaxAnnualAmount: rich.TaxAnnualAmount ?? data.TaxAnnualAmount,
+                    LotWidth: rich.LotWidth ?? data.LotWidth,
+                    LotDepth: rich.LotDepth ?? data.LotDepth,
+                    UnparsedAddress: data.UnparsedAddress || rich.UnparsedAddress,
+                });
+            })
+            .catch((err) => {
+                if (err && err.name === 'AbortError') {
+                    return;
+                }
+            });
+    }
+
+    function selectSuggestion(data) {
+        if (!data) {
+            return;
+        }
+        clearTimeout(debounceTimer);
+        if (suggestAbort) {
+            suggestAbort.abort();
+        }
+        suggestSeq += 1;
+        applySuggestionToForm(data);
+        suggestionBox.innerHTML = "";
+        results = [data];
+        lastSuggestKeyword = String(data.UnparsedAddress || '').trim();
+        enrichSelectedListing(data);
+    }
+
+    function tryAutofillExactMatch(list) {
+        const typed = normalizeAddr(input.value);
+        if (!typed || !Array.isArray(list) || !list.length) {
+            return;
+        }
+        const exact = list.filter((item) => normalizeAddr(item.UnparsedAddress) === typed);
+        if (exact.length === 1) {
+            selectSuggestion(exact[0]);
+        }
+    }
+
     input.addEventListener("input", function () {
+        const keyword = this.value.trim();
+        // Keep autofilled facts while the selected address text is unchanged.
+        if (selectedListing && normalizeAddr(keyword) === normalizeAddr(selectedListing.UnparsedAddress)) {
+            return;
+        }
         selectedListing = null;
         clearTimeout(debounceTimer);
-        const keyword = this.value.trim();
-        if (keyword.length < 3) {
+        if (keyword.length < 1) {
             suggestionBox.innerHTML = "";
             results = [];
+            lastSuggestKeyword = '';
             return;
         }
 
         debounceTimer = setTimeout(() => {
+            if (keyword === lastSuggestKeyword && suggestionBox.childElementCount > 0) {
+                return;
+            }
+            lastSuggestKeyword = keyword;
             if (suggestAbort) {
                 suggestAbort.abort();
             }
             suggestAbort = new AbortController();
+            const seq = ++suggestSeq;
+            suggestionBox.innerHTML = '<div class="list-group-item text-muted">Searching addresses…</div>';
             fetch(`/api/v1/propertiesName?keyword=${encodeURIComponent(keyword)}`, { signal: suggestAbort.signal })
-                .then(res => res.json())
+                .then(async (res) => {
+                    const data = await res.json().catch(() => null);
+                    if (!res.ok) {
+                        throw new Error(res.status === 429 ? 'Too many searches — wait a moment.' : 'Address search failed.');
+                    }
+                    return data;
+                })
                 .then(data => {
+                    if (seq !== suggestSeq) {
+                        return;
+                    }
                     results = Array.isArray(data) ? data : [];
                     suggestionBox.innerHTML = "";
                     if (!results.length) {
-                        suggestionBox.innerHTML = `<div class="list-group-item">No matching listings</div>`;
+                        suggestionBox.innerHTML = '<div class="list-group-item">No matching listings</div>';
                         return;
                     }
                     results.forEach((item, index) => {
@@ -1203,73 +1980,125 @@ document.addEventListener("DOMContentLoaded", function () {
                         div.dataset.index = String(index);
                         suggestionBox.appendChild(div);
                     });
+                    // Exact single match (paste / full typed address) — fill form immediately.
+                    tryAutofillExactMatch(results);
                 })
                 .catch((err) => {
                     if (err && err.name === 'AbortError') {
                         return;
                     }
+                    if (seq !== suggestSeq) {
+                        return;
+                    }
                     results = [];
-                    suggestionBox.innerHTML = "";
+                    suggestionBox.innerHTML = '<div class="list-group-item text-danger">'
+                        + (err && err.message ? err.message : 'Address search failed. Try again.')
+                        + '</div>';
                 });
+        }, 120);
+    });
+
+    // mousedown fires before blur/input races that used to drop the click selection.
+    suggestionBox.addEventListener("mousedown", function (e) {
+        const item = e.target.closest('.suggestion-item');
+        if (!item) {
+            return;
+        }
+        e.preventDefault();
+        const data = results[item.dataset.index];
+        selectSuggestion(data);
+    });
+
+    input.addEventListener('blur', function () {
+        setTimeout(() => {
+            if (selectedListing) {
+                return;
+            }
+            tryAutofillExactMatch(results);
         }, 180);
     });
 
-    suggestionBox.addEventListener("click", function (e) {
-        if (!e.target.classList.contains("suggestion-item")) return;
-        const data = results[e.target.dataset.index];
-        if (!data) {
+    function runEstimate(addressOverride) {
+        const address = String(addressOverride || input.value || '').trim();
+        if (address.length < 3) {
+            showEstimate({ ok: false, message: 'Please enter a property address.' });
             return;
         }
-        selectedListing = data;
-        document.getElementById("prop-address").value = data.UnparsedAddress || '';
-        document.getElementById("bedrooms").value = data.BedroomsAboveGrade ?? 0;
-        document.getElementById("bedrooms-below").value = data.BedroomsBelowGrade ?? 0;
-        document.getElementById("bathrooms").value = data.BathroomsTotalInteger ?? 0;
-        document.getElementById("garage").value = data.ParkingTotal ?? 0;
-        document.getElementById("sqft").value = formatSquareFootageDisplay(data.LivingAreaRange ?? '0');
-        document.getElementById("tax").value = data.TaxAnnualAmount ?? '0';
-        matchPropertyType(data.PropertySubType);
-        document.getElementById("lot-width").value = data.LotWidth ?? '0';
-        document.getElementById("lot-depth").value = data.LotDepth ?? '0';
-        suggestionBox.innerHTML = "";
-    });
+        if (addressOverride) {
+            input.value = address;
+        }
+        if (estimateBtn) {
+            estimateBtn.disabled = true;
+            estimateBtn.textContent = 'Calculating...';
+        }
+        clearForSaleCarousel();
+        if (resultBox) {
+            resultBox.classList.add('is-visible');
+            resultBox.classList.remove('is-error');
+            resultBox.innerHTML = '<p class="estimate-note">Calculating your home value...</p>';
+        }
+        const params = new URLSearchParams({
+            address: address,
+            bedrooms: document.getElementById("bedrooms")?.value || '0',
+            bathrooms: document.getElementById("bathrooms")?.value || '0',
+            sqft: document.getElementById("sqft")?.value || '',
+            property_type: document.getElementById("property-type")?.value || '',
+            // Skip Groq on the critical path — numbers render faster; explanation is optional.
+            include_ai: '0'
+        });
+        fetch(`/api/v1/home-evaluation?${params.toString()}`)
+            .then(async (res) => {
+                const data = await res.json().catch(() => null);
+                if (res.status === 429) {
+                    return { ok: false, message: 'Too many evaluation requests. Please wait a minute and try again.' };
+                }
+                if (res.status === 422) {
+                    const first = data && data.errors ? Object.values(data.errors)[0] : null;
+                    return { ok: false, message: Array.isArray(first) ? first[0] : 'Please check the address and details.' };
+                }
+                return data || { ok: false, message: 'We could not calculate an estimate right now. Please try again.' };
+            })
+            .then(showEstimate)
+            .catch(() => showEstimate({ ok: false, message: 'We could not calculate an estimate right now. Please try again.' }))
+            .finally(() => {
+                if (estimateBtn) {
+                    estimateBtn.disabled = false;
+                    estimateBtn.textContent = 'Get Estimate';
+                }
+            });
+    }
+
+    if (resultBox) {
+        resultBox.addEventListener('click', function (e) {
+            const btn = e.target.closest('.estimate-pick-btn');
+            if (!btn) {
+                return;
+            }
+            const idx = Number(btn.getAttribute('data-pick-index'));
+            const picked = ambiguousSuggestions[idx];
+            const addr = picked && picked.address ? String(picked.address).trim() : btn.textContent.trim();
+            if (!addr) {
+                return;
+            }
+            selectedListing = null;
+            suggestionBox.innerHTML = '';
+            runEstimate(addr);
+        });
+    }
 
     if (form) {
         form.addEventListener("submit", function (e) {
             e.preventDefault();
-            const address = input.value.trim();
-            if (address.length < 3) {
-                showEstimate({ ok: false, message: 'Please enter a property address.' });
-                return;
-            }
-            if (estimateBtn) {
-                estimateBtn.disabled = true;
-                estimateBtn.textContent = 'Calculating...';
-            }
-            if (resultBox) {
-                resultBox.classList.add('is-visible');
-                resultBox.classList.remove('is-error');
-                resultBox.innerHTML = '<p class="estimate-note">Calculating your home value...</p>';
-            }
-            const params = new URLSearchParams({
-                address: address,
-                bedrooms: document.getElementById("bedrooms")?.value || '0',
-                bathrooms: document.getElementById("bathrooms")?.value || '0',
-                property_type: document.getElementById("property-type")?.value || ''
-            });
-            fetch(`/api/v1/home-evaluation?${params.toString()}`)
-                .then(res => res.json())
-                .then(showEstimate)
-                .catch(() => showEstimate({ ok: false, message: 'We could not calculate an estimate right now. Please try again.' }))
-                .finally(() => {
-                    if (estimateBtn) {
-                        estimateBtn.disabled = false;
-                        estimateBtn.textContent = 'Get Estimate';
-                    }
-                });
+            runEstimate();
         });
     }
+}
 
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', serikInitHomeEvalAddressSuggest);
+} else {
+    serikInitHomeEvalAddressSuggest();
+}
 
 // FAQ toggle (namespaced)
 document.querySelectorAll(".srk-faq-q").forEach(q => {
@@ -1277,9 +2106,6 @@ document.querySelectorAll(".srk-faq-q").forEach(q => {
     const a = q.nextElementSibling;
     a.style.display = (a.style.display === "block") ? "none" : "block";
   });
-});
-
-
 });
 </script>
 <script>

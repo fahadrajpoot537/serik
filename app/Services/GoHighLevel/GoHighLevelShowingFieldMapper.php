@@ -712,6 +712,10 @@ class GoHighLevelShowingFieldMapper
         ];
     }
 
+    /**
+     * Normalize to E.164 for GHL PHONE fields. Invalid / extension-junk values
+     * return null so callers omit the field (GHL rejects bad PHONE with HTTP 400).
+     */
     public function normalizePhone(?string $phone): ?string
     {
         if ($phone === null) {
@@ -721,16 +725,20 @@ class GoHighLevelShowingFieldMapper
         if ($digits === '') {
             return null;
         }
-        if (strlen($digits) === 10) {
+
+        // North American Numbering Plan
+        if (strlen($digits) === 10 && $digits[0] !== '0' && $digits[0] !== '1') {
             return '+1' . $digits;
         }
-        if (strlen($digits) === 11 && str_starts_with($digits, '1')) {
+        if (strlen($digits) === 11 && str_starts_with($digits, '1') && $digits[1] !== '0' && $digits[1] !== '1') {
             return '+' . $digits;
         }
-        if (str_starts_with($phone, '+')) {
-            return '+' . ltrim($digits, '+');
+
+        // Other E.164: 8–15 digits, must have looked international (leading +) or clear country code.
+        if (strlen($digits) >= 8 && strlen($digits) <= 15 && str_starts_with(trim($phone), '+')) {
+            return '+' . $digits;
         }
 
-        return '+' . $digits;
+        return null;
     }
 }

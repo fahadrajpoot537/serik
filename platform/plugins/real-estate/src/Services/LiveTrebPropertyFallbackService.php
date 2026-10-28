@@ -253,15 +253,36 @@ class LiveTrebPropertyFallbackService
 
         $unit = trim((string) ($parsed['unit_number'] ?? ''));
         $escapedNumber = str_replace("'", "''", $streetNumber);
-        $escapedName = str_replace("'", "''", $streetName);
-        $filter = "StreetNumber eq '{$escapedNumber}' and startswith(StreetName,'{$escapedName}')";
+        $nameCandidates = $this->streetNameAmpPrefixes($streetName);
+        $fetchTop = max(5, min(25, $limit * 2));
+        $hits = [];
 
-        if ($unit !== '') {
-            $escapedUnit = str_replace("'", "''", $unit);
-            $filter .= " and UnitNumber eq '{$escapedUnit}'";
+        $city = trim((string) ($parsed['municipality'] ?? ''));
+
+        foreach ($nameCandidates as $nameCandidate) {
+            $escapedName = str_replace("'", "''", $nameCandidate);
+            $filter = "StreetNumber eq '{$escapedNumber}' and startswith(StreetName,'{$escapedName}')";
+
+            if ($unit !== '') {
+                $escapedUnit = str_replace("'", "''", $unit);
+                $filter .= " and UnitNumber eq '{$escapedUnit}'";
+            }
+
+            if ($city !== '') {
+                $escapedCity = str_replace("'", "''", $city);
+                $hits = $this->fetchAmpPropertyHits($filter . " and City eq '{$escapedCity}'", $fetchTop);
+                if ($hits !== []) {
+                    break;
+                }
+                // City was typed — do not broaden to other municipalities (slow + wrong hits).
+                continue;
+            }
+
+            $hits = $this->fetchAmpPropertyHits($filter, $fetchTop);
+            if ($hits !== []) {
+                break;
+            }
         }
-
-        $hits = $this->fetchAmpPropertyHits($filter, max(5, min(25, $limit * 2)));
 
         $ids = [];
 
@@ -296,6 +317,46 @@ class LiveTrebPropertyFallbackService
         }
 
         return $ids;
+    }
+
+    /**
+     * AMP StreetName prefixes to try — exact first, then shorter prefixes for typos
+     * like "barret" → "barre" matching "BARRETT".
+     *
+     * @return list<string>
+     */
+    protected function streetNameAmpPrefixes(string $streetName): array
+    {
+        $streetName = trim($streetName);
+        if ($streetName === '') {
+            return [];
+        }
+
+        $candidates = [$streetName];
+        $len = mb_strlen($streetName);
+        if ($len >= 6) {
+            $candidates[] = mb_substr($streetName, 0, $len - 1);
+            $candidates[] = mb_substr($streetName, 0, 5);
+        }
+
+        $out = [];
+        $seen = [];
+        foreach ($candidates as $candidate) {
+            $candidate = trim($candidate);
+            if ($candidate === '' || mb_strlen($candidate) < 4) {
+                continue;
+            }
+            foreach (array_unique([$candidate, mb_strtoupper($candidate)]) as $variant) {
+                $key = mb_strtolower($variant);
+                if (isset($seen[$key])) {
+                    continue;
+                }
+                $seen[$key] = true;
+                $out[] = $variant;
+            }
+        }
+
+        return $out;
     }
 
     protected function ingestByParsedAddress(array $parsed): ?Property
@@ -364,7 +425,8 @@ class LiveTrebPropertyFallbackService
 
         return $this->withLiveFallbackEnabled(function () use ($url, &$unique) {
             foreach (['live', 'historical'] as $profile) {
-                $response = TrebPropertyHelper::ampRequest($url, 12, 2, 'liveTrebAddressSearch', null, $profile);
+                // Address typeahead: fail fast — 6s timeout, 1 retry.
+                $response = TrebPropertyHelper::ampRequest($url, 6, 1, 'liveTrebAddressSearch', null, $profile);
 
                 if (! $response['ok']) {
                     continue;
@@ -382,6 +444,11 @@ class LiveTrebPropertyFallbackService
                     }
 
                     $unique[$key] = $item;
+                }
+
+                // Live board already answered — skip historical for snappy suggest.
+                if ($unique !== [] && $profile === 'live') {
+                    break;
                 }
             }
 

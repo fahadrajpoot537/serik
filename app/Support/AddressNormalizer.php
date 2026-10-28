@@ -288,25 +288,37 @@ final class AddressNormalizer
     public static function scoreAddress(string $address, array $parsed, ?string $mlsStatus = null): int
     {
         $hay = ' ' . self::fold($address) . ' ';
+        // Street tokens must match the street line only — never the city
+        // ("47 Brock Street" must not match "47 Furniss Street, Brock").
+        $commaPos = strpos($address, ',');
+        $streetLine = $commaPos === false ? $address : substr($address, 0, $commaPos);
+        $streetHay = ' ' . self::fold($streetLine) . ' ';
+
         $number = self::fold((string) ($parsed['street_number'] ?? ''));
         $tokens = $parsed['significant_tokens'] ?? [];
         if ($number === '' || $tokens === []) {
             return 0;
         }
 
-        if (! preg_match('/\b' . preg_quote($number, '/') . '\b/', $hay)) {
+        if (! preg_match('/\b' . preg_quote($number, '/') . '\b/', $streetHay)) {
             return 0;
         }
 
         $missing = 0;
         $fuzzy = 0;
         $exactTokens = 0;
+        $prefixTokens = 0;
         foreach ($tokens as $token) {
-            if (preg_match('/\b' . preg_quote($token, '/') . '\b/', $hay)) {
+            if (preg_match('/\b' . preg_quote($token, '/') . '\b/', $streetHay)) {
                 $exactTokens++;
                 continue;
             }
-            if (self::fuzzyTokenInHaystack($token, $hay)) {
+            // Typeahead: "Br" / "Bro" / "Broad" must match "Broadway".
+            if (self::prefixTokenInHaystack($token, $streetHay)) {
+                $prefixTokens++;
+                continue;
+            }
+            if (self::fuzzyTokenInHaystack($token, $streetHay)) {
                 $fuzzy++;
                 continue;
             }
@@ -317,28 +329,48 @@ final class AddressNormalizer
             return 0;
         }
 
+        // Civic + street name must sit together on the street line.
+        // Skip when a fuzzy typo matched ("Isabela" vs "Isabella") — tokens already validated.
+        $phrase = self::fold(trim(($parsed['street_number'] ?? '') . ' ' . ($parsed['street_name'] ?? '')));
+        $phraseHit = $phrase !== '' && str_contains($streetHay, $phrase);
+        if ($phrase !== '' && ! $phraseHit && $fuzzy === 0) {
+            return 0;
+        }
+
         $suffixNorm = (string) ($parsed['street_suffix_normalized'] ?? '');
-        $suffixHit = $suffixNorm === '' || self::addressHasSuffix($hay, $suffixNorm);
+        $suffixHit = $suffixNorm === '' || self::addressHasSuffix($streetHay, $suffixNorm)
+            || self::addressHasSuffix($hay, $suffixNorm);
+        // "Barrett Crescent" must not match "Barrett Street".
+        if ($suffixNorm !== '' && ! self::addressHasSuffix($streetHay, $suffixNorm)
+            && ! self::addressHasSuffix($hay, $suffixNorm)) {
+            return 0;
+        }
 
         $municipality = self::fold((string) ($parsed['municipality'] ?? ''));
         $cityHit = $municipality === '' || preg_match('/\b' . preg_quote($municipality, '/') . '\b/', $hay);
+        // "52 Barrett Crescent, London" must not match Barrie. Street-only lines
+        // (no municipality tokens after the street) still match when city is unknown.
+        if ($municipality !== '' && ! $cityHit && self::haystackNamesMunicipality($hay)) {
+            return 0;
+        }
 
         $unit = self::fold((string) ($parsed['unit_number'] ?? $parsed['unit'] ?? ''));
-        $unitHit = $unit === '' || preg_match('/\b' . preg_quote($unit, '/') . '\b/', $hay);
+        $unitHit = $unit === '' || preg_match('/\b' . preg_quote($unit, '/') . '\b/', $streetHay);
         if ($unit !== '' && ! $unitHit) {
             return 0;
         }
 
-        $phrase = self::fold(trim(($parsed['street_number'] ?? '') . ' ' . ($parsed['street_name'] ?? '')));
-        $phraseHit = $phrase !== '' && str_contains($hay, $phrase);
-
         $score = 0;
-        if ($phraseHit && $suffixHit && $cityHit && $unitHit && $fuzzy === 0) {
+        $allExact = $exactTokens === count($tokens) && $prefixTokens === 0 && $fuzzy === 0;
+        if ($phraseHit && $suffixHit && $cityHit && $unitHit && $allExact) {
             $score = 10000;
-        } elseif ($exactTokens === count($tokens) && $cityHit && $fuzzy === 0) {
+        } elseif ($allExact && $cityHit) {
             $score = 8000;
-        } elseif ($exactTokens === count($tokens) && $fuzzy === 0) {
+        } elseif ($allExact) {
             $score = 7000;
+        } elseif ($prefixTokens > 0 && $missing === 0 && $fuzzy === 0) {
+            // Partial street while typing — still a valid suggestion match.
+            $score = 5500;
         } elseif ($fuzzy > 0 && $missing === 0) {
             $score = 5000;
         } else {
@@ -500,5 +532,62 @@ final class AddressNormalizer
         }
 
         return false;
+    }
+
+    /**
+     * True when a street-line word starts with the typed token ("b"/"bro" → broadway).
+     */
+    private static function prefixTokenInHaystack(string $token, string $foldedHaystack): bool
+    {
+        $token = trim($token);
+        if ($token === '' || mb_strlen($token) < 1) {
+            return false;
+        }
+
+        preg_match_all('/[a-z0-9]+/u', $foldedHaystack, $matches);
+        foreach ($matches[0] ?? [] as $word) {
+            if ($word === $token) {
+                return true;
+            }
+            if (mb_strlen($word) > mb_strlen($token) && str_starts_with($word, $token)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * True when a folded address haystack still carries a city/area token after the street.
+     * fold() strips commas, so we detect leftover alpha tokens beyond street/suffix/province.
+     */
+    private static function haystackNamesMunicipality(string $foldedHaystack): bool
+    {
+        $stop = array_merge(
+            array_keys(self::SUFFIX_ALIASES),
+            self::DIRECTIONALS,
+            self::PROVINCES,
+            ['canada', 'ca']
+        );
+        $stop = array_fill_keys($stop, true);
+
+        preg_match_all('/[a-z]+/u', $foldedHaystack, $matches);
+        $words = $matches[0] ?? [];
+        // Drop leading civic number tokens handled separately; scan remaining words.
+        $alpha = [];
+        foreach ($words as $word) {
+            if (isset($stop[$word])) {
+                continue;
+            }
+            // Postal residue like "n6e" / "l4n"
+            if (preg_match('/^[a-z]\d[a-z]?$/i', $word) || preg_match('/^\d[a-z]\d$/i', $word)) {
+                continue;
+            }
+            $alpha[] = $word;
+        }
+
+        // Street name tokens remain (e.g. barrett). A real city adds at least one more
+        // distinct alpha token (london / barrie / oxford…).
+        return count($alpha) >= 2;
     }
 }

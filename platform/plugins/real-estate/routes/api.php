@@ -130,8 +130,8 @@ Route::group([
         });
     });
 
-    Route::get('propertiesName', 'PropertyController@fetchProperties');
-    Route::get('home-evaluation', 'PropertyController@evaluateHome');
+    Route::get('propertiesName', 'PropertyController@fetchProperties')->middleware('throttle:60,1');
+    Route::get('home-evaluation', 'PropertyController@evaluateHome')->middleware('throttle:20,1');
     Route::get('testApi', 'PropertyController@testapi');
     Route::get('syncMissingDescriptions', 'PropertyController@syncMissingDescriptions');
     Route::get('sync-status', 'PropertyController@syncStatus');

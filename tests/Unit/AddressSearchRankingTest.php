@@ -101,6 +101,24 @@ class AddressSearchRankingTest extends TestCase
         $this->assertGreaterThan($intended, $queenSt);
     }
 
+    public function test_partial_street_typeahead_matches_full_street_name(): void
+    {
+        $address = '47 Broadway Avenue, Hamilton, Ontario';
+
+        foreach (['47 B', '47 Br', '47 Bro', '47 Broad', '47 Broadway'] as $query) {
+            $parsed = AddressNormalizer::parseQuery($query);
+            $this->assertNotNull($parsed, $query);
+            $this->assertTrue(
+                AddressNormalizer::addressMatches($address, $parsed),
+                'Expected typeahead match for: ' . $query
+            );
+        }
+
+        $wrongStreet = AddressNormalizer::parseQuery('47 King');
+        $this->assertNotNull($wrongStreet);
+        $this->assertFalse(AddressNormalizer::addressMatches($address, $wrongStreet));
+    }
+
     public function test_sort_rows_keeps_complete_address_first(): void
     {
         $parsed = AddressNormalizer::parseQuery('110 Queen Isabella Crescent, Vaughan');
