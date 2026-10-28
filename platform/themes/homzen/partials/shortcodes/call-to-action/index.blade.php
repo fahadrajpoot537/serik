@@ -3,8 +3,16 @@
 
     $ctaImage = static fn (string $file): string => SerikMediaUrl::toPublic($file);
     $ctaAltContext = trim(strip_tags((string) ($shortcode->title ?: $shortcode->subtitle ?: __('Free Home Evaluation'))));
+    // Matches prior JS hide rules: these pages only show secondMain1, not the heavy scroll gallery.
+    $skipCtaScrollGallery = request()->is('about-us')
+        || request()->is('free-home-evaluation')
+        || request()->is('evaluation')
+        || request()->is('appointment-scheduler');
+    $renderCtaSimpleBanner = $skipCtaScrollGallery;
+    $renderCtaScrollGallery = ! $skipCtaScrollGallery;
 @endphp
 
+@if ($renderCtaScrollGallery)
 <style>
     /* Layout wrapper */
     .page-wrapper {
@@ -89,8 +97,10 @@
         animation-play-state: paused;
     }
 </style>
+@endif
 
 
+@if ($renderCtaSimpleBanner)
 <section class="flat-section pt-0 flat-banner" id="secondMain1" style="padding-bottom:0px;">
     
     
@@ -121,9 +131,9 @@
     </div>
 
 </section>
+@endif
 
-
-
+@if ($renderCtaScrollGallery)
 <section class="flat-section pt-0 flat-banner" style="padding:0px;" id="formMain1">
     <div class="container-fluid">
         <div class="wrap-banner bg-surface" style="justify-content: normal;">
@@ -134,40 +144,40 @@
                         <!-- LEFT COLUMN (UP) -->
                         <div class="scroll-container">
                             <div class="scroll-track scroll-up">
-                                <img src="{{ $ctaImage('images-1.jfif') }}" alt="{{ img_alt(null, 'images-1.jfif', $ctaAltContext) }}">
-                                <img src="{{ $ctaImage('images-2.jfif') }}" alt="{{ img_alt(null, 'images-2.jfif', $ctaAltContext) }}">
-                                <img src="{{ $ctaImage('images-3.jfif') }}" alt="{{ img_alt(null, 'images-3.jfif', $ctaAltContext) }}">
+                                <img src="{{ $ctaImage('images-1.jfif') }}" alt="{{ img_alt(null, 'images-1.jfif', $ctaAltContext) }}" loading="lazy" decoding="async">
+                                <img src="{{ $ctaImage('images-2.jfif') }}" alt="{{ img_alt(null, 'images-2.jfif', $ctaAltContext) }}" loading="lazy" decoding="async">
+                                <img src="{{ $ctaImage('images-3.jfif') }}" alt="{{ img_alt(null, 'images-3.jfif', $ctaAltContext) }}" loading="lazy" decoding="async">
                     
                                 <!-- Duplicate for seamless loop -->
-                                <img src="{{ $ctaImage('images-1.jfif') }}" alt="{{ img_alt(null, 'images-1.jfif', $ctaAltContext) }}">
-                                <img src="{{ $ctaImage('images-2.jfif') }}" alt="{{ img_alt(null, 'images-2.jfif', $ctaAltContext) }}">
-                                <img src="{{ $ctaImage('images-3.jfif') }}" alt="{{ img_alt(null, 'images-3.jfif', $ctaAltContext) }}">
+                                <img src="{{ $ctaImage('images-1.jfif') }}" alt="{{ img_alt(null, 'images-1.jfif', $ctaAltContext) }}" loading="lazy" decoding="async">
+                                <img src="{{ $ctaImage('images-2.jfif') }}" alt="{{ img_alt(null, 'images-2.jfif', $ctaAltContext) }}" loading="lazy" decoding="async">
+                                <img src="{{ $ctaImage('images-3.jfif') }}" alt="{{ img_alt(null, 'images-3.jfif', $ctaAltContext) }}" loading="lazy" decoding="async">
                             </div>
                         </div>
                     
                         <!-- RIGHT COLUMN (DOWN) -->
                         <div class="scroll-container">
                             <div class="scroll-track scroll-down">
-                                <img src="{{ $ctaImage('images.jfif') }}" alt="{{ img_alt(null, 'images.jfif', $ctaAltContext) }}">
-                                <img src="{{ $ctaImage('images-4.jfif') }}" alt="{{ img_alt(null, 'images-4.jfif', $ctaAltContext) }}">
-                                <img src="{{ $ctaImage('images-5.jfif') }}" alt="{{ img_alt(null, 'images-5.jfif', $ctaAltContext) }}">
+                                <img src="{{ $ctaImage('images.jfif') }}" alt="{{ img_alt(null, 'images.jfif', $ctaAltContext) }}" loading="lazy" decoding="async">
+                                <img src="{{ $ctaImage('images-4.jfif') }}" alt="{{ img_alt(null, 'images-4.jfif', $ctaAltContext) }}" loading="lazy" decoding="async">
+                                <img src="{{ $ctaImage('images-5.jfif') }}" alt="{{ img_alt(null, 'images-5.jfif', $ctaAltContext) }}" loading="lazy" decoding="async">
                     
                                 <!-- Duplicate for seamless loop -->
-                                <img src="{{ $ctaImage('images.jfif') }}" alt="{{ img_alt(null, 'images.jfif', $ctaAltContext) }}">
-                                <img src="{{ $ctaImage('images-4.jfif') }}" alt="{{ img_alt(null, 'images-4.jfif', $ctaAltContext) }}">
-                                <img src="{{ $ctaImage('images-5.jfif') }}" alt="{{ img_alt(null, 'images-5.jfif', $ctaAltContext) }}">
+                                <img src="{{ $ctaImage('images.jfif') }}" alt="{{ img_alt(null, 'images.jfif', $ctaAltContext) }}" loading="lazy" decoding="async">
+                                <img src="{{ $ctaImage('images-4.jfif') }}" alt="{{ img_alt(null, 'images-4.jfif', $ctaAltContext) }}" loading="lazy" decoding="async">
+                                <img src="{{ $ctaImage('images-5.jfif') }}" alt="{{ img_alt(null, 'images-5.jfif', $ctaAltContext) }}" loading="lazy" decoding="async">
                             </div>
                         </div>
                          <div class="scroll-container">
                             <div class="scroll-track scroll-up">
-                                <img src="{{ $ctaImage('images-1.jfif') }}" alt="{{ img_alt(null, 'images-1.jfif', $ctaAltContext) }}">
-                                <img src="{{ $ctaImage('images-2.jfif') }}" alt="{{ img_alt(null, 'images-2.jfif', $ctaAltContext) }}">
-                                <img src="{{ $ctaImage('images-3.jfif') }}" alt="{{ img_alt(null, 'images-3.jfif', $ctaAltContext) }}">
+                                <img src="{{ $ctaImage('images-1.jfif') }}" alt="{{ img_alt(null, 'images-1.jfif', $ctaAltContext) }}" loading="lazy" decoding="async">
+                                <img src="{{ $ctaImage('images-2.jfif') }}" alt="{{ img_alt(null, 'images-2.jfif', $ctaAltContext) }}" loading="lazy" decoding="async">
+                                <img src="{{ $ctaImage('images-3.jfif') }}" alt="{{ img_alt(null, 'images-3.jfif', $ctaAltContext) }}" loading="lazy" decoding="async">
                     
                                 <!-- Duplicate for seamless loop -->
-                                <img src="{{ $ctaImage('images-1.jfif') }}" alt="{{ img_alt(null, 'images-1.jfif', $ctaAltContext) }}">
-                                <img src="{{ $ctaImage('images-2.jfif') }}" alt="{{ img_alt(null, 'images-2.jfif', $ctaAltContext) }}">
-                                <img src="{{ $ctaImage('images-3.jfif') }}" alt="{{ img_alt(null, 'images-3.jfif', $ctaAltContext) }}">
+                                <img src="{{ $ctaImage('images-1.jfif') }}" alt="{{ img_alt(null, 'images-1.jfif', $ctaAltContext) }}" loading="lazy" decoding="async">
+                                <img src="{{ $ctaImage('images-2.jfif') }}" alt="{{ img_alt(null, 'images-2.jfif', $ctaAltContext) }}" loading="lazy" decoding="async">
+                                <img src="{{ $ctaImage('images-3.jfif') }}" alt="{{ img_alt(null, 'images-3.jfif', $ctaAltContext) }}" loading="lazy" decoding="async">
                             </div>
                         </div>
                     
@@ -182,7 +192,7 @@
                 <div class="box-title">
                    
                     <div>
-                    <img style="height: 50px;" src="{{ $ctaImage('backgroundbordershadow.png') }}" alt="">
+                    <img style="height: 50px;" src="{{ $ctaImage('backgroundbordershadow.png') }}" alt="" loading="lazy" decoding="async">
                 </div><br>
                     @if($shortcode->subtitle)
                         <div class="text-subtitle text-primary" style="font-size:30px;color:linear-gradient(#000000, #2C638B);">{!! BaseHelper::clean($shortcode->subtitle) !!}</div>
@@ -192,7 +202,7 @@
                     @endif
                 </div>
                 <div>
-                    <img src="{{ $ctaImage('container.png') }}" alt="{{ img_alt(null, 'container.png', $ctaAltContext) }}">
+                    <img src="{{ $ctaImage('container.png') }}" alt="{{ img_alt(null, 'container.png', $ctaAltContext) }}" loading="lazy" decoding="async">
                 </div>
                 <br>
                 @if($shortcode->button_label)
@@ -205,19 +215,4 @@
         </div>
     </div>
 </section>
-
-<script>
-function isAboutUsPage() {
-    return window.location.pathname === '/about-us' 
-        || window.location.pathname === '/free-home-evaluation' || window.location.pathname === '/evaluation' || window.location.pathname === '/appointment-scheduler';
-}
-
-
-
-if (isAboutUsPage()) {
-    document.getElementById("formMain1").style.display = "none";
-} else {
-    document.getElementById("secondMain1").style.display = "none";
-}
-
-</script>
+@endif

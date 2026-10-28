@@ -1,5 +1,12 @@
+@php
+    $isTipsSellingPage = request()->is('tips-for-home-selling');
+    // Unsplash full originals are ~1MB each; request a compressed crop for guide art.
+    $guideImg = static function (string $photoId): string {
+        return 'https://images.unsplash.com/' . $photoId . '?auto=format&fit=crop&w=900&q=70';
+    };
+@endphp
 
-
+@if ($isTipsSellingPage)
 <style>
 
 
@@ -109,7 +116,7 @@ Selling a property in Ontario in 2026 requires a smart data-driven approach. Wit
 <section class="guide-block  pt-0 flat-testimonial-v3 wow fadeInUpSmall">
 
 <div class="guide-image">
-<img src="https://images.unsplash.com/photo-1560518883-ce09059eeffa" alt="{{ __('Home selling guide illustration: Understand the Ontario Real Estate Market') }}">
+<img src="{{ $guideImg('photo-1560518883-ce09059eeffa') }}" width="900" height="600" decoding="async" loading="lazy" alt="{{ __('Home selling guide illustration: Understand the Ontario Real Estate Market') }}">
 </div>
 
 <div class="guide-content">
@@ -136,7 +143,7 @@ This also means a full rebate for homes up to $1 million for agreements signed b
 <section class="guide-block reverse  pt-0 flat-testimonial-v3 wow fadeInUpSmall">
 
 <div class="guide-image">
-<img src="https://images.unsplash.com/photo-1560448204-e02f11c3d0e2" alt="{{ __('Home selling guide illustration: Why Selling at the Right Time Matters') }}">
+<img src="{{ $guideImg('photo-1560448204-e02f11c3d0e2') }}" width="900" height="600" decoding="async" loading="lazy" alt="{{ __('Home selling guide illustration: Why Selling at the Right Time Matters') }}">
 </div>
 
 <div class="guide-content">
@@ -163,7 +170,7 @@ As a result, sellers who list during this peak spring week can earn about $5,300
 <section class="guide-block  pt-0 flat-testimonial-v3 wow fadeInUpSmall">
 
 <div class="guide-image">
-<img src="https://images.unsplash.com/photo-1507089947368-19c1da9775ae" alt="{{ __('Home selling guide illustration: Understand Buyer Preferences') }}">
+<img src="{{ $guideImg('photo-1507089947368-19c1da9775ae') }}" width="900" height="600" decoding="async" loading="lazy" alt="{{ __('Home selling guide illustration: Understand Buyer Preferences') }}">
 </div>
 
 <div class="guide-content">
@@ -194,7 +201,7 @@ You should also stage your home for the "hybrid professional." Also, ensure your
 <section class="guide-block reverse  pt-0 flat-testimonial-v3 wow fadeInUpSmall">
 
 <div class="guide-image">
-<img src="https://images.unsplash.com/photo-1600585154340-be6161a56a0c" alt="{{ __('Home selling guide illustration: Set the Right Price to Sell Your Home Quickly') }}">
+<img src="{{ $guideImg('photo-1600585154340-be6161a56a0c') }}" width="900" height="600" decoding="async" loading="lazy" alt="{{ __('Home selling guide illustration: Set the Right Price to Sell Your Home Quickly') }}">
 </div>
 
 <div class="guide-content">
@@ -223,7 +230,7 @@ However, a price based on a Comparative Market Analysis (CMA) will help your lis
 <section class="guide-block   pt-0 flat-testimonial-v3 wow fadeInUpSmall">
 
 <div class="guide-image">
-<img src="https://images.unsplash.com/photo-1560185007-c5ca9d2c014d" alt="{{ __('Home selling guide illustration: Preparation Tips for Selling a House Effectively') }}">
+<img src="{{ $guideImg('photo-1560185007-c5ca9d2c014d') }}" width="900" height="600" decoding="async" loading="lazy" alt="{{ __('Home selling guide illustration: Preparation Tips for Selling a House Effectively') }}">
 </div>
 
 <div class="guide-content">
@@ -251,7 +258,7 @@ In addition, you should deep-clean every room and update the hardware to matte b
 <section class="guide-block reverse   pt-0 flat-testimonial-v3 wow fadeInUpSmall">
 
 <div class="guide-image">
-<img src="https://images.unsplash.com/photo-1554224155-6726b3ff858f" alt="{{ __('Home selling guide illustration: Schedule Proactive Home Inspections') }}">
+<img src="{{ $guideImg('photo-1554224155-6726b3ff858f') }}" width="900" height="600" decoding="async" loading="lazy" alt="{{ __('Home selling guide illustration: Schedule Proactive Home Inspections') }}">
 </div>
 
 <div class="guide-content">
@@ -279,7 +286,7 @@ As a result, you can fix problems before potential buyers ever see them. Address
 <section class="guide-block   pt-0 flat-testimonial-v3 wow fadeInUpSmall">
 
 <div class="guide-image">
-<img src="https://images.unsplash.com/photo-1560520031-3a4dc4e9de0c" alt="{{ __('Home selling guide illustration: Build a Marketing Strategy That Sells') }}">
+<img src="{{ $guideImg('photo-1560520031-3a4dc4e9de0c') }}" width="900" height="600" decoding="async" loading="lazy" alt="{{ __('Home selling guide illustration: Build a Marketing Strategy That Sells') }}">
 </div>
 
 <div class="guide-content">
@@ -307,7 +314,7 @@ This targeted approach drives more traffic to your listing and secures more show
 <section class="guide-block reverse   pt-0 flat-testimonial-v3 wow fadeInUpSmall">
 
 <div class="guide-image">
-<img src="https://images.unsplash.com/photo-1556740749-887f6717d7e4" alt="{{ __('Home selling guide illustration: Work With a Trusted Real Estate Agent') }}">
+<img src="{{ $guideImg('photo-1556740749-887f6717d7e4') }}" width="900" height="600" decoding="async" loading="lazy" alt="{{ __('Home selling guide illustration: Work With a Trusted Real Estate Agent') }}">
 </div>
 
 <div class="guide-content">
@@ -320,7 +327,7 @@ A trusted real estate agent saves your valuable time by handling every complex d
 </p>
 <p>
  
-Further, our team ensures that all contracts are perfect so your closing date proceeds without delay. While we handle the legal details, you can use a <a href="https://serik.ca/mortgage-calculator"></a>mortgage calculator to plan for your next dream home.
+Further, our team ensures that all contracts are perfect so your closing date proceeds without delay. While we handle the legal details, you can use a <a href="{{ url('/mortgage-calculator') }}">mortgage calculator</a> to plan for your next dream home.
 </p>
 
 
@@ -336,7 +343,7 @@ Further, our team ensures that all contracts are perfect so your closing date pr
 <section class="guide-block   pt-0 flat-testimonial-v3 wow fadeInUpSmall">
 
 <div class="guide-image">
-<img src="https://images.unsplash.com/photo-1560518883-ce09059eeffa" alt="{{ __('Home selling guide illustration: Your Quick Pre-Showing Checklist') }}">
+<img src="{{ $guideImg('photo-1560518883-ce09059eeffa') }}" width="900" height="600" decoding="async" loading="lazy" alt="{{ __('Home selling guide illustration: Your Quick Pre-Showing Checklist') }}">
 </div>
 
 <div class="guide-content">
@@ -376,13 +383,12 @@ To sell a house in a changing Ontario market can feel very overwhelming. However
 </p>
 <p>
 
-We invite you to <a href="https://serik.ca/contact-us">book a free consultation</a> with Serik Realty. We will answer your questions and build a plan that works for you. So, you can focus on your move while we handle the sale.
+We invite you to <a href="{{ url('/contact-us') }}">book a free consultation</a> with Serik Realty. We will answer your questions and build a plan that works for you. So, you can focus on your move while we handle the sale.
 </p>
 
 </section>
 </div>
-
-
+@else
 <section class="flat-section pt-0 flat-testimonial-v3 wow fadeInUpSmall" data-wow-delay=".6s" data-wow-duration="2000ms" id="formMain">
     <div class="container">
         <div class="row">
@@ -442,23 +448,4 @@ We invite you to <a href="https://serik.ca/contact-us">book a free consultation<
         </div>
     </div>
 </section>
-
-
-
-<script>
-    
-    
-function isHomePage() {
-    return window.location.pathname === '/tips-for-home-selling';
-}
-
-
-if (isHomePage()) {
-    document.getElementById("formMain").style.display = "none";
-   
-}else{
-    document.getElementById("formSecond").style.display = "none";
-   
-    
-}
-</script>
+@endif

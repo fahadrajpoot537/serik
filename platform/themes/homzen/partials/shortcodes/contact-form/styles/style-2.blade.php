@@ -1,8 +1,14 @@
 @php
     $backgroundImage = $shortcode->background_image ? RvMedia::getImageUrl($shortcode->background_image) : null;
+    $isFreeHomeEvaluationPage = request()->is('free-home-evaluation') || request()->is('evaluation');
+    // On the estimator page these blocks are hidden via JS anyway — skip SSR to cut HTML/forms/images.
+    $renderContactMain = ! $isFreeHomeEvaluationPage;
+    $renderSecondMain = ! $isFreeHomeEvaluationPage;
+    $renderBoostFormMain = ! $isFreeHomeEvaluationPage;
 @endphp
 
 <style>
+@if ($renderBoostFormMain)
 .progress-steps {
     gap: 8px;
     font-size: 14px;
@@ -63,6 +69,7 @@
 .logo_form{
     width:158px;
 }
+@endif
 
 
 
@@ -806,6 +813,7 @@ $faqs = collect([
     $faqSideAlt = $faqSideImage !== '' ? __('Serik Realty team answering frequently asked questions') : '';
 @endphp
 
+@if ($renderContactMain)
 <section id="contactMain"
     class="flat-section-v3 flat-slider-contact serik-faq-panel"
 >
@@ -851,14 +859,9 @@ $faqs = collect([
     </div>
    
 </section>
+@endif
 
-
-
-
-
-
-
-
+@if ($renderSecondMain)
 <section id="secondMain"
     class="flat-section-v3 flat-slider-contact"
     @style(["background-image: url('$backgroundImage') !important" => $backgroundImage])
@@ -890,14 +893,8 @@ $faqs = collect([
     </div>
     <div class="overlay"></div>
 </section>
+@endif
 
-
-
-
-
-@php
-    $isFreeHomeEvaluationPage = request()->is('free-home-evaluation') || request()->is('evaluation');
-@endphp
 <section id="thirdMain" @class(['serik-eval-layout' => $isFreeHomeEvaluationPage])>
 @if ($isFreeHomeEvaluationPage)
 <style>
@@ -1190,7 +1187,7 @@ $faqs = collect([
             <!-- ================= HERO ================= -->
 <section class="srk-hero py-5 text-center">
   <div class="container-fluid" style="padding:0px !important;">
-   <img src="https://serik.ca/storage/house-worth.webp" style="width:100%;padding:0px !important;" alt="{{ img_alt(null, 'house-worth.webp', __('Free Home Evaluation')) }}"/>
+   <img src="{{ asset('storage/house-worth.webp') }}" style="width:100%;padding:0px !important;" alt="{{ img_alt(null, 'house-worth.webp', __('Free Home Evaluation')) }}" width="1200" height="675" decoding="async" loading="lazy"/>
   </div>
 </section>
 
@@ -1201,13 +1198,14 @@ $faqs = collect([
 
 
 
+@if ($renderBoostFormMain)
 <section id="formMain">
     <div class="container-fluid min-vh-100 d-flex flex-column">
 
     <!-- Header -->
     <header class="py-3 border-bottom">
         <div class="container d-flex justify-content-between align-items-center">
-            <a href="https://serik.ca"> <img class="logo_form" src="https://serik.ca/storage/whatsapp-image-2025-12-09-at-120824-am.jpeg" alt="Serik Realty" height="40"></a>
+            <a href="{{ url('/') }}"> <img class="logo_form" src="{{ asset('storage/whatsapp-image-2025-12-09-at-120824-am.jpeg') }}" alt="Serik Realty" height="40" width="158" decoding="async" loading="lazy"></a>
             <a href="tel:16475789400" class="text-decoration-none fw-semibold">
                 <i class="bi bi-telephone"></i> 1-(647) 578-9400
             </a>
@@ -1357,6 +1355,7 @@ $faqs = collect([
 </div>
 
 </section>
+@endif
 
 
 <script>
@@ -1368,6 +1367,9 @@ const prevBtn = document.getElementById('prevBtn');
 let currentStep = 0;
 
 function updateStep() {
+    if (!nextBtn || !prevBtn) {
+        return;
+    }
     steps.forEach((step, index) => {
         step.classList.toggle('active', index === currentStep);
         progressSteps[index]?.classList.toggle('active', index <= currentStep);
@@ -1377,34 +1379,36 @@ function updateStep() {
     nextBtn.textContent = currentStep === steps.length - 1 ? 'Submit →' : 'Next →';
    
     if(currentStep == steps.length-1){
-        document.getElementById('nextBtn').style.display = 'none';
-        document.getElementById('prevBtn').style.display = 'none';
+        nextBtn.style.display = 'none';
+        prevBtn.style.display = 'none';
     }
 }
 
-nextBtn.addEventListener('click', () => {
-    if (currentStep < steps.length - 1) {
-        currentStep++;
-        updateStep();
-    }
-});
-
-prevBtn.addEventListener('click', () => {
-    if (currentStep > 0) {
-        currentStep--;
-        updateStep();
-    }
-});
-
-// Option selection
-document.querySelectorAll('.option-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-        btn.closest('.option-group')
-            .querySelectorAll('.option-btn')
-            .forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
+if (nextBtn && prevBtn) {
+    nextBtn.addEventListener('click', () => {
+        if (currentStep < steps.length - 1) {
+            currentStep++;
+            updateStep();
+        }
     });
-});
+
+    prevBtn.addEventListener('click', () => {
+        if (currentStep > 0) {
+            currentStep--;
+            updateStep();
+        }
+    });
+
+    // Option selection
+    document.querySelectorAll('.option-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            btn.closest('.option-group')
+                .querySelectorAll('.option-btn')
+                .forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        });
+    });
+}
 
 
 
