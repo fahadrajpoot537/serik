@@ -519,11 +519,11 @@
             window.__serikCensusStarted = true;
         }
 
-        // DA census can take ~90–120s cold; keep client wait aligned with server budget.
+        // Server compute capped ~72s prod (+ ADA fallback); abort a bit above that.
         var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
         var timer = setTimeout(function () {
             if (controller) controller.abort();
-        }, 150000);
+        }, 90000);
 
         fetch(url, {
             method: 'GET',

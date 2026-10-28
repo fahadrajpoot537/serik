@@ -21,6 +21,12 @@ class CanadaCensusService
     public const STATUS_CENSUS_UNAVAILABLE = 'census_unavailable';
 
     /**
+     * Absolute wall-clock deadline for one HTTP census compute.
+     * IIS/proxy often cuts ~100s; leave room for ADA/CSD after a slow DA.
+     */
+    protected ?float $requestDeadlineAt = null;
+
+    /**
      * Full pipeline for a property detail page (cached).
      *
      * @return array<string, mixed>
@@ -36,11 +42,14 @@ class CanadaCensusService
             return $cached;
         }
 
-        // DA SDMX cold builds can exceed 90s — lock must outlive the compute.
-        $lock = Cache::lock('serik:cache:sf:' . md5($cacheKey), 160);
+        // Keep under typical reverse-proxy kill (~100s): DA probe then ADA/CSD.
+        $this->requestDeadlineAt = microtime(true) + (app()->environment('local') ? 95.0 : 72.0);
+
+        // Lock must outlive the compute window (+ small buffer).
+        $lock = Cache::lock('serik:cache:sf:' . md5($cacheKey), 90);
 
         try {
-            $payload = $lock->block(app()->environment('local') ? 5 : 120, function () use ($cacheKey, $ttl, $property) {
+            $payload = $lock->block(app()->environment('local') ? 5 : 75, function () use ($cacheKey, $ttl, $property) {
                 $again = Cache::get($cacheKey);
                 if (is_array($again) && isset($again['status'])) {
                     return $again;
@@ -67,9 +76,20 @@ class CanadaCensusService
             }
 
             return $this->computeForProperty($property);
+        } finally {
+            $this->requestDeadlineAt = null;
         }
 
         return is_array($payload) ? $payload : $this->errorPayload(self::STATUS_CENSUS_UNAVAILABLE);
+    }
+
+    protected function secondsUntilDeadline(float $fallback): float
+    {
+        if ($this->requestDeadlineAt === null) {
+            return $fallback;
+        }
+
+        return max(0.0, min($fallback, $this->requestDeadlineAt - microtime(true)));
     }
 
     /**
@@ -153,6 +173,15 @@ class CanadaCensusService
 
         foreach ($levels as $level) {
             $level = strtolower(trim((string) $level));
+            // Need headroom for at least one SDMX round-trip + geography lookup.
+            if ($this->secondsUntilDeadline(99) < 8.0) {
+                Log::info('census.profile.deadline_skip_remaining', [
+                    'next_level' => $level,
+                    'remaining' => round($this->secondsUntilDeadline(99), 2),
+                ]);
+                break;
+            }
+
             $candidate = match ($level) {
                 'da' => $daGeo !== null ? [
                     'dguid' => (string) $daGeo['dguid'],
@@ -778,15 +807,21 @@ class CanadaCensusService
         $values = [];
         $rates = [];
         $started = microtime(true);
-        // DA is HouseSigma parity (e.g. Christian 460) — give it real time.
-        // Old 12s/chunk + 32s budget caused silent ADA fallback (Christian 3785 / 51.7%).
-        $budgetSeconds = app()->environment('local') ? 100.0 : 110.0;
-        if ($level === 'da') {
-            $budgetSeconds = app()->environment('local') ? 100.0 : 110.0;
-        }
+        // Prefer DA when it responds, but never burn the whole HTTP budget on it —
+        // live IIS often 500s around ~95–100s (Bancroft cold DA) before ADA can run.
+        // Metrics-first chunks still paint cards; charts fill if time remains.
+        $preferred = $level === 'da'
+            ? (app()->environment('local') ? 40.0 : 28.0)
+            : (app()->environment('local') ? 50.0 : 38.0);
+        $budgetSeconds = $this->secondsUntilDeadline($preferred);
         $chunkSize = $level === 'da' ? 16 : 70;
         $consecutiveFails = 0;
-        $maxFails = $level === 'da' ? 2 : 2;
+        $maxFails = $level === 'da' ? 1 : 2;
+        $metricChunkCount = $metricIds !== [] ? 1 : 0;
+        if ($metricIds !== [] && count($metricIds) > $chunkSize) {
+            $metricChunkCount = (int) ceil(count($metricIds) / $chunkSize);
+        }
+        $chunksCompleted = 0;
 
         // Pack groups into chunks; never split a chart group. Metrics may split by size.
         $chunks = [];
@@ -822,20 +857,42 @@ class CanadaCensusService
         }
 
         foreach ($chunks as $chunk) {
-            if ((microtime(true) - $started) >= $budgetSeconds) {
+            $elapsed = microtime(true) - $started;
+            if ($elapsed >= $budgetSeconds || $this->secondsUntilDeadline(1) <= 0.5) {
                 Log::warning('census.profile.budget_stop', [
                     'dguid' => $dguid,
                     'level' => $level,
-                    'elapsed' => round(microtime(true) - $started, 2),
+                    'elapsed' => round($elapsed, 2),
                     'have' => count($values),
                 ]);
                 break;
             }
 
+            // After summary metrics land, skip remaining chart chunks when time is tight
+            // so ADA/CSD (or the HTTP response) is not starved.
+            if ($chunksCompleted >= $metricChunkCount && $values !== []) {
+                $left = min(
+                    $budgetSeconds - $elapsed,
+                    $this->secondsUntilDeadline(99)
+                );
+                if ($left < 10.0) {
+                    Log::info('census.profile.metrics_only_early_exit', [
+                        'dguid' => $dguid,
+                        'level' => $level,
+                        'elapsed' => round($elapsed, 2),
+                        'have' => count($values),
+                    ]);
+                    break;
+                }
+            }
+
             $part = $this->fetchProfileChunk(
                 $dguid,
                 $chunk,
-                $budgetSeconds - (microtime(true) - $started),
+                min(
+                    $budgetSeconds - (microtime(true) - $started),
+                    $this->secondsUntilDeadline(99)
+                ),
                 $base,
                 $level,
                 false
@@ -854,6 +911,7 @@ class CanadaCensusService
             }
 
             $consecutiveFails = 0;
+            $chunksCompleted++;
             foreach (($part['counts'] ?? []) as $id => $val) {
                 if (! array_key_exists($id, $values) || $values[$id] === null || $values[$id] === '') {
                     $values[$id] = $val;
@@ -863,7 +921,10 @@ class CanadaCensusService
 
         // Small rates-only pass for religion (HouseSigma-compatible %) if time remains.
         $religionIds = ['1935', '1936', '1937', '1953', '1954', '1955', '1956', '1957', '1958', '1959'];
-        $remaining = $budgetSeconds - (microtime(true) - $started);
+        $remaining = min(
+            $budgetSeconds - (microtime(true) - $started),
+            $this->secondsUntilDeadline(99)
+        );
         if ($remaining >= 8 && $values !== []) {
             $ratePart = $this->fetchProfileChunk(
                 $dguid,
@@ -912,16 +973,16 @@ class CanadaCensusService
         $statKey = $withRates ? '1+2' : '1';
         $url = $base . '/A5.' . $dguid . '.1.' . $charKey . '.' . $statKey;
         $configured = (int) config('census.statcan.timeout', 45);
-        // DA SDMX often needs 10–20s per small chunk (not a hang). Short timeouts
-        // were aborting DA and falling through to ADA (wrong neighbourhood size).
+        // Cap DA chunk waits so a dead SDMX socket fails over to ADA before proxy 500.
         $timeout = $level === 'da'
-            ? (app()->environment('local') ? 40 : 42)
+            ? (app()->environment('local') ? 22 : 16)
             : (app()->environment('local')
                 ? max(14, min(26, $configured > 0 ? $configured : 26))
                 : max(14, min(28, $configured > 0 ? $configured : 28)));
         if ($remainingBudget !== null) {
-            $timeout = max($level === 'da' ? 12 : 3, min($timeout, (int) floor($remainingBudget)));
+            $timeout = max($level === 'da' ? 8 : 3, min($timeout, (int) floor($remainingBudget)));
         }
+        $timeout = max(3, min($timeout, (int) floor($this->secondsUntilDeadline((float) $timeout))));
         $connectTimeout = app()->environment('local') ? 4 : 8;
         // Local Windows TLS inspection often breaks StatCan; always skip verify in local.
         $verify = app()->environment('local')

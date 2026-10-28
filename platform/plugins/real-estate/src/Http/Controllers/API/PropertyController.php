@@ -8083,10 +8083,9 @@ class PropertyController extends BaseController
 
     public function getPropertyCensus($propertyId)
     {
-        // Service uses its own wall-clock budget; keep PHP limit above full chart fetch.
-        // DA SDMX can take ~90–110s for full metrics+charts (HouseSigma parity).
-        @set_time_limit(app()->environment('local') ? 150 : 140);
-        @ini_set('max_execution_time', app()->environment('local') ? '150' : '140');
+        // Service caps compute ~72s prod so ADA can run before IIS/proxy ~100s kills.
+        @set_time_limit(app()->environment('local') ? 120 : 90);
+        @ini_set('max_execution_time', app()->environment('local') ? '120' : '90');
 
         $property = Property::query()->find((int) $propertyId);
 
