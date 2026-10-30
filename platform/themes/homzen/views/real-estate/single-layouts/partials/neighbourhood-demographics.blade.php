@@ -152,15 +152,21 @@
     }
     $censusHasBootstrap = is_array($censusBootstrap) && ! empty($censusBootstrap['metrics']);
     $censusPropertyId = (int) $model->getKey();
-    // Do NOT warm census in afterResponse here. Laravel's afterResponse uses
-    // dispatchSync during terminate(), which blocks php artisan serve (and can
-    // stall the browser tab) for 30–110s on a cold StatCan build. The client
-    // already eager-fetches /api/v1/property-census/{id}.
+    // Do NOT warm census in afterResponse sync. Queue a background job when redis/database
+    // queue is available so the next visit SSR-paints; client still fetches for this request.
+    if (! $censusHasBootstrap && config('queue.default') !== 'sync') {
+        try {
+            \App\Jobs\WarmPropertyCensusJob::dispatch($censusPropertyId);
+        } catch (\Throwable $e) {
+            // ignore — client fetch remains the primary path
+        }
+    }
+    $chartJsUrl = asset('vendor/chart.js/4.4.1/chart.umd.min.js');
 @endphp
 @if (! $censusHasBootstrap)
 <link rel="prefetch" href="{{ url('/api/v1/property-census/' . $censusPropertyId) }}" as="fetch" crossorigin="use-credentials">
 @endif
-<link rel="preload" href="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" as="script">
+<link rel="preload" href="{{ $chartJsUrl }}" as="script">
 <section
     class="single-property-element hs-census-section{{ $censusHasBootstrap ? '' : ' is-loading' }}"
     id="neighbourhoodDemographics"
@@ -222,7 +228,7 @@
 <script type="application/json" id="hsCensusBootstrap">{!! json_encode($censusBootstrap, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_UNESCAPED_UNICODE) !!}</script>
 @endif
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+<script src="{{ $chartJsUrl }}" defer></script>
 <script>
 (function () {
     var root = document.getElementById('neighbourhoodDemographics');
