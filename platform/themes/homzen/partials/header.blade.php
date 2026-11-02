@@ -4,6 +4,9 @@
     max-width: 500px;
     min-width: 0;
     width: 100%;
+    /* Keep dropdown out of flex row flow even when site-chrome sets display:flex */
+    flex-direction: column;
+    align-items: stretch;
 }
 
 .search-box {
@@ -12,6 +15,8 @@
     padding:6px 10px;
     display:flex;
     align-items:center;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .search-box input {
@@ -20,6 +25,7 @@
     outline:none;
     padding: 4px 6px;
     width:100%;
+    min-width: 0;
     font-size:16px;
 }
 .search-box input:focus,
@@ -36,16 +42,20 @@
 
 .search-dropdown {
     position:absolute;
-    top:60px;
+    top: calc(100% + 8px);
     left:0;
+    right: auto;
     width:100%;
+    min-width: 100%;
     background:#fff;
     border-radius:12px;
     box-shadow:0 10px 30px rgba(0,0,0,.08);
-    max-height:450px;
+    max-height: min(70vh, 480px);
+    overflow-x: hidden;
     overflow-y:auto;
     display:none;
     z-index:999;
+    box-sizing: border-box;
 }
 
 @media (min-width: 992px) {
@@ -55,10 +65,73 @@
     #header.main-header.serik-header-search-active .smart-search {
         position: relative;
         z-index: 10071;
+        overflow: visible !important;
     }
     #header.main-header.serik-header-search-active .search-dropdown {
         z-index: 10072;
         pointer-events: auto;
+        /* Wider than the squeezed header input on laptop widths */
+        width: max(100%, min(520px, 92vw));
+        min-width: min(420px, 92vw);
+        max-width: min(560px, 96vw);
+    }
+}
+
+/* Small / mid desktop: keep listing cards readable in a narrow header */
+@media (min-width: 992px) and (max-width: 1399.98px) {
+    .search-dropdown .dropdown-section {
+        padding: 0 10px 12px;
+    }
+    .listing-item {
+        gap: 8px;
+        padding: 8px;
+    }
+    .listing-item img,
+    .listing-item .property-image {
+        width: 72px;
+        height: 58px;
+        flex: 0 0 72px;
+    }
+    .listing-item__price-row,
+    .listing-item__meta-row {
+        flex-wrap: wrap;
+        gap: 2px 8px;
+        align-items: flex-start;
+    }
+    .listing-item__status,
+    .listing-item__type,
+    .listing-item__facts {
+        white-space: normal;
+        font-size: 12px;
+        line-height: 1.3;
+    }
+    .listing-item__address {
+        font-size: 13px;
+        margin: 2px 0 4px;
+    }
+    .listing-item__price-row .price,
+    .listing-item .price {
+        font-size: 14px;
+    }
+}
+
+@media (max-width: 991.98px) {
+    .search-dropdown {
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        left: 0;
+        right: 0;
+    }
+    .listing-item img,
+    .listing-item .property-image {
+        width: 72px;
+        height: 58px;
+        flex: 0 0 72px;
+    }
+    .listing-item__status,
+    .listing-item__facts {
+        white-space: normal;
     }
 }
 
@@ -118,6 +191,7 @@
     border-radius:10px;
     cursor:pointer;
     width:100%;
+    max-width:100%;
     box-sizing:border-box;
 }
 
@@ -137,6 +211,8 @@
 .listing-item__body {
     flex:1 1 auto;
     min-width:0;
+    max-width:100%;
+    overflow:hidden;
 }
 
 .listing-item__price-row,
@@ -144,7 +220,7 @@
     display:flex;
     align-items:baseline;
     justify-content:space-between;
-    gap:10px;
+    gap:8px 10px;
     width:100%;
 }
 
@@ -154,6 +230,7 @@
     font-weight:700;
     margin:0;
     float:none;
+    min-width:0;
 }
 
 .listing-item__status,
@@ -163,13 +240,26 @@
     float:none;
     color:#4b5563;
     font-size:13px;
-    white-space:nowrap;
+    line-height:1.35;
+    white-space:normal;
+    text-align:right;
+    min-width:0;
 }
 
 .listing-item__address {
     margin:4px 0 6px;
     line-height:1.35;
     word-break:break-word;
+    overflow-wrap:anywhere;
+}
+
+#listingResults > a {
+    display:block;
+    width:100%;
+    max-width:100%;
+    box-sizing:border-box;
+    text-decoration:none;
+    color:inherit;
 }
 
 .price {
