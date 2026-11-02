@@ -84,7 +84,8 @@
     .auth-modal-content {
         border-radius: 20px;
         border: none;
-        overflow: hidden;
+        overflow-x: hidden;
+        overflow-y: auto;
         background: #ffffff;
         box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
         /* Override map-page global .modal-content height rules */
@@ -95,7 +96,8 @@
         width: 100% !important;
         max-width: 100% !important;
         height: auto !important;
-        max-height: min(75vh, 100dvh - 24px) !important;
+        /* Small desktop (laptop) must still fit forgot-password + reCAPTCHA */
+        max-height: min(90vh, 100dvh - 16px) !important;
         margin-top: 0 !important;
         display: flex;
         flex-direction: column;
@@ -141,12 +143,37 @@
     .auth-body {
         padding: 0;
         position: relative;
-        overflow: hidden;
+        overflow: visible;
         /* Height follows the visible panel — no empty gap under login. */
         min-height: 0;
         height: auto;
         flex: 0 0 auto;
         transition: height 0.18s ease;
+    }
+
+    #modalLogin .auth-pass-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 6px;
+    }
+
+    #modalLogin .auth-pass-row label {
+        margin-bottom: 0;
+    }
+
+    #modalLogin .auth-forgot-link-inline {
+        display: inline-block;
+        margin-top: 0;
+        font-size: 12px;
+        white-space: nowrap;
+    }
+
+    #modalLogin #loginRecaptcha,
+    #modalLogin #registerRecaptcha {
+        min-height: 78px;
+        overflow: visible;
     }
 
     .auth-slider-container {
@@ -481,8 +508,11 @@
                                     <div class="error-msg" id="loginEmailErr"></div>
                                 </div>
                                 <div class="form-group mb-3">
-                                    <label>Password</label>
-                                    <input type="password" name="password" class="form-control"
+                                    <div class="auth-pass-row">
+                                        <label for="loginPassword">Password</label>
+                                        <button type="button" class="auth-forgot-link auth-forgot-link-inline" onclick="toggleForgotPassword(true)">Forgot Password?</button>
+                                    </div>
+                                    <input type="password" name="password" id="loginPassword" class="form-control"
                                         placeholder="Enter your password" required>
                                     <div class="error-msg" id="loginPassErr"></div>
                                 </div>
@@ -495,7 +525,6 @@
                                 <div class="auth-switch">
                                     Don't have an account? <button type="button" class="auth-text-btn" onclick="toggleAuthMode('register')">Create Account</button>
                                 </div>
-                                <button type="button" class="auth-forgot-link" onclick="toggleForgotPassword(true)">Forgot Password?</button>
                             </form>
                         </div>
 
@@ -791,11 +820,21 @@
         }
 
         if (typeof window.loadRecaptcha === 'function') {
-            window.loadRecaptcha();
+            window.loadRecaptcha().then(function () {
+                if (typeof window.initSerikRecaptcha === 'function') {
+                    window.initSerikRecaptcha();
+                }
+                syncAuthBodyHeight();
+                setTimeout(syncAuthBodyHeight, 120);
+                setTimeout(syncAuthBodyHeight, 400);
+            }).catch(function () {
+                syncAuthBodyHeight();
+            });
         }
 
         requestAnimationFrame(() => {
             syncAuthBodyHeight();
+            setTimeout(syncAuthBodyHeight, 80);
         });
         refreshAuthCsrfTokens();
     }

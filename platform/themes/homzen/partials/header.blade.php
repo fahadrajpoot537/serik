@@ -113,20 +113,63 @@
 .listing-item {
     display:flex;
     gap:12px;
+    align-items:flex-start;
     padding:10px;
     border-radius:10px;
     cursor:pointer;
+    width:100%;
+    box-sizing:border-box;
 }
 
 .listing-item:hover {
     background:#f4f7f9;
 }
 
-.listing-item img {
-    width:70px;
-    height:55px;
+.listing-item img,
+.listing-item .property-image {
+    width:100px;
+    height:80px;
+    flex:0 0 100px;
     border-radius:8px;
     object-fit:cover;
+}
+
+.listing-item__body {
+    flex:1 1 auto;
+    min-width:0;
+}
+
+.listing-item__price-row,
+.listing-item__meta-row {
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    gap:10px;
+    width:100%;
+}
+
+.listing-item__price-row .price,
+.listing-item .price {
+    color:#0255a1;
+    font-weight:700;
+    margin:0;
+    float:none;
+}
+
+.listing-item__status,
+.listing-item__type,
+.listing-item__facts {
+    margin:0;
+    float:none;
+    color:#4b5563;
+    font-size:13px;
+    white-space:nowrap;
+}
+
+.listing-item__address {
+    margin:4px 0 6px;
+    line-height:1.35;
+    word-break:break-word;
 }
 
 .price {
@@ -2113,28 +2156,29 @@ function renderHeaderSearchResults(keyword, reset, cityHTML, data, isMlsKey) {
 
         listingsHTML += `
             ${loginOverlay}
-            <a href="${buildPropertyUrl(item)}" style="width: 100%" class="${blurClass}">
-                <div class="listing-item" style="width: 100%">
+            <a href="${buildPropertyUrl(item)}" style="width:100%;display:block;" class="${blurClass}">
+                <div class="listing-item">
                     <img src="${item.MediaURL}"
                     data-key="${item.ListingKey}"
                             class="property-image"
                             loading="lazy"
                             alt="${[item.UnparsedAddress, item.PropertySubType, item.ListingKey].filter(Boolean).join(' - ') || 'Property listing'}"
-                            style="width:100px;height:80px;object-fit:cover;border-radius:6px;"
                             onerror="this.onerror=null;this.src='{{ \App\Support\SerikMediaUrl::placeholder() }}'"
                         />
-                    <div style="width: 100%">
-                        <div class="price">
-                            $${Number(item.ListPrice || 0).toLocaleString()}
-                            <p style="float:right">${statusLabel}</p>
+                    <div class="listing-item__body">
+                        <div class="listing-item__price-row">
+                            <div class="price">$${Number(item.ListPrice || 0).toLocaleString()}</div>
+                            <p class="listing-item__status">${statusLabel}</p>
                         </div>
-                        <div>${displayAddress}${unitBadge}</div>
-                        <p style="float:left">${item.PropertySubType || ''}</p>
-                        <small style="float:right">
-                            🛏 ${item.BedroomsTotal ?? 0}
-                            🛁 ${item.BathroomsTotalInteger ?? 0}
-                            🚘 ${(item.ParkingTotal ?? 0) - (item.ParkingSpaces ?? 0)}
-                        </small>
+                        <div class="listing-item__address">${displayAddress}${unitBadge}</div>
+                        <div class="listing-item__meta-row">
+                            <p class="listing-item__type">${item.PropertySubType || ''}</p>
+                            <small class="listing-item__facts">
+                                🛏 ${item.BedroomsTotal ?? 0}
+                                🛁 ${item.BathroomsTotalInteger ?? 0}
+                                🚘 ${(item.ParkingTotal ?? 0) - (item.ParkingSpaces ?? 0)}
+                            </small>
+                        </div>
                     </div>
                 </div>
             </a>

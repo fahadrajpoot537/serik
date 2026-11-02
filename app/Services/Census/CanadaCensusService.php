@@ -35,7 +35,7 @@ class CanadaCensusService
     {
         $propertyId = (int) $property->getKey();
         $ttl = max(3600, (int) config('census.cache_ttl', 2592000));
-        $cacheKey = 'census:property:' . $propertyId . ':v12';
+        $cacheKey = 'census:property:' . $propertyId . ':v13';
 
         $cached = Cache::get($cacheKey);
         if (is_array($cached) && isset($cached['status'])) {
@@ -43,7 +43,7 @@ class CanadaCensusService
         }
 
         // Keep under typical reverse-proxy kill (~100s): DA probe then ADA/CSD.
-        $this->requestDeadlineAt = microtime(true) + (app()->environment('local') ? 95.0 : 72.0);
+        $this->requestDeadlineAt = microtime(true) + (app()->environment('local') ? 95.0 : 82.0);
 
         // Lock must outlive the compute window (+ small buffer).
         $lock = Cache::lock('serik:cache:sf:' . md5($cacheKey), 90);
@@ -810,9 +810,10 @@ class CanadaCensusService
         // Prefer DA when it responds, but never burn the whole HTTP budget on it —
         // live IIS often 500s around ~95–100s (Bancroft cold DA) before ADA can run.
         // Metrics-first chunks still paint cards; charts fill if time remains.
+        // Give charts enough room after metrics so pie tabs are not half-empty.
         $preferred = $level === 'da'
-            ? (app()->environment('local') ? 40.0 : 28.0)
-            : (app()->environment('local') ? 50.0 : 38.0);
+            ? (app()->environment('local') ? 48.0 : 36.0)
+            : (app()->environment('local') ? 55.0 : 45.0);
         $budgetSeconds = $this->secondsUntilDeadline($preferred);
         $chunkSize = $level === 'da' ? 16 : 70;
         $consecutiveFails = 0;
@@ -875,7 +876,7 @@ class CanadaCensusService
                     $budgetSeconds - $elapsed,
                     $this->secondsUntilDeadline(99)
                 );
-                if ($left < 10.0) {
+                if ($left < 6.0) {
                     Log::info('census.profile.metrics_only_early_exit', [
                         'dguid' => $dguid,
                         'level' => $level,

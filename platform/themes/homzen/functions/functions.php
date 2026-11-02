@@ -231,7 +231,7 @@ app()->booted(function (): void {
     if (is_plugin_active('real-estate')) {
         add_filter('theme_front_footer_content', function (?string $html): ?string {
             if (RealEstateHelper::isLoginEnabled() && theme_option('use_modal_for_authentication', true)) {
-                $html .= \Illuminate\Support\Facades\Cache::remember('serik_auth_modal_html_v2', 3600, function () {
+                $html .= \Illuminate\Support\Facades\Cache::remember('serik_auth_modal_html_v3', 3600, function () {
                     $loginForm = LoginForm::create()
                         ->setFormOption('has_wrapper', 'no');
 
@@ -394,6 +394,31 @@ app()->booted(function (): void {
                         'label' => __('Send Message'),
                     ]
                 );
+
+            // Address + phone each on their own full-width row (not side-by-side).
+            foreach (['address_wrapper', 'phone_wrapper'] as $fieldWrap) {
+                $open = "open_{$fieldWrap}_column_wrapper";
+                $close = "close_{$fieldWrap}_column_wrapper";
+                if ($form->has($open)) {
+                    $form->modify(
+                        $open,
+                        HtmlField::class,
+                        [
+                            'html' => sprintf(
+                                '<div class="contact-column-12 col-md-12 col-12 contact-field-%s">',
+                                $fieldWrap
+                            ),
+                        ]
+                    );
+                }
+                if ($form->has($close)) {
+                    $form->modify(
+                        $close,
+                        HtmlField::class,
+                        ['html' => '</div>']
+                    );
+                }
+            }
 
             \App\Support\MortgageCalculatorFormContext::applyToContactForm($form);
             \App\Support\ServiceInquiryFormContext::applyToContactForm($form);

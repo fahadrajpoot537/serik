@@ -150,6 +150,16 @@
 
 
 
+/* Free-eval / contact: keep Address and Phone on separate full-width lines */
+.contact-form .contact-field-address_wrapper,
+.contact-form .contact-field-phone_wrapper,
+.contact-form .contact-column-12.contact-field-address_wrapper,
+.contact-form .contact-column-12.contact-field-phone_wrapper {
+    flex: 0 0 100%;
+    max-width: 100%;
+    width: 100%;
+}
+
 .prop-address-wrap {
     position: relative;
     z-index: 30;

@@ -16,7 +16,7 @@ final class SerikGuestPageCache
     /** Shorter TTL when property HTML was cached before census warmed. */
     public const TTL_PROPERTY_COLD_CENSUS = 60;
 
-    public const VERSION = 'v35';
+    public const VERSION = 'v36';
 
     /**
      * Exact path prefixes (no trailing slash) eligible for guest HTML cache.
@@ -152,7 +152,7 @@ final class SerikGuestPageCache
         }
 
         try {
-            $payload = Cache::get('census:property:' . $propertyId . ':v12');
+            $payload = Cache::get('census:property:' . $propertyId . ':v13');
         } catch (\Throwable) {
             return $html;
         }
@@ -195,7 +195,29 @@ final class SerikGuestPageCache
             $geoHtml = '<br>Geography: ' . e($levelLabel);
         }
 
+        $chartsHtml = '';
+        $charts = $payload['charts'] ?? null;
+        if (is_array($charts) && $charts !== []) {
+            $tabs = '';
+            foreach ($charts as $i => $chart) {
+                if (! is_array($chart)) {
+                    continue;
+                }
+                $active = $i === 0 ? ' is-active' : '';
+                $tabs .= '<button type="button" class="hs-census-tab' . $active . '" data-chart-index="'
+                    . (int) $i . '">' . e((string) ($chart['label'] ?? '')) . '</button>';
+            }
+            if ($tabs !== '') {
+                $chartsHtml = '<div class="hs-census-charts">'
+                    . '<div class="hs-census-tabs" role="tablist">' . $tabs . '</div>'
+                    . '<div class="hs-census-legend" id="hsCensusLegend"></div>'
+                    . '<div class="hs-census-chart-wrap"><canvas id="hsCensusPie" aria-label="Neighbourhood demographics chart"></canvas></div>'
+                    . '</div>';
+            }
+        }
+
         $bodyInner = '<div class="hs-census-grid">' . $cards . '</div>'
+            . $chartsHtml
             . '<div class="hs-census-source">Source: ' . $source . $geoHtml . '</div>';
 
         $html = preg_replace(

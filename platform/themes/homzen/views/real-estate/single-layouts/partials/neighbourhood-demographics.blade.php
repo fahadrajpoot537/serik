@@ -142,7 +142,7 @@
     $censusBootstrap = null;
     try {
         $censusCached = \Illuminate\Support\Facades\Cache::get(
-            'census:property:' . (int) $model->getKey() . ':v12'
+            'census:property:' . (int) $model->getKey() . ':v13'
         );
         if (is_array($censusCached) && ($censusCached['status'] ?? null) === 'ok') {
             $censusBootstrap = $censusCached;
