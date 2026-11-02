@@ -111,9 +111,9 @@
         }
 
         popup.classList.remove('show');
-        popup.style.display = 'none';
-        popup.style.alignItems = '';
-        popup.style.justifyContent = '';
+        popup.style.setProperty('display', 'none', 'important');
+        popup.style.removeProperty('align-items');
+        popup.style.removeProperty('justify-content');
         popup.setAttribute('aria-hidden', 'true');
         document.body.classList.remove('modal-open', 'newsletter-popup-open');
         document.querySelectorAll('.newsletter-popup-backdrop, .modal-backdrop').forEach(function (el) {

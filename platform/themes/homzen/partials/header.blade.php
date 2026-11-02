@@ -638,7 +638,9 @@
         color:#fff !important;
         background-color:#111827;
         border-top: 1px solid rgba(255,255,255,0.08);
-        z-index: 9999;
+        /* Above cookie/site-notice (99999) so Home/Map/Search taps work */
+        z-index: 100050;
+        pointer-events: auto;
         justify-content: space-around;
         align-items: center;
     }
@@ -651,6 +653,9 @@
         display: flex;
         flex-direction: column;
         align-items: center;
+        pointer-events: auto;
+        position: relative;
+        z-index: 1;
     }
 
     .mobile-bottom-nav .nav-item span{
@@ -659,6 +664,13 @@
 
     .mobile-bottom-nav .nav-item.active{
         color: #0255a1;
+    }
+
+    /* Keep cookie banner above the bottom nav (not covering it) */
+    .js-site-notice.site-notice,
+    .site-notice.site-notice--visible,
+    .site-notice {
+        bottom: 70px !important;
     }
 
     body{
