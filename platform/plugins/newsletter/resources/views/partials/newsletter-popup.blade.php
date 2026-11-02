@@ -43,6 +43,7 @@
         popup.style.setProperty('display', 'flex', 'important');
         popup.style.setProperty('align-items', 'center', 'important');
         popup.style.setProperty('justify-content', 'center', 'important');
+        popup.style.setProperty('pointer-events', 'auto', 'important');
         popup.style.zIndex = '99999999';
         popup.setAttribute('aria-hidden', 'false');
         document.body.classList.add('modal-open', 'newsletter-popup-open');
@@ -58,9 +59,13 @@
         }
 
         function forcePopupCenter() {
+            if (!popup.classList.contains('show')) {
+                return;
+            }
             popup.style.setProperty('display', 'flex', 'important');
             popup.style.setProperty('align-items', 'center', 'important');
             popup.style.setProperty('justify-content', 'center', 'important');
+            popup.style.setProperty('pointer-events', 'auto', 'important');
         }
 
         if (window.bootstrap && window.bootstrap.Modal) {
@@ -112,6 +117,7 @@
 
         popup.classList.remove('show');
         popup.style.setProperty('display', 'none', 'important');
+        popup.style.setProperty('pointer-events', 'none', 'important');
         popup.style.removeProperty('align-items');
         popup.style.removeProperty('justify-content');
         popup.setAttribute('aria-hidden', 'true');
@@ -121,6 +127,7 @@
         });
         document.body.style.overflow = '';
         document.body.style.paddingRight = '';
+        document.body.style.pointerEvents = '';
     }
 
     function schedulePopup() {

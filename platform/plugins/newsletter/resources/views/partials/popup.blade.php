@@ -14,10 +14,17 @@
         z-index: 99999999 !important;
     }
 
+    /* Closed modal must never intercept taps/clicks (especially on mobile). */
+    .newsletter-popup.modal:not(.show) {
+        display: none !important;
+        pointer-events: none !important;
+    }
+
     .newsletter-popup.modal.show {
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
+        pointer-events: auto !important;
     }
 
     body.newsletter-popup-open .modal-backdrop.show {
@@ -45,9 +52,13 @@
         position: relative;
     }
 
-    /* Mobile: keep popup centered in the middle of the screen, still fit viewport. */
+    /* Mobile: keep OPEN popup centered; never force display on closed modal. */
     @media (max-width: 767.98px) {
-        .newsletter-popup.modal,
+        .newsletter-popup.modal:not(.show) {
+            display: none !important;
+            pointer-events: none !important;
+        }
+
         .newsletter-popup.modal.show {
             display: flex !important;
             align-items: center !important;
@@ -56,6 +67,7 @@
             overflow-x: hidden !important;
             overflow-y: auto !important;
             -webkit-overflow-scrolling: touch;
+            pointer-events: auto !important;
         }
 
         .newsletter-popup .modal-dialog,
