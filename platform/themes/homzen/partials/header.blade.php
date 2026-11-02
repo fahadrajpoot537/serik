@@ -2205,43 +2205,66 @@ function loadResults(keyword, reset = false){
     }
     const requestController = new AbortController();
     searchController = requestController;
+    // Community/place suggestions must NEVER block listing results.
+    const communityController = new AbortController();
     const isAddressLike = /\d/.test(String(keyword || ''));
     const communityPromise = isAddressLike
         ? Promise.resolve([])
-        : fetchHeaderCommunitySuggestions(keyword, requestController.signal);
+        : fetchHeaderCommunitySuggestions(keyword, communityController.signal);
     loadResults._activeKeyword = keyword;
 
     const isMlsKey = isHeaderMlsKeyword(keyword);
     const searchTimeoutMs = isMlsKey ? 20000 : 12000;
     const searchTimeoutId = setTimeout(() => requestController.abort(), searchTimeoutMs);
+    const communityTimeoutId = setTimeout(() => communityController.abort(), 2500);
     const searchUrl = buildHeaderSearchUrl(keyword);
 
+    const paintLocations = (communities) => {
+        if (requestId !== headerSearchRequestId) {
+            return;
+        }
+        const locationHTML = buildHeaderLocationSuggestionsHtml(keyword, communities || []);
+        const locationEl = document.getElementById('locationResults');
+        if (locationEl) {
+            locationEl.innerHTML = locationHTML || cityHTML;
+            applyHeaderSuggestionCategoryLimits();
+        }
+    };
+
+    communityPromise
+        .then(paintLocations)
+        .catch(() => paintLocations([]))
+        .finally(() => clearTimeout(communityTimeoutId));
+
+    const paintListings = (data) => {
+        if (requestId !== headerSearchRequestId) {
+            return;
+        }
+        const locationEl = document.getElementById('locationResults');
+        const locationHTML = locationEl ? locationEl.innerHTML : cityHTML;
+        renderHeaderSearchResults(keyword, reset, locationHTML || cityHTML, data, isMlsKey);
+    };
+
     if (headerSearchCache.has(searchUrl)) {
-        communityPromise.then((communities) => {
-            if (requestId !== headerSearchRequestId) {
-                return;
-            }
-            const locationHTML = buildHeaderLocationSuggestionsHtml(keyword, communities);
-            renderHeaderSearchResults(keyword, reset, locationHTML, headerSearchCache.get(searchUrl), isMlsKey);
-        });
+        paintListings(headerSearchCache.get(searchUrl));
         clearTimeout(searchTimeoutId);
         loader.style.display = 'none';
         return;
     }
 
-    Promise.all([
-        headerSmartSearchFetch(searchUrl, requestController.signal),
-        communityPromise,
-    ])
-    .then(([data, communities]) => {
-        if (requestId !== headerSearchRequestId) {
-            return;
-        }
-        const locationHTML = buildHeaderLocationSuggestionsHtml(keyword, communities);
-        renderHeaderSearchResults(keyword, reset, locationHTML, data, isMlsKey);
+    headerSmartSearchFetch(searchUrl, requestController.signal)
+    .then((data) => {
+        paintListings(data);
     })
     .catch((err) => {
         if (requestId !== headerSearchRequestId || err.name === 'AbortError') {
+            if (requestId === headerSearchRequestId && reset) {
+                const listingEl = document.getElementById('listingResults');
+                if (listingEl && /Searching/i.test(listingEl.textContent || '')) {
+                    listingEl.innerHTML =
+                        '<div style="padding:12px;color:#666;">Search timed out. Please try again.</div>';
+                }
+            }
             return;
         }
         console.error('Header search failed:', err);

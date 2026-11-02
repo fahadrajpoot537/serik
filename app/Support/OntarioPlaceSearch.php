@@ -88,7 +88,9 @@ class OntarioPlaceSearch
         }
 
         try {
-            $response = Http::timeout(10)
+            // Keep autocomplete snappy — never block header search on a slow geocoder.
+            $response = Http::timeout(2)
+                ->connectTimeout(1)
                 ->withHeaders([
                     'User-Agent' => 'Serik.ca Property Map/1.0 (https://serik.ca)',
                     'Accept' => 'application/json',

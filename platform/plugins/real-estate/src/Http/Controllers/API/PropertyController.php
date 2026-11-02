@@ -4432,29 +4432,36 @@ class PropertyController extends BaseController
             return response()->json([]);
         }
 
-        $suggestions = app(\Botble\RealEstate\Services\PropertySearchService::class)
-            ->searchCommunitySuggestions($keyword, $limit);
+        try {
+            @set_time_limit(8);
 
-        $placeSearch = app(\App\Support\OntarioPlaceSearch::class);
-        if ($placeSearch->shouldSupplement($keyword, $suggestions)) {
-            $places = $placeSearch->search($keyword, min(4, $limit));
-            if ($places !== []) {
-                $seen = [];
-                foreach ($suggestions as $row) {
-                    $seen[mb_strtolower(($row['name'] ?? '') . '|' . ($row['city'] ?? ''))] = true;
-                }
-                foreach ($places as $place) {
-                    $key = mb_strtolower(($place['name'] ?? '') . '|' . ($place['city'] ?? ''));
-                    if (isset($seen[$key])) {
-                        continue;
+            $suggestions = app(\Botble\RealEstate\Services\PropertySearchService::class)
+                ->searchCommunitySuggestions($keyword, $limit);
+
+            $placeSearch = app(\App\Support\OntarioPlaceSearch::class);
+            if ($placeSearch->shouldSupplement($keyword, $suggestions)) {
+                $places = $placeSearch->search($keyword, min(4, $limit));
+                if ($places !== []) {
+                    $seen = [];
+                    foreach ($suggestions as $row) {
+                        $seen[mb_strtolower(($row['name'] ?? '') . '|' . ($row['city'] ?? ''))] = true;
                     }
-                    $suggestions[] = $place;
-                    $seen[$key] = true;
-                    if (count($suggestions) >= $limit) {
-                        break;
+                    foreach ($places as $place) {
+                        $key = mb_strtolower(($place['name'] ?? '') . '|' . ($place['city'] ?? ''));
+                        if (isset($seen[$key])) {
+                            continue;
+                        }
+                        $suggestions[] = $place;
+                        $seen[$key] = true;
+                        if (count($suggestions) >= $limit) {
+                            break;
+                        }
                     }
                 }
             }
+        } catch (\Throwable $e) {
+            report($e);
+            $suggestions = [];
         }
 
         return response()

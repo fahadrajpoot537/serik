@@ -14008,28 +14008,61 @@ function loadResults(keyword, reset = false){
     }
     const requestController = new AbortController();
     searchAbortController = requestController;
+    // Community/place suggestions must NEVER block listing results.
+    const communityController = new AbortController();
     const isAddressLike = /\d/.test(String(keyword || ''));
     const communityPromise = isAddressLike
         ? Promise.resolve([])
-        : fetchCommunitySuggestions(keyword, requestController.signal);
+        : fetchCommunitySuggestions(keyword, communityController.signal);
     loadResults._activeKeyword = keyword;
     const isMlsKey = isMlsSearchKeyword(keyword);
     const searchTimeoutId = setTimeout(() => requestController.abort(), isMlsKey ? 20000 : 12000);
+    const communityTimeoutId = setTimeout(() => communityController.abort(), 2500);
 
     const searchUrl = buildSmartSearchUrl(keyword);
+
+    const paintLocations = (communities) => {
+        if (requestId !== searchRequestId) {
+            return;
+        }
+        const locationHTML = buildLocationSuggestionsHtml(keyword, communities || []);
+        const locationEl = document.getElementById('mapLocationResults');
+        if (locationEl) {
+            locationEl.innerHTML = locationHTML || cityHTML;
+            applyMapSuggestionCategoryLimits();
+        }
+    };
+
+    communityPromise
+        .then(paintLocations)
+        .catch(() => paintLocations([]))
+        .finally(() => clearTimeout(communityTimeoutId));
+
+    const paintListings = (data) => {
+        if (requestId !== searchRequestId) {
+            return;
+        }
+        try {
+            const locationEl = document.getElementById('mapLocationResults');
+            const locationHTML = locationEl ? locationEl.innerHTML : cityHTML;
+            renderSmartSearchResults(keyword, reset, locationHTML || cityHTML, data, isMlsKey);
+        } catch (renderErr) {
+            console.error('Search render failed:', renderErr);
+            if (reset) {
+                document.getElementById("mapLocationResults").innerHTML = cityHTML;
+                applyMapSuggestionCategoryLimits();
+                document.getElementById("mapListingResults").innerHTML =
+                    '<div style="padding:12px;color:#666;">Could not display search results. Please refresh and try again.</div>';
+            }
+        }
+    };
 
     if (smartSearchCache.has(searchUrl)) {
         const cached = smartSearchCache.get(searchUrl);
         if (requestId !== searchRequestId) {
             return;
         }
-        communityPromise.then((communities) => {
-            if (requestId !== searchRequestId) {
-                return;
-            }
-            const locationHTML = buildLocationSuggestionsHtml(keyword, communities);
-            renderSmartSearchResults(keyword, reset, locationHTML, cached, isMlsKey);
-        });
+        paintListings(cached);
         clearTimeout(searchTimeoutId);
         if (loader) {
             loader.style.display = 'none';
@@ -14037,33 +14070,22 @@ function loadResults(keyword, reset = false){
         return;
     }
 
-    Promise.all([
-        smartSearchFetch(searchUrl, requestController.signal),
-        communityPromise,
-    ])
-    .then(([data, communities]) => {
-        if (requestId !== searchRequestId) {
-            return;
-        }
-        try {
-            const locationHTML = buildLocationSuggestionsHtml(keyword, communities);
-            renderSmartSearchResults(keyword, reset, locationHTML, data, isMlsKey);
-        } catch (renderErr) {
-            console.error('Search render failed:', renderErr);
-            if (reset) {
-                const locationHTML = buildLocationSuggestionsHtml(keyword, communities);
-                document.getElementById("mapLocationResults").innerHTML = locationHTML;
-                applyMapSuggestionCategoryLimits();
-                document.getElementById("mapListingResults").innerHTML =
-                    '<div style="padding:12px;color:#666;">Could not display search results. Please refresh and try again.</div>';
-            }
-        }
+    smartSearchFetch(searchUrl, requestController.signal)
+    .then((data) => {
+        paintListings(data);
     })
     .catch(err => {
         if (requestId !== searchRequestId) {
             return;
         }
         if (err.name === 'AbortError') {
+            if (reset) {
+                const listingEl = document.getElementById('mapListingResults');
+                if (listingEl && /Searching/i.test(listingEl.textContent || '')) {
+                    listingEl.innerHTML =
+                        '<div style="padding:12px;color:#666;">Search timed out. Please try again.</div>';
+                }
+            }
             return;
         }
         console.error('Smart search failed:', err);
