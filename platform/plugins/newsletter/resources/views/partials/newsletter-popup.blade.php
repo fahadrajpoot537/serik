@@ -39,10 +39,10 @@
         }
 
         popup.classList.add('show');
-        // Flex + center so the card sits in the middle of the mobile viewport.
-        popup.style.display = 'flex';
-        popup.style.alignItems = 'center';
-        popup.style.justifyContent = 'center';
+        // Force middle-of-screen centering (beats older CSS !important rules).
+        popup.style.setProperty('display', 'flex', 'important');
+        popup.style.setProperty('align-items', 'center', 'important');
+        popup.style.setProperty('justify-content', 'center', 'important');
         popup.style.zIndex = '99999999';
         popup.setAttribute('aria-hidden', 'false');
         document.body.classList.add('modal-open', 'newsletter-popup-open');
@@ -57,6 +57,12 @@
             document.body.appendChild(backdrop);
         }
 
+        function forcePopupCenter() {
+            popup.style.setProperty('display', 'flex', 'important');
+            popup.style.setProperty('align-items', 'center', 'important');
+            popup.style.setProperty('justify-content', 'center', 'important');
+        }
+
         if (window.bootstrap && window.bootstrap.Modal) {
             try {
                 var existing = window.bootstrap.Modal.getInstance(popup);
@@ -69,12 +75,13 @@
                     focus: true
                 }).show();
                 document.body.style.paddingRight = '0';
-                // Bootstrap may reset display to block — force centered flex again.
-                popup.style.display = 'flex';
-                popup.style.alignItems = 'center';
-                popup.style.justifyContent = 'center';
+                forcePopupCenter();
             } catch (e) {}
         }
+
+        forcePopupCenter();
+        setTimeout(forcePopupCenter, 0);
+        setTimeout(forcePopupCenter, 50);
 
         try {
             popup.scrollTop = 0;
