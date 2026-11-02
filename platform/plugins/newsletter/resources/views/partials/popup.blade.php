@@ -15,7 +15,9 @@
     }
 
     .newsletter-popup.modal.show {
-        display: block !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
     }
 
     body.newsletter-popup-open .modal-backdrop.show {
@@ -45,7 +47,8 @@
 
     /* Mobile: keep popup centered in the middle of the screen, still fit viewport. */
     @media (max-width: 767.98px) {
-        .newsletter-popup.modal {
+        .newsletter-popup.modal,
+        .newsletter-popup.modal.show {
             display: flex !important;
             align-items: center !important;
             justify-content: center !important;
@@ -58,16 +61,17 @@
         .newsletter-popup .modal-dialog,
         .newsletter-popup .modal-dialog.modal-dialog-centered,
         .newsletter-popup .modal-dialog.modal-lg {
-            margin: auto !important;
+            margin: 0 auto !important;
             max-width: min(100%, 400px) !important;
             width: 100% !important;
             min-height: 0 !important;
             height: auto !important;
             max-height: calc(100dvh - 1rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
+            display: block !important;
+            align-items: stretch !important;
             transform: none !important;
+            position: relative !important;
+            top: auto !important;
         }
 
         .newsletter-popup .modal-content {

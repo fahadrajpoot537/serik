@@ -39,7 +39,10 @@
         }
 
         popup.classList.add('show');
-        popup.style.display = 'block';
+        // Flex + center so the card sits in the middle of the mobile viewport.
+        popup.style.display = 'flex';
+        popup.style.alignItems = 'center';
+        popup.style.justifyContent = 'center';
         popup.style.zIndex = '99999999';
         popup.setAttribute('aria-hidden', 'false');
         document.body.classList.add('modal-open', 'newsletter-popup-open');
@@ -66,10 +69,13 @@
                     focus: true
                 }).show();
                 document.body.style.paddingRight = '0';
+                // Bootstrap may reset display to block — force centered flex again.
+                popup.style.display = 'flex';
+                popup.style.alignItems = 'center';
+                popup.style.justifyContent = 'center';
             } catch (e) {}
         }
 
-        // Mobile: always start at the top so the header image/close are not cropped.
         try {
             popup.scrollTop = 0;
             var content = popup.querySelector('.modal-content');
@@ -99,6 +105,8 @@
 
         popup.classList.remove('show');
         popup.style.display = 'none';
+        popup.style.alignItems = '';
+        popup.style.justifyContent = '';
         popup.setAttribute('aria-hidden', 'true');
         document.body.classList.remove('modal-open', 'newsletter-popup-open');
         document.querySelectorAll('.newsletter-popup-backdrop, .modal-backdrop').forEach(function (el) {
