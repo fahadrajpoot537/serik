@@ -68,6 +68,15 @@
                 document.body.style.paddingRight = '0';
             } catch (e) {}
         }
+
+        // Mobile: always start at the top so the header image/close are not cropped.
+        try {
+            popup.scrollTop = 0;
+            var content = popup.querySelector('.modal-content');
+            if (content) {
+                content.scrollTop = 0;
+            }
+        } catch (err) {}
     }
 
     function hidePopup() {

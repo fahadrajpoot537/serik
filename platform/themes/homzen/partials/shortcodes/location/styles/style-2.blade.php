@@ -67,10 +67,11 @@ function initOntarioLocationsSwiper() {
         speed: 800,
         autoplay: { delay: 2500, disableOnInteraction: false },
         breakpoints: {
-            0: { slidesPerView: 1.35, spaceBetween: 12 },
-            480: { slidesPerView: 2.1, spaceBetween: 12 },
-            576: { slidesPerView: 2.5, spaceBetween: 14 },
-            768: { slidesPerView: 3.2, spaceBetween: 16 },
+            0: { slidesPerView: 1.15, spaceBetween: 12 },
+            400: { slidesPerView: 1.25, spaceBetween: 12 },
+            480: { slidesPerView: 1.55, spaceBetween: 12 },
+            576: { slidesPerView: 2.1, spaceBetween: 14 },
+            768: { slidesPerView: 3, spaceBetween: 16 },
             992: { slidesPerView: 4, spaceBetween: 18 },
             1200: { slidesPerView: 4, spaceBetween: 24 }
         }

@@ -43,78 +43,103 @@
         position: relative;
     }
 
-    /* Mobile: keep whole popup on-screen (centered dialog was cropping top/bottom). */
+    /* Mobile: top-align + fit viewport (centered dialog was cropping top/bottom). */
     @media (max-width: 767.98px) {
         .newsletter-popup.modal {
-            padding: max(0.5rem, env(safe-area-inset-top, 0px)) 0 max(0.5rem, env(safe-area-inset-bottom, 0px)) !important;
+            padding: max(0.4rem, env(safe-area-inset-top, 0px)) 0.5rem max(0.4rem, env(safe-area-inset-bottom, 0px)) !important;
             overflow-x: hidden !important;
             overflow-y: auto !important;
             -webkit-overflow-scrolling: touch;
+            align-items: flex-start !important;
         }
 
         .newsletter-popup .modal-dialog,
-        .newsletter-popup .modal-dialog.modal-dialog-centered {
-            margin: 0.5rem auto !important;
-            max-width: calc(100% - 1rem) !important;
-            max-height: calc(100dvh - 1rem) !important;
+        .newsletter-popup .modal-dialog.modal-dialog-centered,
+        .newsletter-popup .modal-dialog.modal-lg {
+            margin: 0 auto !important;
+            max-width: min(100%, 420px) !important;
+            width: 100% !important;
+            max-height: none !important;
             min-height: 0 !important;
             height: auto !important;
-            display: flex !important;
-            align-items: flex-start !important;
+            display: block !important;
+            align-items: stretch !important;
             transform: none !important;
         }
 
         .newsletter-popup .modal-content {
             width: 100%;
-            max-height: calc(100dvh - 1rem);
+            max-height: calc(100dvh - 0.8rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
             overflow-x: hidden;
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
+            display: flex !important;
+            flex-direction: column !important;
         }
 
         .newsletter-popup .newsletter-popup-bg--mobile {
-            height: 112px;
-            min-height: 112px;
-            max-height: 28vw;
+            flex: 0 0 auto;
+            height: 88px;
+            min-height: 88px;
+            max-height: 88px;
         }
 
         .newsletter-popup .newsletter-popup-bg--mobile img {
-            min-height: 0;
-            max-height: 112px;
+            width: 100%;
+            height: 88px;
+            min-height: 88px;
+            max-height: 88px;
             object-fit: cover;
-            object-position: center;
+            object-position: center top;
         }
 
         .newsletter-popup .newsletter-popup-content {
-            padding: 0.85rem 0.9rem 1rem !important;
+            flex: 1 1 auto;
+            padding: 0.75rem 0.85rem 1.1rem !important;
+        }
+
+        .newsletter-popup .popup-content {
+            zoom: 1;
         }
 
         .newsletter-popup .popup-content h2 {
-            font-size: clamp(1.05rem, 4.6vw, 1.35rem);
-            margin-bottom: 10px;
+            font-size: clamp(1rem, 4.4vw, 1.25rem);
+            margin-bottom: 8px;
+            line-height: 1.25;
+        }
+
+        .newsletter-popup .popup-btn {
+            font-size: 14px !important;
+            padding: 10px 12px;
         }
 
         .newsletter-popup .popup-checklist {
-            margin-top: 12px !important;
-            font-size: 13px !important;
+            margin-top: 10px !important;
+            font-size: 12.5px !important;
         }
 
         .newsletter-popup .popup-checklist .form-check {
-            margin-bottom: 4px;
+            margin-bottom: 3px;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.35rem;
         }
 
         .newsletter-popup .popup-checklist .form-check-label {
-            line-height: 1.35;
+            line-height: 1.3;
         }
 
         .newsletter-popup .dont-show {
-            margin-top: 10px;
+            margin-top: 12px;
+            padding-bottom: 0.15rem;
         }
 
         .newsletter-popup .modal-content > .btn-close {
-            top: 0.55rem;
-            right: 0.55rem;
-            padding: 0.45rem;
+            top: 0.45rem;
+            right: 0.45rem;
+            padding: 0.4rem;
+            width: 2rem;
+            height: 2rem;
         }
     }
 
@@ -299,8 +324,8 @@
     }
 </style>
 
-{{-- Centered only on md+; on phones top-align so content is not cropped. --}}
-<div @class(['modal-dialog', 'modal-dialog-centered' => true, 'modal-lg' => $image])>
+{{-- Centered on md+ only; phones use top-aligned CSS so content is not cropped. --}}
+<div @class(['modal-dialog', 'modal-dialog-centered' => true, 'modal-lg' => $image, 'modal-dialog-scrollable' => false])>
     <div @class([
         'modal-content border-0',
         'd-flex flex-md-col flex-lg-row' => $image,
