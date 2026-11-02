@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
- * Pre-build census:property:{id}:v13 off the request path so the next page view SSR-paints metrics.
+ * Pre-build census:property:{id}:v14 off the request path so the next page view SSR-paints metrics.
  */
 class WarmPropertyCensusJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
 {

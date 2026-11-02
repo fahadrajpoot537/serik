@@ -2703,12 +2703,12 @@ class PropertyController extends BaseController
     {
         $keyword = trim((string) ($request->keyword ?? ''));
 
-        if (mb_strlen($keyword) < 1) {
+        if (mb_strlen($keyword) < 2) {
             return response()->json([]);
         }
 
         try {
-            $cacheKey = 'eval_addr_v17:' . md5(mb_strtolower($keyword));
+            $cacheKey = 'eval_addr_v18:' . md5(mb_strtolower($keyword));
 
             $records = Cache::remember($cacheKey, 180, function () use ($keyword) {
                 return $this->localEvaluationAddressSuggestions($keyword);
@@ -2800,13 +2800,13 @@ class PropertyController extends BaseController
         $merged = $this->mergeEvaluationSuggestionRows($merged, $prefixRows);
         $prefixCount = count($prefixRows);
 
-        // 2) Meili only when prefix is thin, or street is complete enough to find condo units
-        //    ("12 - 47 Broadway"). Skip AMP entirely — remote ingest made typeahead feel broken.
+        // 2) Meili only when prefix is thin. Always-on Meili for streetNameLen>=4 made
+        //    typeahead wait on remote search even when BTREE already returned plenty.
         $search = app(\Botble\RealEstate\Services\PropertySearchService::class);
         $needMeili = $search->isAvailable() && (
             $prefixCount === 0
-            || $streetNameLen >= 4
-            || ($streetNameLen === 0 && $prefixCount < 20)
+            || ($prefixCount < 12 && $streetNameLen >= 4)
+            || ($streetNameLen === 0 && $prefixCount < 12)
         );
         if ($needMeili) {
             $opts = [
@@ -2840,8 +2840,10 @@ class PropertyController extends BaseController
     private function evaluationSuggestionsByListingKey(string $listingKey): array
     {
         $listingKey = strtoupper(trim($listingKey));
+        // Include description only on single-key enrich (remark scrape) — not typeahead lists.
+        $cols = array_values(array_unique(array_merge($this->evaluationSuggestionColumns(), ['description'])));
         $item = DB::table('re_properties')
-            ->select($this->evaluationSuggestionColumns())
+            ->select($cols)
             ->where('moderation_status', 'approved')
             ->where('external_id', $listingKey)
             ->first();
@@ -3440,7 +3442,7 @@ class PropertyController extends BaseController
             'PropertySubType',
             'type',
             'square',
-            'description',
+            // Skip description TEXT — remark parsing runs on select/enrich, not typeahead.
             'price',
             'ClosePrice',
             'MlsStatus',

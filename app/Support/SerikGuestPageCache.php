@@ -152,7 +152,7 @@ final class SerikGuestPageCache
         }
 
         try {
-            $payload = Cache::get('census:property:' . $propertyId . ':v13');
+            $payload = Cache::get('census:property:' . $propertyId . ':v14');
         } catch (\Throwable) {
             return $html;
         }
@@ -165,6 +165,9 @@ final class SerikGuestPageCache
         if (! is_array($metrics) || $metrics === []) {
             return $html;
         }
+
+        $chartsPayload = $payload['charts'] ?? null;
+        $chartsComplete = is_array($chartsPayload) && count($chartsPayload) >= 3;
 
         $cards = '';
         foreach ($metrics as $metric) {
@@ -227,6 +230,8 @@ final class SerikGuestPageCache
             1
         ) ?? $html;
 
+        // Metrics-only: paint cards but leave bootstrapped=0 so client refetches Age/Education tabs.
+        $bootFlag = $chartsComplete ? '1' : '0';
         $html = str_replace(
             [
                 'data-census-bootstrapped="0"',
@@ -235,7 +240,7 @@ final class SerikGuestPageCache
                 'hs-census-section is-loading',
             ],
             [
-                'data-census-bootstrapped="1"',
+                'data-census-bootstrapped="' . $bootFlag . '"',
                 'aria-busy="false"',
                 ' hs-census-section',
                 'hs-census-section',

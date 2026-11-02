@@ -1951,7 +1951,7 @@ function serikInitHomeEvalAddressSuggest() {
         }
         selectedListing = null;
         clearTimeout(debounceTimer);
-        if (keyword.length < 1) {
+        if (keyword.length < 2) {
             suggestionBox.innerHTML = "";
             results = [];
             lastSuggestKeyword = '';

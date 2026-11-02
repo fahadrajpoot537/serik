@@ -142,7 +142,7 @@
     $censusBootstrap = null;
     try {
         $censusCached = \Illuminate\Support\Facades\Cache::get(
-            'census:property:' . (int) $model->getKey() . ':v13'
+            'census:property:' . (int) $model->getKey() . ':v14'
         );
         if (is_array($censusCached) && ($censusCached['status'] ?? null) === 'ok') {
             $censusBootstrap = $censusCached;
@@ -150,7 +150,12 @@
     } catch (\Throwable $e) {
         $censusBootstrap = null;
     }
-    $censusHasBootstrap = is_array($censusBootstrap) && ! empty($censusBootstrap['metrics']);
+    $censusHasMetrics = is_array($censusBootstrap) && ! empty($censusBootstrap['metrics']);
+    $censusChartsOk = $censusHasMetrics
+        && is_array($censusBootstrap['charts'] ?? null)
+        && count($censusBootstrap['charts']) >= 3;
+    // Complete only when chart tabs exist; metrics-only still paints cards + client refetch.
+    $censusHasBootstrap = $censusChartsOk;
     $censusPropertyId = (int) $model->getKey();
     // Do NOT warm census in afterResponse sync. Queue a background job when redis/database
     // queue is available so the next visit SSR-paints; client still fetches for this request.
@@ -168,18 +173,18 @@
 @endif
 <link rel="preload" href="{{ $chartJsUrl }}" as="script">
 <section
-    class="single-property-element hs-census-section{{ $censusHasBootstrap ? '' : ' is-loading' }}"
+    class="single-property-element hs-census-section{{ $censusHasMetrics ? '' : ' is-loading' }}"
     id="neighbourhoodDemographics"
     data-property-census-id="{{ $censusPropertyId }}"
     data-census-bootstrapped="{{ $censusHasBootstrap ? '1' : '0' }}"
-    aria-busy="{{ $censusHasBootstrap ? 'false' : 'true' }}"
+    aria-busy="{{ $censusHasMetrics ? 'false' : 'true' }}"
 >
     <div class="hs-census-head">
         <h3>{{ __('Neighbourhood Demographics') }}</h3>
         <p>{{ __('2021 Census data for the property\'s local Census area') }}</p>
     </div>
     <div class="hs-census-body">
-        @if ($censusHasBootstrap)
+        @if ($censusHasMetrics)
             <div class="hs-census-grid">
                 @foreach (($censusBootstrap['metrics'] ?? []) as $metric)
                     <div class="hs-census-card">
@@ -576,8 +581,12 @@
         try { bootData = JSON.parse(bootEl.textContent || ''); } catch (e) { bootData = null; }
     }
     if (bootData && applyCensusPayload(bootData)) {
-        window.__serikCensusStarted = true;
-        return;
+        var bootCharts = Array.isArray(bootData.charts) ? bootData.charts : [];
+        // Metrics-only bootstrap must still hit the API so Age/Education tabs appear.
+        if (bootCharts.length >= 3) {
+            window.__serikCensusStarted = true;
+            return;
+        }
     }
 
     // Cold path: start fetch immediately so data is ready by the time the user

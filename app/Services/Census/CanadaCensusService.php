@@ -35,7 +35,7 @@ class CanadaCensusService
     {
         $propertyId = (int) $property->getKey();
         $ttl = max(3600, (int) config('census.cache_ttl', 2592000));
-        $cacheKey = 'census:property:' . $propertyId . ':v13';
+        $cacheKey = 'census:property:' . $propertyId . ':v14';
 
         $cached = Cache::get($cacheKey);
         if (is_array($cached) && isset($cached['status'])) {
@@ -56,10 +56,8 @@ class CanadaCensusService
                 }
 
                 $computed = $this->computeForProperty($property);
-                // Cache successes for full TTL; cache failures briefly so env/API fixes recover quickly.
-                $putTtl = ($computed['status'] ?? null) === self::STATUS_OK
-                    ? $ttl
-                    : min(300, $ttl);
+                // Full TTL only when chart tabs exist; metrics-only expires fast.
+                $putTtl = $this->cacheTtlForPayload($computed, $ttl);
                 Cache::put($cacheKey, $computed, $putTtl);
 
                 return $computed;
@@ -90,6 +88,26 @@ class CanadaCensusService
         }
 
         return max(0.0, min($fallback, $this->requestDeadlineAt - microtime(true)));
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    protected function cacheTtlForPayload(array $payload, int $ttl): int
+    {
+        if (($payload['status'] ?? null) !== self::STATUS_OK) {
+            return min(300, $ttl);
+        }
+
+        $charts = $payload['charts'] ?? null;
+        $chartCount = is_array($charts) ? count($charts) : 0;
+        $expected = count(config('census.charts', []));
+        // Age/Education/etc. missing → short TTL so warm/API can complete tabs.
+        if ($chartCount < max(3, (int) floor($expected * 0.5))) {
+            return min(900, $ttl);
+        }
+
+        return $ttl;
     }
 
     /**
@@ -809,11 +827,10 @@ class CanadaCensusService
         $started = microtime(true);
         // Prefer DA when it responds, but never burn the whole HTTP budget on it —
         // live IIS often 500s around ~95–100s (Bancroft cold DA) before ADA can run.
-        // Metrics-first chunks still paint cards; charts fill if time remains.
-        // Give charts enough room after metrics so pie tabs are not half-empty.
+        // Metrics-first chunks still paint cards; keep enough budget for Age/Education tabs.
         $preferred = $level === 'da'
-            ? (app()->environment('local') ? 48.0 : 36.0)
-            : (app()->environment('local') ? 55.0 : 45.0);
+            ? (app()->environment('local') ? 52.0 : 48.0)
+            : (app()->environment('local') ? 55.0 : 50.0);
         $budgetSeconds = $this->secondsUntilDeadline($preferred);
         $chunkSize = $level === 'da' ? 16 : 70;
         $consecutiveFails = 0;
@@ -869,14 +886,14 @@ class CanadaCensusService
                 break;
             }
 
-            // After summary metrics land, skip remaining chart chunks when time is tight
-            // so ADA/CSD (or the HTTP response) is not starved.
+            // After summary metrics land, only bail when almost out of time — leaving
+            // 6s unused used to drop Age/Education/Ethnicity chart chunks too often.
             if ($chunksCompleted >= $metricChunkCount && $values !== []) {
                 $left = min(
                     $budgetSeconds - $elapsed,
                     $this->secondsUntilDeadline(99)
                 );
-                if ($left < 6.0) {
+                if ($left < 2.0) {
                     Log::info('census.profile.metrics_only_early_exit', [
                         'dguid' => $dguid,
                         'level' => $level,
