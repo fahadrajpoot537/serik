@@ -206,7 +206,7 @@ color:#334155!important
 .serik-blog-detail__author-linkedin{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;background:#0a66c2;color:#fff!important;text-decoration:none;flex-shrink:0}
 .serik-blog-detail__author-linkedin:hover{background:#084d92;color:#fff!important}
 .serik-blog-detail__author-linkedin i,.serik-blog-detail__author-linkedin svg{width:16px;height:16px}
-/* Header search results: accurate layout on all desktop widths (esp. 992–1400). */
+/* Header search results: accurate on all desktop widths (legacy float + new __body). */
 @media (min-width:992px){
 #header.main-header .smart-search{
 flex-direction:column!important;
@@ -224,6 +224,7 @@ position:absolute!important;
 top:calc(100% + 8px)!important;
 left:0!important;
 right:auto!important;
+transform:none!important;
 width:max(100%,min(520px,92vw))!important;
 min-width:min(420px,92vw)!important;
 max-width:min(560px,96vw)!important;
@@ -234,36 +235,87 @@ box-sizing:border-box!important
 }
 #header.main-header .listing-item{
 display:flex!important;
+flex-direction:row!important;
+flex-wrap:nowrap!important;
 align-items:flex-start!important;
 width:100%!important;
 max-width:100%!important;
 box-sizing:border-box!important
 }
-#header.main-header .listing-item__body{min-width:0!important;max-width:100%!important;overflow:hidden!important}
+#header.main-header .listing-item>img,
+#header.main-header .listing-item>.property-image,
+#header.main-header .listing-item img.property-image{
+flex:0 0 100px!important;
+width:100px!important;
+height:80px!important;
+max-width:100px!important;
+object-fit:cover!important
+}
+#header.main-header .listing-item__body,
+#header.main-header .listing-item>div{
+flex:1 1 0%!important;
+min-width:0!important;
+width:auto!important;
+max-width:100%!important;
+overflow:hidden!important;
+box-sizing:border-box!important
+}
 #header.main-header .listing-item__price-row,
 #header.main-header .listing-item__meta-row{
 display:flex!important;
 justify-content:space-between!important;
-align-items:flex-start!important;
-flex-wrap:wrap!important;
-gap:2px 8px!important;
+align-items:baseline!important;
+flex-wrap:nowrap!important;
+gap:4px 8px!important;
 width:100%!important
 }
 #header.main-header .listing-item__status,
 #header.main-header .listing-item__type,
 #header.main-header .listing-item__facts{
 float:none!important;
-white-space:normal!important;
+white-space:nowrap!important;
 text-align:right!important;
-min-width:0!important
+min-width:0!important;
+overflow:hidden!important;
+text-overflow:ellipsis!important
 }
-#header.main-header .listing-item .price{float:none!important}
+#header.main-header .listing-item .price{
+float:none!important;
+display:flex!important;
+align-items:baseline!important;
+justify-content:space-between!important;
+gap:8px!important;
+width:100%!important
+}
+#header.main-header .listing-item .price>p,
+#header.main-header .listing-item p[style*="float"],
+#header.main-header .listing-item small[style*="float"]{
+float:none!important;
+margin:0!important;
+flex:0 1 auto!important;
+text-align:right!important;
+min-width:0!important;
+max-width:55%!important;
+overflow:hidden!important;
+text-overflow:ellipsis!important;
+white-space:nowrap!important
+}
+#header.main-header .listing-item>div>p{
+display:flex!important;
+align-items:baseline!important;
+justify-content:space-between!important;
+gap:8px!important;
+width:100%!important;
+clear:both!important;
+margin:4px 0 0!important
+}
 #header.main-header #listingResults>a{display:block!important;width:100%!important;max-width:100%!important;box-sizing:border-box!important}
 }
 @media (min-width:992px) and (max-width:1399.98px){
 #header.main-header .listing-item{gap:8px!important;padding:8px!important}
-#header.main-header .listing-item img,
-#header.main-header .listing-item .property-image{width:72px!important;height:58px!important;flex:0 0 72px!important}
+#header.main-header .listing-item>img,
+#header.main-header .listing-item>.property-image,
+#header.main-header .listing-item img.property-image{width:72px!important;height:58px!important;flex:0 0 72px!important;max-width:72px!important}
 #header.main-header .listing-item__address{font-size:13px!important}
 #header.main-header .listing-item .price{font-size:14px!important}
 #header.main-header .listing-item__status,
