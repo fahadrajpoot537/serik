@@ -32,7 +32,7 @@ return [
             }
             $theme->asset()->container('footer')->usePath()->add('swiper', 'plugins/swiper/swiper-bundle.min.js');
             $theme->asset()->container('footer')->usePath()->add('visitor-location', 'js/visitor-location.js', ['jquery'], version: $version . '-vl2');
-            $theme->asset()->container('footer')->usePath()->add('script', 'js/script.js', ['jquery'], version: $version . '-bt3');
+            $theme->asset()->container('footer')->usePath()->add('script', 'js/script.js', ['jquery'], version: $version . '-bt4');
             $theme->asset()->container('footer')->usePath()->add('keyboard-a11y', 'js/keyboard-a11y.js', ['script'], version: $version);
 
             if (is_plugin_active('social-login')) {

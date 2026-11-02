@@ -621,6 +621,37 @@
     }
 }
 
+/* Mobile drawer: full-screen backdrop (header fixed parent was clipping hits to ~64px). */
+.mobile-menu .menu-backdrop{
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    z-index: 1 !important;
+}
+body.mobile-menu-visible .mobile-menu .menu-backdrop{
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+}
+body.mobile-menu-visible .close-btn{
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    z-index: 1000002 !important;
+}
+body.mobile-menu-visible .mobile-menu{
+    visibility: visible !important;
+    z-index: 1000000 !important;
+    pointer-events: auto !important;
+}
+body.mobile-menu-visible .mobile-menu .menu-box{
+    pointer-events: auto !important;
+    z-index: 2 !important;
+    position: relative !important;
+}
+
 /* ===== MOBILE BOTTOM NAV ===== */
 .mobile-bottom-nav{
     display: none;
@@ -1102,11 +1133,12 @@
    
     
 
+    {{-- close-btn + mobile-menu are portaled to <body> so backdrop is not clipped by fixed header --}}
     <div class="close-btn" role="button" tabindex="0" aria-label="{{ __('Close menu') }}">
         <x-core::icon name="ti ti-x" />
     </div>
 
-    <div class="mobile-menu">
+    <div class="mobile-menu" id="serikMobileMenu">
         <div class="menu-backdrop"></div>
         <nav class="menu-box">
             <div class="nav-logo">
@@ -1449,6 +1481,27 @@ if(openSearchBottom){
         document.getElementById('mobileSearchPanel').classList.add('active');
     });
 }
+
+/* Portal mobile drawer to <body> so fixed backdrop covers the full viewport
+   (inside #serikSiteHeader it was clipped to ~64px and taps felt "dead"). */
+(function portalSerikMobileMenu() {
+    function run() {
+        var menu = document.getElementById('serikMobileMenu') || document.querySelector('.mobile-menu');
+        var closeBtn = document.querySelector('.close-btn');
+        if (menu && menu.parentElement !== document.body) {
+            document.body.appendChild(menu);
+        }
+        if (closeBtn && closeBtn.parentElement !== document.body) {
+            document.body.appendChild(closeBtn);
+        }
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', run, { once: true });
+    } else {
+        run();
+    }
+    window.addEventListener('load', run, { once: true });
+})();
 
 const currentPath = window.location.pathname;
 

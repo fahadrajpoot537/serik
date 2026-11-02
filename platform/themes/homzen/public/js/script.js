@@ -701,13 +701,20 @@ $(this).parent('li').children('ul').slideToggle(500)
 })
 
 
-$('.mobile-nav-toggler').on('click', function () {
-$('body').addClass('mobile-menu-visible')
+$('.mobile-nav-toggler').on('click', function (e) {
+e.preventDefault()
+e.stopPropagation()
+$('body').toggleClass('mobile-menu-visible')
+const open = $('body').hasClass('mobile-menu-visible')
+$('.mobile-nav-toggler').attr('aria-expanded', open ? 'true' : 'false')
 })
 
 
-$('.mobile-menu .menu-backdrop, .close-btn').on('click', function () {
+$(document).on('click.serikMobileMenuClose', '.mobile-menu .menu-backdrop, .close-btn', function (e) {
+e.preventDefault()
+e.stopPropagation()
 $('body').removeClass('mobile-menu-visible')
+$('.mobile-nav-toggler').attr('aria-expanded', 'false')
 $('.mobile-menu .navigation > li').removeClass('open')
 $('.mobile-menu .navigation li ul').slideUp(0)
 })
@@ -715,6 +722,7 @@ $('.mobile-menu .navigation li ul').slideUp(0)
 $(document).keydown(function (e) {
 if (e.keyCode === 27) {
 $('body').removeClass('mobile-menu-visible')
+$('.mobile-nav-toggler').attr('aria-expanded', 'false')
 $('.mobile-menu .navigation > li').removeClass('open')
 $('.mobile-menu .navigation li ul').slideUp(0)
 }
