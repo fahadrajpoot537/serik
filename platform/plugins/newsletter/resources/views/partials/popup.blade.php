@@ -43,59 +43,63 @@
         position: relative;
     }
 
-    /* Mobile: top-align + fit viewport (centered dialog was cropping top/bottom). */
+    /* Mobile: keep popup centered in the middle of the screen, still fit viewport. */
     @media (max-width: 767.98px) {
         .newsletter-popup.modal {
-            padding: max(0.4rem, env(safe-area-inset-top, 0px)) 0.5rem max(0.4rem, env(safe-area-inset-bottom, 0px)) !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: max(0.5rem, env(safe-area-inset-top, 0px)) 0.75rem max(0.5rem, env(safe-area-inset-bottom, 0px)) !important;
             overflow-x: hidden !important;
             overflow-y: auto !important;
             -webkit-overflow-scrolling: touch;
-            align-items: flex-start !important;
         }
 
         .newsletter-popup .modal-dialog,
         .newsletter-popup .modal-dialog.modal-dialog-centered,
         .newsletter-popup .modal-dialog.modal-lg {
-            margin: 0 auto !important;
-            max-width: min(100%, 420px) !important;
+            margin: auto !important;
+            max-width: min(100%, 400px) !important;
             width: 100% !important;
-            max-height: none !important;
             min-height: 0 !important;
             height: auto !important;
-            display: block !important;
-            align-items: stretch !important;
+            max-height: calc(100dvh - 1rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
             transform: none !important;
         }
 
         .newsletter-popup .modal-content {
             width: 100%;
-            max-height: calc(100dvh - 0.8rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+            max-height: calc(100dvh - 1rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
             overflow-x: hidden;
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
             display: flex !important;
             flex-direction: column !important;
+            margin: 0 !important;
         }
 
         .newsletter-popup .newsletter-popup-bg--mobile {
             flex: 0 0 auto;
-            height: 88px;
-            min-height: 88px;
-            max-height: 88px;
+            height: 84px;
+            min-height: 84px;
+            max-height: 84px;
         }
 
         .newsletter-popup .newsletter-popup-bg--mobile img {
             width: 100%;
-            height: 88px;
-            min-height: 88px;
-            max-height: 88px;
+            height: 84px;
+            min-height: 84px;
+            max-height: 84px;
             object-fit: cover;
             object-position: center top;
         }
 
         .newsletter-popup .newsletter-popup-content {
             flex: 1 1 auto;
-            padding: 0.75rem 0.85rem 1.1rem !important;
+            padding: 0.7rem 0.85rem 0.95rem !important;
         }
 
         .newsletter-popup .popup-content {
@@ -103,7 +107,7 @@
         }
 
         .newsletter-popup .popup-content h2 {
-            font-size: clamp(1rem, 4.4vw, 1.25rem);
+            font-size: clamp(1rem, 4.3vw, 1.22rem);
             margin-bottom: 8px;
             line-height: 1.25;
         }
@@ -130,8 +134,8 @@
         }
 
         .newsletter-popup .dont-show {
-            margin-top: 12px;
-            padding-bottom: 0.15rem;
+            margin-top: 10px;
+            padding-bottom: 0.1rem;
         }
 
         .newsletter-popup .modal-content > .btn-close {
