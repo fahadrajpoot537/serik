@@ -75,11 +75,13 @@
                 .tf-sw-services,
                 .tf-sw-agents,
                 .tf-sw-categories,
+                .tf-sw-categories .swiper-slide,
+                .tf-sw-categories a,
                 .tf-sw-testimonial,
                 .city-swiper,
                 .serik-blog-m,
                 .serik-hp-reviews__cards {
-                    touch-action: pan-x pan-y;
+                    touch-action: pan-x pan-y !important;
                 }
             }
 

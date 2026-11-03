@@ -1236,19 +1236,47 @@ const el = document.querySelector(selector)
 if (!el || typeof initFn !== 'function') {
 return
 }
-const run = function () {
-if (el.dataset.serikSwiperBound === '1' || el.swiper) {
+const run = function (attempt) {
+attempt = attempt || 0
+if (el.swiper || el.classList.contains('swiper-initialized')) {
+el.dataset.serikSwiperBound = '1'
+return
+}
+// Carousel scripts load idle — wait briefly for window.Swiper.
+if (typeof window.Swiper === 'undefined') {
+if (attempt < 50) {
+setTimeout(function () { run(attempt + 1) }, 120)
+}
+return
+}
+if (el.dataset.serikSwiperBound === '1') {
 return
 }
 el.dataset.serikSwiperBound = '1'
+try {
 initFn()
+} catch (e) {
+el.dataset.serikSwiperBound = '0'
+return
+}
+if (!el.swiper && !el.classList.contains('swiper-initialized')) {
+el.dataset.serikSwiperBound = '0'
+}
 }
 // Never sync-measure geometry here (avoids forced reflow). Always IO / idle.
+let started = false
+const start = function () {
+if (started) {
+return
+}
+started = true
+run(0)
+}
 if (typeof IntersectionObserver === 'undefined') {
 if (typeof window.requestIdleCallback === 'function') {
-window.requestIdleCallback(run, { timeout: 2500 })
+window.requestIdleCallback(start, { timeout: 2500 })
 } else {
-setTimeout(run, 1200)
+setTimeout(start, 1200)
 }
 return
 }
@@ -1258,12 +1286,17 @@ if (entries.some(function (e) {
 return e.isIntersecting
 })) {
 io.disconnect()
-run()
+start()
 }
 },
-{ rootMargin: '200px 0px' }
+{ rootMargin: '280px 0px' }
 )
 io.observe(el)
+// Safety: if IO never fires (height/overflow quirks after login), still init.
+setTimeout(function () {
+io.disconnect()
+start()
+}, 4500)
 }
 
 const serikStartAutoplayAfterLoad = function (swiper, autoplayOpts) {
@@ -1534,8 +1567,14 @@ this.swiper.autoplay.start()
 }
 
 const initPropertyCategories = () => {
-if ($('.tf-sw-categories').length > 0) {
-const $element = $('.tf-sw-categories')
+if (typeof window.Swiper === 'undefined') {
+return
+}
+document.querySelectorAll('.tf-sw-categories').forEach(function (root) {
+if (root.swiper || root.classList.contains('swiper-initialized')) {
+return
+}
+const $element = $(root)
 const previewLg = $element.data('preview-lg')
 const previewMd = $element.data('preview-md')
 const previewSm = $element.data('preview-sm')
@@ -1543,13 +1582,23 @@ const spacing = $element.data('space')
 const autoplay = $element.data('autoplay')
 const autoplaySpeed = $element.data('autoplay-speed')
 const loop = $element.data('loop')
-const swiper = new Swiper('.tf-sw-categories', {
+const swiper = new Swiper(root, {
 rtl: Theme.isRtl(),
-slidesPerView: 2,
-spaceBetween: 30,
+// Peek next card on phones so swipe is obvious (was 2 flat tiles).
+slidesPerView: 1.2,
+spaceBetween: 14,
+watchOverflow: true,
+observer: true,
+observeParents: true,
+simulateTouch: true,
+allowTouchMove: true,
+touchStartPreventDefault: false,
+preventClicks: true,
+preventClicksPropagation: true,
 loop: loop,
 autoplay: autoplay ? {
 delay: autoplaySpeed,
+disableOnInteraction: false,
 } : false,
 navigation: {
 clickable: true,
@@ -1562,21 +1611,24 @@ clickable: true,
 },
 breakpoints: {
 600: {
-slidesPerView: previewSm,
-spaceBetween: 30,
+slidesPerView: previewSm || 3,
+spaceBetween: 18,
 },
 800: {
-slidesPerView: previewMd,
-spaceBetween: 30,
+slidesPerView: previewMd || 4,
+spaceBetween: 22,
 },
-
 1300: {
-slidesPerView: previewLg,
-spaceBetween: spacing,
+slidesPerView: previewLg || 6,
+spaceBetween: spacing || 18,
 },
 },
 })
-}
+try {
+swiper.update()
+} catch (e) {}
+root.dataset.serikSwiperBound = '1'
+})
 }
 
 const initTestimonials = () => {
