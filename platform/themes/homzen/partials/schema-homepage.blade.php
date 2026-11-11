@@ -1,4 +1,6 @@
-{{-- Homepage Organization / WebSite / navigation JSON-LD for Google rich results --}}
+{{-- Homepage Organization / WebSite / navigation JSON-LD for Google rich results.
+     @verbatim required: Blade treats @context/@type/@id as directives. --}}
+@verbatim
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -86,3 +88,4 @@
   ]
 }
 </script>
+@endverbatim
