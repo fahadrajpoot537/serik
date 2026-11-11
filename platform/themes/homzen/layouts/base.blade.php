@@ -289,7 +289,7 @@
 @endif
 {{-- Homepage Google Ads loads via deferred-analytics (after interaction / idle) to cut TBT --}}
 @if (! empty($isSerikHomepage))
-        {!! Theme::partial('schema-homepage') !!}
+        {!! \App\Support\SerikHomepageJsonLd::scriptTag() !!}
 @endif
     </head>
 
