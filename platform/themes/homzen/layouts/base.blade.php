@@ -288,6 +288,9 @@
         <!--End of Tawk.to Script-->
 @endif
 {{-- Homepage Google Ads loads via deferred-analytics (after interaction / idle) to cut TBT --}}
+@if (! empty($isSerikHomepage))
+        {!! Theme::partial('schema-homepage') !!}
+@endif
     </head>
 
     <body {!! Theme::bodyAttributes() !!}>
