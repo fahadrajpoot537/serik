@@ -254,6 +254,8 @@
                 $foundationBannerUrl = is_file($foundationBannerPath)
                     ? asset('pictures/about-foundation-banner.webp')
                     : null;
+                // Keep banner image; play opens this YouTube video.
+                $foundationVideoUrl = 'https://www.youtube.com/watch?v=5Ju160rKJsc';
             @endphp
             @if ($foundationBannerUrl)
                 <img
@@ -267,15 +269,13 @@
                 {{ RvMedia::image($shortcode->image, $shortcode->title) }}
             @endif
 
-            @if ($shortcode->video_url)
-                <a
-                    href="{{ $shortcode->video_url }}"
-                    data-fancybox="gallery2"
-                    class="btn-video"
-                >
-                    <span class="icon icon-play"></span>
-                </a>
-            @endif
+            <a
+                href="{{ $foundationVideoUrl }}"
+                data-fancybox="gallery2"
+                class="btn-video"
+            >
+                <span class="icon icon-play"></span>
+            </a>
         </div>
     </div>
 </section>
