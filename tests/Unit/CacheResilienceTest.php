@@ -30,6 +30,23 @@ class CacheResilienceTest extends TestCase
         $this->assertSame(1, SerikCache::get('homepage_response_cache_version_v4', 1));
     }
 
+    public function test_homepage_cache_drops_failed_properties_html(): void
+    {
+        $request = Request::create('https://serik.ca/', 'GET');
+        $this->app->instance('request', $request);
+        $failed = '<html><body><p class="mb-3">Featured properties are temporarily unavailable.</p></body></html>';
+
+        HomepageResponseCache::put($request, $failed);
+
+        $this->assertNull(HomepageResponseCache::get($request));
+        $this->assertNull(HomepageResponseCache::getSharedHtml($request));
+
+        $ok = '<html><body><section class="serik-hp-props"><article class="serik-portal-card"></article></section></body></html>';
+        HomepageResponseCache::put($request, $ok);
+
+        $this->assertStringContainsString('serik-portal-card', (string) HomepageResponseCache::get($request));
+    }
+
     public function test_homepage_shared_html_cache_miss_when_redis_down(): void
     {
         Cache::shouldReceive('get')->andThrow(new RuntimeException('Memurai stopped'));

@@ -14,7 +14,7 @@ final class HomepageResponseCache
 {
     private const VERSION_KEY = 'homepage_response_cache_version_v4';
 
-    private const KEY_PREFIX = 'homepage_html_v47:';
+    private const KEY_PREFIX = 'homepage_html_v48:';
 
     private const TRACKING_QUERY_KEYS = [
         'utm_source',
@@ -144,7 +144,7 @@ final class HomepageResponseCache
     {
         $html = self::extractHtml(SerikCache::get(self::sharedKey($request)));
 
-        if ($html === null || $html === '') {
+        if ($html === null || $html === '' || self::isFailedPropertiesHtml($html)) {
             return null;
         }
 
@@ -280,7 +280,7 @@ final class HomepageResponseCache
         }
 
         $html = self::extractHtml(SerikCache::get(self::cacheKey($request)));
-        if ($html === null || $html === '') {
+        if ($html === null || $html === '' || self::isFailedPropertiesHtml($html)) {
             return null;
         }
 
@@ -317,7 +317,7 @@ final class HomepageResponseCache
 
     public static function put(Request $request, string $html): void
     {
-        if (! self::isCacheableRequest($request) || $html === '') {
+        if (! self::isCacheableRequest($request) || $html === '' || self::isFailedPropertiesHtml($html)) {
             return;
         }
 
@@ -350,6 +350,16 @@ final class HomepageResponseCache
         }
 
         return $entry;
+    }
+
+    /**
+     * A locked log or view exception used to replace the homepage property
+     * grids with this fallback, then the shared HTML cache kept serving it.
+     */
+    public static function isFailedPropertiesHtml(string $html): bool
+    {
+        return str_contains($html, 'Featured properties are temporarily unavailable')
+            || str_contains($html, 'Properties are temporarily unavailable');
     }
 
     private static function extractHtml(mixed $cached): ?string

@@ -27,20 +27,24 @@ final class SerikLogging
             return;
         }
 
+        // Remember a successful open so IIS/PHP does not touch the log on every hit.
+        // Appending a line here locked laravel.log and flooded production with probes.
+        $stamp = storage_path('framework'.DIRECTORY_SEPARATOR.'serik-log-writable.stamp');
+        if (is_file($stamp) && (time() - (int) @filemtime($stamp)) < 600) {
+            self::$writable = true;
+
+            return;
+        }
+
         try {
             $logDir = storage_path('logs');
             if (! is_dir($logDir)) {
                 @mkdir($logDir, 0775, true);
             }
 
-            $probe = $logDir.DIRECTORY_SEPARATOR.'.write_probe';
-            $probeOk = @file_put_contents($probe, (string) time()) !== false;
-            if ($probeOk) {
-                @unlink($probe);
-            }
-
-            // Probe the real Monolog targets. On Windows, a deleted-but-still-open
-            // laravel-YYYY-MM-DD.log can block recreate while .write_probe works.
+            // Open the real Monolog targets without writing. On Windows, a
+            // deleted-but-still-open laravel-YYYY-MM-DD.log can block recreate
+            // while an unrelated probe file still succeeds.
             $targets = [
                 $logDir.DIRECTORY_SEPARATOR.'laravel.log',
                 $logDir.DIRECTORY_SEPARATOR.'laravel-'.date('Y-m-d').'.log',
@@ -48,18 +52,22 @@ final class SerikLogging
 
             $anyTargetOk = false;
             foreach ($targets as $target) {
-                $ok = @file_put_contents(
-                    $target,
-                    '['.date('Y-m-d H:i:s').'] production.DEBUG: serik log writability probe'.PHP_EOL,
-                    FILE_APPEND
-                ) !== false;
-                if ($ok) {
-                    $anyTargetOk = true;
+                $handle = @fopen($target, 'ab');
+                if ($handle === false) {
+                    continue;
                 }
+                @fclose($handle);
+                $anyTargetOk = true;
+                break;
             }
 
-            if ($probeOk && $anyTargetOk) {
+            if ($anyTargetOk) {
                 self::$writable = true;
+                $stampDir = dirname($stamp);
+                if (! is_dir($stampDir)) {
+                    @mkdir($stampDir, 0775, true);
+                }
+                @touch($stamp);
 
                 return;
             }
