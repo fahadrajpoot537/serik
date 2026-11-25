@@ -142,7 +142,7 @@
     $censusBootstrap = null;
     try {
         $censusCached = \Illuminate\Support\Facades\Cache::get(
-            'census:property:' . (int) $model->getKey() . ':v14'
+            \App\Services\Census\CanadaCensusService::propertyCacheKey((int) $model->getKey())
         );
         if (is_array($censusCached) && ($censusCached['status'] ?? null) === 'ok') {
             $censusBootstrap = $censusCached;
@@ -564,7 +564,7 @@
                 }
                 if (res.json.status === 'warming') {
                     // Keep the loading line. Charts and metrics render when the cache is ready.
-                    if (censusPolls++ < 45) {
+                    if (censusPolls++ < 90) {
                         window.setTimeout(function () { loadCensus(true); }, 1000);
                         return;
                     }

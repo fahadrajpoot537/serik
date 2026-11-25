@@ -23,6 +23,13 @@ class CanadaCensusService
 
     public const STATUS_WARMING = 'warming';
 
+    public const PROPERTY_CACHE_VERSION = 'v15';
+
+    public static function propertyCacheKey(int $propertyId): string
+    {
+        return 'census:property:' . $propertyId . ':' . self::PROPERTY_CACHE_VERSION;
+    }
+
     /**
      * Absolute wall-clock deadline for one HTTP census compute.
      * IIS/proxy often cuts ~100s; leave room for ADA/CSD after a slow DA.
@@ -38,7 +45,7 @@ class CanadaCensusService
     {
         $propertyId = (int) $property->getKey();
         $ttl = max(3600, (int) config('census.cache_ttl', 2592000));
-        $cacheKey = 'census:property:' . $propertyId . ':v14';
+        $cacheKey = self::propertyCacheKey($propertyId);
 
         $cached = Cache::get($cacheKey);
         if (is_array($cached) && isset($cached['status'])) {
@@ -59,9 +66,14 @@ class CanadaCensusService
                 }
 
                 $computed = $this->computeForProperty($property);
-                // Full TTL only when chart tabs exist; metrics-only expires fast.
-                $putTtl = $this->cacheTtlForPayload($computed, $ttl);
-                Cache::put($cacheKey, $computed, $putTtl);
+                $status = $computed['status'] ?? null;
+                if ($status === self::STATUS_OK) {
+                    // Full TTL only when chart tabs exist; metrics-only expires fast.
+                    Cache::put($cacheKey, $computed, $this->cacheTtlForPayload($computed, $ttl));
+                } elseif (in_array($status, [self::STATUS_MISSING_ADDRESS, self::STATUS_GEOCODE_UNAVAILABLE], true)) {
+                    // Permanent for this listing. A StatCan timeout is not cached, so the next view retries.
+                    Cache::put($cacheKey, $computed, 3600);
+                }
 
                 return $computed;
             });
@@ -563,7 +575,8 @@ class CanadaCensusService
             return null;
         }
 
-        $deltas = [0.0008, 0.002, 0.005];
+        // Inside a page warm, one identify is enough. Extra deltas used to burn the ADA budget.
+        $deltas = $this->requestDeadlineAt !== null ? [0.002] : [0.0008, 0.002, 0.005];
 
         foreach ($deltas as $delta) {
             $params = [
@@ -719,15 +732,18 @@ class CanadaCensusService
     {
         $fullUrl = $url . (str_contains($url, '?') ? '&' : '?') . http_build_query($params);
         $timeout = app()->environment('local')
-            ? 10
-            : max(12, min(20, (int) config('census.statcan.timeout', 45)));
+            ? 8
+            : 8;
+        if ($this->requestDeadlineAt !== null) {
+            $timeout = max(4, min($timeout, (int) floor($this->secondsUntilDeadline((float) $timeout))));
+        }
 
         if (function_exists('curl_init')) {
             $ch = curl_init($fullUrl);
             curl_setopt_array($ch, [
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_TIMEOUT => $timeout,
-                CURLOPT_CONNECTTIMEOUT => app()->environment('local') ? 4 : 10,
+                CURLOPT_CONNECTTIMEOUT => 4,
                 CURLOPT_FOLLOWLOCATION => true,
                 CURLOPT_SSL_VERIFYPEER => $verify,
                 CURLOPT_SSL_VERIFYHOST => $verify ? 2 : 0,
@@ -844,8 +860,9 @@ class CanadaCensusService
         // Prefer DA when it responds, but never burn the whole HTTP budget on it —
         // live IIS often 500s around ~95–100s (Bancroft cold DA) before ADA can run.
         // Metrics-first chunks still paint cards; keep enough budget for Age/Education tabs.
+        // DF_DA often hangs. Give it one short try, then ADA/CSD still have time to finish.
         $preferred = $level === 'da'
-            ? (app()->environment('local') ? 52.0 : 48.0)
+            ? (app()->environment('local') ? 12.0 : 10.0)
             : (app()->environment('local') ? 55.0 : 50.0);
         $budgetSeconds = $this->secondsUntilDeadline($preferred);
         $chunkSize = $level === 'da' ? 16 : 70;
@@ -1009,12 +1026,12 @@ class CanadaCensusService
         $configured = (int) config('census.statcan.timeout', 45);
         // Cap DA chunk waits so a dead SDMX socket fails over to ADA before proxy 500.
         $timeout = $level === 'da'
-            ? (app()->environment('local') ? 22 : 16)
+            ? 8
             : (app()->environment('local')
                 ? max(14, min(26, $configured > 0 ? $configured : 26))
                 : max(14, min(28, $configured > 0 ? $configured : 28)));
         if ($remainingBudget !== null) {
-            $timeout = max($level === 'da' ? 8 : 3, min($timeout, (int) floor($remainingBudget)));
+            $timeout = max($level === 'da' ? 4 : 3, min($timeout, (int) floor($remainingBudget)));
         }
         $timeout = max(3, min($timeout, (int) floor($this->secondsUntilDeadline((float) $timeout))));
         $connectTimeout = app()->environment('local') ? 4 : 8;

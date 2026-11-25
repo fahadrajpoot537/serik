@@ -8093,7 +8093,7 @@ class PropertyController extends BaseController
     public function getPropertyCensus($propertyId)
     {
         $propertyId = (int) $propertyId;
-        $cacheKey = 'census:property:' . $propertyId . ':v14';
+        $cacheKey = \App\Services\Census\CanadaCensusService::propertyCacheKey($propertyId);
 
         // Cached profiles return immediately. A cold StatCan fetch must not hold this
         // response open (it used to block the browser for up to ~90s).
@@ -8135,35 +8135,85 @@ class PropertyController extends BaseController
 
     private function startDetachedCensusWarm(int $propertyId): void
     {
-        $php = PHP_BINARY;
+        // IIS serves PHP as php-cgi.exe. That binary cannot run artisan, so a warm
+        // started from PHP_BINARY exits immediately and the page stays on "unavailable".
+        $spawned = $this->spawnCensusWarmProcess($propertyId);
+
+        try {
+            \App\Jobs\WarmPropertyCensusJob::dispatch($propertyId);
+        } catch (\Throwable $e) {
+            report($e);
+            if (! $spawned) {
+                Cache::forget('census:computing:' . $propertyId);
+            }
+        }
+    }
+
+    private function resolveCliPhpBinary(): string
+    {
+        $candidates = [];
+        $fromEnv = getenv('PHP_CLI');
+        if (is_string($fromEnv) && $fromEnv !== '') {
+            $candidates[] = $fromEnv;
+        }
+
+        $binary = PHP_BINARY;
+        if (is_string($binary) && $binary !== '') {
+            $dir = dirname($binary);
+            $base = strtolower(basename($binary));
+            if (str_contains($base, 'cgi') || str_contains($base, 'fpm')) {
+                $candidates[] = $dir . DIRECTORY_SEPARATOR . 'php.exe';
+                $candidates[] = $dir . DIRECTORY_SEPARATOR . 'php';
+            }
+            $candidates[] = $binary;
+        }
+
+        $candidates[] = 'php';
+
+        foreach ($candidates as $path) {
+            $name = strtolower(basename($path));
+            if (str_contains($name, 'cgi') || str_contains($name, 'fpm')) {
+                continue;
+            }
+            if ($path === 'php' || is_file($path)) {
+                return $path;
+            }
+        }
+
+        return 'php';
+    }
+
+    private function spawnCensusWarmProcess(int $propertyId): bool
+    {
+        $php = $this->resolveCliPhpBinary();
         $artisan = base_path('artisan');
         $id = (string) $propertyId;
+        $log = storage_path('logs/census-warm.log');
 
         try {
             if (PHP_OS_FAMILY === 'Windows') {
-                $cmd = 'cmd.exe /C start "" /B ' . escapeshellarg($php) . ' ' . escapeshellarg($artisan) . ' census:warm ' . escapeshellarg($id);
+                // Extra leading quote: cmd.exe /C strips the first and last quote when >> is present.
+                $run = '"' . $php . '" "' . $artisan . '" census:warm ' . $id . ' >> "' . $log . '" 2>&1';
+                $cmd = 'cmd.exe /C start "census" /D "' . base_path() . '" /B cmd.exe /C "' . $run . '"';
                 $handle = @popen($cmd, 'r');
                 if (is_resource($handle)) {
                     pclose($handle);
 
-                    return;
+                    return true;
                 }
             } else {
-                $cmd = escapeshellarg($php) . ' ' . escapeshellarg($artisan) . ' census:warm ' . escapeshellarg($id) . ' > /dev/null 2>&1 &';
+                $cmd = 'cd ' . escapeshellarg(base_path()) . ' && '
+                    . escapeshellarg($php) . ' ' . escapeshellarg($artisan) . ' census:warm ' . escapeshellarg($id)
+                    . ' >> ' . escapeshellarg($log) . ' 2>&1 &';
                 exec($cmd);
 
-                return;
+                return true;
             }
         } catch (\Throwable $e) {
             report($e);
         }
 
-        Cache::forget('census:computing:' . $propertyId);
-        try {
-            \App\Jobs\WarmPropertyCensusJob::dispatch($propertyId);
-        } catch (\Throwable $e) {
-            report($e);
-        }
+        return false;
     }
 
     public function getPropertyImages($listingKey)

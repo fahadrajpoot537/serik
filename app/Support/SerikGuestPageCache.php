@@ -153,7 +153,7 @@ final class SerikGuestPageCache
         }
 
         try {
-            $payload = Cache::get('census:property:' . $propertyId . ':v14');
+            $payload = Cache::get(\App\Services\Census\CanadaCensusService::propertyCacheKey($propertyId));
         } catch (\Throwable) {
             return $html;
         }

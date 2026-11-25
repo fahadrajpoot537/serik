@@ -9,6 +9,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
@@ -45,12 +46,14 @@ class WarmPropertyCensusJob implements ShouldQueue, ShouldBeUniqueUntilProcessin
 
     public function handle(CanadaCensusService $census): void
     {
-        $property = Property::query()->find($this->propertyId);
-        if (! $property) {
-            return;
+        try {
+            $property = Property::query()->find($this->propertyId);
+            if ($property) {
+                $census->getPropertyCensusData($property);
+            }
+        } finally {
+            Cache::forget('census:computing:' . $this->propertyId);
         }
-
-        $census->getPropertyCensusData($property);
     }
 
     public function failed(?Throwable $e): void
