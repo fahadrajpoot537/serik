@@ -21,7 +21,7 @@ return [
     'sqft_tolerance_ratio' => 0.35,
     'sqft_tolerance_ratio_small' => 0.28,
 
-    'cache_ttl_seconds' => 180,
+    'cache_ttl_seconds' => 7200,
 
     'disclaimer' => 'This is an automated market estimate based on available MLS sold and listing data. It is not a certified appraisal, and individual sale prices can differ materially. Use it only as a starting point.',
 

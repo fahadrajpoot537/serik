@@ -13,7 +13,7 @@
 
             document.body.classList.add('lazy-loading-active');
 
-            const applyBlockHtml = function(element, data) {
+            const applyBlockHtml = function(element, data, name, attributes) {
                 const tempDiv = document.createElement('div');
                 tempDiv.innerHTML = data;
                 const firstChild = tempDiv.firstElementChild;
@@ -24,8 +24,6 @@
                 }
 
                 const scripts = tempDiv.querySelectorAll('script');
-                const name = element.getAttribute('data-name');
-                const attributes = JSON.parse(element.getAttribute('data-attributes') || '{}');
 
                 element.outerHTML = data;
 
@@ -68,6 +66,58 @@
                 finishLoading();
             };
 
+            const loadSingleBlock = function(element) {
+                const name = element.getAttribute('data-name');
+                const attributes = JSON.parse(element.getAttribute('data-attributes') || '{}');
+
+                return fetch(singleUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken
+                        },
+                        body: JSON.stringify({
+                            name,
+                            attributes
+                        })
+                    })
+                    .then(response => response.json().then(payload => ({
+                        ok: response.ok,
+                        payload
+                    })).catch(() => ({
+                        ok: false,
+                        payload: null
+                    })))
+                    .then(({
+                        ok,
+                        payload
+                    }) => {
+                        const error = payload && payload.error;
+                        let data = payload && payload.data;
+
+                        if (!ok || error || data === null || data === undefined) {
+                            handleFailure(element);
+                            return;
+                        }
+
+                        applyBlockHtml(element, data, name, attributes);
+                    })
+                    .catch(function(error) {
+                        console.error('Fetch error:', error);
+                        handleFailure(element);
+                    });
+            };
+
+            const loadBlocksIndividually = function(elements) {
+                return Promise.all(elements.map(loadSingleBlock)).then(function() {
+                    if (typeof Theme !== 'undefined' && typeof Theme.lazyLoadInstance !== 'undefined') {
+                        Theme.lazyLoadInstance.update();
+                    }
+                    finishLoading();
+                });
+            };
+
             if (loaders.length > 1) {
                 const blocks = loaders.map(function(element, index) {
                     const blockId = element.getAttribute('data-block-id') || String(index);
@@ -100,24 +150,34 @@
                     })
                     .then(response => response.json().then(payload => ({
                         ok: response.ok,
+                        status: response.status,
                         payload
                     })).catch(() => ({
                         ok: false,
+                        status: 0,
                         payload: null
                     })))
                     .then(({
                         ok,
+                        status,
                         payload
                     }) => {
-                        const data = payload && payload.data ? payload.data : {};
+                        if (!ok || !payload || payload.error) {
+                            console.warn('Batch shortcode load failed (' + status + '), falling back to single requests.');
+                            return loadBlocksIndividually(loaders);
+                        }
+
+                        const data = payload.data || {};
+                        let missing = false;
 
                         blocks.forEach(function(block) {
                             const html = data[block.id];
                             if (!html) {
+                                missing = true;
                                 handleFailure(block.element);
                                 return;
                             }
-                            applyBlockHtml(block.element, html);
+                            applyBlockHtml(block.element, html, block.name, block.attributes);
                         });
 
                         if (typeof Theme !== 'undefined' && typeof Theme.lazyLoadInstance !== 'undefined') {
@@ -125,62 +185,27 @@
                         }
 
                         finishLoading();
+
+                        if (missing) {
+                            console.warn('Some batch shortcode blocks were missing from the response.');
+                        }
                     })
                     .catch(function(error) {
                         console.error('Batch fetch error:', error);
-                        loaders.forEach(handleFailure);
-                        document.body.classList.remove('lazy-loading-active');
+                        loadBlocksIndividually(loaders).finally(function() {
+                            document.body.classList.remove('lazy-loading-active');
+                        });
                     });
 
                 return;
             }
 
-            const element = loaders[0];
-            const name = element.getAttribute('data-name');
-            const attributes = JSON.parse(element.getAttribute('data-attributes') || '{}');
-
-            fetch(singleUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                        'X-CSRF-TOKEN': csrfToken
-                    },
-                    body: JSON.stringify({
-                        name,
-                        attributes
-                    })
-                })
-                .then(response => response.json().then(payload => ({
-                    ok: response.ok,
-                    payload
-                })).catch(() => ({
-                    ok: false,
-                    payload: null
-                })))
-                .then(({
-                    ok,
-                    payload
-                }) => {
-                    const error = payload && payload.error;
-                    let data = payload && payload.data;
-
-                    if (error || data === null || data === undefined) {
-                        data = '<div class="text-center py-3 text-muted">Content temporarily unavailable.</div>';
-                    }
-
-                    applyBlockHtml(element, data);
-
-                    if (typeof Theme !== 'undefined' && typeof Theme.lazyLoadInstance !== 'undefined') {
-                        Theme.lazyLoadInstance.update();
-                    }
-
-                    finishLoading();
-                })
-                .catch(function(error) {
-                    console.error('Fetch error:', error);
-                    handleFailure(element);
-                });
+            loadSingleBlock(loaders[0]).then(function() {
+                if (typeof Theme !== 'undefined' && typeof Theme.lazyLoadInstance !== 'undefined') {
+                    Theme.lazyLoadInstance.update();
+                }
+                finishLoading();
+            });
         };
 
         window.addEventListener('load', function() {

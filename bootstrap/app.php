@@ -27,6 +27,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
         \App\Console\Commands\SerikReliabilityValidateCommand::class,
         \App\Console\Commands\SerikProductionOptimizeCommand::class,
         \App\Console\Commands\SerikRedisStatusCommand::class,
+        \App\Console\Commands\SerikOctaneStartCommand::class,
     ])
     ->withRouting(
         web: __DIR__ . '/../routes/web.php',

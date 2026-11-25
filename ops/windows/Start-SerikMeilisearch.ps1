@@ -45,8 +45,8 @@ if ($svc) {
 }
 
 if (-not $BatPath) {
-    # $PSScriptRoot = <repo>/ops/windows → repo root is parent of ops
-    $root = Split-Path -Parent $PSScriptRoot
+    # $PSScriptRoot = <repo>/ops/windows → repo root is two levels up
+    $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
     $BatPath = Join-Path $root "storage\meilisearch\start-meilisearch.bat"
 }
 

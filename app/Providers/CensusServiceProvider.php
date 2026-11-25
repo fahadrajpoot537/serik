@@ -15,10 +15,19 @@ class CensusServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        if (! function_exists('add_filter')) {
-            return;
-        }
+        // Register after every provider has booted. On Octane, add_filter() can
+        // still be missing while this provider boots, which dropped the census block.
+        $this->app->booted(function () {
+            if (! function_exists('add_filter')) {
+                return;
+            }
 
+            $this->registerPropertyCensusSection();
+        });
+    }
+
+    private function registerPropertyCensusSection(): void
+    {
         add_filter('after_single_content_detail', function ($html, $model = null) {
             if (! $model instanceof Property) {
                 return $html;

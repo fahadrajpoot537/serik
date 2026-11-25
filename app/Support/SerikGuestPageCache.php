@@ -16,7 +16,7 @@ final class SerikGuestPageCache
     /** Shorter TTL when property HTML was cached before census warmed. */
     public const TTL_PROPERTY_COLD_CENSUS = 60;
 
-    public const VERSION = 'v36';
+    public const VERSION = 'v38';
 
     /**
      * Exact path prefixes (no trailing slash) eligible for guest HTML cache.
@@ -111,6 +111,7 @@ final class SerikGuestPageCache
         if (
             str_contains($html, 'Whoops')
             || str_contains($html, 'Server Error')
+            || str_contains($html, 'must be of type string, null given')
             || str_contains($html, 'csrf-token-mismatch')
         ) {
             return;

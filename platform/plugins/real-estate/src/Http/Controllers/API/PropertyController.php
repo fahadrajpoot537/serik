@@ -2710,7 +2710,7 @@ class PropertyController extends BaseController
         try {
             $cacheKey = 'eval_addr_v18:' . md5(mb_strtolower($keyword));
 
-            $records = Cache::remember($cacheKey, 180, function () use ($keyword) {
+            $records = Cache::remember($cacheKey, 900, function () use ($keyword) {
                 return $this->localEvaluationAddressSuggestions($keyword);
             });
 
@@ -8092,11 +8092,21 @@ class PropertyController extends BaseController
 
     public function getPropertyCensus($propertyId)
     {
-        // Service caps compute ~72s prod so ADA can run before IIS/proxy ~100s kills.
-        @set_time_limit(app()->environment('local') ? 120 : 90);
-        @ini_set('max_execution_time', app()->environment('local') ? '120' : '90');
+        $propertyId = (int) $propertyId;
+        $cacheKey = 'census:property:' . $propertyId . ':v14';
 
-        $property = Property::query()->find((int) $propertyId);
+        // Cached profiles return immediately. A cold StatCan fetch must not hold this
+        // response open (it used to block the browser for up to ~90s).
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached) && isset($cached['status']) && $cached['status'] !== \App\Services\Census\CanadaCensusService::STATUS_WARMING) {
+            $ok = ($cached['status'] ?? null) === \App\Services\Census\CanadaCensusService::STATUS_OK;
+
+            return response()->json(array_merge([
+                'success' => $ok,
+            ], $cached), 200);
+        }
+
+        $property = Property::query()->find($propertyId);
 
         if (! $property) {
             return response()->json([
@@ -8107,22 +8117,52 @@ class PropertyController extends BaseController
             ], 404);
         }
 
-        try {
-            $payload = app(\App\Services\Census\CanadaCensusService::class)->getPropertyCensusData($property);
-            $ok = ($payload['status'] ?? null) === \App\Services\Census\CanadaCensusService::STATUS_OK;
+        // One background compute per property. afterResponse() runs inside this
+        // PHP process and, on artisan serve, blocks the property page, CSS, and
+        // images until StatCan returns. A detached process keeps the page free.
+        if (Cache::add('census:computing:' . $propertyId, 1, 150)) {
+            $this->startDetachedCensusWarm($propertyId);
+        }
 
-            return response()->json(array_merge([
-                'success' => $ok,
-            ], $payload), 200);
+        return response()->json([
+            'success' => false,
+            'status' => \App\Services\Census\CanadaCensusService::STATUS_WARMING,
+            'message' => 'Loading neighbourhood demographics…',
+            'metrics' => [],
+            'charts' => [],
+        ], 200);
+    }
+
+    private function startDetachedCensusWarm(int $propertyId): void
+    {
+        $php = PHP_BINARY;
+        $artisan = base_path('artisan');
+        $id = (string) $propertyId;
+
+        try {
+            if (PHP_OS_FAMILY === 'Windows') {
+                $cmd = 'cmd.exe /C start "" /B ' . escapeshellarg($php) . ' ' . escapeshellarg($artisan) . ' census:warm ' . escapeshellarg($id);
+                $handle = @popen($cmd, 'r');
+                if (is_resource($handle)) {
+                    pclose($handle);
+
+                    return;
+                }
+            } else {
+                $cmd = escapeshellarg($php) . ' ' . escapeshellarg($artisan) . ' census:warm ' . escapeshellarg($id) . ' > /dev/null 2>&1 &';
+                exec($cmd);
+
+                return;
+            }
         } catch (\Throwable $e) {
             report($e);
+        }
 
-            return response()->json([
-                'success' => false,
-                'status' => 'census_unavailable',
-                'message' => 'Census data temporarily unavailable.',
-                'metrics' => [],
-            ], 200);
+        Cache::forget('census:computing:' . $propertyId);
+        try {
+            \App\Jobs\WarmPropertyCensusJob::dispatch($propertyId);
+        } catch (\Throwable $e) {
+            report($e);
         }
     }
 

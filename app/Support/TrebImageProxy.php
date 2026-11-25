@@ -123,14 +123,19 @@ final class TrebImageProxy
             }
         }
 
+        $saved = self::savedPublicFile($listingKey, $filename);
+        if ($saved !== null) {
+            return response()->file($saved, self::imageHeaders(self::guessContentType($saved, ''), immutable: true));
+        }
+
         $remoteUrl = self::remoteUrlAtIndex($listingKey, $index, $imageVal);
         if ($remoteUrl === null || $remoteUrl === '') {
             abort(404);
         }
 
-        $response = Http::timeout(self::HTTP_TIMEOUT)
-            ->connectTimeout(8)
-            ->retry(2, 200, throw: false)
+        $response = Http::timeout(8)
+            ->connectTimeout(4)
+            ->retry(1, 200, throw: false)
             ->withHeaders(['User-Agent' => 'SerikRealty/1.0'])
             ->get($remoteUrl);
 
@@ -145,6 +150,10 @@ final class TrebImageProxy
 
         if ($index === 0) {
             self::maybePersistCoverUrl($listingKey, $remoteUrl);
+        }
+
+        if ($targetWidth === null) {
+            self::writePublicFile($listingKey, $filename, $body);
         }
 
         $contentType = trim((string) ($response->header('Content-Type') ?? ''));
@@ -162,6 +171,37 @@ final class TrebImageProxy
         }
 
         return response($body, 200, self::imageHeaders($contentType, immutable: $targetWidth !== null));
+    }
+
+    private static function savedPublicFile(string $listingKey, string $filename): ?string
+    {
+        $path = public_path('storage/properties/treb/' . $listingKey . '/' . strtolower($filename));
+        if (! is_file($path)) {
+            return null;
+        }
+
+        $size = filesize($path);
+
+        return $size !== false && $size > 500 ? $path : null;
+    }
+
+    private static function writePublicFile(string $listingKey, string $filename, string $body): void
+    {
+        if (strlen($body) < 500) {
+            return;
+        }
+
+        $dir = public_path('storage/properties/treb/' . $listingKey);
+        if (! is_dir($dir) && ! @mkdir($dir, 0755, true) && ! is_dir($dir)) {
+            return;
+        }
+
+        $path = $dir . DIRECTORY_SEPARATOR . strtolower($filename);
+        if (is_file($path) && (int) filesize($path) > 500) {
+            return;
+        }
+
+        @file_put_contents($path, $body);
     }
 
     /**

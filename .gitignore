@@ -97,3 +97,6 @@ auth.json
 *.p12
 *.key
 !platform/**/*.key
+rr
+rr.exe
+.rr.yaml

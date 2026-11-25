@@ -1,5 +1,13 @@
 @php
-    $socialSharing = \Botble\Theme\Supports\ThemeSupport::getSocialSharingButtons($model->url, $model->name);
+    $shareUrl = $model->url ?? null;
+    if (! is_string($shareUrl) || $shareUrl === '') {
+        $shareUrl = url()->current();
+    }
+    $shareTitle = trim((string) ($model->name ?? ''));
+    $socialSharing = \Botble\Theme\Supports\ThemeSupport::getSocialSharingButtons(
+        $shareUrl,
+        $shareTitle !== '' ? $shareTitle : 'Property'
+    );
 @endphp
 @if($socialSharing)
     <div class="property-share-social">

@@ -14,6 +14,9 @@ if (file_exists($maintenance = __DIR__ . '/../storage/framework/maintenance.php'
 require __DIR__ . '/../vendor/autoload.php';
 
 // Drop stale bootstrap caches before Laravel boots (prevents Botble-wide 502s).
+// Explicit require: under PHP built-in server on Windows, Composer classmap
+// sometimes fails to load this class even though the file exists.
+require_once __DIR__ . '/../app/Support/BootstrapCacheGuard.php';
 \App\Support\BootstrapCacheGuard::healStaleCaches();
 
 // Bootstrap Laravel and handle the request...

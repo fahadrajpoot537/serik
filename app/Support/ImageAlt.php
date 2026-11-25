@@ -19,6 +19,14 @@ final class ImageAlt
     /** @var array<string, ?MediaFile> */
     private static array $mediaCache = [];
 
+    /**
+     * Drop per-request media lookups so Octane workers do not retain stale MediaFile instances.
+     */
+    public static function flushStaticState(): void
+    {
+        self::$mediaCache = [];
+    }
+
     public static function resolve(
         ?string $explicit = null,
         ?string $mediaPathOrUrl = null,

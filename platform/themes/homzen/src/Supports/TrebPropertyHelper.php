@@ -2702,6 +2702,18 @@ class TrebPropertyHelper
     /** @var array<string, array<string, mixed>> */
     private static array $factRecordMemo = [];
 
+    /** @var array<string, bool> */
+    private static array $scheduledThinHydrates = [];
+
+    /**
+     * Clear request-scoped TREB memoization for long-running Octane workers.
+     */
+    public static function flushStaticState(): void
+    {
+        self::$factRecordMemo = [];
+        self::$scheduledThinHydrates = [];
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -2782,13 +2794,11 @@ class TrebPropertyHelper
 
     private static function scheduleThinDetailHydrate(string $listingKey): void
     {
-        static $scheduled = [];
-
         $listingKey = strtoupper(trim($listingKey));
-        if ($listingKey === '' || isset($scheduled[$listingKey])) {
+        if ($listingKey === '' || isset(self::$scheduledThinHydrates[$listingKey])) {
             return;
         }
-        $scheduled[$listingKey] = true;
+        self::$scheduledThinHydrates[$listingKey] = true;
 
         $runner = static function () use ($listingKey): void {
             try {

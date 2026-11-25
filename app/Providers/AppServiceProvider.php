@@ -28,6 +28,25 @@ class AppServiceProvider extends ServiceProvider
     {
         require_once __DIR__ . '/../helpers/image_alt.php';
 
+        // Octane hard-codes PosixExtension inside its RoadRunner inspector binding.
+        // Re-bind on Windows so status/stop/start work without the posix extension.
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $this->app->bind(
+                \Laravel\Octane\PosixExtension::class,
+                \App\Support\WindowsPosixExtension::class
+            );
+            $this->app->bind(
+                \Laravel\Octane\RoadRunner\ServerProcessInspector::class,
+                function ($app) {
+                    return new \Laravel\Octane\RoadRunner\ServerProcessInspector(
+                        $app->make(\Laravel\Octane\RoadRunner\ServerStateFile::class),
+                        new \Laravel\Octane\SymfonyProcessFactory,
+                        $app->make(\Laravel\Octane\PosixExtension::class),
+                    );
+                }
+            );
+        }
+
         $this->app->singleton(\Botble\Theme\Supports\SiteMapManager::class, \App\Support\SerikSiteMapManager::class);
 
         if (class_exists(\Botble\Ads\Supports\AdsManager::class)) {

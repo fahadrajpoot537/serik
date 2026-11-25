@@ -22,7 +22,13 @@ class BaseModel extends Model implements BaseModelContract
     public function __get($key)
     {
         if (MacroableModels::modelHasMacro(static::class, $method = 'get' . Str::studly($key) . 'Attribute')) {
-            return $this->{$method}();
+            $value = $this->{$method}();
+
+            if ($key === 'url' && (! is_string($value) || $value === '')) {
+                $value = rtrim((string) config('app.url'), '/').'/';
+            }
+
+            return $value;
         }
 
         return parent::__get($key);

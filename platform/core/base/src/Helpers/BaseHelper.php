@@ -564,7 +564,13 @@ class BaseHelper
 
     public function getHomepageUrl()
     {
-        return apply_filters('cms_homepage_url', rescue(fn () => route('public.index'), report: false));
+        $url = apply_filters('cms_homepage_url', rescue(fn () => route('public.index'), report: false));
+
+        if (! is_string($url) || $url === '') {
+            $url = rtrim((string) config('app.url'), '/').'/';
+        }
+
+        return $url;
     }
 
     public function getFonts(): array

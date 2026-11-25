@@ -46,6 +46,11 @@ class MiscTags implements MiscTagsContract
      */
     public function setUrl($url)
     {
+        if (! is_string($url) || $url === '') {
+            $fallback = rtrim((string) config('app.url'), '/');
+            $url = $fallback !== '' ? $fallback.'/' : '/';
+        }
+
         $this->currentUrl = $url;
         $this->addCanonical();
 

@@ -522,6 +522,8 @@
         return false;
     }
 
+    var censusPolls = 0;
+
     function loadCensus(isRetry) {
         if (!isRetry) {
             if (window.__serikCensusStarted) {
@@ -530,11 +532,11 @@
             window.__serikCensusStarted = true;
         }
 
-        // Server compute capped ~72s prod (+ ADA fallback); abort a bit above that.
+        // Cache hits return immediately. A cold build answers "warming" and this polls.
         var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
         var timer = setTimeout(function () {
             if (controller) controller.abort();
-        }, 90000);
+        }, 8000);
 
         fetch(url, {
             method: 'GET',
@@ -552,9 +554,18 @@
             .then(function (res) {
                 clearTimeout(timer);
                 if (!res.json) {
-                    // Laravel FatalError HTML pages say "Server Error" — never show that raw.
-                    if (!isRetry) {
+                    // A non-JSON body is an error page. Keep the loading state and retry.
+                    if (censusPolls++ < 8) {
                         window.setTimeout(function () { loadCensus(true); }, 1200);
+                        return;
+                    }
+                    renderError('Census data temporarily unavailable.');
+                    return;
+                }
+                if (res.json.status === 'warming') {
+                    // Keep the loading line. Charts and metrics render when the cache is ready.
+                    if (censusPolls++ < 45) {
+                        window.setTimeout(function () { loadCensus(true); }, 1000);
                         return;
                     }
                     renderError('Census data temporarily unavailable.');
@@ -566,7 +577,7 @@
             })
             .catch(function () {
                 clearTimeout(timer);
-                if (!isRetry) {
+                if (censusPolls++ < 8) {
                     window.setTimeout(function () { loadCensus(true); }, 1200);
                     return;
                 }

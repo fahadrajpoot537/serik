@@ -32,12 +32,15 @@
         "guzzlehttp/guzzle": "^7.9",
         "http-interop/http-factory-guzzle": "^1.2",
         "laravel/framework": "12.38.1",
+        "laravel/octane": "^2.23",
         "laravel/sanctum": "^4.0",
         "laravel/scout": "^11.3",
         "laravel/tinker": "^2.10",
         "meilisearch/meilisearch-php": "^1.16",
         "predis/predis": "^3.0",
         "ryangjchandler/laravel-cloudflare-turnstile": "^3.0",
+        "spiral/roadrunner-cli": "^3.1",
+        "spiral/roadrunner-http": "^4.2",
         "wikimedia/composer-merge-plugin": "^2.1"
     },
     "require-dev": {

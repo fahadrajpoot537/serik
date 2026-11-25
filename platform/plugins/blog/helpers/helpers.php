@@ -201,6 +201,8 @@ if (! function_exists('get_blog_page_url')) {
             return BaseHelper::getHomepageUrl();
         }
 
-        return $blogPage->url;
+        $url = $blogPage->url;
+
+        return is_string($url) && $url !== '' ? $url : BaseHelper::getHomepageUrl();
     }
 }

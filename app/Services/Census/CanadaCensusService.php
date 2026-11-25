@@ -3,6 +3,7 @@
 namespace App\Services\Census;
 
 use Botble\RealEstate\Models\Property;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -19,6 +20,8 @@ class CanadaCensusService
     public const STATUS_GEOGRAPHY_UNAVAILABLE = 'geography_unavailable';
 
     public const STATUS_CENSUS_UNAVAILABLE = 'census_unavailable';
+
+    public const STATUS_WARMING = 'warming';
 
     /**
      * Absolute wall-clock deadline for one HTTP census compute.
@@ -62,6 +65,19 @@ class CanadaCensusService
 
                 return $computed;
             });
+        } catch (LockTimeoutException $e) {
+            // Another request already holds the StatCan fetch. Do not start a second one.
+            $again = Cache::get($cacheKey);
+            if (is_array($again) && isset($again['status'])) {
+                return $again;
+            }
+
+            return [
+                'status' => self::STATUS_WARMING,
+                'message' => 'Loading neighbourhood demographics…',
+                'metrics' => [],
+                'charts' => [],
+            ];
         } catch (Throwable $e) {
             Log::warning('census.property.lock_failed', [
                 'property_id' => $propertyId,
