@@ -14,7 +14,7 @@ final class HomepageResponseCache
 {
     private const VERSION_KEY = 'homepage_response_cache_version_v4';
 
-    private const KEY_PREFIX = 'homepage_html_v49:';
+    private const KEY_PREFIX = 'homepage_html_v50:';
 
     private const TRACKING_QUERY_KEYS = [
         'utm_source',
