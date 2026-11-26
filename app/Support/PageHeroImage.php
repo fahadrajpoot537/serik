@@ -5,11 +5,11 @@ namespace App\Support;
 use Illuminate\Http\Request;
 
 /**
- * Inner-page hero (breadcrumb banner) images from public/pictures.
+ * Fallback inner-page heroes. Seeded pages use the image stored on the page.
  */
 final class PageHeroImage
 {
-    private const TOP_BANNERS = 'Website Banners (TOp)';
+    private const TOP_BANNERS = 'Top Banners';
 
     /**
      * Request path => relative path under public/pictures.
@@ -65,14 +65,17 @@ final class PageHeroImage
     private static function assetUrl(string $relative): ?string
     {
         $relative = str_replace('\\', '/', ltrim($relative, '/'));
-        $absolute = public_path('pictures/' . $relative);
+        $publicRelative = str_starts_with($relative, 'Top Banners/')
+            ? $relative
+            : 'pictures/' . $relative;
+        $absolute = public_path($publicRelative);
 
         if (! is_file($absolute)) {
             return null;
         }
 
-        $encoded = implode('/', array_map('rawurlencode', explode('/', $relative)));
+        $encoded = implode('/', array_map('rawurlencode', explode('/', $publicRelative)));
 
-        return asset('pictures/' . $encoded);
+        return asset($encoded);
     }
 }

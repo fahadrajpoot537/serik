@@ -1,13 +1,17 @@
 @php
     $backgroundColor = Theme::get('breadcrumbBackgroundColor', theme_option('breadcrumb_background_color', '#f7f7f7'));
     $textColor = Theme::get('breadcrumbTextColor', theme_option('breadcrumb_text_color', '#161e2d'));
-    $backgroundImage = Theme::get('breadcrumbBackgroundImage', theme_option('breadcrumb_background_image') ?: null);
+    $pageBanner = Theme::get('breadcrumbBackgroundImage');
+    $pageBanner = is_string($pageBanner) && $pageBanner !== '' ? $pageBanner : null;
 
-    $backgroundImage = $backgroundImage ? RvMedia::getImageUrl($backgroundImage) : null;
-
-    $mappedHero = \App\Support\PageHeroImage::urlForRequest();
-    if ($mappedHero) {
-        $backgroundImage = $mappedHero;
+    if ($pageBanner) {
+        $backgroundImage = RvMedia::getImageUrl($pageBanner);
+    } else {
+        $backgroundImage = \App\Support\PageHeroImage::urlForRequest();
+        if (! $backgroundImage) {
+            $themeBanner = theme_option('breadcrumb_background_image');
+            $backgroundImage = $themeBanner ? RvMedia::getImageUrl($themeBanner) : null;
+        }
     }
 
     $showBreadcrumb = Theme::get('breadcrumbEnabled', 'yes');
@@ -56,6 +60,41 @@
     height:300px;
 }
 
+/* Full banner file, no color wash over the artwork. */
+#sectionhead.serik-page-banner{
+    position:relative !important;
+    height:auto !important;
+    min-height:0 !important;
+    padding:0 !important;
+    background:none !important;
+    background-image:none !important;
+    overflow:hidden;
+}
+#sectionhead.serik-page-banner .serik-page-banner__img{
+    display:block;
+    width:100%;
+    height:auto;
+    max-width:100%;
+}
+#sectionhead.serik-page-banner .overlay{
+    display:none !important;
+}
+#sectionhead.serik-page-banner .serik-page-banner__copy{
+    position:absolute !important;
+    inset:0;
+    z-index:2;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    background:transparent !important;
+    pointer-events:none;
+    text-shadow:0 1px 2px rgba(0,0,0,.35);
+}
+#sectionhead.serik-page-banner .serik-page-banner__copy a{
+    pointer-events:auto;
+}
+
 /* Contact Us: shorter page hero only (carousel is below) */
 #sectionhead.serik-contact-hero-short{
     height:170px;
@@ -81,6 +120,9 @@
    #sectionhead{
     height: auto;
     min-height: 130px;
+   }
+   #sectionhead.serik-page-banner{
+    min-height:0 !important;
    }
 
    #sectionhead.serik-contact-hero-short{
@@ -239,22 +281,29 @@ body#page-faqs #sectionhead {
 @if ($showBreadcrumb === 'yes')
     <section @class([
         'flat-title-page style-2',
-        'hero-overlay' => $useHeroStyle,
-        'about-mobile-style' => $isAboutUs,
-        'serik-contact-hero-short' => $isContactUs,
+        'hero-overlay' => $useHeroStyle && ! $backgroundImage,
+        'serik-page-banner' => (bool) $backgroundImage,
+        'about-mobile-style' => $isAboutUs && ! $backgroundImage,
+        'serik-contact-hero-short' => $isContactUs && ! $backgroundImage,
     ])
     id="sectionhead"
     @style([
-        "background-color: $backgroundColor",
+        "background-color: $backgroundColor" => ! $backgroundImage,
         "color: $textColor",
-        "background-image: url('{$backgroundImage}'); background-size: cover; background-position: center !important" => $backgroundImage,
     ])>
 
-        @if ($useHeroStyle)
+        @if ($backgroundImage)
+            <img class="serik-page-banner__img" src="{{ $backgroundImage }}" alt="">
+        @endif
+
+        @if ($useHeroStyle && ! $backgroundImage)
             <div class="overlay"></div>
         @endif
 
-        <div class="container position-relative py-3 py-md-4">
+        <div @class([
+            'container position-relative py-3 py-md-4',
+            'serik-page-banner__copy' => (bool) $backgroundImage,
+        ])>
             @if ($breadcrumbStyle !== 'without-title' && $pageH1)
                 <h1 @class([
                     'page-title mt-3 mb-0',

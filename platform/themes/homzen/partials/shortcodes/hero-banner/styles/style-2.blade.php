@@ -69,6 +69,53 @@
     .serik-typewriter {
         min-height: 1.15em;
     }
+    .serik-xmas {
+        margin: 0 0 14px;
+    }
+    .serik-xmas__kicker {
+        margin: 0 0 6px;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #db1d23;
+    }
+    .serik-xmas__row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .serik-xmas__unit {
+        min-width: 58px;
+        padding: 6px 8px 5px;
+        border-radius: 10px;
+        background: #fff;
+        border: 1px solid rgba(219, 29, 35, 0.22);
+        text-align: center;
+        line-height: 1;
+    }
+    .serik-xmas__unit span {
+        display: block;
+        font-size: 22px;
+        font-weight: 800;
+        color: #0b2340;
+        font-variant-numeric: tabular-nums;
+    }
+    .serik-xmas__unit small {
+        display: block;
+        margin-top: 4px;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: #db1d23;
+    }
+    .serik-xmas__done {
+        margin: 0;
+        font-size: 1.25rem;
+        font-weight: 800;
+        color: #db1d23;
+    }
 </style>
 <section class="flat-slider home-2 serik-split-hero" aria-label="{{ __('Ontario property search') }}">
     <div class="container serik-split-hero__container">
@@ -77,6 +124,16 @@
             {{-- LEFT: property discovery --}}
             <div class="serik-split-hero__left slider-content">
                 <div class="heading serik-split-hero__heading">
+                    <div class="serik-xmas" id="serikXmasCountdown">
+                        <p class="serik-xmas__kicker">{{ __('Christmas countdown') }}</p>
+                        <div class="serik-xmas__row">
+                            <div class="serik-xmas__unit"><span data-xmas="days">--</span><small>{{ __('Days') }}</small></div>
+                            <div class="serik-xmas__unit"><span data-xmas="hours">--</span><small>{{ __('Hours') }}</small></div>
+                            <div class="serik-xmas__unit"><span data-xmas="minutes">--</span><small>{{ __('Min') }}</small></div>
+                            <div class="serik-xmas__unit"><span data-xmas="seconds">--</span><small>{{ __('Sec') }}</small></div>
+                        </div>
+                        <p class="serik-xmas__done" hidden>{{ __('Merry Christmas') }}</p>
+                    </div>
                     <h1 class="subtitle body-1 hero-banner-headline serik-split-hero__title" style="color: {{ $descriptionColor }}; font-weight:700;">
                         {{ __('Top Realtor in Ontario - Buy or Sell Homes and Get') }}
                     </h1>
@@ -177,6 +234,58 @@
     @endif
 </section>
 
+<script>
+(function () {
+    var root = document.getElementById('serikXmasCountdown');
+    if (!root) return;
+    var units = {
+        days: root.querySelector('[data-xmas="days"]'),
+        hours: root.querySelector('[data-xmas="hours"]'),
+        minutes: root.querySelector('[data-xmas="minutes"]'),
+        seconds: root.querySelector('[data-xmas="seconds"]')
+    };
+    var row = root.querySelector('.serik-xmas__row');
+    var done = root.querySelector('.serik-xmas__done');
+    var kicker = root.querySelector('.serik-xmas__kicker');
+
+    function pad(n) {
+        return (n < 10 ? '0' : '') + n;
+    }
+
+    // Local midnight on 25 December. Each browser uses its own time zone.
+    function nextChristmas(now) {
+        var year = now.getFullYear();
+        var start = new Date(year, 11, 25, 0, 0, 0, 0);
+        if (now.getTime() < start.getTime()) {
+            return start;
+        }
+        var endOfChristmas = new Date(year, 11, 26, 0, 0, 0, 0);
+        if (now.getTime() < endOfChristmas.getTime()) {
+            return null;
+        }
+        return new Date(year + 1, 11, 25, 0, 0, 0, 0);
+    }
+
+    function tick() {
+        var now = new Date();
+        var target = nextChristmas(now);
+        if (!target) {
+            if (row) row.hidden = true;
+            if (kicker) kicker.hidden = true;
+            if (done) done.hidden = false;
+            return;
+        }
+        var total = Math.floor(Math.max(0, target.getTime() - now.getTime()) / 1000);
+        if (units.days) units.days.textContent = String(Math.floor(total / 86400));
+        if (units.hours) units.hours.textContent = pad(Math.floor((total % 86400) / 3600));
+        if (units.minutes) units.minutes.textContent = pad(Math.floor((total % 3600) / 60));
+        if (units.seconds) units.seconds.textContent = pad(total % 60);
+    }
+
+    tick();
+    setInterval(tick, 1000);
+})();
+</script>
 <script>
 (function () {
     var root = document.getElementById('serikHeroTypewriter');
